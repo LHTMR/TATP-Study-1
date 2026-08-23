@@ -69,7 +69,9 @@ def load(path: Path, conditions: list[str], limbs: list[str], n_sessions: int) -
             f"{path} does not exist. Generate it with tools/make_allocation.py."
         )
     lines = [
-        line for line in path.read_text(encoding="utf-8").splitlines() if not line.startswith("#")
+        line
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if not line.startswith("#")
     ]
     reader = csv.DictReader(lines)
     if tuple(reader.fieldnames or ()) != COLUMNS:
@@ -111,8 +113,8 @@ def load(path: Path, conditions: list[str], limbs: list[str], n_sessions: int) -
         assigned = [r.condition for r in rows if r.participant_code == code]
         if sorted(assigned) != sorted(conditions):
             raise AllocationError(
-                f"{path.name}: participant {code!r} has conditions {sorted(assigned)}, expected "
-                f"each of {sorted(conditions)} exactly once"
+                f"{path.name}: participant {code!r} has conditions {sorted(assigned)}, "
+                f"expected each of {sorted(conditions)} exactly once"
             )
         if allocation.sessions_for(code) != tuple(range(1, n_sessions + 1)):
             raise AllocationError(

@@ -36,7 +36,7 @@ items:
   - item: "4"
     summary: The session schedule grid -- block spacing
     resolved_when: {file: schedule.yaml, path: "generate.settled"}
-    fix: Piloting (SPEC.md 7). Add `settled: true` under `generate:` once the grid is fixed.
+    fix: "Piloting (SPEC.md 7). Add `settled: true` under `generate:` once the grid is fixed."
     blocks_use: false
 
   - item: "5"

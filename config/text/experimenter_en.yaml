@@ -52,9 +52,9 @@ controls:
 status:
   connected: Connected
   disconnected: Disconnected
-  channel_pressure: Channel {channel}: {value} kPa
+  channel_pressure: 'Channel {channel}: {value} kPa'
   elapsed: Session elapsed {time}
-  next_event: Next: {phase} in {time}
+  next_event: 'Next: {phase} in {time}'
   block_due: Block {block} is due.
   block_overdue: Block {block} is OVERDUE.
 
@@ -69,13 +69,13 @@ warnings:
   filaments_unweighed: >-
     No measured filament forces. Nominal forces deviate from measured by up to about 20 %
     (Berquin et al. 2010). Weigh the set in Instruments and environment before collecting data.
-  open_items: Unresolved configuration placeholders: {value}
+  open_items: 'Unresolved configuration placeholders: {value}'
   out_of_range: >-
     The calibration ran out of ladder ({value}). The boundary filament will be used and the
     trial is flagged. Expect this in a meaningful fraction of sessions.
   catch_trials_felt: >-
     More than the allowed share of zero-pressure catch trials were reported as felt ({value}).
-  schedule: Schedule warning, block {block}: {value}
+  schedule: 'Schedule warning, block {block}: {value}'
   no_response: No response for {value} s.
 
 banners:

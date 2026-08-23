@@ -1,6 +1,10 @@
 [tool.ruff]
 line-length = 96
 target-version = "py311"
+# docs/calibration_sim.py is the record of the simulation behind
+# docs/calibration_methods_comparison.md, kept exactly as it was run. Reformatting it would
+# make the numbers in that document harder, not easier, to trace back to the code.
+extend-exclude = ["docs/calibration_sim.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]

@@ -238,7 +238,9 @@ def _read_yaml(path: Path) -> dict:
         raise ConfigError(f"{path}: configuration file does not exist")
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ConfigError(f"{path}: expected a mapping at the top level, got {type(data).__name__}")
+        raise ConfigError(
+            f"{path}: expected a mapping at the top level, got {type(data).__name__}"
+        )
     return data
 
 
@@ -322,14 +324,23 @@ def load(
 ) -> Config:
     """Load and validate every configuration file. Raises ConfigError on any problem."""
     languages = sorted({lang for _, lang in TEXT_FILES})
-    for role, lang in (("participant", participant_language), ("experimenter", experimenter_language)):
+    for role, lang in (
+        ("participant", participant_language),
+        ("experimenter", experimenter_language),
+    ):
         if lang not in languages:
             raise ConfigError(f"{role} language {lang!r} is not one of {languages}")
 
     loaded: dict[str, dict] = {}
-    for filename in ("study1.yaml", "hardware.yaml", "schedule.yaml", "filaments.yaml", "open_items.yaml"):
+    for filename in (
+        "study1.yaml",
+        "hardware.yaml",
+        "schedule.yaml",
+        "filaments.yaml",
+        "open_items.yaml",
+    ):
         loaded[filename] = _read_yaml(config_dir / filename)
-    for (role, lang), relative in TEXT_FILES.items():
+    for relative in TEXT_FILES.values():
         loaded[relative] = _read_yaml(config_dir / relative)
 
     for filename, path, expected, low, high in SCHEMA:
