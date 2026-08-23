@@ -139,7 +139,6 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("schedule.yaml", "validation.equal_spacing_tolerance_s", NUMBER, 0, None),
     ("filaments.yaml", "filaments[*].label_g", str, None, None),
     ("filaments.yaml", "filaments[*].size", str, None, None),
-    ("filaments.yaml", "filaments[*].force_manual_mn", NUMBER, 0, None),
     ("filaments.yaml", "filaments[*].force_nominal_mn", NUMBER, 0, None),
 )
 

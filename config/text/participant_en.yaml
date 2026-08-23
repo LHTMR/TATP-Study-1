@@ -11,8 +11,8 @@
 
 meta:
   language: en
-  verified_against_ethics: null    # SPEC.md 20 item 12
-  instructions_supplied: null      # open item L4
+  verified_against_ethics: null    # SPEC.md 20 item 12 -- covers the VAS wordings, still open
+  instructions_supplied: 2026-08-23  # open item L4, approved by S
 
 vas:
   # SPEC.md 10.6. Anchors are placed at their percentage along the line; the marker is hidden
@@ -52,19 +52,64 @@ vas:
 
 training:
   # Proportionality instruction (Price et al. 1983), given once per scale at first use.
-  # SPEC.md 10.6 supplies the Swedish only; the English is not in any source document.
-  pain: PLACEHOLDER - English proportionality wording for the pain scale not yet supplied.
-  intensity: PLACEHOLDER - English proportionality wording for the intensity scale not yet supplied.
-  pleasantness: PLACEHOLDER - English proportionality wording for the pleasantness scale not yet supplied.
+  # Wording from Bilaga 1: "a mark twice as far along the line indicates it is twice as
+  # painful", and for touch "twice as pleasant/intense".
+  pain: A mark twice as far along the line means it was twice as painful.
+  intensity: A mark twice as far along the line means the touch felt twice as intense.
+  pleasantness: A mark twice as far along the line means the touch felt twice as pleasant.
 
 screens:
-  welcome: PLACEHOLDER - welcome and orientation screen text not yet supplied.
-  standby: PLACEHOLDER - neutral between-block standby text not yet supplied.
-  session_end: PLACEHOLDER - end-of-session text not yet supplied.
-  paused: PLACEHOLDER - paused text not yet supplied.
-  emergency_stop: PLACEHOLDER - text shown after the participant presses the stop button.
-  self_start: PLACEHOLDER - text inviting the participant to start the stimulation.
-  adjust: PLACEHOLDER - instruction for adjusting the touch with the two large buttons.
-  comparison: PLACEHOLDER - instruction for judging which of two touches was stronger.
-  preference: PLACEHOLDER - instruction for indicating which touch is preferred.
-  mapping: PLACEHOLDER - instruction for signalling the change in sensation during mapping.
+  # Approved 23 Aug 2026. Vocabulary follows Bilaga 3a, which describes the skin testing as
+  # "tunna plastfilament" and "en mjuk pensel" and never as pinpricks -- a participant screen
+  # may not describe the study in words the consent document does not use.
+  #
+  # There is no `mapping` key. The area mapping is instructed verbally and the participant
+  # signals verbally (SPEC.md 8.4); the experimenter's script is `instructions.mapping_script`
+  # in experimenter_{sv,en}.yaml. The participant screen shows `standby` throughout.
+  welcome: |-
+    Welcome.
+    This study is about pleasant and unpleasant bodily sensations — touch and pain.
+    You will rate what you feel by marking a point on a line. There are no right answers, and
+    the experimenter does not see your ratings.
+
+    Press ▶ to begin.
+  standby: |-
+    Rest for a moment.
+    The next part starts shortly.
+  session_end: |-
+    That is the end of today's visit.
+    Thank you.
+    Please wait for the experimenter.
+  paused: |-
+    Paused.
+    The session continues shortly.
+  emergency_stop: |-
+    Stopped.
+    The touch has been switched off.
+    Please wait for the experimenter.
+  # Shown in the participant-preferred condition only (SPEC.md 12.3). The agentive wording is
+  # part of that condition's manipulation, not incidental phrasing -- see
+  # docs/participant_screen_text_draft.md.
+  self_start: Press ▶ when you're ready for the touch to start.
+  adjust: |-
+    Left button: weaker. Right button: stronger.
+    Press ▶ when it feels right.
+  comparison: |-
+    Two touches, one after the other.
+    Which felt stronger?
+    Left button: the first. Right button: the second.
+    Press ▶ to confirm.
+  preference: |-
+    You will feel a few different kinds of touch.
+    Use the two large buttons to move between them.
+    Press ▶ to choose the one you like best.
+
+adjust_targets:
+  # The target for each method-of-adjustment step (SPEC.md 9), shown above the `screens.adjust`
+  # frame. Worded with the anchor labels of the scale in question wherever the target sits on a
+  # labelled anchor. The 30 % and 80 % points of the intensity scale carry no anchor label, so
+  # those steps show the scale with the target position marked and the instruction refers to it.
+  just_noticeable: Set the touch so that it is just noticeable.
+  marked_point: Set the touch so that it matches the marked point on the scale.
+  match: Set the second touch so that it feels as strong as the first.
+  most_pleasant: Set the touch so that it feels as pleasant as possible.

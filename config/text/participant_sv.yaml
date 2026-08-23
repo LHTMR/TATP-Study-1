@@ -11,8 +11,8 @@
 
 meta:
   language: sv
-  verified_against_ethics: null    # SPEC.md 20 punkt 12
-  instructions_supplied: null      # öppen punkt L4
+  verified_against_ethics: null    # SPEC.md 20 punkt 12 -- gäller VAS-formuleringarna, kvarstår
+  instructions_supplied: 2026-08-23  # öppen punkt L4, godkänd av S
 
 vas:
   pain:
@@ -58,13 +58,57 @@ training:
   pleasantness: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så behaglig.
 
 screens:
-  welcome: PLACEHOLDER - välkomsttext ej ännu tillhandahållen.
-  standby: PLACEHOLDER - neutral vilotext mellan block ej ännu tillhandahållen.
-  session_end: PLACEHOLDER - avslutningstext ej ännu tillhandahållen.
-  paused: PLACEHOLDER - text vid paus ej ännu tillhandahållen.
-  emergency_stop: PLACEHOLDER - text efter att deltagaren tryckt på stoppknappen.
-  self_start: PLACEHOLDER - text som uppmanar deltagaren att starta stimuleringen.
-  adjust: PLACEHOLDER - instruktion för att justera beröringen med de två stora knapparna.
-  comparison: PLACEHOLDER - instruktion för att bedöma vilken av två beröringar som var starkare.
-  preference: PLACEHOLDER - instruktion för att ange vilken beröring som föredras.
-  mapping: PLACEHOLDER - instruktion för att signalera förändringen i känsel under kartläggningen.
+  # Godkänd 23 aug 2026. Ordvalen följer Bilaga 3a, som beskriver hudmätningen som "tunna
+  # plastfilament" och "en mjuk pensel" och aldrig som nålstick -- en deltagarskärm får inte
+  # beskriva studien med ord som samtyckesdokumentet inte använder.
+  #
+  # Det finns ingen `mapping`-nyckel. Kartläggningen instrueras muntligt och deltagaren
+  # markerar muntligt (SPEC.md 8.4); försöksledarens manus är `instructions.mapping_script` i
+  # experimenter_{sv,en}.yaml. Deltagarskärmen visar `standby` under tiden.
+  welcome: |-
+    Välkommen.
+    Studien handlar om behagliga och obehagliga kroppsförnimmelser – beröring och smärta.
+    Du skattar det du känner genom att markera en punkt på en linje. Det finns inga rätta
+    svar, och försöksledaren ser inte dina skattningar.
+
+    Tryck på ▶ för att börja.
+  standby: |-
+    Vila en stund.
+    Nästa del börjar snart.
+  session_end: |-
+    Då är dagens besök slut.
+    Tack.
+    Vänta kvar tills försöksledaren kommer.
+  paused: |-
+    Pausad.
+    Sessionen fortsätter snart.
+  emergency_stop: |-
+    Stoppat.
+    Beröringen är avstängd.
+    Vänta kvar tills försöksledaren kommer.
+  # Visas endast i den deltagarvalda betingelsen (SPEC.md 12.3). Den agentiva formuleringen är
+  # en del av den betingelsens manipulation, inte en tillfällig ordvändning -- se
+  # docs/participant_screen_text_draft.md.
+  self_start: Tryck på ▶ när du är redo att beröringen ska börja.
+  adjust: |-
+    Vänster knapp: svagare. Höger knapp: starkare.
+    Tryck på ▶ när det känns rätt.
+  comparison: |-
+    Två beröringar, en i taget.
+    Vilken kändes starkast?
+    Vänster knapp: den första. Höger knapp: den andra.
+    Tryck på ▶ för att bekräfta.
+  preference: |-
+    Du får känna några olika sorters beröring.
+    Använd de två stora knapparna för att växla mellan dem.
+    Tryck på ▶ för att välja den du tycker bäst om.
+
+adjust_targets:
+  # Målet för varje justeringssteg (SPEC.md 9), visas ovanför ramen i `screens.adjust`.
+  # Formulerat med ankaretiketterna från respektive skala där målet ligger på ett etiketterat
+  # ankare. Punkterna 30 % och 80 % på intensitetsskalan saknar ankaretikett, så de stegen visar
+  # skalan med målpunkten markerad och instruktionen hänvisar till den.
+  just_noticeable: Ställ in beröringen så att den är precis märkbar.
+  marked_point: Ställ in beröringen så att den motsvarar den markerade punkten på skalan.
+  match: Ställ in den andra beröringen så att den känns lika stark som den första.
+  most_pleasant: Ställ in beröringen så att den känns så behaglig som möjligt.

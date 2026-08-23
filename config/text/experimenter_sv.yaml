@@ -49,6 +49,14 @@ instructions:
   apply_filament: Applicera filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen.
   apply_brush: Borsta {region} zonen på plats {site}.
   mapping_path: Kartlägg bana {path}. Flytta 5 mm inåt vid varje signal och stanna när deltagaren markerar.
+  # Läses högt före första banan. Kartläggningen instrueras muntligt och deltagaren svarar
+  # muntligt, så det här är enda stället formuleringen finns -- det finns ingen deltagarskärm
+  # för kartläggningen. Exemplen på förändringen är Bilaga 1:s egna ("burning", "tenderness",
+  # "more intense pricking"); behåll dem, det är vad planen säger att deltagaren får höra.
+  mapping_script: >-
+    Säg högt: "Jag kommer att röra vid dig med det här filamentet och flytta ett litet steg i
+    taget mot det markerade området. Säg till så snart känslan tydligt förändras – brännande,
+    ömmande eller vassare stick."
   mapping_distances: Skriv in de fyra uppmätta avstånden i mm när det passar. Detta avbryter aldrig sessionen.
   fit_garment: Sätt på plagget och kontrollera att alla fem kanaler sitter rätt.
   thermode_start: Starta termoden på 50 °C. Programmet tar tid på fasen men styr inte enheten.

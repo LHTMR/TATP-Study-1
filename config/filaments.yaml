@@ -1,44 +1,63 @@
-# Aesthesio (DanMic) Semmes-Weinstein set -- the set used in Ng et al. (2024).
+# Aesthesio (DanMic) Precision Tactile Sensory Evaluator set -- the set used in Ng et al. (2024).
 # SPEC.md 8.1, calibration_methods_comparison.md 2 and 8.
+#
+# EVERY VALUE BELOW IS TRANSCRIBED FROM THE "Aesthesio Precision Tactile Sensory Evaluator Data
+# Chart", supplied 23 August 2026. Nothing here is derived, rounded or inferred by me.
 #
 # `label_g`           THE IDENTIFIER. The gram label printed on the filament, which is what an
 #                     experimenter reads off the kit under time pressure. Everything else here
 #                     is a companion value looked up from it, and the data files name filaments
 #                     by this label. Settled 23 Aug 2026.
-# `size`              Semmes-Weinstein number, log10 of the force in units of 0.1 mg. Kept
-#                     because the analysis literature indexes filaments this way.
-# `force_manual_mn`   Aesthesio manual value. Reference only.
-# `force_nominal_mn`  The rounded label force in mN. Display only.
-# `force_measured_mn` What the code uses. Filled in by the instruments module
+#                     Written exactly as the chart prints it, decimals included -- `2.0`, not
+#                     `2`. It is a label, hence a string: the experimenter matches it against
+#                     the filament by eye, and `2` and `2.0` would not match.
+# `size`              Evaluator size, the Semmes-Weinstein number. The analysis literature
+#                     indexes filaments this way.
+# `force_nominal_mn`  The chart's Target Force in milliNewtons -- the manufacturer's stated
+#                     force, which the chart itself marks as calculated and rounded at a
+#                     conversion factor of 9.80665 mN/g. Display, and the fallback the estimator
+#                     fits until the set is weighed (SPEC.md 8.1).
+# `force_measured_mn` What the code uses where it exists. Filled in by the instruments module
 #                     (launcher entry 2) from a precision balance.
 #
-# `label_g` x 9.81 mN/g reproduces `force_manual_mn` to better than 1 % on every row, and
-# tests/test_config_files.py asserts it, so the labels below are machine-checked against a
-# value already in this file rather than trusted transcription. They still need confirming
-# against the physical kit -- FOR_S.md A3.8.
+# There is deliberately no third force column. An earlier version of this file carried a
+# `force_manual_mn` and a separately-rounded `force_nominal_mn`; the chart has one manufacturer
+# force, so the second was a rounding with no source and is gone.
+#
+# tests/test_config_files.py asserts `label_g` x 9.80665 reproduces `force_nominal_mn` on every
+# row, so a mistyped label fails the suite rather than naming the wrong filament in a session.
+# Confirmation against the physical kit is still outstanding -- FOR_S.md A3.8.
 #
 # Manufacturer forces deviate from measured by -19.75% to +17.61%, non-systematically
-# (Berquin et al. 2010), so an unweighed set is a WARNED PLACEHOLDER and never a silent
-# substitution -- SPEC.md 20 item 1. Until every `force_measured_mn` below is filled in,
-# startup warns and `filaments_measured` is written false into the session file.
+# (Berquin et al. 2010), so an unweighed set is a WARNED FALLBACK and never a silent
+# substitution -- SPEC.md 20 item 1. Until every `force_measured_mn` below is filled in, startup
+# warns, `filaments_measured` is written false into the session file, and every pinprick row
+# carries an empty `force_measured_mn` to mark that it was fitted on label values.
 #
-# `size` is the Semmes-Weinstein number, log10 of the force in units of 0.1 mg.
-# The ladder is not limited to the 100-3000 mN range of Bilaga 1 3.6.1: the post-S target
-# will sometimes fall below 100 mN (SPEC.md 8.1), so the kit's lower filaments are listed.
-# List whatever is actually held -- delete a row for a filament that is missing or damaged.
+# LIST WHATEVER IS ACTUALLY HELD. All twenty of the chart's filaments are listed. Delete the row
+# for any that is missing or damaged -- nothing downstream assumes a particular ladder.
 
 weighing_date: null   # ISO date, written by the instruments module
 weighing_balance: null   # free text: which balance, so the measurement is traceable
 
 filaments:
-  - {label_g:   "2", size: "4.31", force_manual_mn:   19.6, force_nominal_mn:   20, force_measured_mn: null}
-  - {label_g:   "4", size: "4.56", force_manual_mn:   39.2, force_nominal_mn:   40, force_measured_mn: null}
-  - {label_g:   "6", size: "4.74", force_manual_mn:   58.8, force_nominal_mn:   60, force_measured_mn: null}
-  - {label_g:   "8", size: "4.93", force_manual_mn:   78.4, force_nominal_mn:   80, force_measured_mn: null}
-  - {label_g:  "10", size: "5.07", force_manual_mn:   98.0, force_nominal_mn:  100, force_measured_mn: null}
-  - {label_g:  "15", size: "5.18", force_manual_mn:  147.0, force_nominal_mn:  150, force_measured_mn: null}
-  - {label_g:  "26", size: "5.46", force_manual_mn:  255.0, force_nominal_mn:  260, force_measured_mn: null}
-  - {label_g:  "60", size: "5.88", force_manual_mn:  588.0, force_nominal_mn:  600, force_measured_mn: null}
-  - {label_g: "100", size: "6.10", force_manual_mn:  980.0, force_nominal_mn: 1000, force_measured_mn: null}
-  - {label_g: "180", size: "6.45", force_manual_mn: 1760.0, force_nominal_mn: 1800, force_measured_mn: null}
-  - {label_g: "300", size: "6.65", force_manual_mn: 2940.0, force_nominal_mn: 3000, force_measured_mn: null}
+  - {label_g: "0.008", size: "1.65", force_nominal_mn:    0.08, force_measured_mn: null}
+  - {label_g:  "0.02", size: "2.36", force_nominal_mn:    0.20, force_measured_mn: null}
+  - {label_g:  "0.04", size: "2.44", force_nominal_mn:    0.40, force_measured_mn: null}
+  - {label_g:  "0.07", size: "2.83", force_nominal_mn:    0.70, force_measured_mn: null}
+  - {label_g:  "0.16", size: "3.22", force_nominal_mn:    1.6,  force_measured_mn: null}
+  - {label_g:  "0.40", size: "3.61", force_nominal_mn:    3.9,  force_measured_mn: null}
+  - {label_g:  "0.60", size: "3.84", force_nominal_mn:    5.9,  force_measured_mn: null}
+  - {label_g:   "1.0", size: "4.08", force_nominal_mn:    9.8,  force_measured_mn: null}
+  - {label_g:   "1.4", size: "4.17", force_nominal_mn:   13.7,  force_measured_mn: null}
+  - {label_g:   "2.0", size: "4.31", force_nominal_mn:   19.6,  force_measured_mn: null}
+  - {label_g:   "4.0", size: "4.56", force_nominal_mn:   39.2,  force_measured_mn: null}
+  - {label_g:   "6.0", size: "4.74", force_nominal_mn:   58.8,  force_measured_mn: null}
+  - {label_g:   "8.0", size: "4.93", force_nominal_mn:   78.4,  force_measured_mn: null}
+  - {label_g:    "10", size: "5.07", force_nominal_mn:   98.0,  force_measured_mn: null}
+  - {label_g:    "15", size: "5.18", force_nominal_mn:  147.0,  force_measured_mn: null}
+  - {label_g:    "26", size: "5.46", force_nominal_mn:  255.0,  force_measured_mn: null}
+  - {label_g:    "60", size: "5.88", force_nominal_mn:  588.0,  force_measured_mn: null}
+  - {label_g:   "100", size: "6.10", force_nominal_mn:  980.0,  force_measured_mn: null}
+  - {label_g:   "180", size: "6.45", force_nominal_mn: 1760.0,  force_measured_mn: null}
+  - {label_g:   "300", size: "6.65", force_nominal_mn: 2940.0,  force_measured_mn: null}

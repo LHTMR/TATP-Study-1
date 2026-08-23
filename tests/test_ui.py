@@ -159,11 +159,17 @@ def test_it_shows_nothing_the_experimenter_may_not_see(experimenter, session):
         assert condition not in shown
 
 
-def test_the_placeholder_banner_is_shown_while_the_wording_is_unapproved(experimenter, session):
-    """CLAUDE.md and SPEC.md 12.4: unmissable while `placeholder_text` is true."""
+def test_the_placeholder_banner_follows_the_view_in_both_directions(experimenter, session):
+    """CLAUDE.md and SPEC.md 12.4: unmissable while `placeholder_text` is true, gone when not.
+
+    Driven from the flag rather than from whatever the config happens to hold today, so this
+    keeps testing the banner as participant wording gets approved.
+    """
     window, held = experimenter
-    assert session.experimenter_view()["placeholder_text"] is True, "still PLACEHOLDER (L4)"
     banner = session.config.experimenter_text["banners"]["placeholder_text"]
+
+    held["override"] = {"placeholder_text": True}
+    window.refresh()
     assert banner in _visible_texts(window)
 
     held["override"] = {"placeholder_text": False}

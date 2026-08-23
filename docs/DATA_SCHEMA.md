@@ -130,7 +130,7 @@ One row per monofilament application, both protocols, all phases (§14.2).
 | purpose | str | - | yes | `search` or `measure`; only `measure` enters the estimate (§8.2) |
 | filament_label_g | str | g | yes | Gram label of the filament the software asked for, e.g. `26`. The label printed on the filament is the identifier everywhere (§8.1); forces are companion values |
 | applied_filament_label_g | str | g | yes | Gram label of the filament actually applied. Equal to `filament_label_g` unless `substituted` (§8.2) |
-| force_nominal_mn | float | mN | yes | Label force of the **applied** filament in mN. Display, and the fallback for `force_applied_mn` until the set is weighed (§8.1) |
+| force_nominal_mn | float | mN | yes | Manufacturer's stated force of the **applied** filament, from the Aesthesio data chart. Display, and the fallback for `force_applied_mn` until the set is weighed (§8.1) |
 | force_measured_mn | float | mN | no | Weighed force of the **applied** filament; empty until the set is weighed (§20 item 1) |
 | force_applied_mn | float | mN | yes | What the estimator fits: `force_measured_mn` when there is one, otherwise `force_nominal_mn`. An empty `force_measured_mn` is therefore the marker that this row was fitted on label values rather than weighed ones (§8.1) |
 | substituted | bool | - | yes | `true` when the applied filament differs from the one the software asked for (§8.2) |

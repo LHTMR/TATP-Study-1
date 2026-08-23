@@ -73,7 +73,9 @@ def test_the_condition_is_not_in_what_the_experimenter_may_see(session):
 
 def test_the_experimenter_view_carries_the_warnings_it_must_show(session):
     view = session.experimenter_view()
-    assert view["placeholder_text"] is True, "participant wording is still unapproved (L4)"
+    # Whether the wording is currently approved is not this test's business -- that it is
+    # reported at all is. tests/test_ui.py drives the banner from both values.
+    assert view["placeholder_text"] is session.config.has_placeholder_text()
     assert view["unresolved_open_items"], "open items must be visible at the screen"
     assert view["limb"] in session.config.study1["design"]["limbs"]
 
@@ -140,8 +142,23 @@ def test_startup_warnings_reach_the_log(session):
     session.start()
     events = {row["event"] for row in _table(session, "log")}
     assert "session_started" in events
-    assert "placeholder_participant_text" in events
     assert "unresolved_open_item" in events
+
+
+def test_unapproved_participant_wording_is_logged_at_startup(loaded, tmp_path):
+    """SPEC.md 20. Driven by a crafted config, so it stays tested as wording gets approved."""
+    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "d"),
+                                            "cloud_sync_markers": []}}
+    text = {**loaded.participant_text, "screens": {"standby": f"{cfg.PLACEHOLDER_PREFIX} - no"}}
+    config = cfg.Config(
+        **{**loaded.__dict__, "hardware": hardware, "participant_text": text}
+    )
+    made = Session(config, "03", 1, "SM", EXAMPLES)
+    made.start()
+    made.close()
+    with made.files.path("log").open(encoding="utf-8", newline="") as handle:
+        events = {row["event"] for row in csv.DictReader(handle)}
+    assert "placeholder_participant_text" in events
 
 
 def test_phase_changes_are_logged_and_validated(session):

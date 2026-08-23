@@ -49,6 +49,14 @@ instructions:
   apply_filament: Apply the {filament} g filament ({force_mn} mN) at site {site}, {region} zone.
   apply_brush: Brush the {region} zone at site {site}.
   mapping_path: Map path {path}. Step inward 5 mm on each cue and stop when the participant signals.
+  # Read aloud before the first path. The mapping is instructed verbally and the participant
+  # answers verbally, so this is the only place the wording exists -- there is no participant
+  # mapping screen. Examples of the change are Bilaga 1's own ("burning", "tenderness", "more
+  # intense pricking"); keep them, they are what the plan says participants are told.
+  mapping_script: >-
+    Say aloud: "I will touch you with this filament, moving a small step at a time towards the
+    marked area. Tell me as soon as the feeling clearly changes — burning, tenderness, or a
+    sharper pricking."
   mapping_distances: Enter the four measured distances in mm whenever convenient. This never blocks the session.
   fit_garment: Fit the garment and confirm all five channels are seated.
   thermode_start: Start the thermode at 50 °C. The software times the phase and does not command the device.

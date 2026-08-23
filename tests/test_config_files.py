@@ -15,9 +15,14 @@ from tatp.config import CONFIG_DIR
 
 YAML_FILES = sorted(CONFIG_DIR.rglob("*.yaml"))
 
-# Standard gravity, the only thing relating a gram label to a force. A unit conversion, which
+# The conversion factor the Aesthesio data chart states it used. A unit conversion, which
 # SPEC.md 4.2 allows as a literal.
-MN_PER_G = 9.81
+MN_PER_G = 9.80665
+
+# The chart's milliNewton column is rounded to two significant figures, so at the bottom of the
+# ladder -- 0.008 g, 0.08 mN -- the rounding alone is about 2 %. A mistyped label moves a row by
+# 25 % or more, so this tolerance still catches every transcription error it is here to catch.
+FORCE_TOLERANCE = 0.03
 
 
 def test_there_are_config_files():
@@ -30,13 +35,13 @@ def test_parses(path):
     assert isinstance(data, dict), f"{path}: expected a mapping at the top level"
 
 
-def test_every_gram_label_agrees_with_the_manual_force():
+def test_every_gram_label_agrees_with_its_force():
     """The gram labels are the identifier (SPEC.md 8.1), so they are checked, not trusted.
 
-    `label_g` was transcribed from the standard Semmes-Weinstein set rather than read off the
-    kit. Multiplying by standard gravity must reproduce `force_manual_mn`, which was already in
-    the file, so a mistyped label fails here instead of naming the wrong filament in a session.
-    Confirmation against the physical kit is still outstanding (FOR_S.md A3.8).
+    Both columns are transcribed from the Aesthesio data chart, and the chart states the factor
+    relating them. Multiplying the label by it must reproduce the force, so a mistyped digit
+    fails here instead of naming the wrong filament in a session. This checks the transcription
+    against itself; confirmation against the physical kit is FOR_S.md A3.8.
     """
     filaments = yaml.safe_load(
         (CONFIG_DIR / "filaments.yaml").read_text(encoding="utf-8")
@@ -44,9 +49,12 @@ def test_every_gram_label_agrees_with_the_manual_force():
     assert filaments, "filaments.yaml lists no filaments"
     labels = [f["label_g"] for f in filaments]
     assert len(set(labels)) == len(labels), f"duplicate gram labels: {labels}"
+    assert labels == sorted(labels, key=float), "list the ladder in ascending order"
     for filament in filaments:
         expected_mn = float(filament["label_g"]) * MN_PER_G
-        assert expected_mn == pytest.approx(filament["force_manual_mn"], rel=0.01), (
-            f"filament labelled {filament['label_g']} g implies {expected_mn:.1f} mN, but "
-            f"force_manual_mn is {filament['force_manual_mn']} mN"
+        assert expected_mn == pytest.approx(
+            filament["force_nominal_mn"], rel=FORCE_TOLERANCE
+        ), (
+            f"filament labelled {filament['label_g']} g implies {expected_mn:.3f} mN, but "
+            f"force_nominal_mn is {filament['force_nominal_mn']} mN"
         )

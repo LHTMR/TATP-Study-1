@@ -30,30 +30,27 @@ The **Gate** column says when the item stops being deferrable:
 
 ### A1. Participant-facing wording
 
-The largest single item, and the one I have most deliberately not touched.
-
 | # | What | Gate | Ref |
 |---|---|---|---|
-| A1.1 | **The participant screen text.** Welcome, standby, session-end, paused, emergency-stop, self-start, adjustment, comparison, preference and mapping instructions — in **both Swedish and English**. | Real participant | L4 |
-| A1.2 | **English proportionality-training wording** for the pain, intensity and pleasantness scales. `SPEC.md` §10.6 supplies the Swedish only. **Now answerable** — Bilaga 1 supplies it ("a mark twice as far along the line indicates it is twice as painful", "twice as pleasant/intense"); transcribed in the draft below, needs only your yes. | Real participant | L4 |
 | A1.3 | **Verification of the drafted Swedish VAS wordings** in `SPEC.md` §10.6 against the participant-facing ethics attachments. | Real participant | §20.12 |
 
-**Why I stopped rather than drafted.** Participant-facing wording is bound by what the ethics
-application says participants will be shown, and by the blinding constraints in `SPEC.md` §16 —
-nothing may imply touch is expected to relieve pain, name the research environment, or
-distinguish a condition. Writing plausible text would have produced something that reads fine
-and is not what was approved. Every such string is currently `PLACEHOLDER…`, detected by
-`Config.has_placeholder_text()`, and the experimenter screen carries an unmissable banner while
-any remain.
+**A1.1 and A1.2 are done — approved 23 Aug 2026, open item L4 closed.** The screen text and the
+English proportionality wording are in `config/text/participant_{sv,en}.yaml`, and the
+placeholder banner no longer fires for them. `docs/participant_screen_text_draft.md` is kept as
+the rationale: which wording came from which approved document, what the literature required,
+and where you decided against my recommendation. Two things settled there that are worth
+knowing about:
 
-**A draft now exists to react to:** `docs/participant_screen_text_draft.md`, written against
-Bilaga 3a (approved participant vocabulary), Bilaga 1 and `article_summaries.md` §§IV and VIII.
-It is a draft for you to mark up, not approved text, and it is deliberately **not** in the
-config — the `PLACEHOLDER` gate and the startup banner are untouched.
+- **The `self_start` wording is part of the `participant_preferred` manipulation**, not
+  incidental phrasing. It follows that keypress→touch-onset latency should be short, fixed and
+  logged (contiguity, Karsh et al. 2018), and that the effect may land on suffering rather than
+  intensity (Löffler et al. 2018) — an analysis-plan question, not a build one.
+- **The area mapping is verbal**, so `screens.mapping` no longer exists and the wording lives in
+  `instructions.mapping_script` in the experimenter files. `SPEC.md` §8.4 should say which key
+  ends a path, since it is the experimenter's, not the participant's.
 
-**What I need:** the strings, in any form — a document, a table, a message. I will transcribe
-them into `config/text/participant_{sv,en}.yaml`. Key names are already in place, so you can
-work against that file directly if that is easier.
+A1.3 remains: it is about the VAS questions and anchors, which came from `SPEC.md` §10.6 rather
+than from the approved attachments, and is a different check from the screens.
 
 ### A2. Safety and hardware limits
 
@@ -66,6 +63,7 @@ work against that file directly if that is easier.
 | A2.5 | **Garment pressure resolution.** | Bring-up | §20.2 |
 | A2.6 | **Inflation rate per channel.** Decides whether the 3 s static match transfers to the moving pattern, and sets pattern activation durations. | Bring-up | §20.3 |
 | A2.7 | **Serial protocol for the proportional-valve controller.** The prototype carries a *bitmask* — one bit per channel — which cannot express a per-channel pressure. This is a protocol change to agree with whoever builds the controller, not just a driver change. `arduino_valves.py` cannot be written until it is settled. | Bring-up | §20.14 |
+| A2.8 | **Physical labels on the response-box buttons.** Every participant screen writes the confirm button as ▶. If custom labels can be printed on the buttons, the screens should match whatever is printed — a single substitution across `participant_{sv,en}.yaml`. | Bring-up | — |
 
 ### A3. Measurements and study parameters
 
@@ -78,7 +76,7 @@ work against that file directly if that is easier.
 | A3.5 | **Expected pre-S → post-S offset** for the informed prior. −2.7 ladder steps from Scheuren et al.; confirm against pilot data. | Piloting | §20.7 |
 | A3.6 | **Duration of one touch adjustment.** Decides whether the Protocol B time budget holds and which of schemes A/B/C is right. | Piloting | §20.8 |
 | A3.7 | **A proper hyperalgesic-zone figure** to replace `assets/hyperalgesia_zones.svg`. Explicitly not blocking. | — | §20.11 |
-| A3.8 | **Confirm the gram labels in `config/filaments.yaml` against the physical kit.** `label_g` is now the identifier for every filament (§8.1), so a wrong one names the wrong filament in a session. I transcribed the standard Semmes-Weinstein values rather than reading them off your kit. `tests/test_config_files.py` checks each label against `force_manual_mn` at 9.81 mN/g and all eleven agree to better than 1 %, so a typo is caught — but that verifies my arithmetic, not your kit. Eleven numbers to eyeball: 2, 4, 6, 8, 10, 15, 26, 60, 100, 180, 300. | Real participant | — |
+| A3.8 | **Confirm `config/filaments.yaml` against the kit you actually hold.** Now transcribed from the Aesthesio data chart you supplied, all twenty filaments, 0.008 g to 300 g. Two things need your eye, neither of which a test can do. **(a) Which of the twenty you hold** — delete the row for any that is missing or damaged; nothing downstream assumes a particular ladder. **(b) That the printed labels match**, since `label_g` is the identifier and a wrong one names the wrong filament in a session. `tests/test_config_files.py` checks every label against its force at the chart's own 9.80665 mN/g, so a mistyped digit fails the suite — but that only proves the transcription is self-consistent, not that it is your kit. | Real participant | — |
 
 ### A4. Access
 
@@ -101,7 +99,8 @@ Nothing here is an input to me. These are yours to decide, align or do.
 | B1.3 | **`static_sham` = all five channels held on.** My assumption, so the sham matches the moving patterns in spatial extent and differs only in motion. A single-channel sham would differ in extent as well. Confirm at bring-up. |
 | B1.4 | **`docs/DATA_SCHEMA.md`** — the column list for all eleven tables. It is *parsed* by the writer and the validator, so it is the real schema, not documentation of one. Worth reading once before data exists rather than after. |
 | B1.5 | **One stated deviation from `SPEC.md` §12.1.** Its interface lists `play_pattern(pattern, params: dict)`. I implemented `play_pattern(pattern)` with no `params`, because every per-pattern parameter the spec names — row interval, channel ids, loop — lives in the pattern's sidecar YAML, and an empty dict nothing reads is the unused option `CLAUDE.md` forbids. Say if you intended `params` to carry something I have not anticipated. |
-| B1.6 | **Three settled changes to `docs/SPEC.md` §8.1–8.2 and the `pinprick` schema**, all from your decisions of 23 Aug 2026 rather than mine, recorded so they do not live only in a chat log. **(a) Filaments are identified by their gram label** — `26`, not `5.46` — in `filaments.yaml`, on the experimenter screen and in the data. Forces became companion values. **(b) `intolerable` is now derived**, from a rating at the top of the pain scale, with the cap per site per time point and escalating to all sites once four sites are capped; enforcement lands with the ladder in Milestone 3. **(c) `force_applied_mn` falls back to the label force** while the set is unweighed, with the empty `force_measured_mn` as the marker — otherwise Protocol A cannot be piloted at all, and A3.4 asks you to re-estimate the slope prior from pilot data. Worth reading the new §8.1 and §8.2 to confirm I recorded them as you meant them. |
+| B1.6 | **Four settled changes to `docs/SPEC.md` §8.1–8.2 and the `pinprick` schema**, all from your decisions of 23 Aug 2026 rather than mine, recorded so they do not live only in a chat log. **(a) Filaments are identified by their gram label** — `26`, not `5.46`, and `2.0` rather than `2` because that is how the chart prints it — in `filaments.yaml`, on the experimenter screen and in the data. Forces became companion values. **(b) `intolerable` is now derived**, from a rating at the top of the pain scale, with the cap per site per time point and escalating to all sites once four sites are capped; enforcement lands with the ladder in Milestone 3. **(c) `force_applied_mn` falls back to the nominal force** while the set is unweighed, with the empty `force_measured_mn` as the marker — otherwise Protocol A cannot be piloted at all, and A3.4 asks you to re-estimate the slope prior from pilot data. **(d) One force column, not two** — see B1.7. Worth reading the new §8.1 and §8.2 to confirm I recorded them as you meant them. |
+| B1.7 | **`force_manual_mn` is gone, and `force_nominal_mn` changed value.** The old file carried both the Aesthesio manual force (255 mN for the 26 g) and a "nominal label" that rounded it (260 mN). The data chart you supplied has **one** manufacturer force column, so the rounded one had no source — it was in `SPEC.md` §8.1 and in `filaments.yaml` without a document behind it. `force_nominal_mn` now holds the chart's own milliNewton figure, which is why a 26 g row records 255.0 rather than 260.0. Nothing about the pinprick schema changed; the numbers in it did. Flagging it because it silently alters what a data file says, and because it means Bilaga 1 §3.6.1's "260 mN" was never a real filament force. |
 
 ### B2. Align Bilaga 1 with what is implemented
 

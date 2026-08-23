@@ -9,6 +9,7 @@ from __future__ import annotations
 import shutil
 
 import pytest
+import yaml
 
 from tatp import config as cfg
 
@@ -30,20 +31,54 @@ def test_unknown_language_is_rejected():
         cfg.load("de", "en")
 
 
-def test_open_items_are_reported_until_their_config_path_is_filled(loaded):
+def test_an_open_item_is_resolved_exactly_when_its_config_path_is_filled(loaded):
+    """The mechanism, not today's state -- items get resolved and this must keep working.
+
+    An earlier version of this test asserted that L1-L4 were all still open, which made it fail
+    the moment L4 was actually supplied. What must hold at every point in the build is that
+    `resolved` agrees with the file: an item is open if and only if a path it names is null.
+    """
     assert loaded.open_items, "open_items.yaml defines no items"
-    numbers = {item.number for item in loaded.open_items}
-    assert {"L1", "L2", "L3", "L4"} <= numbers
-    # Nothing has been supplied yet (FOR_S.md), so every locally-raised item is still open.
-    assert {item.number for item in loaded.unresolved} >= {"L1", "L2", "L3", "L4"}
+    assert {"L1", "L2", "L3", "L4"} <= {item.number for item in loaded.open_items}
     assert all(item.blocks_use for item in loaded.blocking_unresolved)
 
+    def filled(check) -> bool:
+        data = yaml.safe_load(
+            (loaded.config_dir / check["file"]).read_text(encoding="utf-8")
+        )
+        values = cfg.resolve(data, check["path"])
+        return bool(values) and all(value is not None for value in values)
 
-def test_placeholder_participant_text_is_detected(loaded):
-    assert loaded.has_placeholder_text(), (
-        "participant wording is still unsupplied (FOR_S.md A1.1), so this must be True; if "
-        "S has supplied it, this test is what tells you to remove the startup banner"
+    entries = yaml.safe_load(
+        (loaded.config_dir / "open_items.yaml").read_text(encoding="utf-8")
+    )["items"]
+    by_number = {item.number: item for item in loaded.open_items}
+    for entry in entries:
+        checks = [entry["resolved_when"], *([entry["also"]] if "also" in entry else [])]
+        item = by_number[str(entry["item"])]
+        assert item.resolved is all(filled(check) for check in checks), (
+            f"open item {entry['item']} reports resolved={item.resolved}, which disagrees with "
+            f"the config paths it names"
+        )
+
+
+def test_unapproved_participant_wording_is_detected(loaded):
+    """SPEC.md 20 and CLAUDE.md: a PLACEHOLDER string must never reach a participant unseen.
+
+    Driven by a crafted config rather than the live one, so the detector stays tested after S
+    approves wording -- which has already happened once for the `screens:` block (L4).
+    """
+    unapproved = cfg.Config(
+        **{
+            **loaded.__dict__,
+            "participant_text": {"screens": {"standby": f"{cfg.PLACEHOLDER_PREFIX} - not yet"}},
+        }
     )
+    assert unapproved.has_placeholder_text()
+    approved = cfg.Config(
+        **{**loaded.__dict__, "participant_text": {"screens": {"standby": "Please wait."}}}
+    )
+    assert not approved.has_placeholder_text()
 
 
 def test_resolve_star_paths():

@@ -31,7 +31,7 @@ EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 CLOCK_SPEED = 100.0
 SPIN_TIMEOUT_S = 10.0
 
-# The 26 g filament is the 5.46, 255 mN -- the one Bilaga 1 3.6.1 calls "260 mN" (SPEC.md 8.1).
+# The 26 g filament is size 5.46, 255 mN -- the one Bilaga 1 3.6.1 calls "260 mN" (SPEC.md 8.1).
 APPLICATION = Application(
     protocol="short",
     region="primary",
@@ -162,9 +162,9 @@ def test_the_label_force_is_fitted_while_the_set_is_unweighed(running):
     session, _, _ = running
     _run_trial(running)
     row = _rows(session, "pinprick")[0]
-    assert row["force_nominal_mn"] == "260.0"
+    assert row["force_nominal_mn"] == "255.0", "the chart's force for the 26 g, not a rounding"
     assert row["force_measured_mn"] == "", "the set is unweighed (FOR_S A3.1)"
-    assert row["force_applied_mn"] == "260.0", "so the estimator fits the label force"
+    assert row["force_applied_mn"] == "255.0", "so the estimator fits the nominal force"
 
 
 def test_a_substitution_records_the_filament_actually_applied(running):
@@ -184,9 +184,9 @@ def test_a_substitution_records_the_filament_actually_applied(running):
     assert row["filament_label_g"] == "26"
     assert row["applied_filament_label_g"] == "15"
     assert row["substituted"] == "true"
-    # Every force column describes the filament that actually touched the skin.
-    assert row["force_nominal_mn"] == "150.0"
-    assert row["force_applied_mn"] == "150.0"
+    # Every force column describes the filament that actually touched the skin: the 15 g.
+    assert row["force_nominal_mn"] == "147.0"
+    assert row["force_applied_mn"] == "147.0"
 
 
 def test_a_ceiling_rating_flags_the_application_as_intolerable(running):

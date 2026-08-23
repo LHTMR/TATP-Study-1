@@ -183,12 +183,24 @@ Items 20–26 are session 6.
     a. **Filaments are identified by their gram label** — `26`, not `5.46`. That is what is
        printed on the filament and what an experimenter reads off the kit under time pressure.
        `label_g` is the identifier in `filaments.yaml`, on the experimenter screen and in the
-       data files; the Semmes-Weinstein size and the three forces are companion values. The
-       columns are `filament_label_g` and `applied_filament_label_g`, and
-       `start_filament_size` / `chosen_filament_size` in `calibration_pinprick` moved with them.
-       The labels were transcribed from the standard set, so `tests/test_config_files.py`
-       checks each one against `force_manual_mn` at 9.81 mN/g — all eleven agree to better than
-       1 %. Confirmation against the physical kit is `FOR_S.md` A3.8.
+       data files; the evaluator size and the forces are companion values. The columns are
+       `filament_label_g` and `applied_filament_label_g`, and `start_filament_size` /
+       `chosen_filament_size` in `calibration_pinprick` moved with them. **The label is a string
+       written exactly as the kit prints it**, decimals included — `2.0`, not `2` — because the
+       experimenter matches it against the filament by eye.
+
+       `config/filaments.yaml` is now transcribed wholesale from the **Aesthesio Precision
+       Tactile Sensory Evaluator Data Chart**, supplied by S on 23 Aug 2026: all twenty
+       filaments, 0.008 g / 0.08 mN up to 300 g / 2940 mN, where the file previously held
+       eleven. `tests/test_config_files.py` checks every label against its force at the chart's
+       stated 9.80665 mN/g, at 3 % tolerance because the chart's own mN column is rounded to two
+       significant figures. Which of the twenty are actually held is `FOR_S.md` A3.8.
+
+       **`force_manual_mn` is gone and `force_nominal_mn` changed value.** The file used to
+       carry the manual force (255 mN for the 26 g) *and* a "nominal label" that rounded it
+       (260 mN). The chart has one manufacturer force, so the rounded one had no source —
+       `SPEC.md` §8.1's "Nominal label" row was unsourced too and has been deleted with it.
+       Two tests moved from 260.0 to 255.0 as a result. `FOR_S.md` B1.7.
 
     b. **`intolerable` is derived, not observed.** There was never a mechanism for it. A rating
        reaching `pinprick.intolerable_vas_pct` is the proxy, so the software raises the flag —
@@ -211,6 +223,25 @@ Items 20–26 are session 6.
     the escalated all-sites cap uses the **lowest** ceiling-producing force in the run, and it
     clears at the next time point like the per-site cap. Censoring of ceiling ratings is
     `FOR_S.md` B4.5.
+
+21. **Five tests were asserting today's state instead of the mechanism, and broke when S
+    approved the participant wording** (L4 resolved, `has_placeholder_text()` now false). They
+    asserted things like "L1–L4 are all still open" and "the live config contains a
+    PLACEHOLDER", which were true when written and became false the moment the build made
+    progress. Each is now driven by a crafted input or by the flag itself:
+
+    - `test_an_open_item_is_resolved_exactly_when_its_config_path_is_filled` reads
+      `open_items.yaml` and asserts `resolved` agrees with the paths it names, for every item.
+      That holds at every point in the build rather than at one.
+    - `test_unapproved_participant_wording_is_detected` and
+      `test_unapproved_participant_wording_is_logged_at_startup` build a config carrying a
+      `PLACEHOLDER` string, so the detector and the startup warning stay tested after the real
+      wording is approved.
+    - `test_the_placeholder_banner_follows_the_view_in_both_directions` drives the banner from
+      the flag, both ways, instead of from whatever the config holds today.
+
+    **The lesson is worth keeping:** a test that asserts an open item is still open fails as a
+    reward for progress. Assert the mechanism, and let `open_items.yaml` carry the state.
 
 21. **`ExperimenterWindow` takes a reader callable, not the `Session`.** "It reads
     `experimenter_view()` and nothing else" is then structural rather than a habit: the window

@@ -311,25 +311,38 @@ identifier in `filaments.yaml`, on the experimenter screen and in the data files
 else about a filament — the Semmes-Weinstein size, the nominal force, the measured force — is a
 companion value looked up from the label.
 
-`filaments.yaml` lists the filaments held: gram label, Aesthesio size, nominal force, **measured
-force in mN**, and the weighing date. The measured value is what the code uses **where there is
-one**; where the set is unweighed the estimator falls back to the label force, and the empty
-`force_measured_mn` in each row is what marks a row fitted that way. Piloting depends on this:
-the slope prior is re-estimated from pilot data (§20 item 6), which cannot happen if no force is
-recorded at all. Manufacturer forces deviate from measured by −19.75 % to +17.61 %
-non-systematically (Berquin et al. 2010), which is why the fallback is marked rather than
-silent.
+`filaments.yaml` lists the filaments held: gram label, evaluator size, nominal force in mN,
+**measured force in mN**, and the weighing date. The measured value is what the code uses
+**where there is one**; where the set is unweighed the estimator falls back to the nominal
+force, and the empty `force_measured_mn` in each row is what marks a row fitted that way.
+Piloting depends on this: the slope prior is re-estimated from pilot data (§20 item 6), which
+cannot happen if no force is recorded at all. Manufacturer forces deviate from measured by
+−19.75 % to +17.61 % non-systematically (Berquin et al. 2010), which is why the fallback is
+marked rather than silent.
 
-Reference values from the Aesthesio manual, mN, for the range Ng et al. (2024) used:
+**The whole Aesthesio set, transcribed from the "Precision Tactile Sensory Evaluator Data
+Chart"** supplied 23 Aug 2026. The chart's milliNewton column is its own calculation at
+9.80665 mN/g, rounded to two significant figures, and it is the only manufacturer force there
+is — there is no separately-printed "nominal label" in mN, so `filaments.yaml` carries one force
+column, not two.
 
-| Size | 5.07 | 5.18 | 5.46 | 5.88 | 6.10 | 6.45 | 6.65 |
-|---|---|---|---|---|---|---|---|
-| Manual force | 98.0 | 147 | 255 | 588 | 980 | 1760 | 2940 |
-| Nominal label | 100 | 150 | 260 | 600 | 1000 | 1800 | 3000 |
+| Label (g) | 0.008 | 0.02 | 0.04 | 0.07 | 0.16 | 0.40 | 0.60 | 1.0 | 1.4 | 2.0 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Size | 1.65 | 2.36 | 2.44 | 2.83 | 3.22 | 3.61 | 3.84 | 4.08 | 4.17 | 4.31 |
+| Force (mN) | 0.08 | 0.20 | 0.40 | 0.70 | 1.6 | 3.9 | 5.9 | 9.8 | 13.7 | 19.6 |
 
-**Bilaga 1 §3.6.1's "260 mN" filament is the 5.46, actual force 255 mN.** The ladder is not
-limited to this range — the kit continues down through 78.4, 58.8, 39.2, 19.6 mN, and the
-post-S target will sometimes fall below 100 mN. Config lists whatever is held.
+| Label (g) | 4.0 | 6.0 | 8.0 | 10 | 15 | 26 | 60 | 100 | 180 | 300 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Size | 4.56 | 4.74 | 4.93 | 5.07 | 5.18 | 5.46 | 5.88 | 6.10 | 6.45 | 6.65 |
+| Force (mN) | 39.2 | 58.8 | 78.4 | 98.0 | 147 | 255 | 588 | 980 | 1760 | 2940 |
+
+**Labels are written exactly as the chart prints them**, decimals included — `2.0`, not `2`. A
+label is matched against the filament by eye, so it is a string and `2` would not match.
+
+**Bilaga 1 §3.6.1's "260 mN" filament is the 26 g, size 5.46, force 255 mN.** The ladder is not
+limited to the range Ng et al. (2024) used: the kit runs down to 0.008 g / 0.08 mN, and the
+post-S target will sometimes fall below 10 g. Config lists whatever is held — delete a row for a
+filament that is missing or damaged.
 
 **Instruments and environment module** (launcher entry 2, `tatp/instruments.py`): enter
 precision-balance measurements for each filament, which writes them with the date into
