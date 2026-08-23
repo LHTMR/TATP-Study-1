@@ -722,7 +722,7 @@ unaffected — both estimation runs are identical across conditions.
 - The session file records `fit_preview_enabled`, so an affected session is identifiable in
   analysis rather than indistinguishable from a blind one.
 - Enabling it warns at startup, in the same register as the reduced-capability banner.
-- Whether it stays on for real data collection is S's call (`FOR_S.md` B3.4).
+- Whether it stays on for real data collection is S's call (`docs/NOTES.md` N2.4).
 
 Controls: start block, pause, **discard and repeat the last trial**, abort session, timestamped
 free-text note. All logged.

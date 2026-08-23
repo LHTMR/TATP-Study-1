@@ -164,7 +164,8 @@ state on disk rather than in the conversation, so that any fresh session can pic
 - **`PROGRESS.md` is the handover file.** Keep it current: what is done, what is in flight,
   what is next, and any decision taken that is not already in `docs/SPEC.md`. Update it at
   every milestone and before stopping for any reason.
-- **`FOR_S.md` is S's queue.** See below — update it in the same breath as `PROGRESS.md`.
+- **`FOR_S.md` is S's queue** and **`docs/NOTES.md` is the log of everything else worth
+  keeping.** See below — update both in the same breath as `PROGRESS.md`.
 - Between `docs/SPEC.md`, `PROGRESS.md`, `FOR_S.md` and the git log, a new session should need
   nothing from the previous conversation.
 - `/clear` between unrelated tasks. A long session carrying failed approaches performs worse
@@ -185,12 +186,17 @@ state on disk rather than in the conversation, so that any fresh session can pic
 should have to read to know what is waiting on them. Keep it current or it becomes actively
 misleading — a stale queue is worse than no queue, because it gets trusted.
 
-Two lists, and the distinction is load-bearing:
+**One list, and the boundary is load-bearing: things only S can supply.** A value, a wording or
+a decision from outside the repository — measured forces, a pressure limit, a serial protocol —
+without which I would have to guess. Each row is one or two sentences, carries a gate, and is
+**deleted when resolved**, in the same commit as the config change that resolved it. Item IDs
+are never reused or renumbered.
 
-- **List A — things only S can supply.** A value, a wording or a decision from outside the
-  repository. Measured forces, participant text, a pressure limit, a serial protocol.
-- **List B — things that need S's attention.** No input to me. Reviews of what I wrote,
-  alignments between Bilaga 1 and the implementation, analysis-plan decisions, process.
+**Nothing else goes in it.** In particular, do not ask S to review what I wrote: S has their own
+review process, and anything worth their eye is flagged in the chat when it happens. Deviations
+from Bilaga 1, checks the pilot protocol needs, analysis-plan questions and process go in
+**`docs/NOTES.md`**, which is a log, not a queue — it exists so that when S reviews something,
+the thing they are looking at has a written history to ask about.
 
 **The three-places rule.** Any time you would otherwise guess a value, invent a wording, or
 default something the spec does not fix, do all three of these or none:
@@ -199,8 +205,7 @@ default something the spec does not fix, do all three of these or none:
    `PLACEHOLDER`. Never a plausible-looking constant.
 2. Add an entry to **`config/open_items.yaml`** with a `resolved_when:` path, so the startup
    warning is automatic rather than remembered. Items the spec does not number get `Ln`.
-3. Add a row to **`FOR_S.md`**, in the right list, with the gate at which it stops being
-   deferrable.
+3. Add a row to **`FOR_S.md`** with the gate at which it stops being deferrable.
 
 Doing one or two of the three is how a guess ends up in the study. `open_items.yaml` is the
 machine-checked list and `FOR_S.md` is the human-readable one; **they must never disagree.**

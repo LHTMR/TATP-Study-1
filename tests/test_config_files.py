@@ -46,7 +46,7 @@ def test_fit_preview_is_off_in_the_committed_config():
     assert study1["fit_preview"]["enabled"] is False, (
         "fit_preview.enabled is true in the committed config. If that is deliberate, the "
         "'the experimenter does not see your answers' sentence must come out of "
-        "screens.welcome in both languages first. See FOR_S.md B3.4, then update this test."
+        "screens.welcome in both languages first. See NOTES.md N2.4, then update this test."
     )
 
 
@@ -56,7 +56,7 @@ def test_every_gram_label_agrees_with_its_force():
     Both columns are transcribed from the Aesthesio data chart, and the chart states the factor
     relating them. Multiplying the label by it must reproduce the force, so a mistyped digit
     fails here instead of naming the wrong filament in a session. This checks the transcription
-    against itself; confirmation against the physical kit is FOR_S.md A3.8.
+    against itself; the physical kit was confirmed against the chart by S on 23 Aug 2026.
     """
     filaments = yaml.safe_load(
         (CONFIG_DIR / "filaments.yaml").read_text(encoding="utf-8")

@@ -3,8 +3,9 @@
 Handover file (CLAUDE.md). Between `docs/SPEC.md`, this file, `FOR_S.md` and the git log, a
 fresh session should need nothing from any previous conversation.
 
-Everything waiting on S — values, wordings, reviews, decisions — is in **`FOR_S.md`**, not
-here. Keep the two updated together.
+**`FOR_S.md`** holds only what S must supply or decide for the build to move — values, wordings,
+hardware limits. **`docs/NOTES.md`** holds what is merely logged: deviations from Bilaga 1,
+pilot-protocol checks, analysis-plan questions, process. Keep all three updated together.
 
 **Last updated:** 23 August 2026, session 7.
 **Milestone:** 1 (the vertical slice) — *the slice runs.*
@@ -68,6 +69,10 @@ headless screenshot approach in SPEC.md 17.4 is sound on this platform.
 package name differs from the import name and the original spelling does not resolve on any
 channel, so `conda env create` failed outright. The import name in Python is still
 `sounddevice`.
+
+**The reference repository is public and readable directly** — `LHTMR/ttpa_touch_the_pain_away`
+(`SPEC.md` §5.2), confirmed 23 Aug 2026. Read it rather than working from the spec's summary
+when the serial protocol or the CSV parser matters; `Arduino/`, `Python/`, `psychophysics/`.
 
 Note the base conda is **osx-64**, so the env is Intel/Rosetta on this Mac. Harmless here;
 irrelevant to the Windows lab PC.
@@ -177,12 +182,16 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23�
 
 8. **Permissions and `CLAUDE.md` tightened** (see the git log): the bypass class is denied,
    because each of `find`, `sed`, `bash -c` and the rest is a way to run something the deny list
-   would otherwise have caught. The one remaining hole is stated in `FOR_S.md` B5.3.
+   would otherwise have caught. The one remaining hole — `conda run … python` — is stated in
+   `CLAUDE.md`, narrowed to the four forms the Makefile uses. Argument paths are constrained by
+   `.claude/hooks/check_bash.py`, which resolves every path token and refuses anything outside
+   the repository.
 
 9. **`play_pattern` takes no `params` dict**, though SPEC.md 12.1's signature has one. Every
    per-pattern parameter the spec names — row interval, channel ids, loop — lives in the
    pattern's sidecar YAML, so `params` would be an option nothing reads, which CLAUDE.md
-   forbids. The docstring in `tatp/garment/base.py` says so. **In `FOR_S.md` B1.5 for review.**
+   forbids. The docstring in `tatp/garment/base.py` says so. **A stated deviation from the
+   spec's interface** — say if `params` was meant to carry something not anticipated.
 
 10. **The clamps live in the base class, not the drivers.** SPEC.md 12.1 lists `set_pressure`
     as "clamped to the configured ceiling" per driver. A clamp implemented per driver is a
@@ -228,8 +237,7 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23�
 Items 20–26 are session 6.
 
 20. **Three decisions S took on 23 Aug 2026, now in `docs/SPEC.md` §8.1–8.2** rather than only
-    in a conversation. All three are S's, not mine; `FOR_S.md` B1.6 asks them to confirm the
-    wording.
+    in a conversation. All three are S's, not mine.
 
     a. **Filaments are identified by their gram label** — `26`, not `5.46`. That is what is
        printed on the filament and what an experimenter reads off the kit under time pressure.
@@ -245,13 +253,15 @@ Items 20–26 are session 6.
        filaments, 0.008 g / 0.08 mN up to 300 g / 2940 mN, where the file previously held
        eleven. `tests/test_config_files.py` checks every label against its force at the chart's
        stated 9.80665 mN/g, at 3 % tolerance because the chart's own mN column is rounded to two
-       significant figures. Which of the twenty are actually held is `FOR_S.md` A3.8.
+       significant figures. **S confirmed on 23 Aug 2026 that the chart is the manual for the
+       exact set held, that all twenty are present and that the labels match**, so the file needs
+       no further reconciliation with the kit.
 
        **`force_manual_mn` is gone and `force_nominal_mn` changed value.** The file used to
        carry the manual force (255 mN for the 26 g) *and* a "nominal label" that rounded it
        (260 mN). The chart has one manufacturer force, so the rounded one had no source —
        `SPEC.md` §8.1's "Nominal label" row was unsourced too and has been deleted with it.
-       Two tests moved from 260.0 to 255.0 as a result. `FOR_S.md` B1.7.
+       Two tests moved from 260.0 to 255.0 as a result.
 
     b. **`intolerable` is derived, not observed.** There was never a mechanism for it. A rating
        reaching `pinprick.intolerable_vas_pct` is the proxy, so the software raises the flag —
@@ -273,7 +283,7 @@ Items 20–26 are session 6.
     Two things I fixed by assumption rather than asking again, both stated in `SPEC.md` §8.2:
     the escalated all-sites cap uses the **lowest** ceiling-producing force in the run, and it
     clears at the next time point like the per-site cap. Censoring of ceiling ratings is
-    `FOR_S.md` B4.5.
+    `docs/NOTES.md` N3.5.
 
 21. **Five tests were asserting today's state instead of the mechanism, and broke when the
     participant text changed on disk** — `config/text/participant_{sv,en}.yaml` was rewritten

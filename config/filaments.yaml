@@ -26,7 +26,9 @@
 #
 # tests/test_config_files.py asserts `label_g` x 9.80665 reproduces `force_nominal_mn` on every
 # row, so a mistyped label fails the suite rather than naming the wrong filament in a session.
-# Confirmation against the physical kit is still outstanding -- FOR_S.md A3.8.
+#
+# CONFIRMED AGAINST THE PHYSICAL KIT, 23 August 2026: the chart is the manual for the exact set
+# held, all twenty filaments are present, and the printed labels match.
 #
 # Manufacturer forces deviate from measured by -19.75% to +17.61%, non-systematically
 # (Berquin et al. 2010), so an unweighed set is a WARNED FALLBACK and never a silent
@@ -34,8 +36,8 @@
 # warns, `filaments_measured` is written false into the session file, and every pinprick row
 # carries an empty `force_measured_mn` to mark that it was fitted on label values.
 #
-# LIST WHATEVER IS ACTUALLY HELD. All twenty of the chart's filaments are listed. Delete the row
-# for any that is missing or damaged -- nothing downstream assumes a particular ladder.
+# LIST WHATEVER IS ACTUALLY HELD. All twenty are listed because all twenty are held. Delete the
+# row for any that is later lost or damaged -- nothing downstream assumes a particular ladder.
 
 weighing_date: null   # ISO date, written by the instruments module
 weighing_balance: null   # free text: which balance, so the measurement is traceable
