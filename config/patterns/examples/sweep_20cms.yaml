@@ -1,0 +1,12 @@
+# Provisional example pattern. Placeholder channel IDs and arbitrary overlap.
+# Real patterns come from the hardware bring-up session; see SPEC.md 12.2 and 20.
+name: sweep_20cms
+row_interval_ms: 75.0
+channel_ids: [1, 2, 3, 4, 5]
+nominal_velocity_cm_s: 20.0
+assumed_channel_spacing_cm: 1.5
+overlap_rows: 1
+loop: true
+# Derived, for reference only - the CSV and row_interval_ms are authoritative:
+#   leading-edge onset span: 0.3 s over 6.0 cm = 20.0 cm/s
+#   one full sweep including the tail: 0.45 s

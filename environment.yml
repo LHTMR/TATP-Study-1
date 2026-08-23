@@ -1,0 +1,28 @@
+# Create:  conda env create -f environment.yml
+# Update:  conda env update -f environment.yml --prune
+# Use:     conda activate tatp-study-1
+#
+# Declarative on purpose. Add a dependency by editing this file and running the update
+# command, never with `conda install` or `pip install` — an ad-hoc install is invisible in
+# the diff and will not exist on the lab PC.
+name: tatp-study-1
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.11
+
+  # Application
+  - pyside6            # the whole UI; see SPEC.md 3
+  - numpy              # randomisation, the fixed-slope fit
+  - pyyaml             # all configuration
+  - pyserial           # garment driver
+  - sounddevice        # white noise and alert tones
+
+  # Verification
+  - pytest
+  - pytest-qt          # driving Qt widgets in tests
+  - pillow             # screenshot pixel comparison
+  - pandas             # data-file assertions in the validator
+  - ruff               # lint and format

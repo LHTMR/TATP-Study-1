@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 404" width="320" height="404">
+  <title>Placeholder: primary and secondary hyperalgesia zones, dorsum of the hand</title>
+
+  <style>
+    .outline { fill: #ffffff; stroke: #333333; stroke-width: 3; stroke-linejoin: round; }
+    .sh      { fill: none;    stroke: #333333; stroke-width: 2.5; stroke-dasharray: 7 5; }
+    .ph      { fill: #cccccc; stroke: #333333; stroke-width: 2.5; }
+    .lbl     { font-family: Helvetica, Arial, sans-serif; font-size: 17px; fill: #333333; }
+    .cap     { font-family: Helvetica, Arial, sans-serif; font-size: 12px; fill: #777777; }
+  </style>
+
+  <!-- Dorsum of the left hand, schematic. Fingers point up, thumb to the left. -->
+  <path class="outline" d="
+    M 96,372
+    C 92,330 88,300 86,272
+    C 70,258 58,240 54,220
+    C 50,200 52,178 62,170
+    C 72,163 82,170 88,182
+    L 98,202
+    C 96,176 94,140 94,116
+    C 94,104 100,98 108,98
+    C 116,98 122,104 122,116
+    L 126,196
+    L 130,96
+    C 130,84 136,78 144,78
+    C 152,78 158,84 158,96
+    L 160,196
+    L 166,104
+    C 166,92 172,86 180,86
+    C 188,86 194,92 194,104
+    L 192,198
+    L 200,128
+    C 201,116 207,110 215,111
+    C 223,112 228,119 227,131
+    L 222,214
+    C 220,246 214,300 210,372
+    Z" />
+
+  <!-- Secondary hyperalgesia: the surrounding zone, mapped along four paths -->
+  <ellipse class="sh" cx="154" cy="250" rx="62" ry="52" />
+
+  <!-- Primary hyperalgesia: the thermode / capsaicin site itself -->
+  <rect class="ph" x="128" y="232" width="48" height="40" rx="3" />
+
+  <text class="lbl" x="146" y="257" text-anchor="middle">PH</text>
+  <text class="lbl" x="154" y="322" text-anchor="middle">SH</text>
+
+  <text class="cap" x="160" y="396" text-anchor="middle">placeholder — not to scale</text>
+</svg>

@@ -1,0 +1,100 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean:*)",
+      "Bash(rm:*)",
+      "Bash(rmdir:*)",
+      "Bash(mv:*)",
+      "Bash(sudo:*)",
+      "Bash(chmod:*)",
+      "Bash(chown:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(brew:*)",
+      "Read(~/Library/CloudStorage/**)",
+      "Edit(~/Library/CloudStorage/**)",
+      "Write(~/Library/CloudStorage/**)",
+      "Read(//etc/**)",
+      "Read(~/.ssh/**)",
+      "Read(.env)",
+      "Read(data/**)",
+      "Edit(data/**)",
+      "Write(data/**)",
+      "mcp__*",
+      "Bash(conda install:*)",
+      "Bash(conda remove:*)",
+      "Bash(conda create:*)",
+      "Bash(conda uninstall:*)",
+      "Bash(conda clean:*)"
+    ],
+    "allow": [
+      "Bash(conda info:*)",
+      "Bash(conda list:*)",
+      "Bash(conda run:*)",
+      "Bash(conda env list)",
+      "Bash(conda env update:*)",
+      "Bash(conda env create:*)",
+      "Bash(make check)",
+      "Bash(make test)",
+      "Bash(make validate)",
+      "Bash(make shots)",
+      "Bash(make preview)",
+      "Bash(python -m pytest:*)",
+      "Bash(pytest:*)",
+      "Bash(python tools/:*)",
+      "Bash(python -m tatp:*)",
+      "Bash(ruff:*)",
+      "Bash(ruff check:*)",
+      "Bash(ruff format:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git show:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(which:*)",
+      "Bash(python --version)",
+      "Bash(pip list)",
+      "Bash(pip freeze)",
+      "Read(//Users/sarmc72/Documents/GitHub/TATP-Study-1/**)",
+      "Edit(//Users/sarmc72/Documents/GitHub/TATP-Study-1/**)",
+      "Write(//Users/sarmc72/Documents/GitHub/TATP-Study-1/**)",
+      "WebFetch(domain:code.claude.com)",
+      "WebFetch(domain:docs.claude.com)",
+      "WebFetch(domain:psychopy.org)",
+      "WebFetch(domain:doc.qt.io)",
+      "WebFetch(domain:docs.python.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ]
+  },
+  "disabledMcpjsonServers": [
+    "*"
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PROJECT_DIR}/.claude/hooks/check_bash.py",
+            "timeout": 15,
+            "statusMessage": "Checking command..."
+          }
+        ]
+      }
+    ]
+  }
+}
