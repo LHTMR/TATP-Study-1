@@ -277,17 +277,26 @@ capsaicin duration) producing an evenly spaced grid, and an `overrides:` section
 offset or type of any individual block. The generated grid alternates pinprick and touch
 blocks, evenly spaced, never back-to-back.
 
-**The rekindle takes its own place in that sequence rather than colliding with a block.** Blocks
-sit `intervention_duration / n_blocks` apart; any block that would fall at or after the rekindle
-moves back by the rekindle's duration, and the grid is laid so the **last** block lands on the
-end of the intervention. The first block is therefore delayed from the start of the intervention
-by the length of that pause, which leaves equal clear air either side of the rekindle and puts
-both halves of the intervention on the same footing. Settled with S on 23 Aug 2026: the
-alternative, anchoring the first block to the start of the intervention, left no recovery time
-at all between the rekindle and the block after it.
+**The rekindle divides the intervention into two windows, and the blocks are split between
+them** — as evenly as possible, with the later window taking the extra when the count is odd.
+Within each window the blocks sit `block_spacing_min` apart, and the window's spare time is
+shared equally at both ends, rounded down to whole minutes so an experimenter reads whole
+minutes off the schedule. Sharing the slack rather than packing against the start is what buys
+the breathing room: the blocks sit clear of both edges, so a block running over its estimate has
+somewhere to go before it reaches the rekindle or the end of the session.
 
-A rekindle falling outside the intervention inserts no pause. That is not an error — piloting
-may legitimately want a session without one.
+**Spacing is its own parameter, not `intervention_duration / n_blocks`.** That derived value was
+exactly 10 min — twelve blocks filling all 120 minutes and leaving nothing for the rekindle, so
+the rekindle had to be borrowed from the front and left 1 minute of margin ahead of it. Making
+spacing explicit is what creates the slack. At the configured 8 min the grid is 55, 63, 71, 79,
+87, 95, the rekindle at 105–110, then 117, 125, 133, 141, 149, 157 (S, 23 Aug 2026).
+
+A rekindle falling outside the intervention divides nothing, and the blocks are then centred in
+the intervention as a single window. That is not an error — piloting may legitimately want a
+session without one.
+
+The gap that contains the rekindle is deliberately wider than the others, so the §7.3
+equal-spacing check ignores it and measures each half separately.
 
 The intervention window bounds when a block may be **launched**, not when its last rating must
 be in. The experimenter starts each block (§7.4) and the grid puts the last one on the closing
@@ -314,7 +323,16 @@ fail-fast, and it is a scheduling decision rather than error handling.
 The software **times phases and displays countdowns; the experimenter launches each block.**
 Session t=0 is the start of heat sensitisation. Record planned offset, actual start and actual
 end for every block. Alert the experimenter audibly when a block becomes due and again when
-overdue by a configured margin. No block is ever skipped automatically.
+overdue by a configured margin.
+
+**The session guides through every phase and skips nothing** (S, 23 Aug 2026). Ahead of
+schedule, it waits. Behind schedule, the block runs as soon as it can and the lateness is
+recorded — the session never catches up by dropping or shortening anything, because a session
+missing a block is not the session the analysis expects. Drift is a signal about the schedule,
+not a fault to correct inside the session: it is read afterwards and the grid adjusted between
+sessions, and it may well shrink as the experimenter gets faster with practice. This is why
+`generate.expected_duration_min` is an estimate that the preview and the §7.3 clash check use
+for **planning**, while what a block actually took is measured and recorded every time.
 
 The garment is **deactivated for the rekindle** and reactivated afterwards (Bilaga 1 §3.5).
 Log both transitions.

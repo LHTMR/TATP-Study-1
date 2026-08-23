@@ -33,6 +33,7 @@ BASE = {
         "capsaicin_duration_min": 10.0,
         "sensitisation_duration_min": 2.0,
         "first_block_type": "pinprick",
+        "block_spacing_min": 5.0,
         "expected_duration_min": {"pinprick": 4.0, "touch": 4.0},
     },
     "overrides": [],
@@ -44,9 +45,10 @@ BASE = {
     },
 }
 
-# BASE generates 25, 35, [rekindle 40-45], 50, 60 -- the same shape as the real grid, a quarter
-# the size. Blocks are 4 min long, so there is 1 min of slack before the rekindle and 5 after.
-BASE_OFFSETS = [25.0, 35.0, 50.0, 60.0]
+# BASE generates 27, 32, [rekindle 40-45], 50, 55 in a 20-60 intervention -- the same shape as
+# the real grid at a quarter the size: two blocks either side of the rekindle, 5 min apart, with
+# each half's spare time shared at both ends. Blocks are 4 min long.
+BASE_OFFSETS = [27.0, 32.0, 50.0, 55.0]
 
 # Far outside any intervention these tests configure, so no pause is inserted. For the rules
 # that have nothing to do with the rekindle, and would otherwise be read through its arithmetic.
@@ -69,20 +71,23 @@ def make(**generate) -> sched.Schedule:
 
 
 def evenly(**generate) -> sched.Schedule:
-    """Six blocks 10 min apart at 30..80, with no rekindle to widen a gap."""
+    """Six blocks 10 min apart at 25..75, with no rekindle to divide the intervention."""
     return make(
-        n_pinprick_blocks=3,
-        n_touch_blocks=3,
-        intervention_duration_min=60.0,
-        rekindle_offset_min=NO_REKINDLE,
-        **generate,
+        **{
+            "n_pinprick_blocks": 3,
+            "n_touch_blocks": 3,
+            "intervention_duration_min": 60.0,
+            "block_spacing_min": 10.0,
+            "rekindle_offset_min": NO_REKINDLE,
+            **generate,
+        }
     )
 
 
 # -- generation, SPEC.md 7.1 --------------------------------------------------------------
 
 
-def test_the_grid_alternates_and_is_evenly_spaced():
+def test_the_grid_alternates_and_splits_around_the_rekindle():
     schedule = make()
     assert [b.type for b in schedule.blocks] == ["pinprick", "touch", "pinprick", "touch"]
     assert [b.planned_offset_min for b in schedule.blocks] == BASE_OFFSETS
@@ -120,23 +125,58 @@ def test_the_rekindle_takes_its_own_place_in_the_sequence():
         )
 
 
-def test_the_last_block_lands_on_the_end_of_the_intervention():
-    """Which is what delays the first one, and what makes the two halves symmetric."""
+def test_each_half_sits_clear_of_both_ends_of_its_window():
+    """The slack is shared, not packed against the start. That is the breathing room."""
     schedule = make()
-    intervention = schedule.window("intervention")
-    assert schedule.blocks[-1].planned_offset_min == intervention.end_min
-    assert schedule.blocks[0].planned_offset_min == intervention.start_min + 5.0
-    # Equal clear air either side of the rekindle: 5 min before it, 5 min after.
-    rekindle = schedule.window("rekindle")
-    assert rekindle.start_min - schedule.blocks[1].planned_offset_min == 5.0
-    assert schedule.blocks[2].planned_offset_min - rekindle.end_min == 5.0
+    intervention, rekindle = schedule.window("intervention"), schedule.window("rekindle")
+    first, last_before, first_after, last = schedule.blocks
+
+    assert first.planned_offset_min > intervention.start_min, "clear of the opening"
+    assert last_before.planned_end_min < rekindle.start_min, "clear of the rekindle"
+    assert first_after.planned_offset_min > rekindle.end_min, "clear after the rekindle"
+    assert last.planned_end_min < intervention.end_min, "clear of the close"
 
 
-def test_a_rekindle_outside_the_intervention_inserts_no_pause():
+def test_offsets_are_whole_minutes():
+    """The experimenter reads these off a schedule and launches each block by hand."""
+    for schedule in (make(), evenly(), make(n_pinprick_blocks=3, n_touch_blocks=3)):
+        assert all(
+            b.planned_offset_min == int(b.planned_offset_min) for b in schedule.blocks
+        ), [b.planned_offset_min for b in schedule.blocks]
+
+
+def test_spacing_is_its_own_parameter_and_not_the_intervention_divided_by_the_count():
+    """Deriving it filled the whole intervention and left nothing for the rekindle."""
+    gaps = {
+        b.planned_offset_min - a.planned_offset_min
+        for a, b in zip(evenly().blocks, evenly().blocks[1:], strict=False)
+    }
+    assert gaps == {10.0}
+    assert {
+        b.planned_offset_min - a.planned_offset_min
+        for a, b in zip(
+            evenly(block_spacing_min=7.0).blocks,
+            evenly(block_spacing_min=7.0).blocks[1:],
+            strict=False,
+        )
+    } == {7.0}
+
+
+def test_a_rekindle_outside_the_intervention_divides_nothing():
     """Not an error: piloting may legitimately want a session without one."""
     schedule = evenly()
-    assert [b.planned_offset_min for b in schedule.blocks] == [30.0, 40.0, 50.0, 60.0, 70.0,
-                                                               80.0]
+    assert [b.planned_offset_min for b in schedule.blocks] == [25.0, 35.0, 45.0, 55.0, 65.0,
+                                                               75.0]
+
+
+def test_blocks_that_do_not_fit_overrun_the_end_rather_than_backing_into_the_rekindle():
+    """Overrunning is a scheduling problem the warnings describe. Backing up is a collision."""
+    schedule = make(n_pinprick_blocks=7)  # 9 blocks, 5 after the rekindle, in 15 min of window
+    rekindle = schedule.window("rekindle")
+    assert not any(
+        rekindle.start_min <= b.planned_offset_min < rekindle.end_min for b in schedule.blocks
+    )
+    assert any("lies outside the intervention" in w for w in schedule.warnings())
 
 
 # -- overrides ------------------------------------------------------------------------------
@@ -223,8 +263,8 @@ def test_a_block_ending_exactly_at_a_window_start_does_not_warn():
 
 
 def test_overlapping_blocks_are_reported_when_the_durations_are_known():
-    schedule = make(overrides=[{"index": 2, "offset_min": 27.0}])
-    assert any("still running until 29 min" in w for w in schedule.warnings())
+    schedule = make(overrides=[{"index": 2, "offset_min": 29.0}])
+    assert any("still running until 31 min" in w for w in schedule.warnings())
 
 
 def test_a_block_moved_before_its_predecessor_is_reported_as_out_of_order():
@@ -233,10 +273,10 @@ def test_a_block_moved_before_its_predecessor_is_reported_as_out_of_order():
 
 
 def test_an_overlap_is_found_between_blocks_that_are_not_adjacent_in_the_numbering():
-    """Overlap is a question about time. Block 1 moved to 58 runs 58-62, into block 4 at 60."""
-    schedule = make(overrides=[{"index": 1, "offset_min": 58.0}])
+    """Overlap is a question about time. Block 1 moved to 53 runs 53-57, into block 4 at 55."""
+    schedule = make(overrides=[{"index": 1, "offset_min": 53.0}])
     warnings = schedule.warnings()
-    assert any("block 4 starts at 60 min" in w and "block 1" in w for w in warnings)
+    assert any("block 4 starts at 55 min" in w and "block 1" in w for w in warnings)
     assert any("before block 1" in w for w in warnings), "and it is still out of order"
 
 
@@ -252,16 +292,16 @@ def test_a_long_block_catches_a_short_one_nested_inside_it():
             "overrides": [{"index": 4, "offset_min": 36.0}],
         }
     )
-    # Block 1 runs 25-55; block 2 is a 1 min touch at 35, block 4 another at 36.
+    # Block 1 runs 27-57; block 2 is a 1 min touch at 32, block 4 another at 36.
     assert any("block 4 starts at 36 min" in w and "block 1" in w for w in schedule.warnings())
 
 
 def test_the_total_is_the_end_of_the_latest_thing_scheduled():
-    schedule = make()
-    assert schedule.total_duration_min == 64.0  # last block starts at 60 and runs 4 min
-    assert make(expected_duration_min={"pinprick": None, "touch": None}).total_duration_min == (
-        60.0
-    )
+    # The intervention closes at 60 and the last block ends at 59, so the window is the latest.
+    assert make().total_duration_min == 60.0
+    # A block long enough to run past it becomes the latest instead.
+    longer = make(expected_duration_min={"pinprick": 10.0, "touch": 10.0})
+    assert longer.total_duration_min == 65.0
 
 
 def test_unknown_durations_disable_the_overlap_check_and_say_so():
@@ -276,22 +316,22 @@ def test_unknown_durations_disable_the_overlap_check_and_say_so():
 
 
 def test_unequal_spacing_between_same_type_blocks_is_reported():
-    """Pinprick blocks 1, 3, 5 sit 20 min apart; moving block 5 from 70 to 75 makes one 25."""
-    schedule = evenly(overrides=[{"index": 5, "offset_min": 75.0}])
+    """Pinprick blocks 1, 3, 5 sit 20 min apart; moving block 5 from 65 to 70 makes one 25."""
+    schedule = evenly(overrides=[{"index": 5, "offset_min": 70.0}])
     assert any("where the others are" in w for w in schedule.warnings())
 
 
 def test_spacing_within_the_configured_tolerance_does_not_warn():
     """The same move, but 24 s of it -- under the configured 30 s tolerance."""
     schedule = evenly(
-        overrides=[{"index": 5, "offset_min": 70.4}],
+        overrides=[{"index": 5, "offset_min": 65.4}],
         validation={"equal_spacing_tolerance_s": 30.0},
     )
     assert not any("where the others are" in w for w in schedule.warnings())
 
 
-def test_the_rekindle_pause_is_not_counted_as_uneven_spacing():
-    """The grid widens one gap on purpose (SPEC.md 7.1); wall clock alone would always fire."""
+def test_the_gap_holding_the_rekindle_is_not_counted_as_uneven_spacing():
+    """That gap is wide on purpose (SPEC.md 7.1); wall clock alone would always fire."""
     schedule = make(n_pinprick_blocks=3, n_touch_blocks=3, intervention_duration_min=60.0)
     pinprick = [b.planned_offset_min for b in schedule.blocks if b.type == "pinprick"]
     gaps = {round(b - a, 6) for a, b in zip(pinprick, pinprick[1:], strict=False)}
@@ -302,7 +342,7 @@ def test_the_rekindle_pause_is_not_counted_as_uneven_spacing():
 def test_a_session_over_the_configured_maximum_is_reported():
     schedule = make(validation={"max_session_duration_min": 30.0})
     warning = next(w for w in schedule.warnings() if "over the configured maximum" in w)
-    assert "64" in warning  # the last block starts at 60 and runs 4 min
+    assert "60" in warning  # the intervention closes at 60, after the last block ends
 
 
 def test_a_block_outside_the_intervention_window_is_reported():
@@ -356,8 +396,8 @@ def test_the_preview_carries_every_column_the_spec_names():
     assert rows[0] == {
         "index": 1,
         "type": "pinprick",
-        "planned_offset_min": 25.0,
-        "planned_wall_clock": "09:55:00",
+        "planned_offset_min": 27.0,
+        "planned_wall_clock": "09:57:00",
         "expected_duration_min": 4.0,
         "overridden": False,
     }
@@ -366,7 +406,7 @@ def test_the_preview_carries_every_column_the_spec_names():
 def test_the_wall_clock_column_is_the_offset_from_t_zero():
     rows = make().preview_rows(T_ZERO)
     assert [r["planned_wall_clock"] for r in rows] == [
-        "09:55:00", "10:05:00", "10:20:00", "10:30:00"
+        "09:57:00", "10:02:00", "10:20:00", "10:25:00"
     ]
 
 

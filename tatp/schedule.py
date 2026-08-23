@@ -23,6 +23,7 @@ drawn on the experimenter window.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -213,8 +214,9 @@ class Schedule:
         for block_type in BLOCK_TYPES:
             same = [b for b in self.blocks if b.type == block_type]
             gaps = [
-                (a, b, self._gap_min(a, b))
+                (a, b, b.planned_offset_min - a.planned_offset_min)
                 for a, b in zip(same, same[1:], strict=False)
+                if not self._straddles_rekindle(a, b)
             ]
             if len(gaps) < 2:
                 continue
@@ -227,20 +229,20 @@ class Schedule:
                     )
         return found
 
-    def _gap_min(self, earlier: Block, later: Block) -> float:
-        """Minutes between two blocks, not counting a rekindle that sits between them.
+    def _straddles_rekindle(self, earlier: Block, later: Block) -> bool:
+        """Whether the rekindle falls between two blocks.
 
-        The grid deliberately widens one gap by the length of the rekindle (SPEC.md 7.1), so
-        measuring wall-clock distance would report the one intended irregularity as the rule
-        being broken -- and a check that always fires is a check nobody reads.
+        The grid puts the rekindle and a margin either side of it in one gap on purpose
+        (SPEC.md 7.1), so that gap is not evidence of uneven spacing and comparing it against
+        the others would report the one intended irregularity as the rule being broken. Each
+        half is regular in itself, and that is what the check measures. A check that always
+        fires is a check nobody reads.
         """
-        gap = later.planned_offset_min - earlier.planned_offset_min
         rekindle = self.window("rekindle")
-        if earlier.planned_offset_min <= rekindle.start_min <= rekindle.end_min <= (
-            later.planned_offset_min
-        ):
-            gap -= rekindle.duration_min
-        return gap
+        return (
+            earlier.planned_offset_min <= rekindle.start_min
+            and rekindle.end_min <= later.planned_offset_min
+        )
 
     def _length_warnings(self) -> list[str]:
         total = self.total_duration_min
@@ -299,31 +301,56 @@ def _alternating(n_pinprick: int, n_touch: int, first: str) -> list[str]:
     return types
 
 
-def _offsets(n: int, start: float, duration: float, generate: dict) -> list[float]:
-    """Evenly spaced offsets with the rekindle inserted as a pause. SPEC.md 7.1.
+def _centred(n: int, low: float, high: float, spacing: float) -> list[float]:
+    """`n` blocks `spacing` apart, with the window's spare time shared equally at both ends.
 
-    Blocks sit `intervention_duration / n` apart, and the rekindle occupies its own place in
-    that sequence rather than colliding with a block: every block that would fall at or after
-    it moves back by its duration. The grid is then laid so the **last** block lands on the end
-    of the intervention, which delays the first one by the length of the pause -- both hours
-    then sit the same way against the rekindle, with equal clear air on either side of it.
-    Settled with S on 23 Aug 2026 (FOR_S A3.3); the alternative, anchoring the first block to
-    the start of the intervention instead, left no recovery time after the rekindle at all.
+    Sharing it rather than packing against `low` is what buys the breathing room: the blocks
+    sit clear of both edges of their window, so a block running over its estimate has somewhere
+    to go before it hits whatever the window abuts.
+    """
+    if n == 0:
+        return []
+    margin = (high - low - (n - 1) * spacing) / 2.0
+    # Whole minutes, because the experimenter reads these off a schedule and launches the block
+    # by hand. Rounding down gives the spare half-minute to the end of the window rather than
+    # the start, so nothing is pushed closer to whatever the window abuts.
+    #
+    # A negative margin means the blocks do not fit in the window. They then start at its
+    # opening and overrun the far end, rather than being centred and spilling out of both --
+    # overrunning the end of the session is a scheduling problem the warnings describe, whereas
+    # spilling backwards would push a block into the rekindle, which is the one thing the split
+    # exists to prevent.
+    margin = math.floor(margin) if margin > 0 else 0.0
+    return [low + margin + i * spacing for i in range(n)]
+
+
+def _offsets(n: int, start: float, duration: float, generate: dict) -> list[float]:
+    """Block offsets. SPEC.md 7.1.
+
+    The rekindle divides the intervention into two windows. Blocks are split as evenly as
+    possible between them -- with an odd count the later window takes the extra, because it is
+    the post-rekindle half the design is most interested in -- and within each they sit
+    `block_spacing_min` apart with the spare time shared at both ends.
+
+    Spacing is its own parameter rather than `intervention_duration / n`. That derived value was
+    exactly 10 min, which is 12 blocks filling all 120 minutes and leaving nothing for the
+    rekindle, so the pause had to be borrowed from the front and left 1 min of margin ahead of
+    the rekindle. Making spacing explicit is what creates the slack (S, 23 Aug 2026).
     """
     if n == 0:
         return []
     end = start + duration
-    spacing = duration / n
+    spacing = float(generate["block_spacing_min"])
     rekindle_start = float(generate["rekindle_offset_min"])
-    # A rekindle outside the intervention interrupts nothing, so it inserts no pause. It is not
-    # a configuration error: piloting may well want a session without one.
-    pause = float(generate["rekindle_duration_min"]) if start <= rekindle_start < end else 0.0
-    first = end - (n - 1) * spacing - pause
-    offsets = []
-    for i in range(n):
-        at = first + i * spacing
-        offsets.append(at + pause if at >= rekindle_start else at)
-    return offsets
+    rekindle_end = rekindle_start + float(generate["rekindle_duration_min"])
+    # A rekindle outside the intervention divides nothing. Not a configuration error: piloting
+    # may well want a session without one.
+    if not start <= rekindle_start < end:
+        return _centred(n, start, end, spacing)
+    before = n // 2
+    return _centred(before, start, rekindle_start, spacing) + _centred(
+        n - before, rekindle_end, end, spacing
+    )
 
 
 def _durations(generate: dict, types: list[str]) -> dict[str, float | None]:

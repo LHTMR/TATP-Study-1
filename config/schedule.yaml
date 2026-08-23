@@ -18,14 +18,23 @@ generate:
   sensitisation_duration_min: 2.0    # thermode 50 C, timed and prompted only (SPEC.md 1.2)
   first_block_type: pinprick
 
+  block_spacing_min: 8.0             # Minutes between consecutive blocks. Its own parameter and
+                                     # not intervention_duration / n_blocks -- that derived
+                                     # value was exactly 10 min, which is 12 blocks filling all
+                                     # 120 minutes and leaving nothing for the rekindle, so the
+                                     # grid had only 1 min of margin ahead of it. 8 min frees
+                                     # 24 min of slack, shared at both ends of each half.
+
   expected_duration_min:
-    # How long a block is expected to take. SPEC.md 7.2 prints it in the preview and 7.3 needs
-    # it to check for overlapping blocks. NOT SETTLED -- it is part of the same question as the
-    # spacing (open item 4), so it carries no working value: a guessed duration would make the
-    # overlap check answer confidently about a grid nobody has timed. Until these are numbers
-    # the preview prints a dash and the overlap check says it could not run.
-    pinprick: null
-    touch: null
+    # How long a block is expected to take. `make preview` shows it (SPEC.md 7.2) and the
+    # overlap check needs it (7.3). These are ESTIMATES, not measurements: a pinprick block is
+    # 5 trials at 13-17 s ISI plus a 9 s rating delay plus the participant's time on the VAS,
+    # which is the part nobody has timed. 4 min for both, S 23 Aug 2026. Replace with measured
+    # values after piloting (open item 4); the two may well differ, since a touch-rating block
+    # has no ISI train. Nothing derived from these enters analysis -- they drive the preview
+    # and the clash warning, and the session records what a block ACTUALLY took either way.
+    pinprick: 4.0
+    touch: 4.0
 
 overrides: []
   # Each entry replaces one generated block. Example, commented out because an unused

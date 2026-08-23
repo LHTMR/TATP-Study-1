@@ -52,6 +52,14 @@ def _session_values(session):
     return {row["key"]: row["value"] for row in _table(session, "session")}
 
 
+def _session_with(loaded, tmp_path, schedule, participant_code):
+    """A session on a crafted schedule, so a test never depends on today's `schedule.yaml`."""
+    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "d"),
+                                            "cloud_sync_markers": []}}
+    config = cfg.Config(**{**loaded.__dict__, "hardware": hardware, "schedule": schedule})
+    return Session(config, participant_code, 1, "SM", EXAMPLES)
+
+
 # -- blinding --------------------------------------------------------------------------
 
 
@@ -218,7 +226,26 @@ def test_a_block_records_its_plan_and_what_actually_happened(session):
     assert f"planned {block.planned_offset_min:g} min" in rows["block_started"]["detail"]
     assert "against plan" in rows["block_started"]["detail"]
     assert "took" in rows["block_ended"]["detail"]
-    # Unset until open item 4 lands, and the log says so rather than printing a number.
+    # Driven by the block rather than by what schedule.yaml holds today, so this survives the
+    # durations changing from estimates to measurements (PROGRESS.md decision 21).
+    duration = block.expected_duration_min
+    shown = "unset" if duration is None else f"{duration:g} min"
+    assert f"expected {shown}" in rows["block_ended"]["detail"]
+
+
+def test_a_block_with_no_expected_duration_says_unset_rather_than_a_number(loaded, tmp_path):
+    """The other branch of the line above, which the live config no longer reaches."""
+    generate = {**loaded.schedule["generate"],
+                "expected_duration_min": {"pinprick": None, "touch": None}}
+    made = _session_with(loaded, tmp_path, {**loaded.schedule, "generate": generate}, "05")
+    made.start()
+    made.start_sensitisation()
+    made.start_block(made.schedule.blocks[0])
+    made.end_block()
+    made.close()
+
+    with made.files.path("log").open(encoding="utf-8", newline="") as handle:
+        rows = {row["event"]: row for row in csv.DictReader(handle)}
     assert "expected unset" in rows["block_ended"]["detail"]
 
 
@@ -261,16 +288,9 @@ def test_schedule_warnings_are_logged_at_startup(loaded, tmp_path):
     happens to warn about today. Asserting against the live count would quietly become `0 == 0`
     the day open item 4 is resolved, and stop testing anything (PROGRESS.md decision 21).
     """
-    schedule = {
-        **loaded.schedule,
-        "overrides": [{"index": 1, "offset_min": loaded.schedule["generate"][
-            "rekindle_offset_min"
-        ]}],
-    }
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "d"),
-                                            "cloud_sync_markers": []}}
-    config = cfg.Config(**{**loaded.__dict__, "hardware": hardware, "schedule": schedule})
-    made = Session(config, "04", 1, "SM", EXAMPLES)
+    on_the_rekindle = loaded.schedule["generate"]["rekindle_offset_min"]
+    schedule = {**loaded.schedule, "overrides": [{"index": 1, "offset_min": on_the_rekindle}]}
+    made = _session_with(loaded, tmp_path, schedule, "04")
     made.start()
     made.close()
 

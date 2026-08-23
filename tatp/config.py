@@ -139,6 +139,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("schedule.yaml", "generate.capsaicin_duration_min", NUMBER, 0, None),
     ("schedule.yaml", "generate.sensitisation_duration_min", NUMBER, 0, None),
     ("schedule.yaml", "generate.first_block_type", str, None, None),
+    ("schedule.yaml", "generate.block_spacing_min", NUMBER, 0, None),
     ("schedule.yaml", "overrides", list, None, None),
     ("schedule.yaml", "validation.max_session_duration_min", NUMBER, 0, None),
     ("schedule.yaml", "validation.overdue_alert_margin_s", NUMBER, 0, None),

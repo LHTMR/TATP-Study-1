@@ -158,22 +158,46 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23�
     a correct test of the old spec, so this is a spec change with a test change behind it rather
     than a test relaxed to make something pass.
 
-31. **The rekindle takes its own place in the grid.** S's decision, 23 Aug 2026, against three
-    grids I put up. Blocks sit `intervention_duration / n_blocks` apart; any block that would
-    fall at or after the rekindle moves back by its duration; and the grid is laid so the
-    **last** block lands on the end of the intervention, which delays the first by the length of
-    the pause. `SPEC.md` §7.1 has it. The result is 50, 60, 70, 80, 90, 100, rekindle 105–110,
-    115, 125, 135, 145, 155, 165 — symmetric, with 5 min of clear air either side of the
-    rekindle and block 12 flush with the intervention end.
+31. **The rekindle divides the intervention, and block spacing is its own parameter.** Settled
+    with S on 23 Aug 2026 over three rounds. `SPEC.md` §7.1 has the rule; `make preview` shows
+    the result: **55, 63, 71, 79, 87, 95, rekindle 105–110, 117, 125, 133, 141, 149, 157.**
 
-    **The old formula put block 7 exactly on the rekindle**, which is what the preview found the
-    moment it existed. The rejected alternative anchored the first block to the intervention
-    start and left block 7 starting the instant the rekindle ended, with no recovery time.
+    **The chain of findings is worth keeping, because each step was only visible once the
+    previous one was built.**
 
-32. **The equal-spacing check discounts the rekindle pause.** The grid widens one gap on purpose,
-    so measuring wall-clock distance reported the one intended irregularity as a broken rule —
-    two warnings on a correct grid. `Schedule._gap_min` subtracts a rekindle lying between two
-    blocks. A check that always fires is a check nobody reads.
+    a. The original formula spaced blocks at `intervention_duration / n_blocks` and put
+       **block 7 exactly on the rekindle**. The preview found it the first time it ran.
+    b. S chose to keep the rekindle at t+60 and delay the first hour, which gave 50…165 with
+       10 min spacing and a 5 min pause. Clean, but it exposed the real constraint: **twelve
+       blocks at 10 min fill all 120 minutes of the intervention and leave nothing for the
+       rekindle**, so the pause had to be borrowed from the front, leaving 1 min of margin
+       ahead of the rekindle and 5 after.
+    c. S asked for 8 or 9 min spacing for breathing room. That required decoupling spacing from
+       `intervention_duration / n_blocks` — the derived value could never produce slack.
+       `block_spacing_min` is now explicit. **8 was chosen over 9** because it leaves more room
+       everywhere: 6 min from the last pre-rekindle block's estimated end to the rekindle
+       against 3.5, and 7.5 min after it against 5.
+
+    The rule: the rekindle splits the intervention into two windows, blocks are divided as
+    evenly as possible between them (the later window takes the extra on an odd count), and
+    within each they sit `block_spacing_min` apart with the window's spare time **shared at both
+    ends** rather than packed against the start. Sharing it is what buys the room — a block
+    overrunning its estimate has somewhere to go at either edge.
+
+    Two details that are decisions, not arithmetic: margins are **rounded down to whole
+    minutes**, because the experimenter reads offsets off a schedule and launches by hand, and
+    rounding down gives the spare half-minute to the far end rather than pushing a block toward
+    what the window abuts. And when blocks **do not fit**, they start at the window's opening and
+    overrun the far end rather than being centred and spilling out of both — overrunning is a
+    scheduling problem the warnings describe, whereas spilling backwards pushes a block into the
+    rekindle, which is the one thing the split exists to prevent.
+
+32. **The equal-spacing check ignores the gap holding the rekindle.** That gap is wide on
+    purpose, so comparing it against the others reported the one intended irregularity as a
+    broken rule — two warnings on a correct grid, twice, first when the pause was 5 min and
+    again when the margins widened it further. Subtracting the rekindle's duration was not
+    enough; the check now skips the straddling gap entirely and measures each half separately.
+    A check that always fires is a check nobody reads.
 
 33. **The intervention window bounds when a block may be *launched*, not when its last rating
     must be in.** The experimenter starts each block and the grid puts the last one on the
