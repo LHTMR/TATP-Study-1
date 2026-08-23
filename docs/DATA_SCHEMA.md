@@ -131,7 +131,7 @@ One row per monofilament application, both protocols, all phases (§14.2).
 | filament_size | str | - | yes | Aesthesio size, e.g. `5.46` |
 | force_nominal_mn | float | mN | yes | Label value, display only (§8.1) |
 | force_measured_mn | float | mN | no | Weighed value; empty until the set is weighed (§20 item 1) |
-| force_applied_mn | float | mN | yes | What the estimator fits. The measured force of the filament actually applied, which is not the intended one when the experimenter substitutes (§8.2 safety rule) |
+| force_applied_mn | float | mN | no | What the estimator fits. The measured force of the filament actually applied, which is not the intended one when the experimenter substitutes (§8.2 safety rule). Empty until the set is weighed (§20 item 1): nominal force is never written here, because manufacturer values deviate from measured by up to about 20 % non-systematically (§8.1). A session with this column empty cannot yield an F₄₀ estimate, which is what `blocks_use: true` on open item 1 means |
 | substituted | bool | - | yes | `true` when the applied filament differs from the one the software asked for |
 | site_index | int | - | yes | Rotates on every application (§8.2) |
 | cue_onset_iso | iso8601 | - | yes | Visual warning cue onset (§10.5) |

@@ -35,7 +35,7 @@ The largest single item, and the one I have most deliberately not touched.
 | # | What | Gate | Ref |
 |---|---|---|---|
 | A1.1 | **The participant screen text.** Welcome, standby, session-end, paused, emergency-stop, self-start, adjustment, comparison, preference and mapping instructions — in **both Swedish and English**. | Real participant | L4 |
-| A1.2 | **English proportionality-training wording** for the pain, intensity and pleasantness scales. `SPEC.md` §10.6 supplies the Swedish only. | Real participant | L4 |
+| A1.2 | **English proportionality-training wording** for the pain, intensity and pleasantness scales. `SPEC.md` §10.6 supplies the Swedish only. **Now answerable** — Bilaga 1 supplies it ("a mark twice as far along the line indicates it is twice as painful", "twice as pleasant/intense"); transcribed in the draft below, needs only your yes. | Real participant | L4 |
 | A1.3 | **Verification of the drafted Swedish VAS wordings** in `SPEC.md` §10.6 against the participant-facing ethics attachments. | Real participant | §20.12 |
 
 **Why I stopped rather than drafted.** Participant-facing wording is bound by what the ethics
@@ -45,6 +45,11 @@ distinguish a condition. Writing plausible text would have produced something th
 and is not what was approved. Every such string is currently `PLACEHOLDER…`, detected by
 `Config.has_placeholder_text()`, and the experimenter screen carries an unmissable banner while
 any remain.
+
+**A draft now exists to react to:** `docs/participant_screen_text_draft.md`, written against
+Bilaga 3a (approved participant vocabulary), Bilaga 1 and `article_summaries.md` §§IV and VIII.
+It is a draft for you to mark up, not approved text, and it is deliberately **not** in the
+config — the `PLACEHOLDER` gate and the startup banner are untouched.
 
 **What I need:** the strings, in any form — a document, a table, a message. I will transcribe
 them into `config/text/participant_{sv,en}.yaml`. Key names are already in place, so you can
@@ -90,11 +95,12 @@ Nothing here is an input to me. These are yours to decide, align or do.
 
 | # | What |
 |---|---|
-| B1.1 | **The experimenter Swedish in `config/text/experimenter_sv.yaml`.** I wrote it from scratch — it is not participant-facing and not ethics-bound, so it needed no source, but it has had no native review. Roughly 90 lines. |
+| B1.1 | **The experimenter Swedish in `config/text/experimenter_sv.yaml`.** I wrote it from scratch — it is not participant-facing and not ethics-bound, so it needed no source, but it has had no native review. Roughly 110 lines. Session 6 added two blocks: `session:` (the identity strip) and `terms:` (the limb and zone words, so that values the software holds in English are not interpolated untranslated). The zone words are inflected to fit `"{region} zonen"` — *primära*, *sekundära*. |
 | B1.2 | **The allocation design, before `config/allocation.csv` is generated and committed.** Condition order drawn from a pool holding each of the 6 permutations equally often. Starting limb alternates by participant *index*, which balances 21/20 exactly where random assignment would not. Codes `01`–`41`. Default seed `20260823`. Once sessions have been run against it, regenerating it re-allocates people, so this is worth a look now rather than later. |
 | B1.3 | **`static_sham` = all five channels held on.** My assumption, so the sham matches the moving patterns in spatial extent and differs only in motion. A single-channel sham would differ in extent as well. Confirm at bring-up. |
 | B1.4 | **`docs/DATA_SCHEMA.md`** — the column list for all eleven tables. It is *parsed* by the writer and the validator, so it is the real schema, not documentation of one. Worth reading once before data exists rather than after. |
 | B1.5 | **One stated deviation from `SPEC.md` §12.1.** Its interface lists `play_pattern(pattern, params: dict)`. I implemented `play_pattern(pattern)` with no `params`, because every per-pattern parameter the spec names — row interval, channel ids, loop — lives in the pattern's sidecar YAML, and an empty dict nothing reads is the unused option `CLAUDE.md` forbids. Say if you intended `params` to carry something I have not anticipated. |
+| B1.6 | **`pinprick.force_applied_mn` is no longer a *required* column** in `docs/DATA_SCHEMA.md`. It is the **measured** force of the filament applied, and the set is unweighed (A3.1), so requiring it forced a choice between two bad outcomes: writing the nominal label into a column that means something else — manufacturer values deviate from measured by −19.75 % to +17.61 % **non-systematically**, so it is a different quantity, not an approximation — or refusing to run any pinprick trial before the weighing, which contradicts open item 1's `blocks_use: true` meaning "piloting is fine without it". It is now written empty until you weigh the set, and the row still carries `filament_size` and `force_nominal_mn`. **This is a change to the authoritative schema, so it is here rather than only in the git log.** |
 
 ### B2. Align Bilaga 1 with what is implemented
 

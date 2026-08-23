@@ -9,6 +9,24 @@
 meta:
   language: en
 
+session:
+  # The identity strip at the top of the experimenter window (SPEC.md 11). The condition is
+  # deliberately absent from it and must never be added (SPEC.md 16).
+  participant: 'Participant {value}'
+  session_number: 'Session {value}'
+  limb: 'Target limb: {value}'
+  experimenter: 'Experimenter {value}'
+
+terms:
+  # Controlled-vocabulary values that appear inside the strings below, so that a value the
+  # software holds in English -- a limb, a zone -- is not shown untranslated.
+  limbs:
+    left: left
+    right: right
+  regions:
+    primary: primary
+    secondary: secondary
+
 phases:
   setup: Setup
   touch_calibration: Touch calibration

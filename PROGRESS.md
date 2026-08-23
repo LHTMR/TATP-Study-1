@@ -6,14 +6,16 @@ fresh session should need nothing from any previous conversation.
 Everything waiting on S — values, wordings, reviews, decisions — is in **`FOR_S.md`**, not
 here. Keep the two updated together.
 
-**Last updated:** 23 August 2026, session 5.
-**Milestone:** 1 (the vertical slice) — *in progress.*
+**Last updated:** 23 August 2026, session 6.
+**Milestone:** 1 (the vertical slice) — *the slice runs.*
 
-**Session 5 ran the code for the first time and built most of Milestone 1's foundation.**
-Everything written in session 1 had been written and never executed; that is no longer true.
-The config layer, the allocation reader, the clock and provenance all run. The data-file
-writer, the garment layer, the responder, the VAS and the session are new, and there are 118
-tests and a `make` gate. Six commits, each with the suite passing.
+**Session 6 closed the loop.** One pinprick trial now runs end to end: visual warning cue →
+stimulus prompt on the experimenter screen → rating cue 9 s later → VAS on the participant
+screen → one validated row in `pinprick.csv` with reaction time, first-press side and direction
+changes. Both windows exist, thin. 142 tests.
+
+Session 5 built the foundation below it: config, allocation, clock, provenance, data files,
+garment, responder, VAS and session.
 
 ---
 
@@ -68,17 +70,22 @@ function. Do not "fix" anything in the repository for this.
 | `tatp/garment/patterns.py` | **New.** Tick-grid loader and event expansion |
 | `tatp/responder.py` | **New.** R400 key mapping, with the `escape` rule machine-checked |
 | `tatp/ui/vas.py` | **New.** `VasState` (no Qt, all the behaviour) and `VasWidget` |
-| `tatp/session.py` | **New.** Session state, all 40 provenance keys, the log, blinding |
+| `tatp/session.py` | Session state, all 40 provenance keys, the log, blinding |
+| `tatp/ui/participant.py` | **New.** Three screens — text, warning cue, VAS — plus screen placement |
+| `tatp/ui/experimenter.py` | **New.** Banners, identity, phase, elapsed, garment state, open items, instruction |
+| `tatp/pinprick.py` | **New.** One application end to end. Search/bracket/estimate is Milestone 3 |
 | `tools/make_allocation.py` | Run once; the output is committed |
-| `Makefile` | **New.** `check`, `test`, `lint`. `check` is not yet the whole gate |
-| `tests/` | 118 tests, all passing headless |
+| `Makefile` | `check`, `test`, `lint`. `check` is not yet the whole gate |
+| `tests/` | 142 tests, all passing headless |
 
 ## What does not exist yet
 
-`tatp/schedule.py`, `audio.py`, `screenshots.py`, `tatp/ui/{participant,experimenter,widgets}.py`,
-`tatp/garment/arduino_{mosfet,valves}.py`, `pinprick.py`, `touchcal.py`, `instruments.py`,
+`tatp/schedule.py`, `audio.py`, `screenshots.py`, `tatp/ui/widgets.py`,
+`tatp/garment/arduino_{mosfet,valves}.py`, `touchcal.py`, `instruments.py`,
 `launcher.py`, `run_session.py`, `tools/` (except `make_allocation.py`), `sim/`, `README`,
 `SOP.md`, `HARDWARE_BRINGUP.md`.
+
+**Nothing yet opens the two windows outside a test.** `run_session.py` is the next thing.
 
 ---
 
@@ -167,6 +174,47 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5.
     selects it (SPEC.md 12.2), and defaulting to `config/patterns/examples/` would quietly
     substitute the provisional mockups for the real patterns (open item 5).
 
+Items 20–26 are session 6.
+
+20. **`pinprick.force_applied_mn` is no longer a required column** in `docs/DATA_SCHEMA.md`.
+    It is the *measured* force of the filament applied, and the set is unweighed (open item 1),
+    so requiring it would have forced one of two bad outcomes: writing the nominal label into a
+    column that means something else — manufacturer values deviate from measured by −19.75 % to
+    +17.61 % *non-systematically*, so it is a different quantity, not an approximation — or
+    refusing to run any pinprick trial before the weighing, which contradicts `blocks_use: true`
+    meaning "piloting is fine without it". It is now written empty until the set is weighed.
+    **In `FOR_S.md` B1.6 for review** — it is a change to the authoritative schema.
+
+21. **`ExperimenterWindow` takes a reader callable, not the `Session`.** "It reads
+    `experimenter_view()` and nothing else" is then structural rather than a habit: the window
+    holds no reference to a session and so has no route to `Session.condition`, whatever a later
+    edit does to it. `run_session.py` passes `session.experimenter_view`.
+
+22. **`session:` and `terms:` blocks added to `config/text/experimenter_{sv,en}.yaml`.** The
+    identity strip needed format strings, and `limb` and `region` are values the software holds
+    in English (`left`, `primary`) that were being interpolated untranslated into Swedish
+    sentences. `terms:` maps them. The Swedish region words are inflected to fit
+    `"{region} zonen"`.
+
+23. **The participant window handles keys whenever the VAS is not showing.** An emergency stop
+    that only works during a rating is not an emergency stop (SPEC.md 13). Off the VAS the
+    window holds focus, emits `emergency_stop` for that key and swallows everything else,
+    `escape` included — Qt would otherwise read it as "close this window" (SPEC.md 10.1).
+
+24. **An emergency stop during a trial writes no `pinprick` row.** No rating was given, so
+    there is nothing to record in the rating columns and no honest value for them. The `log`
+    carries the event with its timestamp and the trial index, so what happened is recoverable.
+    What the *session* does next — resume, discard, abort — is a session-level decision and is
+    not in the trial.
+
+25. **`garment_driver` added to `experimenter_view()`.** SPEC.md 11 wants hardware status, and
+    the reduced-capability banner of SPEC.md 12.4 names the device in its `{value}`.
+
+26. **The experimenter window has no refresh timer.** It redraws when the caller calls
+    `refresh()`, which the trial does at each step. The ticking clock and the countdown to the
+    next scheduled event are Milestone 5, and that is where the timer belongs — a timer interval
+    here would be a timing literal with no home in config yet.
+
 ---
 
 ## What session 5 fixed
@@ -186,24 +234,22 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5.
 
 ## Next steps, in order
 
-The foundation is done: config, allocation, clock, provenance, data files, garment, responder,
-VAS and session all run and are tested. What is left of Milestone 1 is the phases on top of
-them and the two windows.
+The pinprick half of the slice runs. What is left of Milestone 1 is the touch half and an
+entry point.
 
-1. **`tatp/ui/participant.py`** — the fullscreen participant window, holding the VAS widget and
-   the standby/instruction screens. Every string from `participant_*.yaml`; all of them are
-   still `PLACEHOLDER`, which is expected (`FOR_S.md` A1.1).
-2. **`tatp/ui/experimenter.py`** — SPEC.md 11. Build it against `Session.experimenter_view()`,
-   which is the only thing it may show. It must carry the unmissable banner while
-   `placeholder_text` is true, and a second one for a reduced-capability device (SPEC.md 12.4).
-3. **The thin path itself** — a three-application calibration, one pinprick trial, one touch
-   rating, driven through the session. Keep the long protocol's search/bracket/cap logic for
-   Milestone 3: Milestone 1 wants a thin path, not Protocol A.
-4. **`run_session.py`** and enough of `launcher.py` to start it.
-5. **Milestone 2**: `tools/check.py`, `tools/validate_session.py`, `tatp/screenshots.py`, and
+1. **`run_session.py`** — open both windows, run one trial, close. Until this exists the slice
+   only runs inside `tests/test_pinprick.py`, which is not the same as running. Wire the
+   participant window's `emergency_stop` to the session here (decision 24: the trial stops
+   itself; nothing yet decides what the session does next).
+2. **`tatp/touchcal.py`** — three applications of the method of adjustment and one touch
+   intensity rating, driven through the session, using the accelerating control of SPEC.md 10.3
+   against the mock garment. Keep the anchors, gain matching and equalisation for Milestone 4.
+3. **`tatp/schedule.py`** — enough to place the trial in a block, so `block_index` stops being
+   `None`.
+4. **Milestone 2**: `tools/check.py`, `tools/validate_session.py`, `tatp/screenshots.py`, and
    the literals test SPEC.md 4.2 asks for ("a test greps for violations"). Then finish the
    `check` target and delete its INCOMPLETE GATE line.
-6. Run the **spec-review** agent before declaring Milestone 1 done
+5. Run the **spec-review** agent before declaring Milestone 1 done
    ("Use the spec-review agent to review this diff against docs/SPEC.md").
 
 ## Watch out for

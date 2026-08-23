@@ -9,6 +9,25 @@
 meta:
   language: sv
 
+session:
+  # Identitetsraden överst i försöksledarfönstret (SPEC.md 11). Betingelsen saknas medvetet
+  # och får aldrig läggas till (SPEC.md 16).
+  participant: 'Deltagare {value}'
+  session_number: 'Session {value}'
+  limb: 'Målarm: {value}'
+  experimenter: 'Försöksledare {value}'
+
+terms:
+  # Värden ur kontrollerade vokabulärer som förekommer inuti strängarna nedan, så att ett värde
+  # som programmet håller på engelska -- en arm, en zon -- inte visas oöversatt.
+  limbs:
+    left: vänster
+    right: höger
+  regions:
+    # Böjda så att de passar "{region} zonen" under instructions nedan.
+    primary: primära
+    secondary: sekundära
+
 phases:
   setup: Förberedelse
   touch_calibration: Beröringskalibrering
