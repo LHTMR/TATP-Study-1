@@ -224,11 +224,14 @@ Items 20–26 are session 6.
     clears at the next time point like the per-site cap. Censoring of ceiling ratings is
     `FOR_S.md` B4.5.
 
-21. **Five tests were asserting today's state instead of the mechanism, and broke when S
-    approved the participant wording** (L4 resolved, `has_placeholder_text()` now false). They
-    asserted things like "L1–L4 are all still open" and "the live config contains a
-    PLACEHOLDER", which were true when written and became false the moment the build made
-    progress. Each is now driven by a crafted input or by the flag itself:
+21. **Five tests were asserting today's state instead of the mechanism, and broke when the
+    participant text changed on disk** — `config/text/participant_{sv,en}.yaml` was rewritten
+    by a parallel session, which set `meta.instructions_supplied` and closed L4, so
+    `has_placeholder_text()` went false. The tests asserted things like "L1–L4 are all still
+    open" and "the live config contains a PLACEHOLDER", which were true when written and became
+    false the moment anything moved. Each is now driven by a crafted input or by the flag
+    itself, **so the suite passes whatever state the participant wording is in** — which is what
+    makes the leak in decision 22 safe to unwind:
 
     - `test_an_open_item_is_resolved_exactly_when_its_config_path_is_filled` reads
       `open_items.yaml` and asserts `resolved` agrees with the paths it names, for every item.
@@ -242,6 +245,32 @@ Items 20–26 are session 6.
 
     **The lesson is worth keeping:** a test that asserts an open item is still open fails as a
     reward for progress. Assert the mechanism, and let `open_items.yaml` carry the state.
+
+22. **A parallel session's participant-wording work leaked into this session's commits.** Two
+    Claude sessions were running against the same working tree on `main`. The other one is
+    drafting `config/text/participant_{sv,en}.yaml`; its edits appeared here as working-tree
+    changes I could not distinguish from my own, and I committed them alongside my work.
+
+    **The wording is not finished.** S confirmed on 23 Aug 2026 that some of it is approved and
+    some is not, so `meta.wording_approved` and `meta.instructions_supplied` being set — which
+    closes SPEC.md 20 item 12 and open item L4, and **turns the unmissable placeholder banner
+    off** — is premature. Treat the banner as unreliable until that session lands properly.
+
+    What leaked, and where:
+
+    | Commit | Leaked content |
+    |---|---|
+    | `c25a7df` | `FOR_S.md` A1.2 and the paragraph introducing the draft document |
+    | `16beceb` | `FOR_S.md` A1 prose again |
+    | `6949f9c` | `config/text/participant_{sv,en}.yaml` in full, `docs/participant_screen_text_draft.md`, `instructions.mapping_script` in both experimenter files, and the `FOR_S.md` A1 "approved, nothing here needs you" rewrite |
+
+    Nothing is pushed, so all three are freely rewritable. **Reverting the participant files
+    will not break the suite** — decision 21 above made every test state-agnostic about the
+    wording, which was accidental good timing rather than foresight.
+
+    **The fix going forward is S's, and already decided: parallel work gets a branch.** Two
+    agents sharing one working tree cannot tell whose uncommitted change is whose, and `git add`
+    with explicit paths does not help when the leak is inside a file both are editing.
 
 21. **`ExperimenterWindow` takes a reader callable, not the `Session`.** "It reads
     `experimenter_view()` and nothing else" is then structural rather than a habit: the window
