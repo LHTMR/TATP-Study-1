@@ -82,9 +82,11 @@ allowed wholesale. An ad-hoc `python -c` will prompt, which is the right outcome
     permission-checked, so the Makefile is the right home for the env vars and the
     `conda run` invocations.
 - **Never write outside this repository.** Not to OneDrive, not to a home directory, nowhere
-  else on the machine. This includes the session scratchpad: the hook resolves every absolute
-  path in a command and refuses any that lands outside the repo, so temporary scripts go in
-  `tools/`, not `/tmp`.
+  else on the machine. This includes the session scratchpad: the hook resolves every path token
+  in a command — absolute, `~`-relative, and plain relative ones reached by `..` — and refuses
+  any that lands outside the repo, so temporary scripts go in `tools/`, not `/tmp`. This is
+  also what lets `Bash(… python tools/*)` be an allow rule despite `make_allocation.py` taking
+  an `--out` path.
 - **Never commit participant data.** `data/` is gitignored. If you find data in a commit, stop
   and say so.
 - **No literals in task code.** Timings, forces, pressures, thresholds, rates and every

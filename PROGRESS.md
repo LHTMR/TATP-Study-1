@@ -6,8 +6,19 @@ fresh session should need nothing from any previous conversation.
 Everything waiting on S — values, wordings, reviews, decisions — is in **`FOR_S.md`**, not
 here. Keep the two updated together.
 
-**Last updated:** 23 August 2026, end of session 1.
+**Last updated:** 23 August 2026, end of session 4.
 **Milestone:** 1 (the vertical slice) — *in progress, not complete.*
+
+**Session 4 did one thing:** closed the permission-prompting problem session 3 diagnosed but
+could not fix. Installing the CLI put it (and its settings resolution) on `PATH`, and the host
+session now honours `.claude/settings.json`'s allow list — confirmed with a clean, unprompted
+`git add -A`. See step 0 below. **No task code was written and nothing else was run.**
+
+**Session 3 did one thing:** settled why every command prompts. The cause is the environment,
+not the rules — see step 0. It also fixed the genuinely-dead `tools/` rules, moved the
+protection they were carrying into the Bash hook, and added the first test file. **No task code
+was written and nothing was run**, so everything under "Read this first" below still stands
+unchanged, and `tests/test_check_bash_hook.py` has never been executed.
 
 ---
 
@@ -136,8 +147,63 @@ all of `tatp/ui/`, all of `tatp/garment/`, `pinprick.py`, `touchcal.py`, `instru
 
 ## Next steps, in order
 
-1. **Run `tools/make_allocation.py`** and commit `config/allocation.csv`. Nothing else can be
-   smoke-tested until it exists. This closes SPEC.md 20 item 10.
+0. **Resolved in session 4 — do not re-investigate.** Session 3 diagnosed why every command
+   prompted (kept below as the record); session 4 closed it. Installing the CLI put `claude`,
+   and its settings resolution, on `PATH`, and the session now reads `.claude/settings.json`'s
+   `permissions.allow` block correctly. Confirmed with `git add -A` — previously prompted
+   against the unambiguous rule `Bash(git add:*)`; now runs clean, no prompt. `FOR_S.md` B5.5
+   and B5.6 are closed on the same basis.
+
+   **Session 3's diagnosis, for the record:** in a VS Code extension session, the project allow
+   list in `.claude/settings.json` was not applied. `git add -A` prompted against
+   `Bash(git add:*)`; `conda run -n tatp-study-1 python -m pytest …` prompted against its own
+   equally unambiguous rule. Two well-formed rules, both inert.
+
+   Ruled out by direct check at the time:
+
+   - No managed-settings file on the machine
+     (`/Library/Application Support/ClaudeCode/managed-settings.json` does not exist).
+   - `~/.claude/settings.json` sets only `effortLevel`, `agentPushNotifEnabled`, `model` — no
+     permissions block.
+   - `.claude/settings.local.json` adds only `Bash(conda env *)`.
+   - No deny rule matches either command.
+   - The file itself loaded fine: the `PreToolUse` hook declared in the *same* file fired on
+     every Bash call. It was the `permissions.allow` block specifically that had no effect.
+
+   The corroborating pattern: `Edit` and `Write` calls were auto-approved all session while
+   every Bash call prompted — consistent with the host extension supplying its own permission
+   policy instead of reading the project file, since hooks are a separate mechanism and kept
+   working throughout.
+
+   **What fixed it:** installing the CLI properly, so `claude` resolves on `PATH` instead of
+   only the extension's bundled binary. Run the build from the terminal CLI or the desktop
+   app's Code tab, as session 3 already recommended — that is now also *how* the CLI got
+   installed, not just a workaround.
+
+   **Separately, and this part is real and fixed:** the old rules `Bash(… python tools/:*)` and
+   `Bash(… python tools:*)` were dead on their own terms, and would still be dead in a working
+   environment. Per the [permissions
+   documentation](https://code.claude.com/docs/en/permissions), `:*` is exactly equivalent to
+   ` *`, and a trailing `*` *with a space before it* enforces a word boundary — the prefix must
+   be followed by a space or end-of-string. `Bash(ls *)` matches `ls -la` but not `lsof`. So
+   `python tools *` could never match `python tools/make_allocation.py`. Without the space,
+   `Bash(ls*)` has no boundary constraint. The rules are now `Bash(… python tools/*)` and
+   `Bash(python tools/*)`, which match any script in `tools/` with any arguments.
+
+   That is deliberately broader than one rule per script, and the reasoning is in `FOR_S.md`
+   B5.3: an exact per-script rule is not a security boundary, because the script's contents are
+   written by me. What it bought was blocking *arguments* — `make_allocation.py` takes `--out`,
+   which writes anywhere. That protection now lives where it belongs, in the hook:
+   `.claude/hooks/check_bash.py` resolves **every** token in a command, relative ones included,
+   against the command's `cwd`, and refuses any that lands outside the repository. So
+   `--out ../../elsewhere.csv` is blocked no matter how broad the permission rule is.
+   `tests/test_check_bash_hook.py` covers this and is **unrun** — see step 1.
+
+1. **Run `tests/test_check_bash_hook.py`, then `tools/make_allocation.py`, and commit
+   `config/allocation.csv`.** Nothing else can be smoke-tested until the allocation exists.
+   This closes SPEC.md 20 item 10. S has been asked to review the allocation design
+   (`FOR_S.md` B1.2) — the file is regenerable byte-for-byte from the seed until sessions have
+   been run against it, so generating it now does not pre-empt that review.
 2. **Smoke-test `tatp/config.py`** — `load("sv", "en")` — and fix what breaks. It has never
    been imported. Check especially `resolve()` against the `[*]` paths, and
    `_load_open_items()`, which mutates `loaded` while iterating.

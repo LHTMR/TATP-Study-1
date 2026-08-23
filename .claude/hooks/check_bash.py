@@ -6,8 +6,9 @@ Two things permission patterns cannot reliably catch, which is why this exists:
 1. Compound commands. Permission rules match the command string, so `pytest && rm -rf data`
    can satisfy a rule written for `pytest`. Refusing shell operators outright removes the
    whole class of bypass, and one command per call is easy to comply with.
-2. Paths outside the repository. A relative path cannot escape far, but an absolute path or a
-   `~` can reach the user's OneDrive, which holds documents that are expensive to lose.
+2. Paths outside the repository, whether absolute, `~`-relative or reached by `..`. This is what
+   lets `tools/*` be an allow rule: the scripts there take path arguments, and without this the
+   permission rule would have to forbid arguments altogether to stop `--out ../../elsewhere`.
 
 Contract (https://code.claude.com/docs/en/hooks): the tool call arrives as JSON on stdin.
 Exit 2 blocks the call and returns stderr to the model. Exit 0 with no output means no
@@ -34,9 +35,10 @@ OPERATORS = [
     ("\n", "newline"),
 ]
 
-# Absolute or home-relative paths appearing as whitespace-delimited tokens, with any
-# surrounding quotes stripped.
-PATH_TOKEN = re.compile(r"""(?:^|[\s=])['"]?(~[^\s'"]*|/[^\s'"]+)""")
+# Every whitespace- or `=`-delimited token, with any surrounding quotes stripped. Each is
+# treated as a candidate path: a token that is not one (`conda`, `run`, `main`) resolves inside
+# the repository and passes, so checking everything costs nothing and misses nothing.
+PATH_TOKEN = re.compile(r"""(?:^|[\s=])['"]?([^\s'"=]+)""")
 
 
 def fail(message: str) -> None:
@@ -66,9 +68,19 @@ def main() -> None:
         )
     )
 
+    # Relative tokens are resolved against the directory the command will actually run in.
+    cwd = payload.get("cwd") or project_root
+
     for match in PATH_TOKEN.finditer(command):
         raw = match.group(1)
-        resolved = os.path.realpath(os.path.expanduser(raw))
+        # A leading `-` marks a flag rather than a path. `--out=../elsewhere` still reaches the
+        # check, because the token pattern breaks on `=`.
+        if raw.startswith("-"):
+            continue
+        expanded = os.path.expanduser(raw)
+        resolved = os.path.realpath(
+            expanded if os.path.isabs(expanded) else os.path.join(cwd, expanded)
+        )
         if os.path.commonpath([resolved, project_root]) != project_root:
             fail(
                 f"the path {raw!r} resolves to {resolved!r}, which is outside the repository "
