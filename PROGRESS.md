@@ -9,21 +9,23 @@ here. Keep the two updated together.
 **Last updated:** 23 August 2026, session 5.
 **Milestone:** 1 (the vertical slice) — *in progress.*
 
-**Session 5 ran the code for the first time and continued the slice.** Everything written in
-session 1 had been written and never executed; that is no longer true. The config layer, the
-allocation reader, the clock and provenance all run, the data-file writer and the garment layer
-are new, and there are 79 tests. Three commits, each with the suite passing.
+**Session 5 ran the code for the first time and built most of Milestone 1's foundation.**
+Everything written in session 1 had been written and never executed; that is no longer true.
+The config layer, the allocation reader, the clock and provenance all run. The data-file
+writer, the garment layer, the responder, the VAS and the session are new, and there are 118
+tests and a `make` gate. Six commits, each with the suite passing.
 
 ---
 
 ## Read this first
 
-**`make check` still does not exist**, so the gate has never run. `python -m pytest` and
-`python -m ruff check .` both pass, which is most of what it will do.
+**`make check` exists and passes, but it is not the whole gate yet.** It runs the unit tests
+and the linter. The end-to-end validator and the screenshot comparison are Milestone 2 and do
+not exist, so the target prints a line saying so rather than letting a partial gate look like a
+passing one. Finish it in Milestone 2 and delete that line.
 
 ```
-conda run -n tatp-study-1 python -m pytest -q
-conda run -n tatp-study-1 python -m ruff check .
+make check
 ```
 
 ---
@@ -44,10 +46,9 @@ irrelevant to the Windows lab PC.
 
 **The `conda` shell function was broken in session 5's shell** — `CONDA_EXE` was unset, so
 `conda run …` exited 126 with "permission denied". The binary on `PATH` is fine, so
-`command conda run …` worked and was used throughout. This costs a permission prompt, because
-the `command ` prefix stops the allow rule matching. It disappears once the Makefile exists:
-`make` spawns its recipes through `/bin/sh`, which never defines the function. Do not
-"fix" anything in the repository for this.
+`command conda run …` worked and was used until the Makefile existed. **Use `make` and the
+problem does not arise**: `make` spawns its recipes through `/bin/sh`, which never defines the
+function. Do not "fix" anything in the repository for this.
 
 ---
 
@@ -65,15 +66,19 @@ the `command ` prefix stops the allow rule matching. It disappears once the Make
 | `tatp/garment/base.py` | **New.** Ceiling, rate limit, command recording, pattern playback, looping |
 | `tatp/garment/mock.py` | **New.** Full driver with fault injection |
 | `tatp/garment/patterns.py` | **New.** Tick-grid loader and event expansion |
+| `tatp/responder.py` | **New.** R400 key mapping, with the `escape` rule machine-checked |
+| `tatp/ui/vas.py` | **New.** `VasState` (no Qt, all the behaviour) and `VasWidget` |
+| `tatp/session.py` | **New.** Session state, all 40 provenance keys, the log, blinding |
 | `tools/make_allocation.py` | Run once; the output is committed |
-| `tests/` | 79 tests, all passing headless |
+| `Makefile` | **New.** `check`, `test`, `lint`. `check` is not yet the whole gate |
+| `tests/` | 118 tests, all passing headless |
 
 ## What does not exist yet
 
-`tatp/session.py`, `schedule.py`, `responder.py`, `audio.py`, `screenshots.py`, all of
-`tatp/ui/`, `tatp/garment/arduino_{mosfet,valves}.py`, `pinprick.py`, `touchcal.py`,
-`instruments.py`, `launcher.py`, `run_session.py`, `tools/` (except `make_allocation.py`),
-`sim/`, `Makefile`, `README`, `SOP.md`, `HARDWARE_BRINGUP.md`.
+`tatp/schedule.py`, `audio.py`, `screenshots.py`, `tatp/ui/{participant,experimenter,widgets}.py`,
+`tatp/garment/arduino_{mosfet,valves}.py`, `pinprick.py`, `touchcal.py`, `instruments.py`,
+`launcher.py`, `run_session.py`, `tools/` (except `make_allocation.py`), `sim/`, `README`,
+`SOP.md`, `HARDWARE_BRINGUP.md`.
 
 ---
 
@@ -140,6 +145,28 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5.
     record of the simulation behind `docs/calibration_methods_comparison.md` and the numbers
     there should stay traceable to the code as it was run.
 
+14. **The VAS splits into `VasState` and `VasWidget`**, in the one file `SPEC.md` §4 gives it.
+    The state imports no Qt and holds all the behaviour, so every rule in SPEC.md 10.2 is
+    tested directly instead of through a widget.
+
+15. **The first VAS press has a direction even though it does not move the marker**, so
+    pressing the other button next counts as a direction change. SPEC.md 10.2 does not say
+    which way to read this. A test pins the reading.
+
+16. **A confirm with no marker shown produces no response.** There is nothing to record, so
+    `VasWidget` emits `pressed_without_marker` and the session logs the press instead.
+
+17. **`Session.experimenter_view()` is the only thing the experimenter screen may show.** The
+    blinding rule then has a test on it rather than depending on care at each call site.
+
+18. **The RNG seed is drawn when not supplied, and recorded either way**, so a session is
+    reproducible from its own data file. Defaulting it to a constant would make every session's
+    randomisation identical.
+
+19. **`Session` takes the pattern folder as an argument with no default.** The experimenter
+    selects it (SPEC.md 12.2), and defaulting to `config/patterns/examples/` would quietly
+    substitute the provisional mockups for the real patterns (open item 5).
+
 ---
 
 ## What session 5 fixed
@@ -159,19 +186,24 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5.
 
 ## Next steps, in order
 
-1. **`tatp/ui/` and a VAS widget** — SPEC.md 10.2, 10.6. The widget is the piece the rest of
-   the slice hangs off, and SPEC.md 17.4's screenshot test is written against it.
-2. **`tatp/responder.py`** — R400 key handling, SPEC.md 10.1. Note the play button emits
-   `escape` as well as `period`, and `escape` must be bound to nothing at all, or a participant
-   ends the session by confirming a rating.
-3. **`tatp/session.py`** — the thin path: setup, one calibration, one pinprick trial, one touch
-   rating, session close, producing real data files with full provenance. Keep the long
-   protocol's search/bracket/cap logic for Milestone 3 — Milestone 1 wants a thin path, not
-   Protocol A.
+The foundation is done: config, allocation, clock, provenance, data files, garment, responder,
+VAS and session all run and are tested. What is left of Milestone 1 is the phases on top of
+them and the two windows.
+
+1. **`tatp/ui/participant.py`** — the fullscreen participant window, holding the VAS widget and
+   the standby/instruction screens. Every string from `participant_*.yaml`; all of them are
+   still `PLACEHOLDER`, which is expected (`FOR_S.md` A1.1).
+2. **`tatp/ui/experimenter.py`** — SPEC.md 11. Build it against `Session.experimenter_view()`,
+   which is the only thing it may show. It must carry the unmissable banner while
+   `placeholder_text` is true, and a second one for a reduced-capability device (SPEC.md 12.4).
+3. **The thin path itself** — a three-application calibration, one pinprick trial, one touch
+   rating, driven through the session. Keep the long protocol's search/bracket/cap logic for
+   Milestone 3: Milestone 1 wants a thin path, not Protocol A.
 4. **`run_session.py`** and enough of `launcher.py` to start it.
-5. **Milestone 2**: `Makefile`, `tools/check.py`, `tools/validate_session.py`, screenshot mode.
-   The `Makefile` also retires the `command conda` workaround noted under Environment.
-6. Run the **spec-review** agent before committing Milestone 1
+5. **Milestone 2**: `tools/check.py`, `tools/validate_session.py`, `tatp/screenshots.py`, and
+   the literals test SPEC.md 4.2 asks for ("a test greps for violations"). Then finish the
+   `check` target and delete its INCOMPLETE GATE line.
+6. Run the **spec-review** agent before declaring Milestone 1 done
    ("Use the spec-review agent to review this diff against docs/SPEC.md").
 
 ## Watch out for
