@@ -6,10 +6,15 @@ garment:
   baud: null                         # SPEC.md 20 item 14: the valve controller's protocol
   connect_timeout_s: 5.0
   pressure_max_kpa: 250.0            # the hardware maximum (SPEC.md 3)
-  pressure_ceiling_kpa: 200.0        # SOFTWARE ceiling, enforced independently of the
-                                     # participant's adjustment and below the hardware
-                                     # maximum (SPEC.md 13). Not a value the spec fixes --
-                                     # see config/open_items.yaml, local item L1.
+  pressure_ceiling_kpa: 250.0        # SOFTWARE ceiling, enforced independently of the
+                                     # participant's adjustment (SPEC.md 13). Set to the
+                                     # hardware maximum by S on 23 Aug 2026, so it holds no
+                                     # margin below it: what it guarantees is that the
+                                     # software never commands past what the hardware is
+                                     # rated for. The margin is the hardware emergency stop
+                                     # and the rapid depressurisation mechanism, which is
+                                     # SPEC.md 13's real safety path in any case.
+  pressure_ceiling_kpa_confirmed: true   # closes local item L1
   pressure_rate_max_kpa_s: 60.0      # independent rate limit (SPEC.md 13). Local item L2.
   pressure_resolution_kpa: null      # SPEC.md 20 item 2
   inflation_rate_kpa_s: null         # per channel, from bring-up. SPEC.md 20 item 3

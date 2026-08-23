@@ -45,11 +45,13 @@ class Limits:
             pressure_ceiling_kpa=float(garment["pressure_ceiling_kpa"]),
             pressure_rate_max_kpa_s=float(garment["pressure_rate_max_kpa_s"]),
         )
-        # Stage boundary (CLAUDE.md): the software ceiling exists to sit below the hardware
-        # maximum. A configuration where it does not is not a safety envelope at all.
-        assert 0 < limits.pressure_ceiling_kpa < limits.pressure_max_kpa, (
-            f"pressure_ceiling_kpa {limits.pressure_ceiling_kpa} must be above zero and below "
-            f"the hardware maximum {limits.pressure_max_kpa} (SPEC.md 13)"
+        # Stage boundary (CLAUDE.md). S set the ceiling AT the hardware maximum on 23 Aug 2026,
+        # so this permits equality: what the software guarantees is that it never commands past
+        # what the hardware is rated for, not that it holds a margin below it. Above the maximum
+        # is still refused -- that would be a clamp that clamps nothing (SPEC.md 13).
+        assert 0 < limits.pressure_ceiling_kpa <= limits.pressure_max_kpa, (
+            f"pressure_ceiling_kpa {limits.pressure_ceiling_kpa} must be above zero and no "
+            f"more than the hardware maximum {limits.pressure_max_kpa} (SPEC.md 13)"
         )
         assert limits.pressure_rate_max_kpa_s > 0, "pressure_rate_max_kpa_s must be positive"
         return limits

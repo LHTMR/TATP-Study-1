@@ -595,8 +595,8 @@ Starting values, all config and pilot-tunable:
   constant. Full range in about 6 s of continuous holding.
 
 **Log every button-down and button-up with timestamps**, not just the final setting, so the
-search path is recoverable. Independently enforce a **hard pressure ceiling below the hardware
-maximum** and a rate limit.
+search path is recoverable. Independently enforce a **hard pressure ceiling** and a rate limit
+— see §13 for where the ceiling sits.
 
 ### 10.4 Language
 
@@ -895,8 +895,17 @@ way must be impossible to mistake for a real one afterwards.
 - **Software emergency stop** on `f5`: immediately commands all channels to zero, logs the
   press, pauses, and offers resume. Bilaga 1 §3.10 says participants are told pressing it will
   not disturb the experiment, so resumption must be genuinely clean.
-- Hard pressure ceiling and rate limit in software, below the hardware maximum, independent of
-  participant adjustment.
+- **Hard pressure ceiling and rate limit in software, independent of participant adjustment.**
+  `garment.pressure_ceiling_kpa` clamps every command, whatever its source, and the clamp lives
+  in `GarmentController` rather than in each driver so it cannot differ between them.
+
+  **The ceiling is set at the hardware maximum, 250 kPa** (S, 23 Aug 2026). It therefore holds
+  no margin below the hardware: what it guarantees is that the software never commands past what
+  the device is rated for, not that there is software headroom in reserve. A ceiling *above* the
+  hardware maximum is refused at startup, because that is a clamp that clamps nothing. The margin
+  is the first bullet above — the physical emergency stop and the rapid depressurisation
+  mechanism, which act without the software and are the real safety path regardless of where this
+  number sits.
 - The session can be stopped at any point by either party with all data intact.
 - Every stop, pause and resume is logged with its origin.
 

@@ -107,11 +107,12 @@ items:
   # ---- Raised during the build. The spec requires the value to exist but does not fix it. --
 
   - item: "L1"
-    summary: Software pressure ceiling, below the hardware maximum
+    summary: Software pressure ceiling
     resolved_when: {file: hardware.yaml, path: "garment.pressure_ceiling_kpa_confirmed"}
-    fix: SPEC.md 13 requires a hard ceiling below the 250 kPa hardware maximum but does not
-         give a number. 200 kPa is in place as a working value and is NOT a measured or
-         agreed limit. Confirm at bring-up, then set this key true.
+    fix: "Settled 23 Aug 2026: S set the ceiling at 250 kPa, the hardware maximum. It holds no
+         margin below the hardware, so what it guarantees is that the software never commands
+         past the device's rating. SPEC.md 10.3 and 13 were amended to say so rather than
+         leaving the spec asserting a margin that does not exist."
     blocks_use: true
 
   - item: "L2"

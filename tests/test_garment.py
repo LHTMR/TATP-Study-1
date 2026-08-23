@@ -40,20 +40,47 @@ def garment(limits):
 # -- limits and capabilities -----------------------------------------------------------
 
 
-def test_the_software_ceiling_sits_below_the_hardware_maximum(limits):
-    """SPEC.md 13. The whole point of the ceiling is that it is not the hardware maximum."""
-    assert 0 < limits.pressure_ceiling_kpa < limits.pressure_max_kpa
+def test_the_software_ceiling_does_not_exceed_the_hardware_maximum(limits):
+    """SPEC.md 13. S set the two equal on 23 Aug 2026, so equality is permitted."""
+    assert 0 < limits.pressure_ceiling_kpa <= limits.pressure_max_kpa
 
 
-def test_a_ceiling_at_or_above_the_hardware_maximum_is_refused(limits):
+def test_a_ceiling_at_the_hardware_maximum_is_accepted():
+    """The configured case: the software clamps at what the hardware is rated for."""
+    limits = Limits.from_config(
+        {
+            "garment": {
+                "pressure_max_kpa": 250.0,
+                "pressure_ceiling_kpa": 250.0,
+                "pressure_rate_max_kpa_s": 60.0,
+            }
+        }
+    )
+    assert limits.pressure_ceiling_kpa == 250.0
+
+
+def test_a_ceiling_above_the_hardware_maximum_is_refused():
+    """A clamp above what the device can reach is a clamp that clamps nothing."""
     hardware = {
         "garment": {
             "pressure_max_kpa": 250.0,
-            "pressure_ceiling_kpa": 250.0,
+            "pressure_ceiling_kpa": 250.1,
             "pressure_rate_max_kpa_s": 60.0,
         }
     }
-    with pytest.raises(AssertionError, match="below the hardware maximum"):
+    with pytest.raises(AssertionError, match="no more than the hardware maximum"):
+        Limits.from_config(hardware)
+
+
+def test_a_ceiling_of_zero_is_refused():
+    hardware = {
+        "garment": {
+            "pressure_max_kpa": 250.0,
+            "pressure_ceiling_kpa": 0.0,
+            "pressure_rate_max_kpa_s": 60.0,
+        }
+    }
+    with pytest.raises(AssertionError, match="above zero"):
         Limits.from_config(hardware)
 
 

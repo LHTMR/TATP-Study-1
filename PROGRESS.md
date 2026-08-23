@@ -143,6 +143,21 @@ conda run -n tatp-study-1 python run_session.py --participant 01 --session 1 --e
 Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23–26 are session 7;
 27–30 are session 8; 31–34 are session 9.
 
+36. **The software pressure ceiling is 250 kPa, the hardware maximum.** S's decision, 23 Aug
+    2026, after I raised that `SPEC.md` §13 asked for a ceiling *below* it. Open item L1 closed
+    and the A2.1 row deleted.
+
+    **What changed is the spec, not just the number.** §10.3 and §13 both asserted a margin
+    below the hardware; they now say what is actually true — the ceiling guarantees the software
+    never commands past the device's rating, and holds nothing in reserve. `Limits.from_config`
+    relaxed from `ceiling < max` to `ceiling <= max`; **above** the maximum is still refused,
+    because that is a clamp that clamps nothing. The margin is §13's first bullet, the physical
+    emergency stop and the rapid depressurisation mechanism, which act without the software.
+
+    A test that asserted the ceiling sits strictly below the maximum had to be rewritten. It was
+    a correct test of the old spec, so this is a spec change with a test change behind it rather
+    than a test relaxed to make something pass.
+
 31. **The rekindle takes its own place in the grid.** S's decision, 23 Aug 2026, against three
     grids I put up. Blocks sit `intervention_duration / n_blocks` apart; any block that would
     fall at or after the rekindle moves back by its duration; and the grid is laid so the
