@@ -70,9 +70,10 @@ package name differs from the import name and the original spelling does not res
 channel, so `conda env create` failed outright. The import name in Python is still
 `sounddevice`.
 
-**The reference repository is public and readable directly** — `LHTMR/ttpa_touch_the_pain_away`
-(`SPEC.md` §5.2), confirmed 23 Aug 2026. Read it rather than working from the spec's summary
-when the serial protocol or the CSV parser matters; `Arduino/`, `Python/`, `psychophysics/`.
+**All three reference repositories are public and readable directly** — `Touch-Comm-ASD`,
+`Expt_MonofilamentDiscrimination` and `ttpa_touch_the_pain_away` (`SPEC.md` §5.2), each fetched
+and confirmed 23 Aug 2026. Read the source when a detail matters rather than working from the
+spec's summary. `github.com` is on the `WebFetch` allow list, so no permission prompt.
 
 Note the base conda is **osx-64**, so the env is Intel/Rosetta on this Mac. Harmless here;
 irrelevant to the Windows lab PC.

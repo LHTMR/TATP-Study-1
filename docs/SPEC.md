@@ -225,6 +225,10 @@ it.
 The exemplars are PsychoPy applications and this is a Qt application, so take **structure and
 data conventions, not display code**.
 
+**All three are public and readable directly** (confirmed 23 August 2026). Read the source when
+a detail matters rather than working from the summaries below — the summaries say what to take,
+not what the code contains.
+
 1. **<https://github.com/SDAMcIntyre/Touch-Comm-ASD>** — primary exemplar. Read `touchcomm.py`.
    Take: the `DataFileCollection` pattern of open-append-close on every write; external
    bilingual text files; the separation of an experiment script from a reusable module; the
