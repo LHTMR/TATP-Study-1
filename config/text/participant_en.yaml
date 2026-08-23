@@ -110,6 +110,36 @@ screens:
     Use the two large buttons to move between them.
     Press ▶ to choose the one you like best.
 
+audio_setup:
+  # SPEC.md 10.7, the masking check. Drafted 23 Aug 2026 on S's instruction ("just come up with
+  # something and I will review it"), so this is NOT ethics-sourced wording like the VAS
+  # questions -- it is practical instruction about the headphones, awaiting S's review.
+  #
+  # The word for the noise is "hiss" rather than "white noise": the participant has to turn it
+  # up until it covers a sound, and needs to know what they are listening for, not what it is
+  # called. Nothing here says why the noise is there, because the reason is that the garment
+  # must not be identifiable by ear -- which is a blinding matter (SPEC.md 16).
+  find_level: |-
+    There is a quiet hiss in the headphones.
+    Left button: quieter. Right button: louder.
+    Turn it up until you can just hear it, then press ▶.
+  mask_level: |-
+    The garment is working now, and you may be able to hear it.
+    Turn the hiss up until it covers that sound.
+    Stop before the hiss itself becomes uncomfortable.
+    Press ▶ when it is right.
+  still_audible:
+    # Two options drawn left and right, chosen with the matching large button (SPEC.md 10.7).
+    # The affirmative is on the left everywhere, so there is one convention to learn.
+    question: Can you still hear the garment?
+    left: Yes, I can hear it
+    right: No, the hiss covers it
+  settled: |-
+    That is the sound level set for today.
+    It stays the same for the rest of the visit.
+
+    Press ▶ to continue.
+
 adjust_targets:
   # The target for each method-of-adjustment step (SPEC.md 9), shown above the `screens.adjust`
   # frame. Every target is a labelled anchor of the scale in question -- the participant is

@@ -108,6 +108,34 @@ screens:
     Använd de två stora knapparna för att växla mellan dem.
     Tryck på ▶ för att välja den du tycker bäst om.
 
+audio_setup:
+  # SPEC.md 10.7, maskeringskontrollen. Utkast 23 aug 2026 på S:s instruktion -- alltså INTE
+  # etikförankrad formulering som VAS-frågorna, utan praktisk instruktion om hörlurarna.
+  #
+  # "Brus" om ljudet, inte "vitt brus": deltagaren ska höja det tills det döljer ett ljud och
+  # behöver veta vad hen lyssnar efter, inte vad det heter. Ingenting här säger varför bruset
+  # finns, eftersom skälet är att plagget inte ska gå att känna igen på ljudet (SPEC.md 16).
+  find_level: |-
+    Det hörs ett svagt brus i hörlurarna.
+    Vänster knapp: svagare. Höger knapp: starkare.
+    Höj det tills du precis kan höra det, och tryck sedan på ▶.
+  mask_level: |-
+    Plagget arbetar nu, och du kanske kan höra det.
+    Höj bruset tills det döljer det ljudet.
+    Sluta innan bruset i sig blir obehagligt.
+    Tryck på ▶ när det är lagom.
+  still_audible:
+    # Två alternativ till vänster och höger, valda med motsvarande stor knapp (SPEC.md 10.7).
+    # Ja-alternativet ligger till vänster överallt, så det blir en konvention att lära sig.
+    question: Hör du fortfarande plagget?
+    left: Ja, jag hör det
+    right: Nej, bruset döljer det
+  settled: |-
+    Då är ljudnivån inställd för idag.
+    Den är densamma resten av besöket.
+
+    Tryck på ▶ för att fortsätta.
+
 adjust_targets:
   # Målet för varje justeringssteg (SPEC.md 9), visas ovanför ramen i `screens.adjust`. Varje mål
   # är ett etiketterat ankare på respektive skala -- deltagaren ombeds ställa in en förnimmelse

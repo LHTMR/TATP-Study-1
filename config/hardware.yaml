@@ -56,10 +56,26 @@ audio:
   enabled: true
   device: null                       # null = system default
   sample_rate_hz: 44100
-  white_noise_level_dbfs: -30.0      # participant headphones. Local item L3.
+  # The participant sets their own noise level in the masking check (SPEC.md 10.7). These three
+  # bound that adjustment; the level itself is not configured, it is measured per session.
+  white_noise_start_dbfs: -60.0      # deliberately below audibility: the check starts quiet
+  white_noise_max_dbfs: -12.0        # HARD CEILING, the audio equivalent of the pressure
+                                     # ceiling of SPEC.md 13. "Stop before it is uncomfortable"
+                                     # is the participant's limit and should always bite first;
+                                     # this is what stops a held button regardless. NOT a
+                                     # measured safe level -- dBFS says nothing about sound
+                                     # pressure until the system volume is fixed, which is
+                                     # local item L3 and a bring-up step.
+  white_noise_step_db: 1.0           # one tap of the two-button control
+  masking_check_pressure_kpa: 40.0   # low, and MOVING -- the valve switching is the sound
+                                     # being masked (SPEC.md 10.7). Confirm at bring-up.
+  masking_check_max_attempts: 3      # re-raise and re-ask this many times before continuing
+                                     # with a logged warning
   participant_cue_hz: 1000.0
   participant_cue_duration_s: 0.20
-  participant_cue_level_dbfs: -18.0  # must be audible over the noise
+  participant_cue_over_noise_db: 12.0  # the cue is set this far above whatever noise level the
+                                     # participant settled on, so it stays audible for everyone
+                                     # rather than at one absolute level that suits nobody
   experimenter_alert_hz: 660.0       # lab-side; must NOT be audible to the participant
   experimenter_alert_duration_s: 0.50
   experimenter_alert_level_dbfs: -12.0

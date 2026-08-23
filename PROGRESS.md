@@ -143,6 +143,37 @@ conda run -n tatp-study-1 python run_session.py --participant 01 --session 1 --e
 Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23–26 are session 7;
 27–30 are session 8; 31–34 are session 9.
 
+37. **The participant sets their own white-noise level, and it is checked against the garment.**
+    S's decision, 23 Aug 2026, replacing "set the levels with a meter". `SPEC.md` §10.7 has the
+    procedure. **Specified and drafted, not built** — it needs `audio.py`, which is Milestone 4.
+
+    The reasoning worth keeping: a meter fixes one number for every participant, every pair of
+    headphones and every room, when the question is whether *this* participant can hear *this*
+    garment. Four steps — raise the noise to audible, start the garment, raise until it masks
+    while stopping short of uncomfortable, then confirm it is masked, re-raising up to
+    `masking_check_max_attempts` times.
+
+    Four things follow that are decisions rather than transcription:
+
+    - **The check uses the fixed CT-targeted pattern, never the participant's own** (S). Fixed
+      means it carries no information about the condition; the participant's own would put the
+      condition into setup where the experimenter can hear it. `docs/NOTES.md` N2.6 records that
+      everyone therefore meets that pattern once before calibration.
+    - **`participant_cue_level_dbfs` is gone**, replaced by `participant_cue_over_noise_db`. An
+      absolute cue level cannot stay audible over a noise level that now varies per participant.
+    - **`white_noise_max_dbfs` is a hard ceiling**, the audio analogue of the pressure ceiling.
+      S's answer was that participants modulate themselves, which is true of the instruction and
+      not of a held button. It is a stop on the software, **not a safe sound pressure**: dBFS
+      says nothing about SPL until the system volume is fixed, which is now what L3 asks for.
+    - **Yes/no is positional** — options drawn left and right, chosen with the matching large
+      button (S), affirmative on the left everywhere so it is one convention. `screens.comparison`
+      already worked this way.
+
+    The wording in `config/text/participant_{sv,en}.yaml` under `audio_setup` is **mine, awaiting
+    S's review** — S said to draft something. It is not ethics-sourced like the VAS questions,
+    and is deliberately not marked `PLACEHOLDER`, because it is practical instruction about
+    headphones rather than a description of the study.
+
 36. **The software pressure ceiling is 250 kPa, the hardware maximum.** S's decision, 23 Aug
     2026, after I raised that `SPEC.md` §13 asked for a ceiling *below* it. Open item L1 closed
     and the A2.1 row deleted.

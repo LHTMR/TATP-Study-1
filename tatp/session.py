@@ -106,6 +106,13 @@ class Session:
         self.fit_preview_enabled = config.study1["fit_preview"]["enabled"]
         self.fit_preview_reruns = 0
 
+        # SPEC.md 10.7. Set by the masking check, which is Milestone 4 -- the participant picks
+        # their own noise level, so there is no configured value to default these to. None
+        # means the check has not run, which is distinguishable from it having run and failed.
+        self.white_noise_level_dbfs: float | None = None
+        self.masking_confirmed: bool | None = None
+        self.masking_attempts = 0
+
         self.data_folder = Path(config.hardware["data"]["folder"])
         if not self.data_folder.is_absolute():
             self.data_folder = REPO_ROOT / self.data_folder
@@ -381,6 +388,12 @@ class Session:
             ],
             "room_temperature_c": room_temperature_c,
             "relative_humidity_pct": relative_humidity_pct,
+            # SPEC.md 10.7. The masking check fills these in setup and rewrites the row; they
+            # are declared here so the column exists from the first session rather than
+            # appearing when the procedure lands. Empty means the check has not run.
+            "white_noise_level_dbfs": self.white_noise_level_dbfs,
+            "masking_confirmed": self.masking_confirmed,
+            "masking_attempts": self.masking_attempts,
             "data_folder": str(self.data_folder.resolve()),
             "cloud_sync_warning": self.cloud_sync_warning,
             "unresolved_open_items": ";".join(

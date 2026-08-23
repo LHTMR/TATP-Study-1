@@ -124,10 +124,14 @@ items:
     blocks_use: true
 
   - item: "L3"
-    summary: White-noise and cue levels at the participant's headphones
+    summary: System output volume, and the experimenter alert's inaudibility to the participant
     resolved_when: {file: hardware.yaml, path: "audio.levels_confirmed"}
-    fix: The dBFS values are placeholders. Set with a sound level meter at the headphones so
-         the cue is reliably audible over the noise and neither is uncomfortable.
+    fix: "Superseded in part on 23 Aug 2026: the participant now sets their own noise level in
+         the masking check (SPEC.md 10.7), so the noise and cue levels are no longer numbers to
+         choose. What remains is a bring-up step. Fix the system output volume once and record
+         it -- until it is fixed, white_noise_max_dbfs is a stop on the software rather than a
+         safe sound pressure -- and meter the experimenter alert against the LOWEST noise level
+         a participant is likely to settle on, which is the worst case for it leaking."
     blocks_use: true
 
   - item: "L4"

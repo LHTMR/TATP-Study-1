@@ -87,6 +87,9 @@ written, with an empty value — an absent row and an empty value must not be co
 | `slope_prior_vas_per_log10` | VAS·log₁₀⁻¹ | The fixed slope used by the estimator (§8.2) |
 | `room_temperature_c` | °C | Optional (§8.1) |
 | `relative_humidity_pct` | % | Optional (§8.1) |
+| `white_noise_level_dbfs` | dBFS | The level the participant set in the masking check (§10.7). Per session, not configured |
+| `masking_confirmed` | - | `true` when the participant reported the garment no longer audible |
+| `masking_attempts` | - | How many times the level was raised and re-asked. Above 1 means the first setting did not mask |
 | `data_folder` | - | Resolved absolute path |
 | `cloud_sync_warning` | - | The warning text if the data folder is inside a synced tree, else empty (§14.1) |
 | `unresolved_open_items` | - | Semicolon-separated §20 item numbers still on placeholders |

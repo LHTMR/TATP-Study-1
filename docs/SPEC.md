@@ -708,6 +708,48 @@ Two deviations from Bilaga 1 that the application should be updated to match:
   which Bilaga 1 already describes as "adapted from". The published item properties and
   reliability do not transfer directly to the VAS form. Worth one sentence in the plan.
 
+### 10.7 Audio setup — the masking check
+
+**The participant sets their own white-noise level, and it is checked against the garment.**
+Settled with S on 23 Aug 2026, replacing "set the levels with a meter at the headphones" (open
+item L3). A meter fixes one number for every participant, every pair of headphones and every
+room; what actually matters is whether *this* participant can hear *this* garment, and the only
+instrument that answers that is the participant.
+
+**It runs in setup, before touch calibration** — the calibration itself commands the garment, so
+the masking has to be working before it starts.
+
+1. **Find the noise.** White noise begins at `audio.white_noise_start_dbfs`, deliberately below
+   audibility. The participant raises it with the §10.3 two-button control until they can just
+   hear it, and confirms.
+2. **Start the garment.** The **fixed CT-targeted pattern** plays at
+   `audio.masking_check_pressure_kpa`, low and looping. It must be a *moving* pattern: the valve
+   switching is the sound being masked, and a static hold does not produce it.
+3. **Raise to mask.** The participant raises the noise until it covers the garment, **stopping
+   before it becomes uncomfortable**. That instruction is the participant's own limit; the
+   software's limit is `audio.white_noise_max_dbfs`, a hard ceiling in the same sense as the
+   pressure ceiling of §13, which the instruction working correctly never reaches.
+4. **Check it.** Ask whether the garment is still audible. If it is, return to step 3, up to
+   `audio.masking_check_max_attempts` times; the count is recorded either way. If the ceiling is
+   reached with the garment still audible, log a warning and continue — a session run without
+   full masking is a limitation to record, not a reason to refuse.
+
+**The pattern is fixed and identical in every session, so it carries no information about the
+condition** (§16). This is why it may not be the participant's own condition pattern: that would
+put the condition into the setup phase, where the experimenter can hear it.
+
+**The cue level tracks the noise.** `audio.participant_cue_level_dbfs` stops being an absolute
+value — the cue must be audible over whatever level the participant chose, so it is set
+`audio.participant_cue_over_noise_db` above it. The experimenter alert is unaffected: it plays
+lab-side and must stay inaudible to the participant, which a *higher* noise level only helps.
+
+**Yes/no answers are positional.** The two options are drawn at the left and right of the screen
+and selected with the corresponding large button, matching the physical layout of the response
+device (S, 23 Aug 2026). The affirmative is on the left throughout, so the mapping is one
+convention rather than one per question. `screens.comparison` already works this way.
+
+Record the chosen level, whether masking was confirmed, and the number of attempts, in the
+session file.
 
 ---
 
