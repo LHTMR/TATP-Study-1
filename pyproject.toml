@@ -7,6 +7,8 @@ select = ["E", "F", "W", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Qt must render without a display so the gate runs headless (SPEC.md 17.1).
-env = ["QT_QPA_PLATFORM=offscreen"]
 filterwarnings = ["error"]
+# QT_QPA_PLATFORM is NOT set here. `env = [...]` needs the pytest-env plugin, and without it
+# the key is silently ignored -- the tests would quietly stop being headless, which is the
+# failure SPEC.md 17.1 exists to prevent. tests/conftest.py sets it instead, before Qt is
+# imported, which needs no plugin and works however pytest is invoked.

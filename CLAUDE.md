@@ -71,6 +71,16 @@ allowed wholesale. An ad-hoc `python -c` will prompt, which is the right outcome
   enforces this; the rule is here so you do not fight it. The hook rejects those characters
   even inside a quoted string, so `python -c "a=1; b=2"` is refused too — put the code in a
   file under `tools/` instead of fighting the quoting.
+- **Write the command so the permission rule can match it.** The rules in
+  `.claude/settings.json` match a command *prefix*, so anything in front of the real command
+  breaks the match and prompts:
+  - **No environment-variable prefix.** Not `QT_QPA_PLATFORM=offscreen pytest`. Set the
+    variable in `tests/conftest.py` or in the tool itself. (`env` is denied anyway.)
+  - **No `git -C <path>`.** The working directory is already the repository root, so plain
+    `git status`, `git add -A`, `git commit` are both shorter and matchable.
+  - Prefer `make check` over its parts. Subprocesses a Makefile spawns are not
+    permission-checked, so the Makefile is the right home for the env vars and the
+    `conda run` invocations.
 - **Never write outside this repository.** Not to OneDrive, not to a home directory, nowhere
   else on the machine. This includes the session scratchpad: the hook resolves every absolute
   path in a command and refuses any that lands outside the repo, so temporary scripts go in
