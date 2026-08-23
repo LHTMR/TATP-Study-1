@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QWidget
 
 from tatp.clock import Clock
 from tatp.responder import Action, Responder
+from tatp.units import MS_PER_S
 
 # Layout and colour. Not study parameters (SPEC.md 4.2 lists timings, forces, pressures,
 # thresholds, rates and strings) -- these are how the widget draws itself, and the reference
@@ -161,9 +162,9 @@ class VasWidget(QWidget):
         self.statement = ""
         self.anchors: list[dict] = []
 
-        self._repeat_delay_ms = int(round(float(vas_config["hold_repeat_delay_s"]) * 1000))
+        self._repeat_delay_ms = int(round(float(vas_config["hold_repeat_delay_s"]) * MS_PER_S))
         self._repeat_interval_ms = int(
-            round(float(vas_config["hold_repeat_interval_s"]) * 1000)
+            round(float(vas_config["hold_repeat_interval_s"]) * MS_PER_S)
         )
         self._held: Action | None = None
         self._repeat = QTimer(self)

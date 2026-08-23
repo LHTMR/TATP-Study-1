@@ -23,6 +23,8 @@ from collections.abc import Callable
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
+from tatp.units import S_PER_MIN
+
 # Presentation only, not study parameters (SPEC.md 4.2). The banners are red and large because
 # SPEC.md 12.4 requires them to be unmissable; the reference screenshots pin the rest.
 BANNER_STYLE = (
@@ -31,7 +33,6 @@ BANNER_STYLE = (
 BANNER_POINT_SIZE = 18
 HEADING_POINT_SIZE = 22
 INSTRUCTION_POINT_SIZE = 16
-SECONDS_PER_MINUTE = 60
 
 
 def _label(point_size: int, wrap: bool = False) -> QLabel:
@@ -44,8 +45,8 @@ def _label(point_size: int, wrap: bool = False) -> QLabel:
 
 
 def _elapsed_text(seconds: float) -> str:
-    whole = int(seconds)
-    return f"{whole // SECONDS_PER_MINUTE:02d}:{whole % SECONDS_PER_MINUTE:02d}"
+    minutes, remainder = divmod(int(seconds), int(S_PER_MIN))
+    return f"{minutes:02d}:{remainder:02d}"
 
 
 class ExperimenterWindow(QWidget):

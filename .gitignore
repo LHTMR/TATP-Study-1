@@ -24,3 +24,8 @@ __pycache__/
 # Claude Code local overrides
 .claude/settings.local.json
 CLAUDE.local.md
+
+# A commit message with a blank line in it cannot be passed to `git commit -m`: the PreToolUse
+# hook refuses one shell command containing a newline. Writing it to a file and using -F is the
+# way round, and the file is scratch.
+tools/commit_message.txt

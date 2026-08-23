@@ -117,7 +117,9 @@ def parse_schema(path: Path = SCHEMA_PATH) -> tuple[dict[str, Table], tuple[str,
         if not _is_row(line):
             continue
 
-        cells = _cells(line, 5 if not in_session_keys else 3)
+        # The width comes from the header the contract declares, so the two cannot drift.
+        header = SESSION_KEY_HEADER if in_session_keys else COLUMN_HEADER
+        cells = _cells(line, len(header))
         if in_session_keys:
             if tuple(cells) == SESSION_KEY_HEADER or set(cells[0]) <= {"-"}:
                 continue

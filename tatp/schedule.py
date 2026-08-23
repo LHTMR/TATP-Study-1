@@ -28,10 +28,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from tatp.config import ConfigError
+from tatp.units import S_PER_MIN
 
 BLOCK_TYPES = ("pinprick", "touch")
-
-S_PER_MIN = 60.0
 
 
 @dataclass(frozen=True)

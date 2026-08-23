@@ -11,7 +11,7 @@
 
 CONDA_RUN := conda run --no-capture-output -n tatp-study-1
 
-.PHONY: check test test-one lint preview
+.PHONY: check test test-one lint literals preview
 
 check: test lint
 	@echo
@@ -30,6 +30,12 @@ test-one:
 
 lint:
 	$(CONDA_RUN) python -m ruff check .
+
+# The SPEC.md 4.2 literals inventory. The violations are already a test (tests/test_no_literals.py,
+# so `make check` covers them); this target is for reading the list of named constants the rule
+# lets through, which is the part that needs a human eye rather than an assertion.
+literals:
+	$(CONDA_RUN) python tools/lint_literals.py --inventory
 
 # The session timeline and its warnings (SPEC.md 7.2). No hardware, nothing written.
 #   make preview ARGS="--start 09:30"

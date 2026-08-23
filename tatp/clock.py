@@ -16,6 +16,8 @@ from __future__ import annotations
 import time
 from datetime import datetime
 
+from tatp.units import MS_PER_S
+
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%f"
 FILENAME_FORMAT = "%Y-%m-%d_%H-%M-%S"
 
@@ -77,4 +79,4 @@ class Clock:
 
     def scaled_ms(self, seconds: float) -> int:
         """A duration in real milliseconds for a Qt timer, given the clock's speed."""
-        return max(0, int(round(seconds * 1000.0 / self.speed)))
+        return max(0, int(round(seconds * MS_PER_S / self.speed)))

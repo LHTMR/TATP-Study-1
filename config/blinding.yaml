@@ -1,0 +1,37 @@
+# Terms that must never reach a participant. SPEC.md 16.
+#
+# This file exists so the forbidden list is reviewable by S rather than buried in a test, and
+# so the screenshot check (SPEC.md 17.4) and the text check read the same list.
+#
+# WHAT A GREP CAN AND CANNOT DO. It can catch the study name, which states the hypothesis, and
+# the condition labels, which distinguish one visit from another. It cannot catch framing --
+# "this should help with the pain" contains none of these terms and breaks SPEC.md 16's first
+# bullet completely. The wording review is what catches that; this list is the floor, not the
+# ceiling. Do not read a pass here as a blinding check.
+#
+# The condition labels are NOT listed here. They are read from study1.yaml
+# (design.conditions), so adding a condition cannot leave a stale list behind.
+
+forbidden_terms:
+  # The research environment's name. SPEC.md 16: the name states the hypothesis.
+  - TATP
+  - touch away the pain
+  - ttpa
+
+  # The mechanism under test. Naming it to a participant both states the hypothesis and
+  # distinguishes the ct_targeted condition from the other two.
+  - CT-afferent
+  - CT afferent
+  - C-taktil
+  - CT-fiber
+  - CT fibre
+  - CT fiber
+
+  # Words for what the touch is expected to do. Not exhaustive -- see the note above -- but
+  # these are the ones that would most obviously arrive by a copy-paste from the protocol.
+  - smärtlindring
+  - smärtlindrande
+  - pain relief
+  - pain-relieving
+  - analgesi
+  - analgesia

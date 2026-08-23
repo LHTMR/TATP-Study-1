@@ -66,12 +66,20 @@ and the Makefile needs it. It is narrowed to the four forms the Makefile actuall
 (`python -m pytest`, `python -m tatp`, `python tools/…`, `python run_session.py`) rather than
 allowed wholesale. An ad-hoc `python -c` will prompt, which is the right outcome.
 
+`conda run … python tools/…` is allowed **both with and without `--no-capture-output`**. The
+Makefile uses the flag, so that is the spelling in front of you when you run a tool by hand,
+and a rule matching only the bare form prompts on the one you would naturally copy.
+
 ## Hard rules
 
 - **One shell command per Bash call.** No `&&`, `||`, `;`, `|`, `$(...)` or backticks. A hook
   enforces this; the rule is here so you do not fight it. The hook rejects those characters
   even inside a quoted string, so `python -c "a=1; b=2"` is refused too — put the code in a
   file under `tools/` instead of fighting the quoting.
+  - **This includes a `|` inside a regex**, so `grep -n "alpha\|beta"` and `grep -nE "a|b"`
+    are both refused. That is the hook working, not a bug: allowing `|` inside quotes is
+    exactly the hole that makes denying it elsewhere meaningless. **Run one `grep` per term.**
+    Alternation is never necessary and a second call is cheaper than three rejections.
 - **Write the command so the permission rule can match it.** The rules in
   `.claude/settings.json` match a command *prefix*, so anything in front of the real command
   breaks the match and prompts:

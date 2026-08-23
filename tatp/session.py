@@ -23,6 +23,12 @@ from tatp.datafiles import DataFileCollection
 from tatp.garment.base import GarmentController, Limits
 from tatp.garment.mock import MockGarment
 from tatp.garment.patterns import load_folder
+from tatp.units import S_PER_MIN
+
+# A drawn seed is recorded and reused (PROGRESS.md decision 18), so it only has to be large
+# enough that two sessions do not collide and small enough to survive a round trip through the
+# data file as text. 2**31 is the conventional choice for both.
+SEED_RANGE = 2**31
 
 # The controlled vocabulary of the `phase` column, from the Conventions section of
 # docs/DATA_SCHEMA.md. A test asserts this tuple still matches the document.
@@ -74,7 +80,9 @@ class Session:
         # Recorded whether it was given or drawn, so a session is always reproducible from its
         # own data file (SPEC.md 14.2). Never defaulted to a constant, which would make every
         # session's randomisation identical.
-        self.rng_seed = random.SystemRandom().randrange(2**31) if rng_seed is None else rng_seed
+        self.rng_seed = (
+            random.SystemRandom().randrange(SEED_RANGE) if rng_seed is None else rng_seed
+        )
         self.rng = random.Random(self.rng_seed)
 
         self.allocation_path = Path(config.study1["design"]["allocation_file"])
@@ -228,7 +236,7 @@ class Session:
         self._block = block
         self._block_start_s = self.clock.t_session_s()
         self.block_index = block.index
-        started_min = self._block_start_s / 60.0
+        started_min = self._block_start_s / S_PER_MIN
         self.log(
             "block_started",
             origin="experimenter",
@@ -242,7 +250,7 @@ class Session:
         if self._block is None:
             raise SessionError("no block is open")
         block, start_s = self._block, self._block_start_s
-        actual_min = (self.clock.t_session_s() - start_s) / 60.0
+        actual_min = (self.clock.t_session_s() - start_s) / S_PER_MIN
         planned = (
             "unset" if block.expected_duration_min is None
             else f"{block.expected_duration_min:g} min"

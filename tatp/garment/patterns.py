@@ -20,6 +20,8 @@ from pathlib import Path
 
 import yaml
 
+from tatp.units import MS_PER_S
+
 SIDECAR_KEYS = ("name", "row_interval_ms", "channel_ids", "loop")
 
 
@@ -43,7 +45,7 @@ class Pattern:
         A pattern whose final row still has channels on is a full row long at the end, not
         instantaneous, so the cycle is one row longer than the grid.
         """
-        return len(self.rows) * self.row_interval_ms / 1000.0
+        return len(self.rows) * self.row_interval_ms / MS_PER_S
 
 
 @dataclass(frozen=True)
@@ -139,7 +141,7 @@ def expand(pattern: Pattern) -> tuple[ChannelEvent, ...]:
     A channel still on in the final row is turned off at the end of that row, which is what
     makes one cycle `duration_s` long and what guarantees the on/off pairing below.
     """
-    interval_s = pattern.row_interval_ms / 1000.0
+    interval_s = pattern.row_interval_ms / MS_PER_S
     events: list[ChannelEvent] = []
     previous = [0] * len(pattern.channel_ids)
     for index, row in enumerate([*pattern.rows, (0,) * len(pattern.channel_ids)]):

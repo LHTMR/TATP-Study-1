@@ -42,10 +42,10 @@ from tatp.responder import Action
 from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
+from tatp.units import MS_PER_S
 
 # Config keys and controlled-vocabulary values, not wording.
 INTENSITY_SCALE = "intensity"
-MS_PER_S = 1000.0  # a unit conversion, not a timing (SPEC.md 4.2)
 ANCHOR_STAGE = "anchor"
 BELOW = "below"
 ABOVE = "above"
