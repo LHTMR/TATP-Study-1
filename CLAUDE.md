@@ -152,8 +152,9 @@ state on disk rather than in the conversation, so that any fresh session can pic
 - **`PROGRESS.md` is the handover file.** Keep it current: what is done, what is in flight,
   what is next, and any decision taken that is not already in `docs/SPEC.md`. Update it at
   every milestone and before stopping for any reason.
-- Between `docs/SPEC.md`, `PROGRESS.md` and the git log, a new session should need nothing
-  from the previous conversation.
+- **`FOR_S.md` is S's queue.** See below — update it in the same breath as `PROGRESS.md`.
+- Between `docs/SPEC.md`, `PROGRESS.md`, `FOR_S.md` and the git log, a new session should need
+  nothing from the previous conversation.
 - `/clear` between unrelated tasks. A long session carrying failed approaches performs worse
   than a fresh one with a better prompt.
 - Prefer a targeted grep to reading a whole file. Do not re-read a file already read this
@@ -166,9 +167,40 @@ state on disk rather than in the conversation, so that any fresh session can pic
 - After a compaction, re-read `PROGRESS.md` and `docs/SPEC.md` §18 before continuing — the
   summary will not have kept the detail.
 
+## `FOR_S.md` — the queue of things the build cannot settle by itself
+
+`PROGRESS.md` is for the next session. **`FOR_S.md` is for S**, and it is the only file S
+should have to read to know what is waiting on them. Keep it current or it becomes actively
+misleading — a stale queue is worse than no queue, because it gets trusted.
+
+Two lists, and the distinction is load-bearing:
+
+- **List A — things only S can supply.** A value, a wording or a decision from outside the
+  repository. Measured forces, participant text, a pressure limit, a serial protocol.
+- **List B — things that need S's attention.** No input to me. Reviews of what I wrote,
+  alignments between Bilaga 1 and the implementation, analysis-plan decisions, process.
+
+**The three-places rule.** Any time you would otherwise guess a value, invent a wording, or
+default something the spec does not fix, do all three of these or none:
+
+1. Leave a **clearly-marked placeholder** in `config/` — `null`, or a string prefixed
+   `PLACEHOLDER`. Never a plausible-looking constant.
+2. Add an entry to **`config/open_items.yaml`** with a `resolved_when:` path, so the startup
+   warning is automatic rather than remembered. Items the spec does not number get `Ln`.
+3. Add a row to **`FOR_S.md`**, in the right list, with the gate at which it stops being
+   deferrable.
+
+Doing one or two of the three is how a guess ends up in the study. `open_items.yaml` is the
+machine-checked list and `FOR_S.md` is the human-readable one; **they must never disagree.**
+When an item's `resolved_when:` path stops being null, delete its row from `FOR_S.md` in the
+same commit.
+
+Only genuinely non-blocking things belong in `FOR_S.md`. If something blocks the build, the
+rule above it applies instead — **stop and ask.** Do not park a blocker in a list and carry on.
+
 ## Working style
 
 - IMPORTANT: build in vertical slices. One thin path through every layer that runs end to end,
   then widen. Do not build one layer completely before starting the next.
 - Anything in `docs/SPEC.md` §20 that is still unresolved stays a clearly-marked placeholder
-  that warns at startup. Never quietly default it.
+  that warns at startup. Never quietly default it — see the three-places rule above.

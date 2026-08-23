@@ -1,7 +1,10 @@
 # PROGRESS
 
-Handover file (CLAUDE.md). Between `docs/SPEC.md`, this file and the git log, a fresh session
-should need nothing from any previous conversation.
+Handover file (CLAUDE.md). Between `docs/SPEC.md`, this file, `FOR_S.md` and the git log, a
+fresh session should need nothing from any previous conversation.
+
+Everything waiting on S — values, wordings, reviews, decisions — is in **`FOR_S.md`**, not
+here. Keep the two updated together.
 
 **Last updated:** 23 August 2026, end of session 1.
 **Milestone:** 1 (the vertical slice) — *in progress, not complete.*
