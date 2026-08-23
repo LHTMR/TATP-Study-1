@@ -45,7 +45,8 @@ instructions:
     Applicera vinkelrätt från cirka 3 cm. Böj filamentet till ungefär tre fjärdedelar av dess
     utsträckta längd, håll kvar i cirka 1 s, ingen sidorörelse, lyft sedan långsamt. Håll
     appliceringsstället utom synhåll för deltagaren.
-  apply_filament: Applicera filament {filament} ({force_mn} mN) på plats {site}, {region} zonen.
+  # Filamenten benämns med gramsiffran som står tryckt på dem (SPEC.md 8.1), kraften efter.
+  apply_filament: Applicera filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen.
   apply_brush: Borsta {region} zonen på plats {site}.
   mapping_path: Kartlägg bana {path}. Flytta 5 mm inåt vid varje signal och stanna när deltagaren markerar.
   mapping_distances: Skriv in de fyra uppmätta avstånden i mm när det passar. Detta avbryter aldrig sessionen.

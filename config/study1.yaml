@@ -27,7 +27,15 @@ pinprick:
   measure_repetitions: 3             # 3 reps x 3 adjacent filaments (comparison doc 6)
   measure_n_levels: 3                # crossing filament and the two immediately below it
   max_applications: 25               # hard cap; take the best estimate and flag (SPEC.md 8.2)
-  start_filament_size_session1_pre_s: "5.46"   # informed-prior start (comparison doc 5.2c)
+  start_filament_label_g_session1_pre_s: "26"  # informed-prior start (comparison doc 5.2c).
+                                     # Filaments are named by their gram label everywhere
+                                     # (SPEC.md 8.1); 26 g is the 5.46, 255 mN.
+  intolerable_vas_pct: 100.0         # top of the pain scale is the proxy for intolerable
+                                     # (SPEC.md 8.2). There is no separate control: the
+                                     # software raises the flag and enforces the cap.
+  intolerable_sites_for_global_cap: 4   # once this many distinct sites are capped within one
+                                     # time point, the cap applies to every site, at the lowest
+                                     # force that reached the ceiling in that run (SPEC.md 8.2)
   expected_offset_steps_pre_to_post_s: -2.7    # Scheuren et al.; SPEC.md 20 item 7
   isi_min_s: 13.0                    # Scheuren et al. 2023
   isi_max_s: 17.0

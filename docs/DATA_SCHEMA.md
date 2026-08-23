@@ -128,11 +128,12 @@ One row per monofilament application, both protocols, all phases (§14.2).
 | region | str | - | yes | `primary` or `secondary` hyperalgesic zone |
 | trial_index | int | - | yes | 1-based within the protocol run |
 | purpose | str | - | yes | `search` or `measure`; only `measure` enters the estimate (§8.2) |
-| filament_size | str | - | yes | Aesthesio size, e.g. `5.46` |
-| force_nominal_mn | float | mN | yes | Label value, display only (§8.1) |
-| force_measured_mn | float | mN | no | Weighed value; empty until the set is weighed (§20 item 1) |
-| force_applied_mn | float | mN | no | What the estimator fits. The measured force of the filament actually applied, which is not the intended one when the experimenter substitutes (§8.2 safety rule). Empty until the set is weighed (§20 item 1): nominal force is never written here, because manufacturer values deviate from measured by up to about 20 % non-systematically (§8.1). A session with this column empty cannot yield an F₄₀ estimate, which is what `blocks_use: true` on open item 1 means |
-| substituted | bool | - | yes | `true` when the applied filament differs from the one the software asked for |
+| filament_label_g | str | g | yes | Gram label of the filament the software asked for, e.g. `26`. The label printed on the filament is the identifier everywhere (§8.1); forces are companion values |
+| applied_filament_label_g | str | g | yes | Gram label of the filament actually applied. Equal to `filament_label_g` unless `substituted` (§8.2) |
+| force_nominal_mn | float | mN | yes | Label force of the **applied** filament in mN. Display, and the fallback for `force_applied_mn` until the set is weighed (§8.1) |
+| force_measured_mn | float | mN | no | Weighed force of the **applied** filament; empty until the set is weighed (§20 item 1) |
+| force_applied_mn | float | mN | yes | What the estimator fits: `force_measured_mn` when there is one, otherwise `force_nominal_mn`. An empty `force_measured_mn` is therefore the marker that this row was fitted on label values rather than weighed ones (§8.1) |
+| substituted | bool | - | yes | `true` when the applied filament differs from the one the software asked for (§8.2) |
 | site_index | int | - | yes | Rotates on every application (§8.2) |
 | cue_onset_iso | iso8601 | - | yes | Visual warning cue onset (§10.5) |
 | rating_cue_iso | iso8601 | - | no | When the rating was cued, 9 s post-stimulus (Scheuren et al. 2023) |
@@ -140,7 +141,7 @@ One row per monofilament application, both protocols, all phases (§14.2).
 | rt_s | float | s | no | From rating cue to confirm |
 | first_press_side | str | - | no | `left` or `right`; sets the marker's first position (§10.2) |
 | direction_changes | int | - | no | Marker direction reversals |
-| intolerable | bool | - | yes | Participant or experimenter marked this application intolerable at this site (§8.2) |
+| intolerable | bool | - | yes | `true` when this application's rating reached `pinprick.intolerable_vas_pct`, the proxy for intolerable (§8.2). Derived from `rating_percent`, so a trial with no response is `false` |
 | discarded | bool | - | yes | Experimenter discarded and repeated; the row is retained (§11) |
 | notes | str | - | no | Free text |
 
@@ -156,14 +157,14 @@ One row per completed long protocol — three per session (§8.2).
 | t_session_s | float | s | no | Seconds from session t=0 |
 | phase | str | - | yes | `pre_sensitisation`, `post_sensitisation` or `post_intervention` |
 | region | str | - | yes | `primary` or `secondary` |
-| start_filament_size | str | - | yes | Where the ascent began; logged so prior bias is detectable (§8.2) |
+| start_filament_label_g | str | g | yes | Gram label of the filament the ascent began at; logged so prior bias is detectable (§8.2) |
 | start_source | str | - | yes | `config_default` or `previous_timepoint` |
 | applications_total | int | - | yes | Search plus measurement |
 | applications_measure | int | - | yes | Measurement trials entering the fit |
 | capped | bool | - | yes | `true` if `max_applications` was reached (§8.2) |
 | slope_prior_vas_per_log10 | float | VAS·log₁₀⁻¹ | yes | The fixed slope (§8.2) |
 | f40_mn | float | mN | yes | The estimate; the continuous dependent variable |
-| chosen_filament_size | str | - | yes | Nearest available filament, for the short protocol |
+| chosen_filament_label_g | str | g | yes | Gram label of the nearest available filament, for the short protocol |
 | chosen_force_mn | float | mN | yes | That filament's force |
 | out_of_range | bool | - | yes | Set when and only when a boundary filament had to be used (§8.2) |
 | out_of_range_direction | str | - | no | `below` or `above`; empty unless `out_of_range` |

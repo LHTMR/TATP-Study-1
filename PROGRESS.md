@@ -176,14 +176,41 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5.
 
 Items 20–26 are session 6.
 
-20. **`pinprick.force_applied_mn` is no longer a required column** in `docs/DATA_SCHEMA.md`.
-    It is the *measured* force of the filament applied, and the set is unweighed (open item 1),
-    so requiring it would have forced one of two bad outcomes: writing the nominal label into a
-    column that means something else — manufacturer values deviate from measured by −19.75 % to
-    +17.61 % *non-systematically*, so it is a different quantity, not an approximation — or
-    refusing to run any pinprick trial before the weighing, which contradicts `blocks_use: true`
-    meaning "piloting is fine without it". It is now written empty until the set is weighed.
-    **In `FOR_S.md` B1.6 for review** — it is a change to the authoritative schema.
+20. **Three decisions S took on 23 Aug 2026, now in `docs/SPEC.md` §8.1–8.2** rather than only
+    in a conversation. All three are S's, not mine; `FOR_S.md` B1.6 asks them to confirm the
+    wording.
+
+    a. **Filaments are identified by their gram label** — `26`, not `5.46`. That is what is
+       printed on the filament and what an experimenter reads off the kit under time pressure.
+       `label_g` is the identifier in `filaments.yaml`, on the experimenter screen and in the
+       data files; the Semmes-Weinstein size and the three forces are companion values. The
+       columns are `filament_label_g` and `applied_filament_label_g`, and
+       `start_filament_size` / `chosen_filament_size` in `calibration_pinprick` moved with them.
+       The labels were transcribed from the standard set, so `tests/test_config_files.py`
+       checks each one against `force_manual_mn` at 9.81 mN/g — all eleven agree to better than
+       1 %. Confirmation against the physical kit is `FOR_S.md` A3.8.
+
+    b. **`intolerable` is derived, not observed.** There was never a mechanism for it. A rating
+       reaching `pinprick.intolerable_vas_pct` is the proxy, so the software raises the flag —
+       no experimenter control, no participant control beyond the scale and the emergency stop.
+       The cap is prospective, per site, per time point, escalating to **all** sites once
+       `pinprick.intolerable_sites_for_global_cap` distinct sites are capped, at the lowest
+       force that reached the ceiling in that run. **Enforcement lands with the ladder in
+       Milestone 3** — there is no filament selection yet to constrain, and the state to track
+       it would be an abstraction with no consumer. The flag and its log event are written now.
+
+    c. **`force_applied_mn` falls back to the label force while the set is unweighed.** My
+       previous session had made it optional and left it empty, which would have made Protocol A
+       impossible to pilot at all — and `FOR_S.md` A3.4 asks for the slope prior to be
+       re-estimated *from pilot data*. It is now required and always populated: measured where
+       there is one, nominal otherwise. Nothing is hidden, because `force_measured_mn` is empty
+       on exactly those rows. Every force column now describes the filament that actually
+       touched the skin, so the three stay consistent about one object.
+
+    Two things I fixed by assumption rather than asking again, both stated in `SPEC.md` §8.2:
+    the escalated all-sites cap uses the **lowest** ceiling-producing force in the run, and it
+    clears at the next time point like the per-site cap. Censoring of ceiling ratings is
+    `FOR_S.md` B4.5.
 
 21. **`ExperimenterWindow` takes a reader callable, not the `Session`.** "It reads
     `experimenter_view()` and nothing else" is then structural rather than a habit: the window
@@ -246,6 +273,11 @@ entry point.
    against the mock garment. Keep the anchors, gain matching and equalisation for Milestone 4.
 3. **`tatp/schedule.py`** — enough to place the trial in a block, so `block_index` stops being
    `None`.
+
+Then in **Milestone 3**, when the ladder exists: the intolerable cap of `SPEC.md` §8.2 —
+per site, per time point, escalating to all sites at
+`pinprick.intolerable_sites_for_global_cap`. The flag is written today; nothing enforces it yet.
+The experimenter's substitution control belongs there too, for the same reason.
 4. **Milestone 2**: `tools/check.py`, `tools/validate_session.py`, `tatp/screenshots.py`, and
    the literals test SPEC.md 4.2 asks for ("a test greps for violations"). Then finish the
    `check` target and delete its INCOMPLETE GATE line.

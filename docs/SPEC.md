@@ -305,10 +305,20 @@ Log both transitions.
 
 ### 8.1 Filaments, and the instruments module
 
-`filaments.yaml` lists the filaments held: Aesthesio size, nominal force, **measured force in
-mN**, and the weighing date. The measured value is what the code uses; nominal is for display.
-Manufacturer forces deviate from measured by −19.75 % to +17.61 % non-systematically
-(Berquin et al. 2010).
+**Filaments are identified by the gram label printed on them** — `26`, not `5.46`. Settled
+23 Aug 2026: that is what an experimenter reads off the kit under time pressure, so it is the
+identifier in `filaments.yaml`, on the experimenter screen and in the data files. Everything
+else about a filament — the Semmes-Weinstein size, the nominal force, the measured force — is a
+companion value looked up from the label.
+
+`filaments.yaml` lists the filaments held: gram label, Aesthesio size, nominal force, **measured
+force in mN**, and the weighing date. The measured value is what the code uses **where there is
+one**; where the set is unweighed the estimator falls back to the label force, and the empty
+`force_measured_mn` in each row is what marks a row fitted that way. Piloting depends on this:
+the slope prior is re-estimated from pilot data (§20 item 6), which cannot happen if no force is
+recorded at all. Manufacturer forces deviate from measured by −19.75 % to +17.61 %
+non-systematically (Berquin et al. 2010), which is why the fallback is marked rather than
+silent.
 
 Reference values from the Aesthesio manual, mN, for the range Ng et al. (2024) used:
 
@@ -369,8 +379,30 @@ al. (2022) had 25.7 % of participants ineligible on range criteria with four tim
 stimulus levels as this ladder has.
 
 **Safety rule** (Amir et al.): never apply a filament at or above one already rated
-intolerable at that site. If the experimenter substitutes a lower one, **fit the applied value,
-not the intended one.**
+intolerable. Settled 23 Aug 2026: there is **no separate "intolerable" control**. A rating at
+the top of the pain scale is the proxy, so the software raises the flag and enforces the cap,
+and the participant needs no channel beyond the scale itself and the emergency stop (§10.1).
+
+- **Trigger:** `rating_percent >= pinprick.intolerable_vas_pct`, config, the top of the scale.
+- **The cap is prospective.** It is known only once the rating is in, so it constrains the
+  applications *after* it, never the one that raised it.
+- **Scope: per site, per time point.** The site that reached the ceiling is capped at that
+  force and above, and the cap clears at the next time point, where sensitivity genuinely
+  differs.
+- **Escalation:** once `pinprick.intolerable_sites_for_global_cap` distinct sites are capped
+  within one time point, the cap applies to **every** site, at the **lowest** force that
+  reached the ceiling anywhere in that run. Site rotates over `pinprick.n_sites` sites, so a
+  per-site cap alone bars one site in eight; the escalation is what stops a broadly sensitised
+  participant being walked around the rotation.
+- **Experimenter discretion survives as substitution.** The experimenter may apply a lower
+  filament than the software asked for whenever they judge it warranted. The row records which
+  filament was applied as well as which was asked for, and **the estimator fits the applied
+  value, not the intended one.**
+
+A ceiling rating is a **censored** observation — the participant had no headroom, so the true
+response may be higher. It will nearly always land on a `search` trial, since measurement sits
+at the crossing filament and the two below it near VAS 40, so it rarely enters the estimate.
+The analysis plan should still state what happens when it does.
 
 **Budget equally across time points.** The trial count is set by what post-S needs and applied
 identically at pre-S and post-I, because F₄₀ is compared across the three and unequal counts

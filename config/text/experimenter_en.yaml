@@ -45,7 +45,8 @@ instructions:
     Approach perpendicular from about 3 cm. Bend the filament to about three-quarters of its
     extended length, hold for about 1 s, no lateral movement, then remove slowly. Keep the
     site out of the participant's view.
-  apply_filament: Apply filament {filament} ({force_mn} mN) at site {site}, {region} zone.
+  # Filaments are named by the gram label printed on them (SPEC.md 8.1), with the force after.
+  apply_filament: Apply the {filament} g filament ({force_mn} mN) at site {site}, {region} zone.
   apply_brush: Brush the {region} zone at site {site}.
   mapping_path: Map path {path}. Step inward 5 mm on each cue and stop when the participant signals.
   mapping_distances: Enter the four measured distances in mm whenever convenient. This never blocks the session.

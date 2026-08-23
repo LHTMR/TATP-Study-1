@@ -1,11 +1,21 @@
 # Aesthesio (DanMic) Semmes-Weinstein set -- the set used in Ng et al. (2024).
 # SPEC.md 8.1, calibration_methods_comparison.md 2 and 8.
 #
+# `label_g`           THE IDENTIFIER. The gram label printed on the filament, which is what an
+#                     experimenter reads off the kit under time pressure. Everything else here
+#                     is a companion value looked up from it, and the data files name filaments
+#                     by this label. Settled 23 Aug 2026.
+# `size`              Semmes-Weinstein number, log10 of the force in units of 0.1 mg. Kept
+#                     because the analysis literature indexes filaments this way.
 # `force_manual_mn`   Aesthesio manual value. Reference only.
-# `force_nominal_mn`  The printed label. Display only, so the experimenter reads the
-#                     same number that is written on the filament.
+# `force_nominal_mn`  The rounded label force in mN. Display only.
 # `force_measured_mn` What the code uses. Filled in by the instruments module
 #                     (launcher entry 2) from a precision balance.
+#
+# `label_g` x 9.81 mN/g reproduces `force_manual_mn` to better than 1 % on every row, and
+# tests/test_config_files.py asserts it, so the labels below are machine-checked against a
+# value already in this file rather than trusted transcription. They still need confirming
+# against the physical kit -- FOR_S.md A3.8.
 #
 # Manufacturer forces deviate from measured by -19.75% to +17.61%, non-systematically
 # (Berquin et al. 2010), so an unweighed set is a WARNED PLACEHOLDER and never a silent
@@ -21,14 +31,14 @@ weighing_date: null   # ISO date, written by the instruments module
 weighing_balance: null   # free text: which balance, so the measurement is traceable
 
 filaments:
-  - {size: "4.31", force_manual_mn:   19.6, force_nominal_mn:   20, force_measured_mn: null}
-  - {size: "4.56", force_manual_mn:   39.2, force_nominal_mn:   40, force_measured_mn: null}
-  - {size: "4.74", force_manual_mn:   58.8, force_nominal_mn:   60, force_measured_mn: null}
-  - {size: "4.93", force_manual_mn:   78.4, force_nominal_mn:   80, force_measured_mn: null}
-  - {size: "5.07", force_manual_mn:   98.0, force_nominal_mn:  100, force_measured_mn: null}
-  - {size: "5.18", force_manual_mn:  147.0, force_nominal_mn:  150, force_measured_mn: null}
-  - {size: "5.46", force_manual_mn:  255.0, force_nominal_mn:  260, force_measured_mn: null}
-  - {size: "5.88", force_manual_mn:  588.0, force_nominal_mn:  600, force_measured_mn: null}
-  - {size: "6.10", force_manual_mn:  980.0, force_nominal_mn: 1000, force_measured_mn: null}
-  - {size: "6.45", force_manual_mn: 1760.0, force_nominal_mn: 1800, force_measured_mn: null}
-  - {size: "6.65", force_manual_mn: 2940.0, force_nominal_mn: 3000, force_measured_mn: null}
+  - {label_g:   "2", size: "4.31", force_manual_mn:   19.6, force_nominal_mn:   20, force_measured_mn: null}
+  - {label_g:   "4", size: "4.56", force_manual_mn:   39.2, force_nominal_mn:   40, force_measured_mn: null}
+  - {label_g:   "6", size: "4.74", force_manual_mn:   58.8, force_nominal_mn:   60, force_measured_mn: null}
+  - {label_g:   "8", size: "4.93", force_manual_mn:   78.4, force_nominal_mn:   80, force_measured_mn: null}
+  - {label_g:  "10", size: "5.07", force_manual_mn:   98.0, force_nominal_mn:  100, force_measured_mn: null}
+  - {label_g:  "15", size: "5.18", force_manual_mn:  147.0, force_nominal_mn:  150, force_measured_mn: null}
+  - {label_g:  "26", size: "5.46", force_manual_mn:  255.0, force_nominal_mn:  260, force_measured_mn: null}
+  - {label_g:  "60", size: "5.88", force_manual_mn:  588.0, force_nominal_mn:  600, force_measured_mn: null}
+  - {label_g: "100", size: "6.10", force_manual_mn:  980.0, force_nominal_mn: 1000, force_measured_mn: null}
+  - {label_g: "180", size: "6.45", force_manual_mn: 1760.0, force_nominal_mn: 1800, force_measured_mn: null}
+  - {label_g: "300", size: "6.65", force_manual_mn: 2940.0, force_nominal_mn: 3000, force_measured_mn: null}
