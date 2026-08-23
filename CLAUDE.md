@@ -25,6 +25,7 @@ run through `conda run -n tatp-study-1`, so they work whether or not the env is 
 ```
 make check          # the gate: unit tests, end-to-end validator, screenshot comparison
 make test           # unit tests only
+make test-one ARGS="tests/test_touchcal.py -x"   # a targeted run, same environment
 make validate       # end-to-end validator only
 make shots          # regenerate screenshots and compare against approved references
 make preview        # print the session schedule and any warnings

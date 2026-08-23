@@ -33,6 +33,16 @@ class Clock:
         """Seconds since the clock was created, scaled by `speed`."""
         return (time.perf_counter() - self._origin) * self.speed
 
+    def real_elapsed_s(self) -> float:
+        """Seconds since the clock was created, unscaled.
+
+        For durations belonging to the participant's hand rather than to the session's pacing --
+        the tap/hold thresholds and rates of SPEC.md 10.3. Accelerating those would mean that at
+        speed 100 no press could be short enough to be a tap and a hold would cross the whole
+        pressure range in 60 ms, which is not a faster session but a different control.
+        """
+        return time.perf_counter() - self._origin
+
     def start_session(self) -> None:
         """Mark session t=0 -- the start of heat sensitisation (SPEC.md 7.4)."""
         if self._zero is not None:

@@ -79,6 +79,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "fit_preview.max_reruns", int, 0, None),
     ("study1.yaml", "touch_calibration.reference_channel", int, 1, None),
     ("study1.yaml", "touch_calibration.anchors_pct[*]", NUMBER, 0, 100),
+    ("study1.yaml", "touch_calibration.anchor_prompt_keys[*]", str, None, None),
     ("study1.yaml", "touch_calibration.estimation_n_amplitudes", int, 2, None),
     ("study1.yaml", "touch_calibration.estimation_fit", str, None, None),
     ("study1.yaml", "touch_calibration.derived_pct[*]", NUMBER, 0, 100),

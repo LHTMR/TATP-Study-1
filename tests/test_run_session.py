@@ -90,11 +90,23 @@ def _rows(session, table):
         return list(csv.DictReader(handle))
 
 
-def _run_to_a_rating(runner) -> None:
+def _answer_vas(participant) -> None:
+    _press(participant.vas, "pagedown")
+    _press(participant.vas, "period")
+
+
+def _run_slice(runner) -> None:
+    """Adjust, rate the touch, then rate one pinprick application -- the whole slice."""
+    participant = runner.participant
     runner.run()
-    _spin(lambda: runner.participant.stack.currentWidget() is runner.participant.vas)
-    _press(runner.participant.vas, "pagedown")
-    _press(runner.participant.vas, "period")
+    _press(participant, "pagedown")
+    _press(participant, "period")
+
+    # The touch intensity rating follows the adjustment immediately; the pinprick rating waits
+    # out the warning cue and the configured delay, which the accelerated clock compresses.
+    _answer_vas(participant)
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    _answer_vas(participant)
 
 
 # -- arguments and warnings ---------------------------------------------------------------
@@ -129,10 +141,19 @@ def test_unresolved_open_items_are_printed_before_the_windows_open(loaded):
 # -- the slice ----------------------------------------------------------------------------
 
 
-def test_the_slice_runs_one_application_and_closes_the_session(runner):
-    _run_to_a_rating(runner)
+def test_the_slice_writes_every_table_it_touches_and_closes_the_session(runner):
+    _run_slice(runner)
     assert runner.completed
     assert runner.session.closed
+
+    adjust = _rows(runner.session, "touchcal_adjust")
+    assert len(adjust) == 1
+    assert adjust[0]["stage"] == "anchor"
+    touch = _rows(runner.session, "touch_ratings")
+    assert len(touch) == 1
+    assert touch[0]["scale"] == "intensity"
+    assert float(touch[0]["commanded_pressure_kpa"]) > 0.0, "the touch was being delivered"
+
     rows = _rows(runner.session, "pinprick")
     assert len(rows) == 1
     assert rows[0]["filament_label_g"] == (
@@ -142,7 +163,7 @@ def test_the_slice_runs_one_application_and_closes_the_session(runner):
 
 
 def test_the_participant_is_left_on_the_closing_screen(runner):
-    _run_to_a_rating(runner)
+    _run_slice(runner)
     text = runner.session.config.participant_text["screens"][run_session.END_SCREEN]
     assert runner.participant.message.text == text
     assert runner.participant.stack.currentWidget() is runner.participant.message

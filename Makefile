@@ -11,7 +11,7 @@
 
 CONDA_RUN := conda run --no-capture-output -n tatp-study-1
 
-.PHONY: check test lint
+.PHONY: check test test-one lint
 
 check: test lint
 	@echo
@@ -19,6 +19,14 @@ check: test lint
 
 test:
 	$(CONDA_RUN) python -m pytest -q
+
+# One file, one test, or any other pytest arguments, without leaving the environment:
+#   make test-one ARGS="tests/test_touchcal.py -x --timeout=30"
+# It exists so that a targeted run is still a `make` target. The `conda run` line above is the
+# only place the environment is named, and a target is one allow-list entry rather than one per
+# spelling of the same conda command (CLAUDE.md, "write the command so the rule can match it").
+test-one:
+	$(CONDA_RUN) python -m pytest $(ARGS)
 
 lint:
 	$(CONDA_RUN) python -m ruff check .

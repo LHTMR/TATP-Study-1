@@ -85,6 +85,7 @@
       "Bash(conda run -n tatp-study-1 ruff:*)",
       "Bash(make check)",
       "Bash(make test)",
+      "Bash(make test-one:*)",
       "Bash(make validate)",
       "Bash(make shots)",
       "Bash(make preview)",

@@ -82,6 +82,12 @@ touch_calibration:
                                      # asked for a sensation the scale names, never for a
                                      # position on a line. These adjustments set the sampling
                                      # bracket for the estimation run (SPEC.md 9 step 1).
+  anchor_prompt_keys: [just_noticeable, just_uncomfortable]
+                                     # what the participant is asked for at each of anchors_pct,
+                                     # in the same order: the `adjust_targets` keys in
+                                     # config/text/participant_*.yaml. The pairing is here and
+                                     # not in code because the wording is ethics-bound and the
+                                     # anchors are tunable (SPEC.md 10.4).
   estimation_n_amplitudes: 10        # amplitudes spanning the bracket, RANDOMISED order -- an
                                      # ascending series builds in the sequence effect the fit
                                      # exists to average out (SPEC.md 9 step 2)

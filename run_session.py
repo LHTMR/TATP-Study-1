@@ -2,9 +2,10 @@
 """Entry point. SPEC.md 4.1.
 
 Milestone 1 runs the vertical slice from a command line: load and validate the configuration,
-open both windows, run one pinprick application against the mock garment, and close the session
-so the data files are complete. The four-entry launcher of SPEC.md 4.1 is Milestone 5 -- until
-the auxiliary tools exist there is nothing for three of its entries to open.
+open both windows, run one touch adjustment and its intensity rating against the mock garment,
+then one pinprick application, and close the session so the data files are complete. The
+four-entry launcher of SPEC.md 4.1 is Milestone 5 -- until the auxiliary tools exist there is
+nothing for three of its entries to open.
 
 **Warn, never block.** Unresolved open items and unapproved participant wording stop this being
 a session that may be run with a real participant, and both are already a banner on the
@@ -23,6 +24,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
+from tatp import touchcal
 from tatp.clock import Clock
 from tatp.pinprick import Application, PinprickTrial
 from tatp.responder import Responder
@@ -43,11 +45,12 @@ ABORT_EMERGENCY_STOP = "emergency stop during the slice trial"
 
 
 class SliceRunner:
-    """Milestone 1's whole session: one application, then close.
+    """Milestone 1's whole session: one adjustment, one touch rating, one application, close.
 
-    Milestone 3 replaces this with the protocols and Milestone 5 with the schedule. It exists so
-    that the slice is something that runs, rather than something only `tests/test_pinprick.py`
-    can reach.
+    Milestones 3 and 4 replace this with the protocols in full and Milestone 5 with the
+    schedule. It exists so that the slice is something that runs, rather than something only the
+    test suite can reach -- and so that the three layers it touches (the garment, the VAS and
+    the data files) are exercised together rather than one at a time.
     """
 
     def __init__(self, session: Session, participant: ParticipantWindow,
@@ -56,9 +59,49 @@ class SliceRunner:
         self.participant = participant
         self.experimenter = experimenter
         self.completed = False
+        self.adjustment: touchcal.Adjustment | None = None
+        self.rating: touchcal.TouchRating | None = None
         self.trial: PinprickTrial | None = None
+        self.channel = int(session.config.study1["touch_calibration"]["reference_channel"])
+
+    # -- the touch half ----------------------------------------------------------------
 
     def run(self) -> None:
+        """Protocol B step 1, first anchor: adjust the reference channel (SPEC.md 9)."""
+        self.session.set_phase("touch_calibration")
+        self.session.garment.set_channel(self.channel, True)
+        plan = touchcal.anchor_plans(self.session.config)[0]
+        self.adjustment = touchcal.Adjustment(
+            self.session, self.participant, self.experimenter, plan
+        )
+        self.adjustment.finished.connect(self._adjusted)
+        self.adjustment.start()
+
+    def _adjusted(self, produced_kpa) -> None:
+        if produced_kpa is None:
+            self._stopped()
+            return
+        self.rating = touchcal.TouchRating(
+            self.session,
+            self.participant,
+            self.experimenter,
+            touchcal.INTENSITY_SCALE,
+            self.channel,
+        )
+        self.rating.finished.connect(self._rated)
+        self.rating.start()
+
+    def _rated(self, response) -> None:
+        if response is None:
+            self._stopped()
+            return
+        self.session.garment.stop()
+        self._run_trial()
+
+    # -- the pinprick half -------------------------------------------------------------
+
+    def _run_trial(self) -> None:
+        self.session.set_phase("pre_sensitisation")
         pinprick = self.session.config.study1["pinprick"]
         application = Application(
             protocol="short",
@@ -78,10 +121,22 @@ class SliceRunner:
         # A trial that ended in an emergency stop carries no response (SPEC.md 13). What the
         # session does next is the session's decision, and for a one-trial session that is to
         # stop and record why.
-        self.completed = response is not None
+        if response is None:
+            self._stopped()
+            return
+        self.completed = True
         self.participant.show_message(END_SCREEN)
+        self._close("")
+
+    # -- the end -----------------------------------------------------------------------
+
+    def _stopped(self) -> None:
+        """An emergency stop anywhere in the slice ends it. The stop screen is already up."""
+        self._close(ABORT_EMERGENCY_STOP)
+
+    def _close(self, abort_reason: str) -> None:
         self.experimenter.refresh()
-        self.session.close("" if self.completed else ABORT_EMERGENCY_STOP)
+        self.session.close(abort_reason)
         QApplication.instance().quit()
 
 
@@ -145,7 +200,6 @@ def main(argv: list[str] | None = None) -> int:
     participant.show()
     experimenter.show()
 
-    session.set_phase("pre_sensitisation")
     runner = SliceRunner(session, participant, experimenter)
     runner.run()
     app.exec()

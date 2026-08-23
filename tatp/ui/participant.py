@@ -12,6 +12,12 @@ screen was asked for rather than showing a participant a blank.
 (SPEC.md 13), so the window handles keys whenever the VAS is not the current screen and
 swallows everything else -- including `escape`, which the play button emits and which Qt would
 otherwise read as "close this window" (SPEC.md 10.1).
+
+The one screen that reads more than the emergency stop is the adjustment screen: the pressure
+adjustment of SPEC.md 10.3 is press-and-hold, so both the down and the up of every button matter
+and the window emits them as they happen. It does not itself know what a press means -- what a
+button does to the pressure is `tatp/touchcal.py`, so the participant window stays a display
+with no protocol in it.
 """
 
 from __future__ import annotations
@@ -28,6 +34,10 @@ from tatp.ui.vas import BACKGROUND, FOREGROUND, QT_KEYS, VasWidget
 # How the window draws itself. Not study parameters (SPEC.md 4.2 lists timings, forces,
 # pressures, thresholds, rates and strings) -- the reference screenshots are what pin these
 # (SPEC.md 17.4).
+# The screen every protocol shows after an emergency stop. A key in the participant text file,
+# not wording -- it lives here rather than in one protocol because both of them show it.
+EMERGENCY_STOP_SCREEN = "emergency_stop"
+
 MESSAGE_POINT_SIZE = 26
 MESSAGE_MARGIN_PX = 80
 CUE_RADIUS_FRACTION = 0.09
@@ -78,6 +88,10 @@ class ParticipantWindow(QWidget):
     confirmed = Signal(object)  # a VasResponse
     emergency_stop = Signal()
     pressed_without_marker = Signal()
+    # The adjustment screen only (SPEC.md 10.3). Each carries the responder action's value.
+    adjust_pressed = Signal(str)
+    adjust_released = Signal(str)
+    adjust_confirmed = Signal()
 
     def __init__(
         self,
@@ -105,6 +119,7 @@ class ParticipantWindow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.stack)
 
+        self._adjusting = False
         self.setFocusPolicy(Qt.StrongFocus)
         self.show_blank()
 
@@ -143,6 +158,22 @@ class ParticipantWindow(QWidget):
         self.message.text = ""
         self._show(self.message)
 
+    def show_emergency_stop(self) -> None:
+        """What the participant is left looking at after a stop (SPEC.md 13)."""
+        self.show_message(EMERGENCY_STOP_SCREEN)
+
+    def show_adjustment(self, target_key: str) -> None:
+        """The adjustment screen: what to set, above how the buttons work (SPEC.md 9, 10.3).
+
+        `target_key` names an entry in `adjust_targets`, which is always one of the anchors the
+        scale labels -- a participant is asked for a sensation the scale names, never for a
+        position on a line.
+        """
+        self.message.text = (
+            f"{self.text['adjust_targets'][target_key]}\n\n{self.text['screens']['adjust']}"
+        )
+        self._show(self.message, adjusting=True)
+
     def show_warning_cue(self) -> None:
         self._show(self.cue)
 
@@ -151,7 +182,10 @@ class ParticipantWindow(QWidget):
         self.vas.show_scale(scale, self.text["vas"][scale])
         self._show(self.vas)
 
-    def _show(self, screen: QWidget) -> None:
+    def _show(self, screen: QWidget, adjusting: bool = False) -> None:
+        # Set here rather than in the caller so that leaving the adjustment screen by any route
+        # -- including a blank shown by an emergency stop -- stops the window reading buttons.
+        self._adjusting = adjusting
         self.stack.setCurrentWidget(screen)
         # The VAS reads its own keys; every other screen leaves the window holding focus so the
         # emergency stop still works.
@@ -160,9 +194,33 @@ class ParticipantWindow(QWidget):
     # -- input -------------------------------------------------------------------------
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 -- Qt's name
-        name = self._names.get(Qt.Key(event.key()))
-        if name is not None and self.responder.action_for(name) is Action.EMERGENCY_STOP:
+        action = self._action(event)
+        if action is Action.EMERGENCY_STOP:
             self.emergency_stop.emit()
+        elif self._adjusting and not event.isAutoRepeat():
+            # Auto-repeat is the operating system's idea of a held key. The adjustment reads the
+            # hold itself, from the interval between the down and the up (SPEC.md 10.3), so a
+            # repeat here would be a second press that never happened.
+            if action is Action.CONFIRM:
+                self.adjust_confirmed.emit()
+            elif action is not None:
+                self.adjust_pressed.emit(action.value)
         # Everything else is swallowed rather than passed on: off the VAS there is nothing a
         # press can mean, and Qt would close the window on `escape` (SPEC.md 10.1).
         event.accept()
+
+    def keyReleaseEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        action = self._action(event)
+        if (
+            self._adjusting
+            and not event.isAutoRepeat()
+            and action in (Action.DECREASE, Action.INCREASE)
+        ):
+            self.adjust_released.emit(action.value)
+        event.accept()
+
+    def _action(self, event) -> Action | None:
+        name = self._names.get(Qt.Key(event.key()))
+        if name is None or self.responder.is_ignored(name):
+            return None
+        return self.responder.action_for(name)

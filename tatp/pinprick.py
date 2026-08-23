@@ -31,9 +31,8 @@ from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 
-# The `vas` block and the `screens` key this protocol presents. Config keys, not wording.
+# The `vas` block this protocol presents. A config key, not wording.
 PAIN_SCALE = "pain"
-EMERGENCY_STOP_SCREEN = "emergency_stop"
 
 
 @dataclass(frozen=True)
@@ -177,7 +176,7 @@ class PinprickTrial(QObject):
         what the session as a whole does next belongs to the session, not to one trial.
         """
         self._disconnect()
-        self.participant.show_message(EMERGENCY_STOP_SCREEN)
+        self.participant.show_emergency_stop()
         self.session.log(
             "emergency_stop",
             origin="participant",

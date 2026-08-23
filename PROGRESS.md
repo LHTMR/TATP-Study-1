@@ -106,15 +106,16 @@ function. Do not "fix" anything in the repository for this.
 | `tatp/ui/participant.py` | **New.** Three screens — text, warning cue, VAS — plus screen placement |
 | `tatp/ui/experimenter.py` | **New.** Banners, identity, phase, elapsed, garment state, open items, instruction |
 | `tatp/pinprick.py` | **New.** One application end to end. Search/bracket/estimate is Milestone 3 |
-| `run_session.py` | **New.** Entry point. Loads config, opens both windows, runs the slice, closes |
+| `tatp/touchcal.py` | **New.** The accelerating control, one anchor adjustment, one touch rating |
+| `run_session.py` | **New.** Entry point. Adjustment, touch rating, pinprick application, close |
 | `tools/make_allocation.py` | Run once; the output is committed |
-| `Makefile` | `check`, `test`, `lint`. `check` is not yet the whole gate |
-| `tests/` | 152 tests, all passing headless |
+| `Makefile` | `check`, `test`, `test-one`, `lint`. `check` is not yet the whole gate |
+| `tests/` | 171 tests, all passing headless |
 
 ## What does not exist yet
 
 `tatp/schedule.py`, `audio.py`, `screenshots.py`, `tatp/ui/widgets.py`,
-`tatp/garment/arduino_{mosfet,valves}.py`, `touchcal.py`, `instruments.py`,
+`tatp/garment/arduino_{mosfet,valves}.py`, `instruments.py`,
 `launcher.py`, `tools/` (except `make_allocation.py`), `sim/`, `README`,
 `SOP.md`, `HARDWARE_BRINGUP.md`.
 
@@ -131,7 +132,35 @@ conda run -n tatp-study-1 python run_session.py --participant 01 --session 1 --e
 
 ## Decisions taken, not already in SPEC.md
 
-Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23–26 are session 7.
+Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23–26 are session 7;
+27–30 are session 8.
+
+27. **The pressure adjustment runs on real seconds, not on the accelerated clock.** A tap
+    threshold and a ramp rate describe the participant's hand. Scaling them does not make a
+    session faster, it makes the control different: at speed 100 no press is short enough to be
+    a tap and a hold crosses the whole range in 60 ms. `Clock.real_elapsed_s()` was added for
+    this, and `duration_s` on a `touchcal_adjust` row uses it too — that column is the FOR_S
+    A3.6 measurement and must not be reported scaled. **The adjustment time-out stays scaled**,
+    because that one is the session waiting for the participant rather than the participant
+    acting. This was found by a test, not by reasoning: the first taps moved nothing.
+
+28. **`AdjustmentState` takes the time as an argument and imports no Qt.** The ramp is then
+    tested at exact times instead of at whatever times a timer fired, and the travel is the
+    closed-form integral of the ramp rather than a per-tick accumulation — so how often the
+    timer fires cannot change how far a hold travels. There is a test that pins exactly that.
+
+29. **Minimum exploration is recorded, not enforced.** `min_exploration_met` is written on every
+    row and a short confirm is still accepted. Refusing one means telling the participant why,
+    and no approved wording for that exists — inventing one would be participant-facing text
+    written outside the ethics attachments. Logged as `docs/NOTES.md` N2.5.
+
+30. **`touch_calibration.anchor_prompt_keys` pairs each anchor with what the participant is
+    asked.** `[just_noticeable, just_uncomfortable]` against `anchors_pct` `[10, 90]`, in order,
+    with an assert that the two lists are the same length. The pairing is config and not code
+    because the wording is ethics-bound and the anchors are tunable.
+
+    `EMERGENCY_STOP_SCREEN` moved from `tatp/pinprick.py` to `tatp/ui/participant.py` as
+    `show_emergency_stop()`, now that two protocols show it.
 
 23. **Protocol B step 2 defines the targets; it no longer checks them.** Step 1's adjustments
     now only set a sampling bracket. Step 2 presents ten randomised amplitudes across it, fits
@@ -398,24 +427,22 @@ Items 20–26 are session 6.
 
 ## Next steps, in order
 
-The pinprick half of the slice runs, from an entry point. What is left of Milestone 1 is the
-touch half.
+**The slice is closed.** `run_session.py` runs one anchor adjustment, one touch intensity rating
+and one pinprick application against the mock garment, writing `touchcal_adjust`,
+`touch_ratings`, `pinprick`, `garment`, `log` and `session`. What remains of Milestone 1 is the
+block index.
 
-1. **`tatp/touchcal.py`** — three applications of the method of adjustment and one touch
-   intensity rating, driven through the session, using the accelerating control of SPEC.md 10.3
-   against the mock garment. Keep the anchors, gain matching and equalisation for Milestone 4.
-   `SliceRunner` in `run_session.py` is where it joins the slice.
-2. **`tatp/schedule.py`** — enough to place the trial in a block, so `block_index` stops being
+1. **`tatp/schedule.py`** — enough to place the trial in a block, so `block_index` stops being
    `None`.
 
 Then in **Milestone 3**, when the ladder exists: the intolerable cap of `SPEC.md` §8.2 —
 per site, per time point, escalating to all sites at
 `pinprick.intolerable_sites_for_global_cap`. The flag is written today; nothing enforces it yet.
 The experimenter's substitution control belongs there too, for the same reason.
-3. **Milestone 2**: `tools/check.py`, `tools/validate_session.py`, `tatp/screenshots.py`, and
+2. **Milestone 2**: `tools/check.py`, `tools/validate_session.py`, `tatp/screenshots.py`, and
    the literals test SPEC.md 4.2 asks for ("a test greps for violations"). Then finish the
    `check` target and delete its INCOMPLETE GATE line.
-4. Run the **spec-review** agent before declaring Milestone 1 done
+3. Run the **spec-review** agent before declaring Milestone 1 done
    ("Use the spec-review agent to review this diff against docs/SPEC.md").
 
 ## Watch out for
@@ -427,5 +454,12 @@ The experimenter's substitution control belongs there too, for the same reason.
   scratchpad.
 - `mkdir` is not on the allow list. `DataFileCollection` creates its own folder, which is the
   right place for it anyway.
+- **A `QObject` protocol object with no parent is collected the moment nothing holds it**, and a
+  collected object silently stops answering the participant's buttons. Two tests failed this way
+  before the reference was bound. `SliceRunner` holds each of its three.
+- **Targeted test runs go through `make test-one ARGS="..."`.** `conda run --no-capture-output …`
+  typed directly does not match the allow-list prefix, and the bare `conda` shell function is
+  broken in this environment (see Environment above). The Makefile is the only place the
+  environment is named.
 - Directory permissions do not stop an append to an existing file. If you are testing the
   data-write failure path, chmod the *file*, not the folder.

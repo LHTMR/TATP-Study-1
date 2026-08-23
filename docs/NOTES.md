@@ -31,6 +31,7 @@ The software supports each; someone has to actually run it.
 | N2.2 | **Record enough repeats at one filament to estimate σ directly.** The simulated advantage of the Protocol A design rests on the s/σ ratio taken from Ng et al.'s Weber fraction. If real ratings are noisier, the ranking of procedures narrows. |
 | N2.3 | **The evenness question.** Whether the 3 s static match transfers to the moving pattern is answered by asking the participant. The software supports the check and a rebalance path. |
 | N2.4 | **Does the fit preview stay on for real sessions?** `SPEC.md` §11.1. Off by default and built for piloting. It shows the experimenter the participant's ratings, which Bilaga 1 §3.3 and the welcome screen both say does not happen — so keeping it on means changing those, not just the config. A test fails if the flag is flipped without it, and `fit_preview_enabled` in the session file tells analysis which sessions were affected. |
+| N2.5 | **Minimum exploration is recorded, not enforced.** The comparison document §7.3 asks for a minimum total travel before a confirm is accepted (`min_exploration_kpa`, 20 kPa). `min_exploration_met` is written on every `touchcal_adjust` row, but a short confirm is still accepted: refusing one means telling the participant why, and there is no approved wording for that — inventing one would be participant-facing text written outside the ethics attachments (`SPEC.md` §10.4). If it should bite rather than be flagged, it needs a sentence in the participant text first. |
 
 ## 3. For the analysis plan, before data exists
 
