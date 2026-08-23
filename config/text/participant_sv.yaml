@@ -109,8 +109,9 @@ screens:
     Tryck på ▶ för att välja den du tycker bäst om.
 
 audio_setup:
-  # SPEC.md 10.7, maskeringskontrollen. Utkast 23 aug 2026 på S:s instruktion -- alltså INTE
-  # etikförankrad formulering som VAS-frågorna, utan praktisk instruktion om hörlurarna.
+  # SPEC.md 10.7, maskeringskontrollen. Utkast 23 aug 2026 på S:s instruktion, godkänt av S
+  # samma dag. Inte etikförankrad formulering som VAS-frågorna, utan praktisk instruktion om
+  # hörlurarna, vilket är därför S godkänner den direkt.
   #
   # "Brus" om ljudet, inte "vitt brus": deltagaren ska höja det tills det döljer ett ljud och
   # behöver veta vad hen lyssnar efter, inte vad det heter. Ingenting här säger varför bruset

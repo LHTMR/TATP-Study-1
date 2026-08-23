@@ -107,6 +107,14 @@ warnings:
     More than the allowed share of zero-pressure catch trials were reported as felt ({value}).
   schedule: 'Schedule warning, block {block}: {value}'
   no_response: No response for {value} s.
+  # SPEC.md 10.7 step 5. Raising the noise has stopped helping, so the remedy is physical.
+  # Audible as well as on screen: the experimenter may be looking at the participant.
+  masking_failed: >-
+    The participant can still hear the garment and the noise cannot be raised further. Offer
+    earplugs under the headphones. The noise has stopped so you can talk, and the check will
+    start again from the beginning once they are fitted.
+  masking_failed_after_earplugs: >-
+    Still audible with earplugs. The session will continue and is recorded as not fully masked.
 
 banners:
   # SPEC.md 12.4: persistent and unmissable. A session run this way must be impossible to

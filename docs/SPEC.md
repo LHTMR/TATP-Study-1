@@ -730,9 +730,21 @@ the masking has to be working before it starts.
    software's limit is `audio.white_noise_max_dbfs`, a hard ceiling in the same sense as the
    pressure ceiling of §13, which the instruction working correctly never reaches.
 4. **Check it.** Ask whether the garment is still audible. If it is, return to step 3, up to
-   `audio.masking_check_max_attempts` times; the count is recorded either way. If the ceiling is
-   reached with the garment still audible, log a warning and continue — a session run without
-   full masking is a limitation to record, not a reason to refuse.
+   `audio.masking_check_max_attempts` times; the count is recorded either way.
+5. **Escalate to the experimenter.** When raising can no longer help — the attempts are used up
+   or `white_noise_max_dbfs` is reached — **alert the experimenter audibly and on screen** (S,
+   23 Aug 2026). The remedy is physical: **offer the participant earplugs** under the
+   headphones. The white noise stops for the exchange, as it does for the area mapping (§10.5),
+   and the participant screen shows `paused`.
+
+   After earplugs are fitted the check **restarts from step 1**, because earplugs move the
+   participant's threshold as well as the garment's loudness — resuming at step 3 would leave
+   the noise at a level chosen for unplugged ears. `earplugs_used` is recorded in the session
+   file, and the attempt count accumulates across the restart rather than resetting.
+
+   If it still cannot be masked, log a warning and continue. **A session run without full
+   masking is a limitation to record, not a reason to refuse** — but it must be visible in the
+   data rather than only in someone's memory.
 
 **The pattern is fixed and identical in every session, so it carries no information about the
 condition** (§16). This is why it may not be the participant's own condition pattern: that would
@@ -748,8 +760,8 @@ and selected with the corresponding large button, matching the physical layout o
 device (S, 23 Aug 2026). The affirmative is on the left throughout, so the mapping is one
 convention rather than one per question. `screens.comparison` already works this way.
 
-Record the chosen level, whether masking was confirmed, and the number of attempts, in the
-session file.
+Record the chosen level, whether masking was confirmed, the number of attempts, and whether
+earplugs were used, in the session file.
 
 ---
 

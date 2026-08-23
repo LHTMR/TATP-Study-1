@@ -111,9 +111,9 @@ screens:
     Press ▶ to choose the one you like best.
 
 audio_setup:
-  # SPEC.md 10.7, the masking check. Drafted 23 Aug 2026 on S's instruction ("just come up with
-  # something and I will review it"), so this is NOT ethics-sourced wording like the VAS
-  # questions -- it is practical instruction about the headphones, awaiting S's review.
+  # SPEC.md 10.7, the masking check. Drafted 23 Aug 2026 on S's instruction and APPROVED by S
+  # the same day. Not ethics-sourced wording like the VAS questions -- practical instruction
+  # about the headphones, which is why S approves it directly.
   #
   # The word for the noise is "hiss" rather than "white noise": the participant has to turn it
   # up until it covers a sound, and needs to know what they are listening for, not what it is

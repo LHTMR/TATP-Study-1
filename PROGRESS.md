@@ -169,10 +169,21 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23�
       button (S), affirmative on the left everywhere so it is one convention. `screens.comparison`
       already worked this way.
 
-    The wording in `config/text/participant_{sv,en}.yaml` under `audio_setup` is **mine, awaiting
-    S's review** — S said to draft something. It is not ethics-sourced like the VAS questions,
-    and is deliberately not marked `PLACEHOLDER`, because it is practical instruction about
-    headphones rather than a description of the study.
+    - **A failed check escalates to the experimenter, and the remedy is earplugs** (S). Raising
+      the noise is the software's only lever, so when it runs out — attempts exhausted or the
+      ceiling reached — the experimenter is alerted audibly and on screen, the noise stops so
+      the two can talk, and earplugs go under the headphones. **The check then restarts from
+      step 1**, because earplugs move the participant's own threshold as well as the garment's
+      loudness; resuming at step 3 would leave the noise at a level chosen for unplugged ears.
+      `earplugs_used` is recorded, and `masking_attempts` accumulates across the restart.
+      Still unmasked after that is a logged limitation, not a refusal. `docs/NOTES.md` N2.8
+      records that earplugs attenuate the participant cue too, which nobody has checked.
+
+    The wording in `config/text/participant_{sv,en}.yaml` under `audio_setup` is mine, drafted
+    on S's instruction and **approved by S on 23 Aug 2026**. It is not ethics-sourced like the
+    VAS questions, and is deliberately not marked `PLACEHOLDER`, because it is practical
+    instruction about headphones rather than a description of the study — which is why S could
+    approve it directly rather than it waiting on an ethics attachment.
 
 36. **The software pressure ceiling is 250 kPa, the hardware maximum.** S's decision, 23 Aug
     2026, after I raised that `SPEC.md` §13 asked for a ceiling *below* it. Open item L1 closed

@@ -106,6 +106,15 @@ warnings:
     Fler än tillåten andel av kontrolltrials utan tryck rapporterades som kända ({value}).
   schedule: 'Schemavarning, block {block}: {value}'
   no_response: Inget svar på {value} s.
+  # SPEC.md 10.7 steg 5. Att höja bruset hjälper inte längre, så åtgärden är fysisk. Hörbar
+  # larmsignal också, eftersom försöksledaren kan titta på deltagaren i stället för skärmen.
+  masking_failed: >-
+    Deltagaren hör fortfarande plagget och bruset kan inte höjas mer. Erbjud öronproppar under
+    hörlurarna. Bruset har stängts av så att ni kan prata, och kontrollen börjar om från början
+    när propparna sitter på plats.
+  masking_failed_after_earplugs: >-
+    Fortfarande hörbart med öronproppar. Sessionen fortsätter och registreras som inte helt
+    maskerad.
 
 banners:
   reduced_capability: >-

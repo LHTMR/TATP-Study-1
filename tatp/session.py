@@ -112,6 +112,7 @@ class Session:
         self.white_noise_level_dbfs: float | None = None
         self.masking_confirmed: bool | None = None
         self.masking_attempts = 0
+        self.earplugs_used = False
 
         self.data_folder = Path(config.hardware["data"]["folder"])
         if not self.data_folder.is_absolute():
@@ -394,6 +395,7 @@ class Session:
             "white_noise_level_dbfs": self.white_noise_level_dbfs,
             "masking_confirmed": self.masking_confirmed,
             "masking_attempts": self.masking_attempts,
+            "earplugs_used": self.earplugs_used,
             "data_folder": str(self.data_folder.resolve()),
             "cloud_sync_warning": self.cloud_sync_warning,
             "unresolved_open_items": ";".join(
