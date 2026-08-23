@@ -7,7 +7,7 @@ fresh session should need nothing from any previous conversation.
 hardware limits. **`docs/NOTES.md`** holds what is merely logged: deviations from Bilaga 1,
 pilot-protocol checks, analysis-plan questions, process. Keep all three updated together.
 
-**Last updated:** 23 August 2026, session 7.
+**Last updated:** 23 August 2026, session 8.
 **Milestone:** 1 (the vertical slice) — *the slice runs.*
 
 **Session 7 was a design session, not a build one.** It settled the participant wording, then
@@ -106,18 +106,26 @@ function. Do not "fix" anything in the repository for this.
 | `tatp/ui/participant.py` | **New.** Three screens — text, warning cue, VAS — plus screen placement |
 | `tatp/ui/experimenter.py` | **New.** Banners, identity, phase, elapsed, garment state, open items, instruction |
 | `tatp/pinprick.py` | **New.** One application end to end. Search/bracket/estimate is Milestone 3 |
+| `run_session.py` | **New.** Entry point. Loads config, opens both windows, runs the slice, closes |
 | `tools/make_allocation.py` | Run once; the output is committed |
 | `Makefile` | `check`, `test`, `lint`. `check` is not yet the whole gate |
-| `tests/` | 142 tests, all passing headless |
+| `tests/` | 152 tests, all passing headless |
 
 ## What does not exist yet
 
 `tatp/schedule.py`, `audio.py`, `screenshots.py`, `tatp/ui/widgets.py`,
 `tatp/garment/arduino_{mosfet,valves}.py`, `touchcal.py`, `instruments.py`,
-`launcher.py`, `run_session.py`, `tools/` (except `make_allocation.py`), `sim/`, `README`,
+`launcher.py`, `tools/` (except `make_allocation.py`), `sim/`, `README`,
 `SOP.md`, `HARDWARE_BRINGUP.md`.
 
-**Nothing yet opens the two windows outside a test.** `run_session.py` is the next thing.
+**The slice now runs outside the tests.** `run_session.py` takes the participant code, session
+number, initials and pattern folder, opens both windows, runs one application of the configured
+starting filament and closes the session. The four-entry launcher of `SPEC.md` §4.1 is
+Milestone 5 — three of its four entries have nothing to open yet.
+
+```
+conda run -n tatp-study-1 python run_session.py --participant 01 --session 1 --experimenter SM --patterns config/patterns/examples
+```
 
 ---
 
@@ -390,27 +398,24 @@ Items 20–26 are session 6.
 
 ## Next steps, in order
 
-The pinprick half of the slice runs. What is left of Milestone 1 is the touch half and an
-entry point.
+The pinprick half of the slice runs, from an entry point. What is left of Milestone 1 is the
+touch half.
 
-1. **`run_session.py`** — open both windows, run one trial, close. Until this exists the slice
-   only runs inside `tests/test_pinprick.py`, which is not the same as running. Wire the
-   participant window's `emergency_stop` to the session here (decision 24: the trial stops
-   itself; nothing yet decides what the session does next).
-2. **`tatp/touchcal.py`** — three applications of the method of adjustment and one touch
+1. **`tatp/touchcal.py`** — three applications of the method of adjustment and one touch
    intensity rating, driven through the session, using the accelerating control of SPEC.md 10.3
    against the mock garment. Keep the anchors, gain matching and equalisation for Milestone 4.
-3. **`tatp/schedule.py`** — enough to place the trial in a block, so `block_index` stops being
+   `SliceRunner` in `run_session.py` is where it joins the slice.
+2. **`tatp/schedule.py`** — enough to place the trial in a block, so `block_index` stops being
    `None`.
 
 Then in **Milestone 3**, when the ladder exists: the intolerable cap of `SPEC.md` §8.2 —
 per site, per time point, escalating to all sites at
 `pinprick.intolerable_sites_for_global_cap`. The flag is written today; nothing enforces it yet.
 The experimenter's substitution control belongs there too, for the same reason.
-4. **Milestone 2**: `tools/check.py`, `tools/validate_session.py`, `tatp/screenshots.py`, and
+3. **Milestone 2**: `tools/check.py`, `tools/validate_session.py`, `tatp/screenshots.py`, and
    the literals test SPEC.md 4.2 asks for ("a test greps for violations"). Then finish the
    `check` target and delete its INCOMPLETE GATE line.
-5. Run the **spec-review** agent before declaring Milestone 1 done
+4. Run the **spec-review** agent before declaring Milestone 1 done
    ("Use the spec-review agent to review this diff against docs/SPEC.md").
 
 ## Watch out for
