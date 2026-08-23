@@ -94,6 +94,7 @@ Nothing here is an input to me. These are yours to decide, align or do.
 | B1.2 | **The allocation design, before `config/allocation.csv` is generated and committed.** Condition order drawn from a pool holding each of the 6 permutations equally often. Starting limb alternates by participant *index*, which balances 21/20 exactly where random assignment would not. Codes `01`–`41`. Default seed `20260823`. Once sessions have been run against it, regenerating it re-allocates people, so this is worth a look now rather than later. |
 | B1.3 | **`static_sham` = all five channels held on.** My assumption, so the sham matches the moving patterns in spatial extent and differs only in motion. A single-channel sham would differ in extent as well. Confirm at bring-up. |
 | B1.4 | **`docs/DATA_SCHEMA.md`** — the column list for all eleven tables. It is *parsed* by the writer and the validator, so it is the real schema, not documentation of one. Worth reading once before data exists rather than after. |
+| B1.5 | **One stated deviation from `SPEC.md` §12.1.** Its interface lists `play_pattern(pattern, params: dict)`. I implemented `play_pattern(pattern)` with no `params`, because every per-pattern parameter the spec names — row interval, channel ids, loop — lives in the pattern's sidecar YAML, and an empty dict nothing reads is the unused option `CLAUDE.md` forbids. Say if you intended `params` to carry something I have not anticipated. |
 
 ### B2. Align Bilaga 1 with what is implemented
 
