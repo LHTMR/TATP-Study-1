@@ -61,7 +61,6 @@
       "Bash(conda create:*)",
       "Bash(conda uninstall:*)",
       "Bash(conda clean:*)",
-      "Read(~/Library/CloudStorage/**)",
       "Edit(~/Library/CloudStorage/**)",
       "Write(~/Library/CloudStorage/**)",
       "Read(//etc/**)",

@@ -439,11 +439,20 @@ brush instead of a filament, at pre-S, post-S and post-I.
 
 Four linear paths, inward in 5 mm steps at 1 s intervals (Bilaga 1 §3.6.2).
 
-- The software provides the **1 Hz pacing cue** and counts steps.
-- The participant signals the change in sensation; the software records the step number.
-- The experimenter measures the marked distances and **types the four distances in mm whenever
-  convenient — this must never block the session.** The software computes the area in mm² and
-  stores both.
+**The software's only job here is the pacing cue.** It does not count steps and does not record
+where the border fell — that is a pen mark and a ruler, not a keypress.
+
+- The software provides the **1 Hz pacing cue**. The experimenter advances the filament 5 mm on
+  each cue.
+- The participant reports the change in sensation **verbally** (Bilaga 1 §3.6.2: "a definite
+  change in sensation — 'burning', 'tenderness', 'more intense pricking'"). The experimenter
+  stops, marks the border on the skin and measures it. Nothing about the signal is recorded.
+- **The white noise is off for the whole mapping phase**, so that the participant and the
+  experimenter can talk (§10.5). It resumes afterwards.
+- There is no participant instruction screen for mapping. The experimenter instructs verbally
+  from `instructions.mapping_script`; the participant screen shows the standby display.
+- The experimenter **types the four distances in mm whenever convenient — this must never block
+  the session.** The software computes the area in mm² and stores both.
 - If distances are outstanding at session end, prompt once, then allow the session to close
   with the entry flagged missing.
 
@@ -455,20 +464,52 @@ Scheme B of the comparison document. **Channel 3, the middle channel, is the ref
 minimises the maximum distance to any other channel along the arm and its sensitivity is
 likely intermediate rather than extreme.
 
-1. **Anchors on the reference channel.** Method of adjustment to the 10 %, 30 % and 80 % points
-   on the intensity VAS, stimulus on continuously. **Two adjustments per anchor**, one from
-   clearly below and one from clearly above, averaged. Log both; a large gap means the anchor
-   is poorly defined for that person.
-2. **Verify each anchor by rating.** Deliver the produced pressure and ask for an intensity
-   rating. Adjusting to a target is magnitude *production* whereas the outcome measures are
-   magnitude *estimation*, and the two differ systematically — the regression effect
-   (Teghtsoonian & Teghtsoonian 1978). Record produced pressure and returned rating.
+**Revised 23 Aug 2026.** Steps 1–2 were "adjust to three anchors, then spot-check each by
+rating". They are now "adjust to bracket the range, then *estimate* across it and fit". The
+reason is the one step 2 always cited: adjusting to a target is magnitude **production**, the
+outcome measures are magnitude **estimation**, and the two differ systematically — the
+regression effect (Teghtsoonian & Teghtsoonian 1978). If that gap is real, the targets should be
+defined on the estimation function rather than checked against it. Two choices inside the
+revision are recommendations rather than settled, and are marked **[R]** so they are easy to
+reverse.
+
+1. **Bracket the range on the reference channel.** Method of adjustment to the **10 % and 90 %**
+   points on the intensity VAS, stimulus on continuously. **One adjustment per anchor [R]** —
+   the adjustments now only set the sampling bracket for step 2, so the two-per-anchor averaging
+   that guarded against hysteresis is doing less work than it was. Reverting to two costs two
+   trials.
+
+   **These are the two points the scale names** — 10 % "just noticeable" and 90 % "just
+   uncomfortable" (§10.6). A participant can be asked to adjust to a sensation the scale labels;
+   asking them to adjust to an unlabelled position on a line is a different and worse task.
+
+2. **Estimation run — this is what defines the targets.** Present **ten amplitudes spanning the
+   bracket, in randomised order**, and collect an intensity rating for each. Then fit and invert
+   for P20, P30 and P80.
+
+   - **Randomised, not ascending.** An ascending series builds in exactly the sequence effect
+     the fit exists to average out. Randomisation also gives the **zero-pressure catch trials**
+     a natural home, which is where they now live rather than in the comparison phase.
+   - **Fit `rating ~ a + b·log(pressure)` [R].** Stevens' power law makes rating near-linear in
+     log pressure, and the intensity VAS is bounded at 100 so the top of the range compresses.
+     A straight line in linear pressure only works if the sampled range is tight enough that
+     curvature does not bite. Reversing this is a one-line change to the fit form.
+   - **Fit rating on pressure, then invert.** Pressure is the controlled variable and rating is
+     the noisy one. Fitting pressure on rating and reading targets off directly gives different
+     numbers and is the wrong way round.
+   - **Any target outside the sampled amplitudes is extrapolation — flag it.** The bracket is
+     set by the participant's own adjustments, so this can happen.
+   - **Stage 1 failure now has a definition**: a fit that is flat, non-monotonic, or has poor
+     residuals. That is a real per-participant quality gate, which the spot-check version did
+     not provide.
+
 3. **Match the other four channels to the reference** by adjustment at a single level, two
-   start points. Derive each channel's anchor set from the reference's by the fitted gain.
+   start points. Derive each channel's anchor set from the reference's by the fitted gain,
+   chained off the **fitted** reference values rather than the adjustment values.
 4. **Equalisation check against the reference only** — four comparisons, both orders, reference
    and test channel one after the other with a **3 s hold**. Prompt re-adjustment on mismatch.
-5. **Pleasantness adjustment** with the pattern looped continuously, range **bounded to
-   [P30, P80]**, two adjustments from different start points.
+5. **Pleasantness adjustment** with the pattern looped continuously, range **bounded to the
+   fitted [P30, P80]**, two adjustments from different start points.
 6. **Preference selection — in every session.** The participant is presented with the available
    activation patterns at their calibrated intensity and indicates a preference. The choice is
    recorded every time, but is **only delivered in the participant-preferred condition**.
@@ -481,14 +522,17 @@ likely intermediate rather than extreme.
    wording but is not what it describes; the sentence is worth aligning with the implemented
    procedure.
 
-The 10 % anchor exists so the control condition's 20 % target is **interpolated between
-measured points rather than extrapolated below them**.
+The 10 % and 90 % adjustments bracket everything the study delivers — the control condition's
+20 % target and both ends of the pleasantness window sit inside the sampled range, so nothing is
+extrapolated. **The 20 % control target is derived from the fit like any other**, rather than
+being the one delivered pressure with no estimation behind it.
 
 Stage 1 failure must be detected before stage 2 begins, since the pleasantness range is defined
-by the window.
+by the window. Its definition is in step 2: a flat, non-monotonic or poorly-fitting rating
+function.
 
-**Zero-pressure catch trials** during the comparison phase; flag if more than 20 % are reported
-as felt (Berquin et al. 2010).
+**Zero-pressure catch trials** are embedded in the step 2 estimation run, where the randomised
+order hides them; flag if more than 20 % are reported as felt (Berquin et al. 2010).
 
 **End-of-calibration evenness check.** Ask once whether the movement feels even along the arm,
 with a path back to rebalancing. A 3 s static match may not transfer to the moving pattern if
@@ -551,6 +595,9 @@ language.
   not be audible to the participant over the noise.
 - Timestamp every cue onset.
 - Between blocks the participant screen shows a neutral standby display.
+- **The white noise stops for the secondary-hyperalgesia mapping** (§8.4) and resumes after it.
+  The mapping is instructed verbally and answered verbally, so masking noise would prevent the
+  exchange it exists to protect. Log the stop and the resume.
 
 ### 10.6 VAS questions and anchors
 
@@ -645,7 +692,37 @@ Displays:
 
 It **never displays the value of any participant rating** (Bilaga 1 §3.3 requires ratings be
 made on an interface not visible to the experimenter — showing the numbers on the lab screen
-would defeat that), and it **never displays the condition** (§16).
+would defeat that), and it **never displays the condition** (§16). The one deliberate exception
+is the fit preview below, which is off by default and records the fact that it was on.
+
+### 11.1 Fit preview — an opt-in exception, off by default
+
+Both adaptive procedures produce an estimate that can fail quietly: the **F₄₀ estimation**
+(§8.2) and the **touch-calibration estimation run** (§9 step 2). A bad estimate is not obvious
+from the trial sequence, and everything downstream in the session is built on it. So when
+`fit_preview.enabled` is true, the experimenter is shown, at the end of each of those runs:
+
+- the fitted curve with the observed points on it,
+- the fit-quality numbers already stored (`r_squared`, `residual_sd`, monotonicity, and the
+  stage-1 verdict for touch calibration; the equivalent for F₄₀),
+- the derived values that the rest of the session will use,
+- and a choice: **accept, or re-run the procedure.**
+
+**A re-run never overwrites.** The discarded run stays in the data with `superseded: true` and
+its own fit row, and the re-run is a new run with `run_index` incremented. Whatever the reason
+for re-running, the discarded estimate must remain visible to analysis — a procedure that can be
+repeated until it looks right is a garden of forking paths unless every attempt is retained.
+
+**The cost.** The preview shows the participant's ratings to the experimenter, which Bilaga 1
+§3.3 says does not happen and which `screens.welcome` tells the participant does not happen.
+Enabling it for real sessions means changing that sentence. Blinding to *condition* is
+unaffected — both estimation runs are identical across conditions.
+
+- `fit_preview.enabled` defaults to **false** and is intended for piloting.
+- The session file records `fit_preview_enabled`, so an affected session is identifiable in
+  analysis rather than indistinguishable from a blind one.
+- Enabling it warns at startup, in the same register as the reduced-capability banner.
+- Whether it stays on for real data collection is S's call (`FOR_S.md` B3.4).
 
 Controls: start block, pause, **discard and repeat the last trial**, abort session, timestamped
 free-text note. All logged.
@@ -743,6 +820,13 @@ targeting 20 % on the intensity VAS.
 
 Active through the intervention, **deactivated for the rekindle**, reactivated after. In the
 participant-preferred condition the participant starts the stimulation with the confirm button.
+
+That self-start is part of what defines the condition, not a convenience. Any lag between the
+press and touch onset weakens it (contiguity — Karsh et al. 2018), so **insert no delay** on
+that path and **log the latency**: milliseconds from the confirm keypress to the start command
+leaving for the device, written as `self_start_latency_ms` on the `garment` row. It is a
+measurement, not a target — nothing waits on it and nothing is tuned to hit a number. If the
+distribution turns out to be slow or ragged, that is a finding about the hardware path.
 
 ### 12.4 Piloting against the current prototype
 

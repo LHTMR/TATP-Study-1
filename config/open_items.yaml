@@ -80,11 +80,11 @@ items:
     blocks_use: false
 
   - item: "12"
-    summary: Verification of the drafted Swedish VAS wordings against the participant-facing
-             ethics attachments
-    resolved_when: {file: text/participant_sv.yaml, path: "meta.verified_against_ethics"}
-    fix: Participant-facing wording is bound by what the ethics application says participants
-         will be shown, so it is verified, not invented (SPEC.md 10.6).
+    summary: S's approval of the Swedish VAS wordings
+    resolved_when: {file: text/participant_sv.yaml, path: "meta.wording_approved"}
+    fix: Approved 23 Aug 2026. Where an ethics document supplies a wording it is used;
+         otherwise S decides. SPEC.md 10.6's "checked against the participant-facing ethics
+         attachments" overstated what this is.
     blocks_use: true
 
   - item: "13"

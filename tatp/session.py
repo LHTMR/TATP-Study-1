@@ -96,6 +96,11 @@ class Session:
         self.aborted_reason = ""
         self.closed = False
 
+        # SPEC.md 11.1. Off by default; a session run with it on shows the experimenter the
+        # participant's ratings and is recorded as unblinded in that respect.
+        self.fit_preview_enabled = config.study1["fit_preview"]["enabled"]
+        self.fit_preview_reruns = 0
+
         self.data_folder = Path(config.hardware["data"]["folder"])
         if not self.data_folder.is_absolute():
             self.data_folder = REPO_ROOT / self.data_folder
@@ -146,6 +151,7 @@ class Session:
             "unresolved_open_items": [str(item) for item in self.config.unresolved],
             "placeholder_text": self.config.has_placeholder_text(),
             "reduced_capability_device": not self.garment.per_channel_pressure,
+            "fit_preview_enabled": self.fit_preview_enabled,
         }
 
     # -- logging -----------------------------------------------------------------------
@@ -223,6 +229,13 @@ class Session:
                 detail=f"{self.garment.driver_name} cannot set per-channel pressure "
                 f"(SPEC.md 12.4)",
             )
+        if self.fit_preview_enabled:
+            self.log(
+                "fit_preview_enabled",
+                severity="warning",
+                detail="the experimenter can see participant ratings; this session is not "
+                "blind in the sense Bilaga 1 3.3 describes (SPEC.md 11.1)",
+            )
 
     def close(self, abort_reason: str = "") -> None:
         """Stop the garment, write the closing provenance, and flush. Safe to call twice."""
@@ -294,6 +307,10 @@ class Session:
                 f"{k}={v}" for k, v in sorted(capabilities.items())
             ),
             "reduced_capability_device": not capabilities["per_channel_pressure"],
+            # A session run with the preview on is not blind in the sense Bilaga 1 3.3
+            # describes, so analysis must be able to tell it apart (SPEC.md 11.1).
+            "fit_preview_enabled": self.fit_preview_enabled,
+            "fit_preview_reruns": self.fit_preview_reruns,
             "filament_calibration_date": self.config.filaments.get("weighing_date") or "",
             "filaments_measured": all(f["force_measured_mn"] is not None for f in filaments),
             "slope_prior_vas_per_log10": self.config.study1["pinprick"][

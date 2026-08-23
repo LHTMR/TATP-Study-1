@@ -9,6 +9,20 @@ design:
   limbs: [left, right]               # target limb alternates between visits (SPEC.md 2)
   allocation_file: config/allocation.csv
 
+fit_preview:
+  # SPEC.md 11.1. Shows the experimenter the fitted curve, its quality and the derived values
+  # at the end of the F40 estimation and the touch-calibration estimation run, with an option
+  # to re-run. OFF BY DEFAULT and intended for piloting.
+  #
+  # Turning it on shows the experimenter the participant's ratings. That breaks Bilaga 1 3.3,
+  # contradicts Bilaga 3a ("Försöksledaren ser inte dina skattningar") and makes the welcome
+  # screen's own sentence untrue -- see SPEC.md 11.1 before enabling it for real sessions.
+  # Blinding to condition is unaffected; the estimation runs do not differ between conditions.
+  enabled: false
+  procedures: [f40, touch_calibration]  # which adaptive procedures offer the preview
+  max_reruns: 2                      # bounds the forking path; a discarded run is retained
+                                     # with superseded: true, never overwritten
+
 vas:
   # SPEC.md 10.2. The marker is hidden until the first press, then appears on the side that
   # was pressed, so the starting position cannot bias the response.
@@ -53,17 +67,34 @@ mapping:
   # Secondary-hyperalgesia area, four linear paths inward (SPEC.md 8.4, Bilaga 1 3.6.2).
   n_paths: 4
   step_size_mm: 5.0
-  step_interval_s: 1.0               # the 1 Hz pacing cue
-  max_steps: 40                      # bounds a path that is never signalled; 40 x 5 mm = 200 mm
+  step_interval_s: 1.0               # the 1 Hz pacing cue; the experimenter advances on each
+  max_steps: 40                      # bounds the cue train; 40 x 5 mm = 200 mm. The software
+                                     # does not count steps -- the border is a pen mark and a
+                                     # ruler, not a keypress (SPEC.md 8.4).
   distance_plausible_min_mm: 1.0     # outside this range the entry is queried, not accepted
   distance_plausible_max_mm: 200.0   # silently (SPEC.md 17.5 adversarial experimenter)
 
 touch_calibration:
   # Protocol B, scheme B of the comparison document (SPEC.md 9, comparison doc 7).
   reference_channel: 3               # middle channel; minimises max distance along the arm
-  anchors_pct: [10.0, 30.0, 80.0]    # 10% exists so the sham's 20% is interpolated, not
-                                     # extrapolated below the measured points (SPEC.md 9)
-  adjustments_per_anchor: 2          # one from clearly below, one from clearly above
+  anchors_pct: [10.0, 90.0]          # the two LABELLED points on the intensity scale, "just
+                                     # noticeable" and "just uncomfortable". A participant is
+                                     # asked for a sensation the scale names, never for a
+                                     # position on a line. These adjustments set the sampling
+                                     # bracket for the estimation run (SPEC.md 9 step 1).
+  estimation_n_amplitudes: 10        # amplitudes spanning the bracket, RANDOMISED order -- an
+                                     # ascending series builds in the sequence effect the fit
+                                     # exists to average out (SPEC.md 9 step 2)
+  estimation_fit: log_pressure       # rating ~ a + b*log(pressure), fitted rating-on-pressure
+                                     # and inverted. Pressure is controlled, rating is noisy.
+                                     # Alternative `linear_pressure` only holds if the bracket
+                                     # is tight enough that curvature does not bite.
+  derived_pct: [20.0, 30.0, 80.0]    # read off the fit, never adjusted to: the sham target and
+                                     # both ends of the pleasantness window. Flag any that
+                                     # falls outside the sampled amplitudes as extrapolated.
+  adjustments_per_anchor: 1          # the adjustments only set the bracket now, so the
+                                     # two-per-anchor hysteresis guard does less than it did.
+                                     # Reverting to 2 costs two trials (SPEC.md 9 step 1).
   start_directions: [below, above]
   start_offset_fraction: 0.6         # how far below/above the expected point an adjustment
                                      # starts, as a fraction of the adjustable range
@@ -73,7 +104,9 @@ touch_calibration:
   comparison_gap_s: 1.0              # between the two stimuli of a pair
   catch_trial_fraction: 0.2          # zero-pressure catch trials (SPEC.md 9)
   catch_felt_warn_fraction: 0.2      # flag if more than this share are reported felt
-  pleasantness_range_anchors: [30.0, 80.0]   # bound the adjustment to [P30, P80] (SPEC.md 9)
+  pleasantness_range_anchors: [30.0, 80.0]   # which of derived_pct bound the pleasantness
+                                     # adjustment: the FITTED P30 and P80, not the adjusted
+                                     # values (SPEC.md 9 step 5)
   pleasantness_adjustments: 2
   sham_target_intensity_pct: 20.0    # low-intensity static sham touch, not absence of touch
   evenness_check: true               # end-of-calibration "does it feel even?" with a

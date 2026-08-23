@@ -80,6 +80,8 @@ written, with an empty value — an absent row and an empty value must not be co
 | `garment_driver` | - | Driver class name, e.g. `MockGarment` |
 | `garment_capabilities` | - | `capabilities()` as `key=value` pairs, semicolon-separated (§12.1) |
 | `reduced_capability_device` | - | `true` when `per_channel_pressure` is false (§12.4) |
+| `fit_preview_enabled` | - | `true` if the experimenter could see fitted ratings and re-run a procedure (§11.1). A session run this way is **not blind in the sense Bilaga 1 §3.3 describes**, and must be identifiable in analysis |
+| `fit_preview_reruns` | - | Total re-runs the experimenter chose across the session; `0` when the preview was on but nothing was re-run |
 | `filament_calibration_date` | - | Latest weighing date in `filaments.yaml`; empty if unweighed |
 | `filaments_measured` | - | `true` when every listed filament has a measured force |
 | `slope_prior_vas_per_log10` | VAS·log₁₀⁻¹ | The fixed slope used by the estimator (§8.2) |
@@ -157,6 +159,9 @@ One row per completed long protocol — three per session (§8.2).
 | t_session_s | float | s | no | Seconds from session t=0 |
 | phase | str | - | yes | `pre_sensitisation`, `post_sensitisation` or `post_intervention` |
 | region | str | - | yes | `primary` or `secondary` |
+| run_index | int | - | yes | 1 for the first run; incremented if the experimenter re-ran from the fit preview (§11.1) |
+| superseded | bool | - | yes | `true` if re-run after preview. Retained regardless — every attempt stays in the data |
+| rerun_reason | str | - | no | Free text the experimenter gave when re-running |
 | start_filament_label_g | str | g | yes | Gram label of the filament the ascent began at; logged so prior bias is detectable (§8.2) |
 | start_source | str | - | yes | `config_default` or `previous_timepoint` |
 | applications_total | int | - | yes | Search plus measurement |
@@ -197,6 +202,11 @@ One row per brush application — allodynia, primary and secondary regions (§8.
 
 One row per secondary-hyperalgesia mapping path — four per time point (§8.4).
 
+The software does not count steps and does not record where the participant signalled. It
+provides the pacing cue; the experimenter advances the filament, marks the border on the skin,
+measures it and types the distance. `distance_mm` is therefore the only measurement this table
+carries, and it comes from a ruler rather than from a keypress.
+
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|
 | timestamp_iso | iso8601 | - | yes | Wall clock at path start |
@@ -204,9 +214,7 @@ One row per secondary-hyperalgesia mapping path — four per time point (§8.4).
 | phase | str | - | yes | Phase |
 | path_id | str | - | yes | Which of the four linear paths |
 | step_interval_s | float | s | yes | Pacing cue interval (§8.4) |
-| step_size_mm | float | mm | yes | Distance per step |
-| steps_counted | int | - | yes | Steps before the participant signalled the change |
-| signalled | bool | - | yes | `false` if the path ran out before a signal |
+| step_size_mm | float | mm | yes | Distance the experimenter advances per cue |
 | distance_mm | float | mm | no | Experimenter's measurement; may be entered later and must never block (§8.4) |
 | distance_entered_iso | iso8601 | - | no | When it was typed |
 | distance_missing | bool | - | yes | `true` if the session closed without it |
@@ -263,8 +271,8 @@ One row per adjustment — Protocol B steps 1, 3 and 5 (§9).
 | stage | str | - | yes | `anchor`, `channel_match` or `pleasantness` |
 | channel | int | - | yes | Channel adjusted |
 | reference_channel | int | - | no | Empty for `anchor` |
-| anchor_percent | float | % | no | Target VAS point: 10, 30 or 80. Empty for `pleasantness`, which has no target |
-| adjustment_index | int | - | yes | 1 or 2 — the two start points (§9) |
+| anchor_percent | float | % | no | Target VAS point: 10 or 90, the two labelled anchors. Empty for `pleasantness`, which has no target |
+| adjustment_index | int | - | yes | Which start point; 1 only for `anchor` since 23 Aug 2026 (§9 step 1) |
 | start_direction | str | - | yes | `below` or `above` |
 | start_pressure_kpa | float | kPa | yes | Where the adjustment began |
 | produced_pressure_kpa | float | kPa | yes | Where the participant settled |
@@ -274,8 +282,62 @@ One row per adjustment — Protocol B steps 1, 3 and 5 (§9).
 | button_events | int | - | yes | Down and up events; the full path is in `log` (§10.3) |
 | min_exploration_met | bool | - | yes | Whether the minimum-exploration requirement was satisfied (comparison doc §7.3) |
 | timed_out | bool | - | yes | Whether the adjustment time-out fired |
-| verification_rating_percent | float | % | no | Rating of the produced pressure, step 2. Empty for stages that do not verify |
 | valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4) |
+
+`verification_rating_percent` was removed on 23 Aug 2026. Step 2 is no longer a per-adjustment
+spot-check but a run of its own — see `touchcal_estimate`.
+
+---
+
+### touchcal_estimate
+
+One row per amplitude presented in the Protocol B step 2 estimation run, including the
+zero-pressure catch trials (§9). This run **defines** P20, P30 and P80; the adjustments in step
+1 only set the bracket it samples.
+
+| Column | Type | Unit | Required | Description |
+|---|---|---|---|---|
+| timestamp_iso | iso8601 | - | yes | Wall clock at the presentation |
+| t_session_s | float | s | no | Seconds from session t=0 |
+| channel | int | - | yes | Reference channel |
+| run_index | int | - | yes | Which run these trials belong to; joins to `touchcal_fit` (§11.1) |
+| presentation_order | int | - | yes | Position in the randomised sequence, from 1 |
+| amplitude_index | int | - | yes | Which of the sampled amplitudes, ordered by pressure |
+| pressure_kpa | float | kPa | yes | Commanded pressure; `0` on a catch trial |
+| catch_trial | bool | - | yes | `true` for a zero-pressure trial (§9) |
+| rating_percent | float | % | yes | Intensity VAS response |
+| reaction_time_s | float | s | no | As for any VAS response (§10.2) |
+| valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4) |
+
+The fit itself is one row per run, not per trial, and is stored in `touchcal_fit`.
+
+---
+
+### touchcal_fit
+
+One row per estimation run — the fitted rating function and the targets read off it (§9 step 2).
+
+| Column | Type | Unit | Required | Description |
+|---|---|---|---|---|
+| timestamp_iso | iso8601 | - | yes | Wall clock at the fit |
+| t_session_s | float | s | no | Seconds from session t=0 |
+| channel | int | - | yes | Reference channel |
+| run_index | int | - | yes | 1 for the first run; incremented for each re-run (§11.1) |
+| superseded | bool | - | yes | `true` if the experimenter re-ran after seeing this fit. The row is retained regardless — a procedure repeatable until it looks right is a forking path unless every attempt is kept |
+| rerun_reason | str | - | no | Free text the experimenter gave when re-running |
+| fit_form | str | - | yes | `log_pressure` or `linear_pressure` (§9 step 2) |
+| intercept | float | - | yes | `a` in `rating ~ a + b·log(pressure)` |
+| slope | float | - | yes | `b` |
+| r_squared | float | - | yes | Fit quality |
+| residual_sd | float | % | yes | Residual standard deviation in VAS points |
+| monotonic | bool | - | yes | `false` if the fitted slope is not positive |
+| stage1_pass | bool | - | yes | `false` if flat, non-monotonic or poorly fitting — the §9 stage 1 gate |
+| bracket_min_kpa | float | kPa | yes | Lowest amplitude sampled |
+| bracket_max_kpa | float | kPa | yes | Highest amplitude sampled |
+| p20_kpa | float | kPa | yes | Control-condition target, inverted from the fit |
+| p30_kpa | float | kPa | yes | Lower bound of the pleasantness window |
+| p80_kpa | float | kPa | yes | Upper bound of the pleasantness window |
+| extrapolated | str | - | no | Comma-separated list of any of `p20`, `p30`, `p80` that fell outside the sampled bracket (§9) |
 
 ---
 
@@ -320,4 +382,5 @@ driver does, so a mock session and a real one are comparable line for line (§18
 | requested_kpa | float | kPa | no | What was asked for before clamping |
 | clamped | bool | - | yes | `true` when the ceiling or rate limit altered the command (§13) |
 | pattern_name | str | - | no | Pattern involved, for pattern events |
+| self_start_latency_ms | float | ms | no | On a `pattern_start` the participant triggered: milliseconds from their confirm keypress to this command leaving for the device. Measured, never targeted — no delay is inserted (§12.3) |
 | detail | str | - | no | Fault text or other free detail |

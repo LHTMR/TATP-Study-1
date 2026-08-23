@@ -35,6 +35,21 @@ def test_parses(path):
     assert isinstance(data, dict), f"{path}: expected a mapping at the top level"
 
 
+def test_fit_preview_is_off_in_the_committed_config():
+    """SPEC.md 11.1. Enabling this is a study decision, not a config tweak.
+
+    The preview shows the experimenter the participant's ratings, which Bilaga 1 3.3 says does
+    not happen and which `screens.welcome` tells the participant does not happen. A flag
+    flipped in passing fails here rather than reaching a participant who was told otherwise.
+    """
+    study1 = yaml.safe_load((CONFIG_DIR / "study1.yaml").read_text(encoding="utf-8"))
+    assert study1["fit_preview"]["enabled"] is False, (
+        "fit_preview.enabled is true in the committed config. If that is deliberate, the "
+        "'the experimenter does not see your answers' sentence must come out of "
+        "screens.welcome in both languages first. See FOR_S.md B3.4, then update this test."
+    )
+
+
 def test_every_gram_label_agrees_with_its_force():
     """The gram labels are the identifier (SPEC.md 8.1), so they are checked, not trusted.
 

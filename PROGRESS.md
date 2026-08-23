@@ -6,16 +6,42 @@ fresh session should need nothing from any previous conversation.
 Everything waiting on S — values, wordings, reviews, decisions — is in **`FOR_S.md`**, not
 here. Keep the two updated together.
 
-**Last updated:** 23 August 2026, session 6.
+**Last updated:** 23 August 2026, session 7.
 **Milestone:** 1 (the vertical slice) — *the slice runs.*
 
-**Session 6 closed the loop.** One pinprick trial now runs end to end: visual warning cue →
-stimulus prompt on the experimenter screen → rating cue 9 s later → VAS on the participant
-screen → one validated row in `pinprick.csv` with reaction time, first-press side and direction
-changes. Both windows exist, thin. 142 tests.
+**Session 7 was a design session, not a build one.** It settled the participant wording, then
+S's answers to it changed Protocol B twice and added a new experimenter feature. Nothing new
+executes; what changed is `SPEC.md`, `DATA_SCHEMA.md`, the comparison document, the config and
+the text files. 146 tests.
 
-Session 5 built the foundation below it: config, allocation, clock, provenance, data files,
-garment, responder, VAS and session.
+Session 6 closed the loop: one pinprick trial runs end to end, both windows exist, thin.
+Session 5 built the foundation — config, allocation, clock, provenance, data files, garment,
+responder, VAS and session.
+
+### What session 7 decided
+
+All S's. Recorded here because it is not recoverable from the diff; **the reasoning behind it
+is not, and belongs in the ethics folder, not here.**
+
+1. **Participant wording is approved and in the config.** Open items L4 and 12 closed.
+2. **Protocol B step 1 targets the two *labelled* anchors**, 10 % and 90 %, because a
+   participant can only be asked to adjust to a sensation the scale names.
+3. **Protocol B step 2 became an estimation run that defines the targets** — ten randomised
+   amplitudes, a log fit, inverted for P20/P30/P80 — rather than a spot-check of the
+   adjustments. This is the largest change of the session.
+4. **The area mapping is verbal**; the software only paces it.
+5. **A fit preview for the experimenter**, off by default, with the blinding cost written down.
+
+### What is NOT built yet from session 7
+
+The spec, schema, config and strings are all in place for these; the code is not, because the
+procedures they attach to do not exist yet.
+
+- The step 2 estimation run and its fit — `touchcal_estimate` and `touchcal_fit` are specified
+  tables with no writer.
+- The fit-preview plot widget (`SPEC.md` §11.1). Deliberately not built ahead of the procedures
+  it previews — there is nothing to plot yet.
+- `self_start_latency_ms` (§12.3): the column exists, the measurement does not.
 
 ---
 
@@ -91,7 +117,32 @@ function. Do not "fix" anything in the repository for this.
 
 ## Decisions taken, not already in SPEC.md
 
-Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5.
+Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23–26 are session 7.
+
+23. **Protocol B step 2 defines the targets; it no longer checks them.** Step 1's adjustments
+    now only set a sampling bracket. Step 2 presents ten randomised amplitudes across it, fits
+    `rating ~ a + b·log(pressure)` and inverts for P20, P30 and P80. `SPEC.md` §9 has it. Two
+    choices are marked **[R]** there because they were my recommendation, not S's decision: the
+    log fit form and one adjustment per anchor. **The §7.2 time budget is not re-derived** —
+    that measurement is `SPEC.md` §20 item 8.
+
+24. **Adjustment targets must be points the scale names.** 10 % "just noticeable" and 90 % "just
+    uncomfortable"; everything else derived. Asking a participant to adjust to an unlabelled
+    position on a line is a different task from asking for a sensation. The principle
+    generalises — apply it to any future adjustment step.
+
+25. **The area mapping is verbal and the software only paces it.** No step counting, no recorded
+    signal, no participant screen. The **white noise stops for the whole phase** so the two can
+    talk — the only place masking is deliberately given up. The mapping measurement is a ruler,
+    not a keypress.
+
+26. **The fit preview is an opt-in break of the experimenter blind.** `SPEC.md` §11.1. Off by
+    default, `fit_preview_enabled` in every session file, warning-severity log line and banner
+    when on, and a test that fails if the flag is flipped in passing.
+
+    **A re-run never overwrites**: the discarded run keeps its rows with `superseded: true` and
+    its own `run_index`. A procedure repeatable until it looks right is a forking path unless
+    every attempt is retained — keep that even if the preview is switched off.
 
 1. **`docs/DATA_SCHEMA.md` is parsed, not just read.** It declares a parsing contract: a
    `### table_name` heading followed by a table with the header
@@ -251,10 +302,17 @@ Items 20–26 are session 6.
     drafting `config/text/participant_{sv,en}.yaml`; its edits appeared here as working-tree
     changes I could not distinguish from my own, and I committed them alongside my work.
 
-    **The wording is not finished.** S confirmed on 23 Aug 2026 that some of it is approved and
-    some is not, so `meta.wording_approved` and `meta.instructions_supplied` being set — which
-    closes SPEC.md 20 item 12 and open item L4, and **turns the unmissable placeholder banner
-    off** — is premature. Treat the banner as unreliable until that session lands properly.
+    **Corrected 23 Aug 2026 by the wording session itself.** The paragraph here previously said
+    the wording was unfinished and that `meta.wording_approved` and `meta.instructions_supplied`
+    were set prematurely, and recommended reverting the participant files. That was a reasonable
+    inference from a half-finished-looking tree, but it is wrong: S approved the screen text
+    explicitly ("The text is otherwise approved"), then answered every outstanding question —
+    the adjustment targets, the verbal mapping, the self-start latency — and instructed that the
+    items be marked done rather than held open for ethics alignment or later human review.
+
+    So the flags are correct and the banner is correct to be off. **Do not revert the participant
+    files.** What was genuinely unfinished at the moment of the leak was S's answers to the
+    open-questions list, and those have since landed.
 
     What leaked, and where:
 
@@ -264,9 +322,9 @@ Items 20–26 are session 6.
     | `16beceb` | `FOR_S.md` A1 prose again |
     | `6949f9c` | `config/text/participant_{sv,en}.yaml` in full, `docs/participant_screen_text_draft.md`, `instructions.mapping_script` in both experimenter files, and the `FOR_S.md` A1 "approved, nothing here needs you" rewrite |
 
-    Nothing is pushed, so all three are freely rewritable. **Reverting the participant files
-    will not break the suite** — decision 21 above made every test state-agnostic about the
-    wording, which was accidental good timing rather than foresight.
+    Nothing is pushed, so all three are freely rewritable — but there is no longer anything to
+    undo, only mis-attributed authorship. Decision 21 above made every test state-agnostic about
+    the wording, so the suite never depended on which session's version was in the tree.
 
     **The fix going forward is S's, and already decided: parallel work gets a branch.** Two
     agents sharing one working tree cannot tell whose uncommitted change is whose, and `git add`

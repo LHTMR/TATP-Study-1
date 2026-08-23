@@ -11,8 +11,11 @@
 
 meta:
   language: en
-  verified_against_ethics: null    # SPEC.md 20 item 12 -- covers the VAS wordings, still open
-  instructions_supplied: 2026-08-23  # open item L4, approved by S
+  # S approves the participant-facing wording. Where an ethics document supplies wording it is
+  # used; otherwise S decides. Renamed from `verified_against_ethics`, which overstated it --
+  # this is approval, not a document-by-document check.
+  wording_approved: 2026-08-23     # SPEC.md 20 item 12
+  instructions_supplied: 2026-08-23  # open item L4
 
 vas:
   # SPEC.md 10.6. Anchors are placed at their percentage along the line; the marker is hidden
@@ -66,11 +69,14 @@ screens:
   # There is no `mapping` key. The area mapping is instructed verbally and the participant
   # signals verbally (SPEC.md 8.4); the experimenter's script is `instructions.mapping_script`
   # in experimenter_{sv,en}.yaml. The participant screen shows `standby` throughout.
+  # Practical only. The participant has already read the information sheet, so the screen does
+  # not re-explain the study -- it explains the buttons.
   welcome: |-
     Welcome.
-    This study is about pleasant and unpleasant bodily sensations — touch and pain.
-    You will rate what you feel by marking a point on a line. There are no right answers, and
-    the experimenter does not see your ratings.
+    The two large buttons move the marker along the line.
+    ▶ confirms your answer.
+    There are no right answers — mark what you feel. The experimenter does not see your
+    answers.
 
     Press ▶ to begin.
   standby: |-
@@ -88,8 +94,8 @@ screens:
     The touch has been switched off.
     Please wait for the experimenter.
   # Shown in the participant-preferred condition only (SPEC.md 12.3). The agentive wording is
-  # part of that condition's manipulation, not incidental phrasing -- see
-  # docs/participant_screen_text_draft.md.
+  # part of that condition's manipulation, not incidental phrasing: it says the touch starts
+  # BECAUSE the participant pressed. Do not soften it to "press to continue".
   self_start: Press ▶ when you're ready for the touch to start.
   adjust: |-
     Left button: weaker. Right button: stronger.
@@ -106,10 +112,10 @@ screens:
 
 adjust_targets:
   # The target for each method-of-adjustment step (SPEC.md 9), shown above the `screens.adjust`
-  # frame. Worded with the anchor labels of the scale in question wherever the target sits on a
-  # labelled anchor. The 30 % and 80 % points of the intensity scale carry no anchor label, so
-  # those steps show the scale with the target position marked and the instruction refers to it.
+  # frame. Every target is a labelled anchor of the scale in question -- the participant is
+  # asked for a sensation the scale names, never for a position on a line. That is why the
+  # intensity anchors are 10 % and 90 %: P30 and P80 are interpolated, not adjusted to.
   just_noticeable: Set the touch so that it is just noticeable.
-  marked_point: Set the touch so that it matches the marked point on the scale.
+  just_uncomfortable: Set the touch so that it is just uncomfortable.
   match: Set the second touch so that it feels as strong as the first.
   most_pleasant: Set the touch so that it feels as pleasant as possible.

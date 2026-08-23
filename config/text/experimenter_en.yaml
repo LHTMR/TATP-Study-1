@@ -75,6 +75,9 @@ controls:
   connect: Connect garment
   disconnect: Disconnect garment
   rebalance: Rebalance channels
+  # SPEC.md 11.1, shown only when fit_preview.enabled.
+  fit_accept: Accept this estimate
+  fit_rerun: Re-run the procedure
 
 status:
   connected: Connected
@@ -113,10 +116,18 @@ banners:
     ({value}) cannot set pressure per channel. Timings are real; pressures are not.
   placeholder_text: >-
     PARTICIPANT SCREENS STILL CONTAIN PLACEHOLDER TEXT. Do not run a real participant.
+  # SPEC.md 11.1. Unmissable, because the experimenter must not switch this on without seeing
+  # what it costs.
+  fit_preview: >-
+    FIT PREVIEW IS ON. You will see the participant's ratings, which Bilaga 1 3.3 says you will
+    not and the participant information sheet says you do not. This session is recorded as
+    unblinded in that respect.
 
 dialogs:
   abort_confirm: Abort this session? All data collected so far is kept.
   abort_reason: Reason for aborting
   resume_found: An unfinished session was found for this participant, started {time} ago. Resume it?
   distances_outstanding: Mapping distances are still outstanding. Enter them now, or close the session with them flagged missing.
+  fit_rerun_reason: Why are you re-running? Recorded with the discarded estimate, which is kept.
+  fit_rerun_exhausted: The re-run limit for this procedure has been reached. This estimate will be used.
   error: Error

@@ -27,6 +27,8 @@ EXPECTED_TABLES = {
     "sh_area",
     "touch_ratings",
     "touchcal_adjust",
+    "touchcal_estimate",
+    "touchcal_fit",
     "touchcal_compare",
     "garment",
 }

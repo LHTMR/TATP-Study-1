@@ -75,6 +75,9 @@ controls:
   connect: Anslut plagget
   disconnect: Koppla från plagget
   rebalance: Balansera om kanalerna
+  # SPEC.md 11.1, visas endast när fit_preview.enabled är på.
+  fit_accept: Godkänn den här skattningen
+  fit_rerun: Gör om proceduren
 
 status:
   connected: Ansluten
@@ -110,10 +113,18 @@ banners:
     ({value}) kan inte ställa tryck per kanal. Tiderna är verkliga; trycken är det inte.
   placeholder_text: >-
     DELTAGARSKÄRMARNA INNEHÅLLER FORTFARANDE PLATSHÅLLARTEXT. Kör inte en riktig deltagare.
+  # SPEC.md 11.1. Omöjlig att missa, eftersom försöksledaren inte ska kunna slå på detta utan
+  # att se vad det kostar.
+  fit_preview: >-
+    FÖRHANDSGRANSKNING AV ANPASSNINGEN ÄR PÅ. Du kommer att se deltagarens skattningar, vilket
+    Bilaga 1 3.3 säger att du inte gör och som forskningspersonsinformationen säger att du inte
+    gör. Sessionen registreras som oblindad i det avseendet.
 
 dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.
   abort_reason: Orsak till avbrott
   resume_found: En oavslutad session hittades för denna deltagare, startad för {time} sedan. Återuppta den?
   distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem nu, eller avsluta sessionen med dem flaggade som saknade.
+  fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
+  fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
   error: Fel

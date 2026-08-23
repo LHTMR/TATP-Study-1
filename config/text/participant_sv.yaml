@@ -11,8 +11,11 @@
 
 meta:
   language: sv
-  verified_against_ethics: null    # SPEC.md 20 punkt 12 -- gäller VAS-formuleringarna, kvarstår
-  instructions_supplied: 2026-08-23  # öppen punkt L4, godkänd av S
+  # S godkänner de deltagarvända formuleringarna. Där ett etikdokument anger en formulering
+  # används den; i övrigt avgör S. Omdöpt från `verified_against_ethics`, som lovade för
+  # mycket -- det här är ett godkännande, inte en dokumentgenomgång.
+  wording_approved: 2026-08-23     # SPEC.md 20 punkt 12
+  instructions_supplied: 2026-08-23  # öppen punkt L4
 
 vas:
   pain:
@@ -65,11 +68,13 @@ screens:
   # Det finns ingen `mapping`-nyckel. Kartläggningen instrueras muntligt och deltagaren
   # markerar muntligt (SPEC.md 8.4); försöksledarens manus är `instructions.mapping_script` i
   # experimenter_{sv,en}.yaml. Deltagarskärmen visar `standby` under tiden.
+  # Endast praktiskt. Deltagaren har redan läst forskningspersonsinformationen, så skärmen
+  # förklarar inte studien -- den förklarar knapparna.
   welcome: |-
     Välkommen.
-    Studien handlar om behagliga och obehagliga kroppsförnimmelser – beröring och smärta.
-    Du skattar det du känner genom att markera en punkt på en linje. Det finns inga rätta
-    svar, och försöksledaren ser inte dina skattningar.
+    De två stora knapparna flyttar markören längs linjen.
+    ▶ bekräftar ditt svar.
+    Det finns inga rätta svar – markera det du känner. Försöksledaren ser inte dina svar.
 
     Tryck på ▶ för att börja.
   standby: |-
@@ -87,8 +92,8 @@ screens:
     Beröringen är avstängd.
     Vänta kvar tills försöksledaren kommer.
   # Visas endast i den deltagarvalda betingelsen (SPEC.md 12.3). Den agentiva formuleringen är
-  # en del av den betingelsens manipulation, inte en tillfällig ordvändning -- se
-  # docs/participant_screen_text_draft.md.
+  # en del av den betingelsens manipulation, inte en tillfällig ordvändning: den säger att
+  # beröringen börjar FÖR ATT deltagaren tryckte. Mildra den inte till "tryck för att fortsätta".
   self_start: Tryck på ▶ när du är redo att beröringen ska börja.
   adjust: |-
     Vänster knapp: svagare. Höger knapp: starkare.
@@ -104,11 +109,11 @@ screens:
     Tryck på ▶ för att välja den du tycker bäst om.
 
 adjust_targets:
-  # Målet för varje justeringssteg (SPEC.md 9), visas ovanför ramen i `screens.adjust`.
-  # Formulerat med ankaretiketterna från respektive skala där målet ligger på ett etiketterat
-  # ankare. Punkterna 30 % och 80 % på intensitetsskalan saknar ankaretikett, så de stegen visar
-  # skalan med målpunkten markerad och instruktionen hänvisar till den.
+  # Målet för varje justeringssteg (SPEC.md 9), visas ovanför ramen i `screens.adjust`. Varje mål
+  # är ett etiketterat ankare på respektive skala -- deltagaren ombeds ställa in en förnimmelse
+  # som skalan namnger, aldrig en position på en linje. Därför är intensitetsankarna 10 % och
+  # 90 %: P30 och P80 interpoleras och justeras inte fram.
   just_noticeable: Ställ in beröringen så att den är precis märkbar.
-  marked_point: Ställ in beröringen så att den motsvarar den markerade punkten på skalan.
+  just_uncomfortable: Ställ in beröringen så att den är precis obehaglig.
   match: Ställ in den andra beröringen så att den känns lika stark som den första.
   most_pleasant: Ställ in beröringen så att den känns så behaglig som möjligt.

@@ -418,11 +418,52 @@ Hardware: pressure to 250 kPa, proportional valves, **five independently control
 Resolution not yet known.
 
 1. **Method of adjustment** on the **middle channel (channel 3)**, which serves as the reference,
-   to find the 10 %, 30 % and 80 % intensity anchors. Stimulus on continuously while the
+   to find the **10 % and 90 %** intensity anchors. Stimulus on continuously while the
    participant adjusts. **Two adjustments per anchor**, one starting clearly below and one clearly
    above, averaged (see §7.3 on hysteresis).
-2. **Verify each produced anchor by rating.** Deliver the produced pressure and ask for an
-   intensity rating. One extra trial per anchor; see §7.3 on why production is not estimation.
+
+   **Revised 23 Aug 2026 (S).** The targets were 10 %, 30 % and 80 %. They are now the two
+   **labelled** anchors on the intensity scale — 10 % "just noticeable" and 90 % "just
+   uncomfortable" — and **30 % and 80 % are interpolated between them**. The reason is that a
+   participant can only be asked to adjust to a point the scale actually names; 30 % and 80 %
+   carry no anchor label, so adjusting to them meant asking for a position on a line rather than
+   for a sensation. Consequences:
+
+   - **Two anchors instead of three**, so four adjustments and two verifications rather than six
+     and three. The time budget in §7.2 improves; the figures there are not yet re-derived.
+   - **The pleasantness window [P30, P80] is now derived rather than measured.** Both ends carry
+     interpolation error. This is the real cost of the change, and it is the thing to watch in
+     piloting.
+   - **The control condition's 20 % target remains interpolated**, now between 10 % and 90 %
+     rather than between 10 % and 30 %, so the rationale below still holds.
+   - **90 % is "just uncomfortable" by construction**, so calibration will briefly produce an
+     uncomfortable pressure. Bilaga 3a already tells participants this: "enstaka tryck kan
+     upplevas som obehagliga innan rätt nivå är hittad."
+
+   **Revised again the same day: the targets come from a fitted estimation run, not from the
+   adjustments.** §7.3 below has always said that production and estimation differ
+   systematically (Teghtsoonian & Teghtsoonian 1978) and that step 2 exists to measure the gap.
+   If the gap is real, the targets belong on the estimation function rather than being
+   spot-checked against it. So:
+
+   - Step 1's adjustments now only **set a sampling bracket**, and drop to **one per anchor**.
+   - Step 2 presents **ten amplitudes across that bracket in randomised order**, collects an
+     intensity rating for each, fits **`rating ~ a + b·log(pressure)`**, and inverts it for P20,
+     P30 and P80. Log because Stevens' power law makes rating near-linear in log pressure and
+     the VAS is bounded at 100, so the top compresses; a straight line in linear pressure needs
+     a tight enough bracket that curvature does not bite.
+   - Fit **rating on pressure and invert** — pressure is controlled, rating is noisy. The other
+     direction gives different numbers and is wrong here.
+   - **The zero-pressure catch trials move into this run**, where randomised order hides them.
+   - **Stage 1 failure acquires a definition** — flat, non-monotonic, or poor residuals — which
+     is a per-participant quality gate the spot-check version could not provide.
+
+   The time budget in §7.2 is **not re-derived**. One adjustment per anchor plus a ten-point
+   estimation run is plausibly cheaper than the previous six adjustments and three
+   verifications, but that is a claim to check against `SPEC.md` §21 open item 8, not an
+   established figure. `SPEC.md` §20 item 8 is where that measurement lands.
+2. **Estimation run — ten amplitudes across the bracket, randomised, fitted.** Not a per-anchor
+   spot-check. See the revision note below.
 3. **Match the other four channels to the reference** by adjustment at a single level, from two
    start points. Their full anchor sets are derived from the reference's by the fitted gain.
 4. **Equalisation check** against the reference only — four comparisons, both orders, one channel
@@ -434,7 +475,7 @@ Channel 3 is the reference because it minimises the maximum distance to any othe
 arm and its sensitivity is likely to be intermediate rather than extreme.
 
 Two things this design gets right that the earlier draft got wrong. The control condition's 20 %
-target now sits **between** the 10 % and 30 % anchors, so it is interpolated rather than
+target sits **between** the measured anchors, so it is interpolated rather than
 extrapolated — which removes the failure mode that dominated Amir et al.'s exclusions. And
 per-channel calibration is the correct response to five actuators over five sites with different
 skin mechanics and different actuator coupling.
