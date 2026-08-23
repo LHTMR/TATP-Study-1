@@ -131,7 +131,8 @@ items:
          choose. What remains is a bring-up step. Fix the system output volume once and record
          it -- until it is fixed, white_noise_max_dbfs is a stop on the software rather than a
          safe sound pressure -- and meter the experimenter alert against the LOWEST noise level
-         a participant is likely to settle on, which is the worst case for it leaking."
+         a participant is likely to settle on, which is the worst case for it leaking.
+         Earplugs, which SPEC.md 10.7 step 5 depends on, are confirmed stocked in the lab."
     blocks_use: true
 
   - item: "L4"
