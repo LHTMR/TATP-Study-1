@@ -36,6 +36,7 @@ QUESTION_Y_FRACTION = 0.18
 QUESTION_POINT_SIZE = 26
 ANCHOR_POINT_SIZE = 18
 ANCHOR_GAP_PX = 18
+ANCHOR_LABEL_GAP_PX = 16  # clear space required between two anchor labels sharing a row
 
 # Key names as `config/hardware.yaml` writes them. A configured key that is not here is a
 # startup error rather than a key that silently does nothing.
@@ -239,6 +240,40 @@ class VasWidget(QWidget):
         margin = self.width() * SIDE_MARGIN_FRACTION
         return margin + (self.width() - 2 * margin) * percent / MAX_PCT
 
+    def _anchor_layout(self, metrics) -> list[tuple[str, float, int]]:
+        """Each anchor label as (text, left edge, row), stacking labels that would collide.
+
+        A label is centred under its own percentage, which is the whole point of an anchor --
+        moving it sideways to make room would put "just noticeable" somewhere other than 10 %.
+        So when two labels overlap, the second one drops to a row underneath instead.
+
+        This is not a hypothetical. The `intensity` scale anchors 0/10/90/100 % and the
+        `pain` scale anchors 0/10 %, and at those spacings the Swedish labels overlap into
+        illegibility at every window size the lab will use -- which the SPEC.md 17.4
+        screenshots are what found.
+        """
+        placed: list[tuple[str, float, int]] = []
+        row_right_edges: list[float] = []
+        for anchor in sorted(self.anchors, key=lambda a: float(a["pct"])):
+            label = str(anchor["label"])
+            width = metrics.horizontalAdvance(label)
+            centre = self._x_for(float(anchor["pct"]))
+            # Clamped so an end label stays on screen; the ends are where clamping bites.
+            left = min(max(centre - width / 2, 0.0), float(self.width() - width))
+            row = next(
+                (
+                    index
+                    for index, edge in enumerate(row_right_edges)
+                    if left >= edge + ANCHOR_LABEL_GAP_PX
+                ),
+                len(row_right_edges),
+            )
+            if row == len(row_right_edges):
+                row_right_edges.append(0.0)
+            row_right_edges[row] = left + width
+            placed.append((label, left, row))
+        return placed
+
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -266,14 +301,9 @@ class VasWidget(QWidget):
         anchor_font.setPointSize(ANCHOR_POINT_SIZE)
         painter.setFont(anchor_font)
         metrics = painter.fontMetrics()
-        for anchor in self.anchors:
-            label = str(anchor["label"])
-            centre = self._x_for(float(anchor["pct"]))
-            width = metrics.horizontalAdvance(label)
-            left = min(max(centre - width / 2, 0.0), float(self.width() - width))
-            painter.drawText(
-                int(left), int(line_y + ANCHOR_GAP_PX + metrics.ascent()), label
-            )
+        for label, left, row in self._anchor_layout(metrics):
+            baseline = line_y + ANCHOR_GAP_PX + metrics.ascent() + row * metrics.height()
+            painter.drawText(int(left), int(baseline), label)
 
         if self.state.visible:
             x = self._x_for(self.state.percent)

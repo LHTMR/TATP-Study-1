@@ -7,8 +7,15 @@ fresh session should need nothing from any previous conversation.
 hardware limits. **`docs/NOTES.md`** holds what is merely logged: deviations from Bilaga 1,
 pilot-protocol checks, analysis-plan questions, process. Keep all three updated together.
 
-**Last updated:** 23 August 2026, session 9.
-**Milestone:** 1 (the vertical slice) — *the slice runs, and it now runs inside a scheduled block.*
+**Last updated:** 23 August 2026, session 10.
+**Milestone:** 2 (the checks) — *in progress. The literals and blinding checks and the
+screenshot comparison are in the gate; the end-to-end validator is what remains.*
+
+**Session 10** built the three checks SPEC.md 17.2 and 17.4 name and nothing else did:
+`tools/lint_literals.py`, `tests/test_blinding_text.py` against the new `config/blinding.yaml`,
+and `tatp/screenshots.py` with a 60-entry manifest. `make check` now runs them. See "What
+session 10 found" below — each of the three found something, which is the only reason to
+believe they work.
 
 **Session 9 closed Milestone 1** with `tatp/schedule.py`, `tools/preview_schedule.py` and the
 block boundaries in `Session`. The slice now sets session t=0 and runs its application inside
@@ -24,6 +31,33 @@ the text files. 146 tests.
 Session 6 closed the loop: one pinprick trial runs end to end, both windows exist, thin.
 Session 5 built the foundation — config, allocation, clock, provenance, data files, garment,
 responder, VAS and session.
+
+### What session 10 found
+
+A check that has never failed is a check nobody has tested. All three failed on first run, and
+what they caught is the argument for having built them.
+
+1. **The VAS anchor labels overlapped, and nobody had looked.** On `pain` (anchors at 0 and
+   10 %) and `intensity` (0, 10, 90, 100 %) the labels were drawn centred on their own
+   percentage with no collision handling, so at every window size the lab will use they landed
+   on top of each other. On `intensity` all four were illegible — and that is the scale the
+   whole touch calibration is rated against, so "precis märkbar" and "precis obehaglig" being
+   unreadable is not cosmetic. **This was invisible to 250 passing tests** and would have been
+   found by a participant. `VasWidget._anchor_layout` now stacks a colliding label onto a row
+   underneath rather than moving it sideways, because moving it would put the anchor somewhere
+   other than the percentage it names. Six tests pin it, across both languages.
+2. **The two unit conversions were written in six places under three names** — `S_PER_MIN` in
+   `schedule.py`, `SECONDS_PER_MINUTE` in `experimenter.py`, `MS_PER_S` in `touchcal.py`, and
+   bare `1000.0` and `60.0` in three more. Six chances to write `100.0` and get a plausible
+   wrong number rather than an error. Now `tatp/units.py`, which holds conversions and nothing
+   else. **These are the one kind of constant that must not move to `config/`:** there are
+   sixty seconds in a minute whatever S decides, so a configurable `s_per_min` would be a
+   setting that can be wrong.
+3. **The forbidden-terms check passes on the live text**, which is the result that needs the
+   most care in reading. `config/blinding.yaml` says so at length and the point is worth
+   repeating here: a grep catches the study name and the condition labels and *cannot* catch
+   "this should help with the pain", which contains neither and breaks SPEC.md 16 completely.
+   It is a floor. The wording review is the actual check.
 
 ### What session 7 decided
 
@@ -54,10 +88,17 @@ procedures they attach to do not exist yet.
 
 ## Read this first
 
-**`make check` exists and passes, but it is not the whole gate yet.** It runs the unit tests
-and the linter. The end-to-end validator and the screenshot comparison are Milestone 2 and do
-not exist, so the target prints a line saying so rather than letting a partial gate look like a
-passing one. Finish it in Milestone 2 and delete that line.
+**`make check` exists and passes, but it is not the whole gate yet.** It runs the unit tests,
+the linter and the screenshot comparison. The end-to-end validator (`tools/validate_session.py`,
+SPEC.md 17.3) does not exist, so the target prints a line saying so rather than letting a
+partial gate look like a passing one. Build it and delete that line — that is what is left of
+Milestone 2.
+
+**No screenshot is armed yet.** All 60 are catalogued and written, none has an approved
+reference, so none is compared — that is the SPEC.md 17.4 design, not an oversight. Arming them
+(`make shots ARGS="--approve-all"`, then committing `screenshots/reference/`) is **waiting on
+S**: it freezes the current layout, including session 10's anchor-stacking change, as the thing
+every later diff is measured against.
 
 ```
 make check
@@ -117,12 +158,17 @@ function. Do not "fix" anything in the repository for this.
 | `run_session.py` | **New.** Entry point. Adjustment, touch rating, block, pinprick application, close |
 | `tools/make_allocation.py` | Run once; the output is committed |
 | `tools/preview_schedule.py` | **New.** SPEC.md §7.2. `make preview`; launcher entry 4 when it exists |
-| `Makefile` | `check`, `test`, `test-one`, `lint`, `preview`. `check` is not yet the whole gate |
-| `tests/` | 221 tests, all passing headless |
+| `tatp/screenshots.py` | **New.** SPEC.md 17.4. Catalogue of 60 states, manifest, per-screen arming |
+| `tatp/units.py` | **New.** `MS_PER_S` and `S_PER_MIN`. Conversions only, never config |
+| `tools/lint_literals.py` | **New.** SPEC.md 4.2, over the AST. `make literals` prints the inventory |
+| `tools/shots.py` | **New.** Entry point for the screenshot run; sets the offscreen platform |
+| `config/blinding.yaml` | **New.** The forbidden terms of SPEC.md 16, reviewable by S |
+| `Makefile` | `check`, `test`, `test-one`, `lint`, `literals`, `shots`, `preview` |
+| `tests/` | 263 tests, all passing headless |
 
 ## What does not exist yet
 
-`audio.py`, `screenshots.py`, `tatp/ui/widgets.py`,
+`audio.py`, `tools/validate_session.py`, `tatp/ui/widgets.py`,
 `tatp/garment/arduino_{mosfet,valves}.py`, `instruments.py`,
 `launcher.py`, `tools/` (except `make_allocation.py`), `sim/`, `README`,
 `SOP.md`, `HARDWARE_BRINGUP.md`.
@@ -579,9 +625,16 @@ Then in **Milestone 3**, when the ladder exists: the intolerable cap of `SPEC.md
 per site, per time point, escalating to all sites at
 `pinprick.intolerable_sites_for_global_cap`. The flag is written today; nothing enforces it yet.
 The experimenter's substitution control belongs there too, for the same reason.
-2. **Milestone 2**: `tools/check.py`, `tools/validate_session.py`, `tatp/screenshots.py`, and
-   the literals test SPEC.md 4.2 asks for ("a test greps for violations"). Then finish the
-   `check` target and delete its INCOMPLETE GATE line.
+2. **Milestone 2, what is left**: `tools/validate_session.py` (SPEC.md 17.3) and the
+   `sim/responders.py` virtual participant it needs (17.5). Then delete the `check` target's
+   INCOMPLETE GATE line. The literals test, the forbidden-terms test and the screenshot
+   comparison landed in session 10 and are in the gate.
+
+   **The validator will not be able to assert everything SPEC.md 17.3 lists.** Row counts
+   matching the schedule and every scheduled block appearing in order need all twelve blocks,
+   which is Milestone 5. Build it against what the slice actually does today and add each
+   assertion as the thing it checks starts existing — do not write assertions that pass because
+   there is nothing to check.
 3. Run the **spec-review** agent before declaring Milestone 1 done
    ("Use the spec-review agent to review this diff against docs/SPEC.md").
 

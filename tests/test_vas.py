@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QApplication
 from tatp import config as cfg
 from tatp.clock import Clock
 from tatp.responder import Action, Responder
-from tatp.ui.vas import QT_KEYS, VasState, VasWidget
+from tatp.ui.vas import ANCHOR_POINT_SIZE, QT_KEYS, VasState, VasWidget
 
 
 class FakeClock(Clock):
@@ -160,6 +160,62 @@ def test_the_widget_carries_no_wording_of_its_own(widget, loaded):
     assert [a["label"] for a in widget.anchors] == [
         a["label"] for a in loaded.participant_text["vas"]["pain"]["anchors"]
     ]
+
+
+# -- anchor layout -----------------------------------------------------------------------
+#
+# Found by the SPEC.md 17.4 screenshots, not by reasoning: on the `pain` and `intensity`
+# scales the labels at 0 and 10 % were drawn on top of each other and neither was readable.
+# `intensity` is the scale the whole touch calibration is rated against, so "just noticeable"
+# and "just uncomfortable" being illegible is not cosmetic.
+
+
+def _boxes(widget, scale, text):
+    """Each anchor as (left, right, row), in the layout the widget would paint."""
+    from PySide6.QtGui import QFont, QFontMetrics
+
+    widget.show_scale(scale, text)
+    font = QFont(widget.font())
+    font.setPointSize(ANCHOR_POINT_SIZE)
+    metrics = QFontMetrics(font)
+    return [
+        (left, left + metrics.horizontalAdvance(label), row)
+        for label, left, row in widget._anchor_layout(metrics)
+    ]
+
+
+@pytest.fixture(scope="module")
+def by_language(app):
+    """One widget per language, built once. `cfg.load` hashes every config file it reads, so
+    calling it per parameter turned a 60-second suite into a three-minute one."""
+    made = {}
+    for language in ("sv", "en"):
+        config = cfg.load(language, language)
+        widget = VasWidget(config.study1["vas"], Responder(config.hardware), FakeClock())
+        widget.resize(1280, 800)
+        made[language] = (widget, config)
+    return made
+
+
+@pytest.mark.parametrize("scale", ("pain", "intensity", "pleasantness"))
+@pytest.mark.parametrize("language", ("sv", "en"))
+def test_no_two_anchor_labels_overlap(by_language, scale, language):
+    """Every scale, both languages -- the collision depends on how long the words are."""
+    widget, config = by_language[language]
+    boxes = _boxes(widget, scale, config.participant_text["vas"][scale])
+    for index, (left, right, row) in enumerate(boxes):
+        for other_left, other_right, other_row in boxes[index + 1 :]:
+            if row != other_row:
+                continue
+            assert right <= other_left or other_right <= left, (
+                f"{language} {scale}: two anchor labels overlap on row {row}"
+            )
+
+
+def test_anchors_far_apart_stay_on_one_row(widget, loaded):
+    """Stacking is the exception. Two anchors at 0 and 100 % have no reason to be stacked."""
+    boxes = _boxes(widget, "pleasantness", loaded.participant_text["vas"]["pleasantness"])
+    assert {row for _, _, row in boxes} == {0}
 
 
 def test_confirming_emits_the_response(widget):

@@ -4,18 +4,18 @@
 # active. Recipes are spawned through /bin/sh, which does not define the `conda` shell function,
 # so `conda` here is always the binary on PATH.
 #
-# `check` is the gate. It is NOT complete yet: the end-to-end validator (tools/validate_session.py)
-# and the screenshot comparison (tools/check.py, SPEC.md 17.4) are Milestone 2 and do not exist,
-# so `check` currently runs the unit tests and the linter only. It says so when it runs, rather
-# than letting a partial gate look like a passing one.
+# `check` is the gate. It is NOT complete yet: the end-to-end validator
+# (tools/validate_session.py, SPEC.md 17.3) does not exist, so `check` runs the unit tests, the
+# linter and the screenshot comparison. It says so when it runs, rather than letting a partial
+# gate look like a passing one.
 
 CONDA_RUN := conda run --no-capture-output -n tatp-study-1
 
-.PHONY: check test test-one lint literals preview
+.PHONY: check test test-one lint literals shots preview
 
-check: test lint
+check: test lint shots
 	@echo
-	@echo "INCOMPLETE GATE: validate and shots are Milestone 2 and are not run yet."
+	@echo "INCOMPLETE GATE: the end-to-end validator (make validate) is not built yet."
 
 test:
 	$(CONDA_RUN) python -m pytest -q
@@ -36,6 +36,15 @@ lint:
 # lets through, which is the part that needs a human eye rather than an assertion.
 literals:
 	$(CONDA_RUN) python tools/lint_literals.py --inventory
+
+# Screen states as PNGs, compared against the approved references (SPEC.md 17.4). The bare
+# target is the gate's form: write every screen, compare the armed ones, fail on a difference.
+#   make shots ARGS="--write-manifest"        after adding or removing a screen
+#   make shots ARGS="--approve-all"           a wording pass across every screen
+#   make shots ARGS="--approve NAME"          arm one screen
+#   make shots ARGS="--freeze"                require every screen approved and clean
+shots:
+	$(CONDA_RUN) python tools/shots.py $(ARGS)
 
 # The session timeline and its warnings (SPEC.md 7.2). No hardware, nothing written.
 #   make preview ARGS="--start 09:30"
