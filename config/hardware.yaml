@@ -1,0 +1,69 @@
+# Ports, pressure limits, screens, audio and adjustment rates. SPEC.md 4, 10.3, 13, 14.1.
+
+garment:
+  driver: mock                       # mock | arduino_mosfet | arduino_valves
+  port: null                         # serial port; unused by mock
+  baud: null                         # SPEC.md 20 item 14: the valve controller's protocol
+  connect_timeout_s: 5.0
+  pressure_max_kpa: 250.0            # the hardware maximum (SPEC.md 3)
+  pressure_ceiling_kpa: 200.0        # SOFTWARE ceiling, enforced independently of the
+                                     # participant's adjustment and below the hardware
+                                     # maximum (SPEC.md 13). Not a value the spec fixes --
+                                     # see config/open_items.yaml, local item L1.
+  pressure_rate_max_kpa_s: 60.0      # independent rate limit (SPEC.md 13). Local item L2.
+  pressure_resolution_kpa: null      # SPEC.md 20 item 2
+  inflation_rate_kpa_s: null         # per channel, from bring-up. SPEC.md 20 item 3
+
+adjustment:
+  # Accelerating two-button control (SPEC.md 10.3, comparison doc 7.5). All pilot-tunable.
+  # A tap gives fine positioning; a hold traverses the full range in about 6 s.
+  tap_max_duration_s: 0.15
+  tap_step_kpa: 1.0
+  hold_delay_s: 0.30
+  hold_rate_initial_kpa_s: 5.0
+  hold_rate_final_kpa_s: 50.0
+  hold_ramp_duration_s: 1.5
+  tick_interval_s: 0.05
+
+responder:
+  # Logitech R400. It emits only these keys (SPEC.md 3, 10.1).
+  device: logitech_r400
+  keys:
+    decrease: [pageup]               # left large button
+    increase: [pagedown]             # right large button
+    confirm: [period]                # play button; see ignore_keys
+    emergency_stop: [f5]             # blank-screen button
+  ignore_keys: [escape]              # The play button emits escape AS WELL AS period. A
+                                     # default quit binding would let a participant end the
+                                     # session by confirming a rating, so escape is bound to
+                                     # nothing at all (SPEC.md 10.1).
+
+screens:
+  # SPEC.md 20 item 9. Null means "primary screen, windowed", which is right for a
+  # development machine and wrong for the lab PC, so startup warns while they are null.
+  participant_screen_index: null
+  experimenter_screen_index: null
+  participant_fullscreen: true
+
+audio:
+  # Continuous white noise with an alert tone mixed over it as the cue (SPEC.md 10.5).
+  # The white noise is generated, not a file (SPEC.md 3).
+  enabled: true
+  device: null                       # null = system default
+  sample_rate_hz: 44100
+  white_noise_level_dbfs: -30.0      # participant headphones. Local item L3.
+  participant_cue_hz: 1000.0
+  participant_cue_duration_s: 0.20
+  participant_cue_level_dbfs: -18.0  # must be audible over the noise
+  experimenter_alert_hz: 660.0       # lab-side; must NOT be audible to the participant
+  experimenter_alert_duration_s: 0.50
+  experimenter_alert_level_dbfs: -12.0
+
+data:
+  folder: data                       # relative to the repository root; gitignored (SPEC.md 14.1)
+  # Warn and record, never refuse, if the folder resolves inside a cloud-synced tree.
+  cloud_sync_markers:
+    - OneDrive
+    - Dropbox
+    - Library/CloudStorage
+    - iCloud Drive

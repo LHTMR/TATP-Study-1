@@ -1,0 +1,95 @@
+# Every experimenter-facing string, English. SPEC.md 10.4, 11.
+#
+# The experimenter screen NEVER shows a participant rating (Bilaga 1 3.3) and NEVER shows the
+# condition or the selected pattern (SPEC.md 16). No string here may name one.
+#
+# Placeholders in braces are filled by the software: {filament}, {force_mn}, {site}, {path},
+# {region}, {channel}, {block}, {phase}, {time}, {value}.
+
+meta:
+  language: en
+
+phases:
+  setup: Setup
+  touch_calibration: Touch calibration
+  pre_sensitisation: Pre-sensitisation
+  sensitisation: Heat sensitisation
+  capsaicin: Capsaicin
+  post_sensitisation: Post-sensitisation
+  intervention: Intervention
+  rekindle: Rekindle
+  post_intervention: Post-intervention
+  session_end: Session end
+
+instructions:
+  # SPEC.md 11: what to do now, alongside the zone diagram.
+  monofilament: >-
+    Approach perpendicular from about 3 cm. Bend the filament to about three-quarters of its
+    extended length, hold for about 1 s, no lateral movement, then remove slowly. Keep the
+    site out of the participant's view.
+  apply_filament: Apply filament {filament} ({force_mn} mN) at site {site}, {region} zone.
+  apply_brush: Brush the {region} zone at site {site}.
+  mapping_path: Map path {path}. Step inward 5 mm on each cue and stop when the participant signals.
+  mapping_distances: Enter the four measured distances in mm whenever convenient. This never blocks the session.
+  fit_garment: Fit the garment and confirm all five channels are seated.
+  thermode_start: Start the thermode at 50 °C. The software times the phase and does not command the device.
+  thermode_rekindle: Rekindle now. The garment has been deactivated and will be reactivated afterwards.
+  capsaicin_apply: Apply 0.075 % capsaicin.
+  await_participant: Waiting for the participant's response.
+  response_received: Response received.
+
+controls:
+  start_block: Start block
+  pause: Pause
+  resume: Resume
+  discard_repeat: Discard and repeat last trial
+  abort: Abort session
+  note: Timestamped note
+  connect: Connect garment
+  disconnect: Disconnect garment
+  rebalance: Rebalance channels
+
+status:
+  connected: Connected
+  disconnected: Disconnected
+  channel_pressure: Channel {channel}: {value} kPa
+  elapsed: Session elapsed {time}
+  next_event: Next: {phase} in {time}
+  block_due: Block {block} is due.
+  block_overdue: Block {block} is OVERDUE.
+
+warnings:
+  # Warn-and-continue, never block (SPEC.md 7.3, 11, 14.1).
+  experimenter_changed: >-
+    These initials differ from earlier sessions for this participant. Bilaga 1 3.3 asks for the
+    same experimenter throughout. The session will continue and the deviation is recorded.
+  cloud_sync: >-
+    The data folder is inside a cloud-synced tree ({value}). This is recorded in the session
+    file. Move the data to a local folder if you can.
+  filaments_unweighed: >-
+    No measured filament forces. Nominal forces deviate from measured by up to about 20 %
+    (Berquin et al. 2010). Weigh the set in Instruments and environment before collecting data.
+  open_items: Unresolved configuration placeholders: {value}
+  out_of_range: >-
+    The calibration ran out of ladder ({value}). The boundary filament will be used and the
+    trial is flagged. Expect this in a meaningful fraction of sessions.
+  catch_trials_felt: >-
+    More than the allowed share of zero-pressure catch trials were reported as felt ({value}).
+  schedule: Schedule warning, block {block}: {value}
+  no_response: No response for {value} s.
+
+banners:
+  # SPEC.md 12.4: persistent and unmissable. A session run this way must be impossible to
+  # mistake for a real one afterwards.
+  reduced_capability: >-
+    THIS SESSION IS NOT COLLECTING VALID TOUCH-CALIBRATION DATA. The connected device
+    ({value}) cannot set pressure per channel. Timings are real; pressures are not.
+  placeholder_text: >-
+    PARTICIPANT SCREENS STILL CONTAIN PLACEHOLDER TEXT. Do not run a real participant.
+
+dialogs:
+  abort_confirm: Abort this session? All data collected so far is kept.
+  abort_reason: Reason for aborting
+  resume_found: An unfinished session was found for this participant, started {time} ago. Resume it?
+  distances_outstanding: Mapping distances are still outstanding. Enter them now, or close the session with them flagged missing.
+  error: Error

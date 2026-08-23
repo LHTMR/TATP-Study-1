@@ -1,0 +1,70 @@
+# Every participant-facing string, English. SPEC.md 10.4: no user-facing string in any .py
+# file, and a missing key is a startup error, never a silent fallback to the other language.
+#
+# BLINDING (SPEC.md 16). Nothing in this file may state or imply that touch is expected to
+# relieve pain, name the research environment, or distinguish one condition from another.
+# Tests assert that the forbidden terms do not appear here.
+#
+# Strings beginning `PLACEHOLDER` are NOT approved wording. They are the screens SPEC.md 10.6
+# does not supply, which are bound by Bilaga 1 and the participant-facing ethics attachments
+# (open item L4). Startup warns while any remain; they cannot reach a participant unnoticed.
+
+meta:
+  language: en
+  verified_against_ethics: null    # SPEC.md 20 item 12
+  instructions_supplied: null      # open item L4
+
+vas:
+  # SPEC.md 10.6. Anchors are placed at their percentage along the line; the marker is hidden
+  # until the first press. No numbers, no tick marks beyond these anchors (SPEC.md 10.2).
+  pain:
+    question: How painful was the stimulus that you just felt on your hand?
+    anchors:
+      - {pct: 0.0, label: not at all painful}
+      - {pct: 10.0, label: just painful}
+      - {pct: 100.0, label: extremely painful}
+  intensity:
+    question: How intense is the current touch from the garment?
+    anchors:
+      - {pct: 0.0, label: no sensation at all}
+      - {pct: 10.0, label: just noticeable}
+      - {pct: 90.0, label: just uncomfortable}
+      - {pct: 100.0, label: very intense}
+  pleasantness:
+    question: How pleasant is the current touch from the garment?
+    anchors:
+      - {pct: 0.0, label: very unpleasant}
+      - {pct: 100.0, label: very pleasant}
+  relaxation:
+    # RSQ item 6 (Steghaus & Poth 2022), adapted to a VAS. SPEC.md 10.6.
+    question: How accurately do the following statements describe how you feel right now?
+    statement: I'm feeling very relaxed.
+    anchors:
+      - {pct: 0.0, label: completely disagree}
+      - {pct: 100.0, label: completely agree}
+  alertness:
+    # RSQ item 10 (R).
+    question: How accurately do the following statements describe how you feel right now?
+    statement: I'm feeling refreshed and awake.
+    anchors:
+      - {pct: 0.0, label: completely disagree}
+      - {pct: 100.0, label: completely agree}
+
+training:
+  # Proportionality instruction (Price et al. 1983), given once per scale at first use.
+  # SPEC.md 10.6 supplies the Swedish only; the English is not in any source document.
+  pain: PLACEHOLDER - English proportionality wording for the pain scale not yet supplied.
+  intensity: PLACEHOLDER - English proportionality wording for the intensity scale not yet supplied.
+  pleasantness: PLACEHOLDER - English proportionality wording for the pleasantness scale not yet supplied.
+
+screens:
+  welcome: PLACEHOLDER - welcome and orientation screen text not yet supplied.
+  standby: PLACEHOLDER - neutral between-block standby text not yet supplied.
+  session_end: PLACEHOLDER - end-of-session text not yet supplied.
+  paused: PLACEHOLDER - paused text not yet supplied.
+  emergency_stop: PLACEHOLDER - text shown after the participant presses the stop button.
+  self_start: PLACEHOLDER - text inviting the participant to start the stimulation.
+  adjust: PLACEHOLDER - instruction for adjusting the touch with the two large buttons.
+  comparison: PLACEHOLDER - instruction for judging which of two touches was stronger.
+  preference: PLACEHOLDER - instruction for indicating which touch is preferred.
+  mapping: PLACEHOLDER - instruction for signalling the change in sensation during mapping.

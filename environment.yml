@@ -18,7 +18,7 @@ dependencies:
   - numpy              # randomisation, the fixed-slope fit
   - pyyaml             # all configuration
   - pyserial           # garment driver
-  - sounddevice        # white noise and alert tones
+  - python-sounddevice # white noise and alert tones; conda-forge's name for `sounddevice`
 
   # Verification
   - pytest

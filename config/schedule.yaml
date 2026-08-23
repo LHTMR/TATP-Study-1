@@ -1,0 +1,35 @@
+# Session timeline. SPEC.md 7.
+#
+# Generated from `generate:` into an evenly spaced grid, then any individual block replaced
+# by an entry in `overrides:`. The grid is NOT SETTLED and will change during piloting
+# (SPEC.md 20 item 4) -- which is exactly why it is data rather than code.
+#
+# Session t=0 is the start of heat sensitisation (SPEC.md 7.4).
+
+generate:
+  n_pinprick_blocks: 6               # SPEC.md 2: 6 pinprick and 6 touch-rating blocks,
+  n_touch_blocks: 6                  # alternating, evenly spaced, never back-to-back
+  intervention_duration_min: 120.0
+  intervention_start_offset_min: 45.0   # after sensitisation, capsaicin and post-S measures
+  rekindle_offset_min: 105.0         # t+60 into the intervention (SPEC.md 2)
+  rekindle_duration_min: 5.0
+  capsaicin_start_offset_min: 2.0    # immediately after the 2 min sensitisation
+  capsaicin_duration_min: 30.0
+  sensitisation_duration_min: 2.0    # thermode 50 C, timed and prompted only (SPEC.md 1.2)
+  first_block_type: pinprick
+
+overrides: []
+  # Each entry replaces one generated block. Example, commented out because an unused
+  # override is a config option nothing reads:
+  # - index: 3
+  #   offset_min: 72.0
+  #   type: touch
+
+validation:
+  # These WARN and never block: piloting will legitimately want irregular schedules. This is
+  # the one deliberate exception to fail-fast, and it is a scheduling decision rather than
+  # error handling (SPEC.md 7.3).
+  max_session_duration_min: 210.0
+  overdue_alert_margin_s: 60.0       # audible alert when a block is overdue by this much
+  due_alert_lead_s: 30.0             # audible alert when a block becomes due
+  equal_spacing_tolerance_s: 30.0

@@ -1,0 +1,70 @@
+# Varje deltagarvänd sträng, svenska. SPEC.md 10.4.
+#
+# BLINDNING (SPEC.md 16). Ingenting här får ange eller antyda att beröring förväntas lindra
+# smärta, namnge forskningsmiljön eller skilja en betingelse från en annan.
+#
+# Formuleringarna under `vas:` är utkast från SPEC.md 10.6 och ska kontrolleras mot de
+# deltagarvända etikbilagorna före första användning (SPEC.md 20 punkt 12). Kollegor granskar
+# svenskan under piloteringen.
+#
+# Strängar som börjar med PLACEHOLDER är INTE godkänd text -- se motsvarande engelska fil.
+
+meta:
+  language: sv
+  verified_against_ethics: null    # SPEC.md 20 punkt 12
+  instructions_supplied: null      # öppen punkt L4
+
+vas:
+  pain:
+    question: Hur smärtsamt var det du just kände på handen?
+    anchors:
+      - {pct: 0.0, label: inte alls smärtsamt}
+      - {pct: 10.0, label: precis smärtsamt}
+      - {pct: 100.0, label: extremt smärtsamt}
+  intensity:
+    question: Hur intensiv är beröringen från plagget just nu?
+    anchors:
+      - {pct: 0.0, label: ingen känsla alls}
+      - {pct: 10.0, label: precis märkbar}
+      - {pct: 90.0, label: precis obehaglig}
+      - {pct: 100.0, label: mycket intensiv}
+  pleasantness:
+    # Symmetrisk skala, en avvikelse från Bilaga 1 3.9.1 som anger "unpleasant" till
+    # "very pleasant". Beslutat 22 aug 2026 (SPEC.md 10.6).
+    question: Hur behaglig är beröringen från plagget just nu?
+    anchors:
+      - {pct: 0.0, label: mycket obehaglig}
+      - {pct: 100.0, label: mycket behaglig}
+  relaxation:
+    # RSQ punkt 6, översatt från det tyska originalet "Ich fühle mich sehr entspannt."
+    question: Hur väl stämmer följande påståenden med hur du känner dig just nu?
+    statement: Jag känner mig mycket avslappnad.
+    anchors:
+      - {pct: 0.0, label: instämmer inte alls}
+      - {pct: 100.0, label: instämmer helt}
+  alertness:
+    # RSQ punkt 10 (R), från "Ich fühle mich erfrischt und wach." Tyskans *erfrischt* är
+    # uppiggad, inte utvilad, därför "pigg och vaken" (SPEC.md 10.6).
+    question: Hur väl stämmer följande påståenden med hur du känner dig just nu?
+    statement: Jag känner mig pigg och vaken.
+    anchors:
+      - {pct: 0.0, label: instämmer inte alls}
+      - {pct: 100.0, label: instämmer helt}
+
+training:
+  # Proportionalitetsinstruktion (Price et al. 1983), en gång per skala vid första användning.
+  pain: Ett märke dubbelt så långt ut på linjen betyder att det gjorde dubbelt så ont.
+  intensity: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så intensiv.
+  pleasantness: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så behaglig.
+
+screens:
+  welcome: PLACEHOLDER - välkomsttext ej ännu tillhandahållen.
+  standby: PLACEHOLDER - neutral vilotext mellan block ej ännu tillhandahållen.
+  session_end: PLACEHOLDER - avslutningstext ej ännu tillhandahållen.
+  paused: PLACEHOLDER - text vid paus ej ännu tillhandahållen.
+  emergency_stop: PLACEHOLDER - text efter att deltagaren tryckt på stoppknappen.
+  self_start: PLACEHOLDER - text som uppmanar deltagaren att starta stimuleringen.
+  adjust: PLACEHOLDER - instruktion för att justera beröringen med de två stora knapparna.
+  comparison: PLACEHOLDER - instruktion för att bedöma vilken av två beröringar som var starkare.
+  preference: PLACEHOLDER - instruktion för att ange vilken beröring som föredras.
+  mapping: PLACEHOLDER - instruktion för att signalera förändringen i känsel under kartläggningen.

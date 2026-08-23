@@ -1,0 +1,16 @@
+# Provisional example pattern. Placeholder channel IDs.
+# Real patterns come from the hardware bring-up session; see SPEC.md 12.2 and 20 item 5.
+#
+# The control condition delivers LOW-INTENSITY STATIC SHAM TOUCH, not the absence of touch,
+# targeting 20 % on the intensity VAS (SPEC.md 12.2). All five channels are held on, so the
+# spatial extent matches the moving patterns and only the motion differs -- an assumption
+# worth confirming at bring-up, since a single-channel sham would differ in extent as well.
+#
+# One row with `loop: true` holds every channel on for as long as the pattern is active.
+name: static_sham
+row_interval_ms: 500.0
+channel_ids: [1, 2, 3, 4, 5]
+nominal_velocity_cm_s: 0.0
+assumed_channel_spacing_cm: 1.5
+overlap_rows: 0
+loop: true

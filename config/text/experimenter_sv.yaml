@@ -1,0 +1,91 @@
+# Varje försöksledarvänd sträng, svenska. SPEC.md 10.4, 11.
+#
+# Försöksledarskärmen visar ALDRIG en deltagares skattning (Bilaga 1 3.3) och ALDRIG
+# betingelsen eller det valda mönstret (SPEC.md 16).
+#
+# Platshållare inom klammer fylls i av programmet: {filament}, {force_mn}, {site}, {path},
+# {region}, {channel}, {block}, {phase}, {time}, {value}.
+
+meta:
+  language: sv
+
+phases:
+  setup: Förberedelse
+  touch_calibration: Beröringskalibrering
+  pre_sensitisation: Före sensitisering
+  sensitisation: Värmesensitisering
+  capsaicin: Capsaicin
+  post_sensitisation: Efter sensitisering
+  intervention: Intervention
+  rekindle: Återuppvärmning
+  post_intervention: Efter intervention
+  session_end: Sessionen avslutad
+
+instructions:
+  monofilament: >-
+    Applicera vinkelrätt från cirka 3 cm. Böj filamentet till ungefär tre fjärdedelar av dess
+    utsträckta längd, håll kvar i cirka 1 s, ingen sidorörelse, lyft sedan långsamt. Håll
+    appliceringsstället utom synhåll för deltagaren.
+  apply_filament: Applicera filament {filament} ({force_mn} mN) på plats {site}, {region} zonen.
+  apply_brush: Borsta {region} zonen på plats {site}.
+  mapping_path: Kartlägg bana {path}. Flytta 5 mm inåt vid varje signal och stanna när deltagaren markerar.
+  mapping_distances: Skriv in de fyra uppmätta avstånden i mm när det passar. Detta avbryter aldrig sessionen.
+  fit_garment: Sätt på plagget och kontrollera att alla fem kanaler sitter rätt.
+  thermode_start: Starta termoden på 50 °C. Programmet tar tid på fasen men styr inte enheten.
+  thermode_rekindle: Återuppvärm nu. Plagget har avaktiverats och återaktiveras efteråt.
+  capsaicin_apply: Applicera 0,075 % capsaicin.
+  await_participant: Väntar på deltagarens svar.
+  response_received: Svar mottaget.
+
+controls:
+  start_block: Starta block
+  pause: Pausa
+  resume: Återuppta
+  discard_repeat: Kassera och upprepa senaste trial
+  abort: Avbryt sessionen
+  note: Tidsstämplad anteckning
+  connect: Anslut plagget
+  disconnect: Koppla från plagget
+  rebalance: Balansera om kanalerna
+
+status:
+  connected: Ansluten
+  disconnected: Frånkopplad
+  channel_pressure: 'Kanal {channel}: {value} kPa'
+  elapsed: Förfluten tid {time}
+  next_event: 'Nästa: {phase} om {time}'
+  block_due: Block {block} ska starta nu.
+  block_overdue: Block {block} är FÖRSENAT.
+
+warnings:
+  experimenter_changed: >-
+    Dessa initialer skiljer sig från tidigare sessioner för denna deltagare. Bilaga 1 3.3 önskar
+    samma försöksledare genomgående. Sessionen fortsätter och avvikelsen registreras.
+  cloud_sync: >-
+    Datamappen ligger i ett molnsynkat träd ({value}). Detta registreras i sessionsfilen. Flytta
+    data till en lokal mapp om det går.
+  filaments_unweighed: >-
+    Inga uppmätta filamentkrafter. Nominella krafter avviker från uppmätta med upp till cirka
+    20 % (Berquin et al. 2010). Väg uppsättningen under Instrument och miljö innan data samlas in.
+  open_items: 'Olösta konfigurationsplatshållare: {value}'
+  out_of_range: >-
+    Kalibreringen tog slut på stegen ({value}). Yttersta filamentet används och försöket flaggas.
+    Räkna med detta i en betydande andel av sessionerna.
+  catch_trials_felt: >-
+    Fler än tillåten andel av kontrolltrials utan tryck rapporterades som kända ({value}).
+  schedule: 'Schemavarning, block {block}: {value}'
+  no_response: Inget svar på {value} s.
+
+banners:
+  reduced_capability: >-
+    DENNA SESSION SAMLAR INTE IN GILTIG BERÖRINGSKALIBRERINGSDATA. Den anslutna enheten
+    ({value}) kan inte ställa tryck per kanal. Tiderna är verkliga; trycken är det inte.
+  placeholder_text: >-
+    DELTAGARSKÄRMARNA INNEHÅLLER FORTFARANDE PLATSHÅLLARTEXT. Kör inte en riktig deltagare.
+
+dialogs:
+  abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.
+  abort_reason: Orsak till avbrott
+  resume_found: En oavslutad session hittades för denna deltagare, startad för {time} sedan. Återuppta den?
+  distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem nu, eller avsluta sessionen med dem flaggade som saknade.
+  error: Fel

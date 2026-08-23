@@ -1,0 +1,12 @@
+[tool.ruff]
+line-length = 96
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Qt must render without a display so the gate runs headless (SPEC.md 17.1).
+env = ["QT_QPA_PLATFORM=offscreen"]
+filterwarnings = ["error"]

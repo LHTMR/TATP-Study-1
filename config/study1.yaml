@@ -1,0 +1,86 @@
+# Design parameters for TATP Study 1.
+# Timings, forces, thresholds and rates live here, never in .py (SPEC.md 4.2).
+# Every user-facing string lives in config/text/ (SPEC.md 10.4).
+
+design:
+  n_participants: 41                 # SPEC.md 20 item 10
+  n_sessions: 3
+  conditions: [participant_preferred, ct_targeted, sham]
+  limbs: [left, right]               # target limb alternates between visits (SPEC.md 2)
+  allocation_file: config/allocation.csv
+
+vas:
+  # SPEC.md 10.2. The marker is hidden until the first press, then appears on the side that
+  # was pressed, so the starting position cannot bias the response.
+  start_pct_after_left_press: 25.0
+  start_pct_after_right_press: 75.0
+  move_step_pct: 0.5                 # one tap
+  hold_repeat_delay_s: 0.30          # before hold-to-repeat engages
+  hold_repeat_interval_s: 0.04
+  no_response_warning_s: 60.0        # log a warning; never auto-advance (SPEC.md 8.3)
+
+pinprick:
+  target_vas_pct: 40.0               # F40 is the quantity estimated
+  slope_prior_vas_per_log10: 51.6    # SPEC.md 8.2 and 20 item 6: a simulated starting value,
+                                     # to be replaced by a pooled estimate from pilot data.
+                                     # Pooled, never per participant.
+  measure_repetitions: 3             # 3 reps x 3 adjacent filaments (comparison doc 6)
+  measure_n_levels: 3                # crossing filament and the two immediately below it
+  max_applications: 25               # hard cap; take the best estimate and flag (SPEC.md 8.2)
+  start_filament_size_session1_pre_s: "5.46"   # informed-prior start (comparison doc 5.2c)
+  expected_offset_steps_pre_to_post_s: -2.7    # Scheuren et al.; SPEC.md 20 item 7
+  isi_min_s: 13.0                    # Scheuren et al. 2023
+  isi_max_s: 17.0
+  rating_cue_delay_s: 9.0            # rating cued 9 s after the stimulus (comparison doc 8)
+  short_protocol_n_trials: 5         # median of five ratings (SPEC.md 8.3)
+  n_sites: 8                         # site rotates on every application (SPEC.md 8.2)
+  ordinal_rho_min: 0.3               # consistency check only; never gates eligibility, and
+                                     # R^2 is deliberately not used (comparison doc 6.7)
+
+brush:
+  n_trials: 5                        # same structure as the short protocol (SPEC.md 8.3)
+  n_sites: 8
+
+mapping:
+  # Secondary-hyperalgesia area, four linear paths inward (SPEC.md 8.4, Bilaga 1 3.6.2).
+  n_paths: 4
+  step_size_mm: 5.0
+  step_interval_s: 1.0               # the 1 Hz pacing cue
+  max_steps: 40                      # bounds a path that is never signalled; 40 x 5 mm = 200 mm
+  distance_plausible_min_mm: 1.0     # outside this range the entry is queried, not accepted
+  distance_plausible_max_mm: 200.0   # silently (SPEC.md 17.5 adversarial experimenter)
+
+touch_calibration:
+  # Protocol B, scheme B of the comparison document (SPEC.md 9, comparison doc 7).
+  reference_channel: 3               # middle channel; minimises max distance along the arm
+  anchors_pct: [10.0, 30.0, 80.0]    # 10% exists so the sham's 20% is interpolated, not
+                                     # extrapolated below the measured points (SPEC.md 9)
+  adjustments_per_anchor: 2          # one from clearly below, one from clearly above
+  start_directions: [below, above]
+  start_offset_fraction: 0.6         # how far below/above the expected point an adjustment
+                                     # starts, as a fraction of the adjustable range
+  adjustment_timeout_s: 120.0        # method of adjustment has no stopping rule of its own
+  min_exploration_kpa: 20.0          # minimum total travel before confirm is accepted
+  comparison_hold_s: 3.0             # clears the inflation transient (comparison doc 7.4)
+  comparison_gap_s: 1.0              # between the two stimuli of a pair
+  catch_trial_fraction: 0.2          # zero-pressure catch trials (SPEC.md 9)
+  catch_felt_warn_fraction: 0.2      # flag if more than this share are reported felt
+  pleasantness_range_anchors: [30.0, 80.0]   # bound the adjustment to [P30, P80] (SPEC.md 9)
+  pleasantness_adjustments: 2
+  sham_target_intensity_pct: 20.0    # low-intensity static sham touch, not absence of touch
+  evenness_check: true               # end-of-calibration "does it feel even?" with a
+                                     # rebalance path (SPEC.md 9, comparison doc 7.4)
+
+patterns:
+  # Which pattern each condition uses, by pattern name within the selected pattern folder.
+  # `participant_preferred` has no entry: it is whatever the participant chose in the
+  # preference selection, which runs in every session (SPEC.md 9 step 6).
+  condition_pattern:
+    ct_targeted: sweep_03cms
+    sham: static_sham
+  preference_candidates: [sweep_01cms, sweep_03cms, sweep_20cms]
+
+cues:
+  # A visual warning cue precedes every stimulus (SPEC.md 10.5).
+  warning_lead_s: 1.0
+  warning_duration_s: 0.5

@@ -32,12 +32,49 @@ make preview        # print the session schedule and any warnings
 
 `make check` must pass headless, with no hardware attached. Nothing is done until it does.
 
+## Reach for a tool before a shell command
+
+Most of what a shell command is normally used for here has a dedicated tool that is safer,
+faster and needs no permission prompt. **Use the tool where it exists.** A shell command is for
+things that genuinely have no tool: running the test suite, git, conda.
+
+| To do this | Use | Not |
+|---|---|---|
+| Read a file, or part of one | `Read` | `cat`, `head`, `tail`, `less` |
+| Change a file | `Edit` / `Write` | `sed -i`, `perl -i`, `tee`, `>` |
+| Find files by name or glob | `Glob`, else `ls` / `git ls-files` | `find` |
+| Search file contents | `Grep`, else `grep -rn` | `awk`, `find -exec grep` |
+| Explore across many files where only the conclusion matters | a subagent | a pipeline |
+
+**`Glob` and `Grep` are not present in every session.** When they are missing, `ls`,
+`git ls-files` and `grep -rn` are allowed and are the fallback — that is why `grep` and `rg`
+are on the allow list while `find` is denied. `git ls-files` is usually the better of the three
+anyway: it lists exactly the tracked files and never descends into `data/`.
+
+The deny list refuses `find`, `sed`, `awk`, `perl`, `tee`, `xargs` and the shell wrappers
+(`bash -c`, `sh`, `zsh`, `env`, `eval`, `exec`, `nohup`, `time`, `watch`) outright. Those are
+not arbitrary refusals: each is a way to run something the permission patterns would otherwise
+have matched and refused — `find -delete` deletes without invoking `rm`, `bash -c "…"` hides the
+real command inside a string. Denying the wrapper is what makes denying the wrapped thing mean
+anything. Same reason for `cp`, `ln`, `dd`, `truncate`, `unlink`, and for `git checkout` /
+`git restore` / `git config` (they discard uncommitted work or rewrite tool behaviour — use
+`git switch` to change branch).
+
+**One known hole, stated rather than papered over:** `conda run … python` can execute anything,
+and the Makefile needs it. It is narrowed to the four forms the Makefile actually uses
+(`python -m pytest`, `python -m tatp`, `python tools/…`, `python run_session.py`) rather than
+allowed wholesale. An ad-hoc `python -c` will prompt, which is the right outcome.
+
 ## Hard rules
 
 - **One shell command per Bash call.** No `&&`, `||`, `;`, `|`, `$(...)` or backticks. A hook
-  enforces this; the rule is here so you do not fight it.
+  enforces this; the rule is here so you do not fight it. The hook rejects those characters
+  even inside a quoted string, so `python -c "a=1; b=2"` is refused too — put the code in a
+  file under `tools/` instead of fighting the quoting.
 - **Never write outside this repository.** Not to OneDrive, not to a home directory, nowhere
-  else on the machine.
+  else on the machine. This includes the session scratchpad: the hook resolves every absolute
+  path in a command and refuses any that lands outside the repo, so temporary scripts go in
+  `tools/`, not `/tmp`.
 - **Never commit participant data.** `data/` is gitignored. If you find data in a commit, stop
   and say so.
 - **No literals in task code.** Timings, forces, pressures, thresholds, rates and every
