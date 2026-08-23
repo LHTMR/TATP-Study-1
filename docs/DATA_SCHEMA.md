@@ -319,4 +319,4 @@ driver does, so a mock session and a real one are comparable line for line (§18
 | requested_kpa | float | kPa | no | What was asked for before clamping |
 | clamped | bool | - | yes | `true` when the ceiling or rate limit altered the command (§13) |
 | pattern_name | str | - | no | Pattern involved, for pattern events |
-| detail | str | - | no | Fault text or other free detail |</invoke>
+| detail | str | - | no | Fault text or other free detail |
