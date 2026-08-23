@@ -34,9 +34,12 @@ items:
     blocks_use: false
 
   - item: "4"
-    summary: The session schedule grid -- block spacing
+    summary: The session schedule grid -- block spacing and expected block durations
     resolved_when: {file: schedule.yaml, path: "generate.settled"}
-    fix: "Piloting (SPEC.md 7). Add `settled: true` under `generate:` once the grid is fixed."
+    fix: "Piloting (SPEC.md 7). Add `settled: true` under `generate:` once the grid is fixed.
+         `generate.expected_duration_min` is part of the same question and is null until then;
+         `tatp.schedule.generate` refuses a grid declared settled while a duration is still
+         null, so the two cannot drift apart."
     blocks_use: false
 
   - item: "5"

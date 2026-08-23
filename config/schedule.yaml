@@ -18,6 +18,15 @@ generate:
   sensitisation_duration_min: 2.0    # thermode 50 C, timed and prompted only (SPEC.md 1.2)
   first_block_type: pinprick
 
+  expected_duration_min:
+    # How long a block is expected to take. SPEC.md 7.2 prints it in the preview and 7.3 needs
+    # it to check for overlapping blocks. NOT SETTLED -- it is part of the same question as the
+    # spacing (open item 4), so it carries no working value: a guessed duration would make the
+    # overlap check answer confidently about a grid nobody has timed. Until these are numbers
+    # the preview prints a dash and the overlap check says it could not run.
+    pinprick: null
+    touch: null
+
 overrides: []
   # Each entry replaces one generated block. Example, commented out because an unused
   # override is a config option nothing reads:

@@ -88,7 +88,7 @@
       "Bash(make test-one:*)",
       "Bash(make validate)",
       "Bash(make shots)",
-      "Bash(make preview)",
+      "Bash(make preview:*)",
       "Bash(python -m pytest:*)",
       "Bash(pytest:*)",
       "Bash(python tools/*)",

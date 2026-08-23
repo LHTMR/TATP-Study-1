@@ -11,7 +11,7 @@
 
 CONDA_RUN := conda run --no-capture-output -n tatp-study-1
 
-.PHONY: check test test-one lint
+.PHONY: check test test-one lint preview
 
 check: test lint
 	@echo
@@ -30,3 +30,8 @@ test-one:
 
 lint:
 	$(CONDA_RUN) python -m ruff check .
+
+# The session timeline and its warnings (SPEC.md 7.2). No hardware, nothing written.
+#   make preview ARGS="--start 09:30"
+preview:
+	$(CONDA_RUN) python tools/preview_schedule.py $(ARGS)

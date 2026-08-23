@@ -7,8 +7,14 @@ fresh session should need nothing from any previous conversation.
 hardware limits. **`docs/NOTES.md`** holds what is merely logged: deviations from Bilaga 1,
 pilot-protocol checks, analysis-plan questions, process. Keep all three updated together.
 
-**Last updated:** 23 August 2026, session 8.
-**Milestone:** 1 (the vertical slice) — *the slice runs.*
+**Last updated:** 23 August 2026, session 9.
+**Milestone:** 1 (the vertical slice) — *the slice runs, and it now runs inside a scheduled block.*
+
+**Session 9 closed Milestone 1** with `tatp/schedule.py`, `tools/preview_schedule.py` and the
+block boundaries in `Session`. The slice now sets session t=0 and runs its application inside
+intervention block 1. S settled the grid (decision 31). 221 tests.
+
+Session 8 built `tatp/touchcal.py` and `run_session.py`.
 
 **Session 7 was a design session, not a build one.** It settled the participant wording, then
 S's answers to it changed Protocol B twice and added a new experimenter feature. Nothing new
@@ -107,14 +113,16 @@ function. Do not "fix" anything in the repository for this.
 | `tatp/ui/experimenter.py` | **New.** Banners, identity, phase, elapsed, garment state, open items, instruction |
 | `tatp/pinprick.py` | **New.** One application end to end. Search/bracket/estimate is Milestone 3 |
 | `tatp/touchcal.py` | **New.** The accelerating control, one anchor adjustment, one touch rating |
-| `run_session.py` | **New.** Entry point. Adjustment, touch rating, pinprick application, close |
+| `tatp/schedule.py` | **New.** Grid generation, per-block overrides, the §7.3 rules as warnings |
+| `run_session.py` | **New.** Entry point. Adjustment, touch rating, block, pinprick application, close |
 | `tools/make_allocation.py` | Run once; the output is committed |
-| `Makefile` | `check`, `test`, `test-one`, `lint`. `check` is not yet the whole gate |
-| `tests/` | 171 tests, all passing headless |
+| `tools/preview_schedule.py` | **New.** SPEC.md §7.2. `make preview`; launcher entry 4 when it exists |
+| `Makefile` | `check`, `test`, `test-one`, `lint`, `preview`. `check` is not yet the whole gate |
+| `tests/` | 221 tests, all passing headless |
 
 ## What does not exist yet
 
-`tatp/schedule.py`, `audio.py`, `screenshots.py`, `tatp/ui/widgets.py`,
+`audio.py`, `screenshots.py`, `tatp/ui/widgets.py`,
 `tatp/garment/arduino_{mosfet,valves}.py`, `instruments.py`,
 `launcher.py`, `tools/` (except `make_allocation.py`), `sim/`, `README`,
 `SOP.md`, `HARDWARE_BRINGUP.md`.
@@ -133,7 +141,53 @@ conda run -n tatp-study-1 python run_session.py --participant 01 --session 1 --e
 ## Decisions taken, not already in SPEC.md
 
 Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23–26 are session 7;
-27–30 are session 8.
+27–30 are session 8; 31–34 are session 9.
+
+31. **The rekindle takes its own place in the grid.** S's decision, 23 Aug 2026, against three
+    grids I put up. Blocks sit `intervention_duration / n_blocks` apart; any block that would
+    fall at or after the rekindle moves back by its duration; and the grid is laid so the
+    **last** block lands on the end of the intervention, which delays the first by the length of
+    the pause. `SPEC.md` §7.1 has it. The result is 50, 60, 70, 80, 90, 100, rekindle 105–110,
+    115, 125, 135, 145, 155, 165 — symmetric, with 5 min of clear air either side of the
+    rekindle and block 12 flush with the intervention end.
+
+    **The old formula put block 7 exactly on the rekindle**, which is what the preview found the
+    moment it existed. The rejected alternative anchored the first block to the intervention
+    start and left block 7 starting the instant the rekindle ended, with no recovery time.
+
+32. **The equal-spacing check discounts the rekindle pause.** The grid widens one gap on purpose,
+    so measuring wall-clock distance reported the one intended irregularity as a broken rule —
+    two warnings on a correct grid. `Schedule._gap_min` subtracts a rekindle lying between two
+    blocks. A check that always fires is a check nobody reads.
+
+33. **The intervention window bounds when a block may be *launched*, not when its last rating
+    must be in.** The experimenter starts each block and the grid puts the last one on the
+    closing minute, so testing the block's *end* against the window would warn on every grid
+    once durations exist. Start only, and `SPEC.md` §7.1 says so.
+
+34. **Blocks are started by `Session.start_block`, never by the clock.** SPEC.md 7.4: the
+    software times and counts down, the experimenter launches, nothing is skipped automatically.
+    The planned offset and the actual start go in the `log` as `block_started`, with the drift
+    between them — the gap is data, not something to correct. `close()` ends an open block so an
+    aborted one still gets an actual end. There is no `blocks` table: `DATA_SCHEMA.md` already
+    says the log carries block boundaries.
+
+    `block_index` is **identity, not position**. An override that moves a block does not
+    renumber it, because the value in an already-written row has to keep meaning the same block.
+    The cost of having no `blocks` table is logged as `docs/NOTES.md` N3.6.
+
+35. **Overlap is asked of the blocks in the order they run, not in index order.** The
+    spec-review agent found the first version comparing only index-adjacent pairs and skipping
+    the overlap test entirely once a pair was out of order — so an override putting block 1 at
+    58 min, overlapping block 4, reported only the ordering. It now sorts by offset and compares
+    against whatever reaches furthest into the session, which also catches a short block nested
+    inside a long one. Two tests pin both cases.
+
+    The same review caught two tests that would have become `0 == 0` the day open item 4 is
+    resolved, both asserting the log carries as many `schedule_warning` rows as the live grid
+    produces. They are driven by a crafted faulty grid now. **This is decision 21's lesson
+    recurring**, and it recurs because asserting against live config always looks reasonable
+    at the moment of writing.
 
 27. **The pressure adjustment runs on real seconds, not on the accelerated clock.** A tap
     threshold and a ramp rate describe the participant's hand. Scaling them does not make a
@@ -427,13 +481,18 @@ Items 20–26 are session 6.
 
 ## Next steps, in order
 
-**The slice is closed.** `run_session.py` runs one anchor adjustment, one touch intensity rating
-and one pinprick application against the mock garment, writing `touchcal_adjust`,
-`touch_ratings`, `pinprick`, `garment`, `log` and `session`. What remains of Milestone 1 is the
-block index.
+**Milestone 1 is complete.** `run_session.py` runs one anchor adjustment, one touch intensity
+rating, then sets session t=0 and runs one pinprick application inside intervention block 1
+against the mock garment, writing `touchcal_adjust`, `touch_ratings`, `pinprick`, `garment`,
+`log` and `session`. Every layer is touched by one thin path.
 
-1. **`tatp/schedule.py`** — enough to place the trial in a block, so `block_index` stops being
-   `None`.
+Two things the schedule work fixed that were not on anyone's list: `start_sensitisation` was
+never called, so **every row the slice wrote had an empty `t_session_s`**; and the generated grid
+put block 7 exactly on the rekindle, which nothing would have found until someone read a
+timeline. `make preview` is what found it.
+
+1. Run the **spec-review** agent, then commit Milestone 1
+   ("Use the spec-review agent to review this diff against docs/SPEC.md").
 
 Then in **Milestone 3**, when the ladder exists: the intolerable cap of `SPEC.md` §8.2 —
 per site, per time point, escalating to all sites at

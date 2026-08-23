@@ -159,7 +159,37 @@ def test_the_slice_writes_every_table_it_touches_and_closes_the_session(runner):
     assert rows[0]["filament_label_g"] == (
         runner.session.config.study1["pinprick"]["start_filament_label_g_session1_pre_s"]
     )
-    assert rows[0]["phase"] == "pre_sensitisation"
+    assert rows[0]["phase"] == "intervention"
+
+
+def test_the_application_is_placed_in_the_first_scheduled_block(runner):
+    """SPEC.md 7.4. The slice reaches the schedule, so `block_index` is a block, not empty."""
+    _run_slice(runner)
+    first = runner.session.schedule.blocks[0]
+    assert first.type == "pinprick", "the slice runs a pinprick block, so it must lead the grid"
+
+    rows = _rows(runner.session, "pinprick")
+    assert rows[0]["block_index"] == str(first.index)
+    # Session t=0 is set by the same step, so the row is placed in time as well as in the grid.
+    assert float(rows[0]["t_session_s"]) >= 0.0
+
+    events = [r["event"] for r in _rows(runner.session, "log")]
+    assert events.count("block_started") == 1
+    assert events.count("block_ended") == 1
+    assert events.index("block_started") < events.index("block_ended")
+
+
+def test_a_started_block_carries_its_planned_offset_and_the_drift_against_it(runner):
+    """The experimenter launches the block; the gap to the plan is recorded, not corrected."""
+    _run_slice(runner)
+    started = next(r for r in _rows(runner.session, "log") if r["event"] == "block_started")
+    planned = runner.session.schedule.blocks[0].planned_offset_min
+    assert f"planned {planned:g} min" in started["detail"]
+    assert "against plan" in started["detail"]
+    # The experimenter, not the software, decides when a block begins (SPEC.md 7.4).
+    assert started["origin"] == "experimenter"
+
+
 
 
 def test_the_participant_is_left_on_the_closing_screen(runner):

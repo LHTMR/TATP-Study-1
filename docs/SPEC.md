@@ -277,6 +277,22 @@ capsaicin duration) producing an evenly spaced grid, and an `overrides:` section
 offset or type of any individual block. The generated grid alternates pinprick and touch
 blocks, evenly spaced, never back-to-back.
 
+**The rekindle takes its own place in that sequence rather than colliding with a block.** Blocks
+sit `intervention_duration / n_blocks` apart; any block that would fall at or after the rekindle
+moves back by the rekindle's duration, and the grid is laid so the **last** block lands on the
+end of the intervention. The first block is therefore delayed from the start of the intervention
+by the length of that pause, which leaves equal clear air either side of the rekindle and puts
+both halves of the intervention on the same footing. Settled with S on 23 Aug 2026: the
+alternative, anchoring the first block to the start of the intervention, left no recovery time
+at all between the rekindle and the block after it.
+
+A rekindle falling outside the intervention inserts no pause. That is not an error — piloting
+may legitimately want a session without one.
+
+The intervention window bounds when a block may be **launched**, not when its last rating must
+be in. The experimenter starts each block (§7.4) and the grid puts the last one on the closing
+minute, so a block that runs past the end of the window is expected rather than a warning.
+
 The grid is **not settled and will change during piloting** (§20). This is why it is data.
 
 ### 7.2 Preview

@@ -43,6 +43,8 @@ The software supports each; someone has to actually run it.
 | N3.4 | **Blinding is a managed limitation, not a property.** An experimenter running many sessions may infer the structure. The software's obligation is narrower and absolute — never to be the thing that reveals the condition. The limitation belongs in the write-up. |
 | N3.5 | **A ceiling pain rating is a censored observation.** With the top of the scale as the proxy for intolerable (§8.2), a rating of 100 means the participant had no headroom, so their true response may be higher. Fitting it as a plain point biases the fixed-slope estimate. It should rarely enter the fit — measurement sits at the crossing filament and the two below it near VAS 40 — but the plan should say what happens when it does. |
 
+| N3.6 | **A block's planned offset is recorded as prose, not as a column.** `SPEC.md` §7.4 asks for the planned offset, actual start and actual end of every block, and `DATA_SCHEMA.md` has no `blocks` table — so they go in `log.detail`, as `"pinprick; planned 50 min, started 51.20 min, +1.20 min against plan"`. The actual start and end are recoverable exactly from the row's own `t_session_s`, but the *planned* offset can only be recovered by parsing that sentence, or by regenerating the grid from the `schedule_sha256` in the session file. If drift against plan turns out to be an analysis variable rather than a monitoring aid, it needs a `blocks` table rather than a regex. |
+
 ## 4. Process, outside the software
 
 | # | What |

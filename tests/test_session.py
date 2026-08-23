@@ -188,6 +188,99 @@ def test_an_unknown_origin_or_severity_is_refused(session):
         session.log("e", severity="catastrophic")
 
 
+# -- blocks, SPEC.md 7.4 ------------------------------------------------------------------
+
+
+def test_a_block_stamps_every_row_written_while_it_is_open(session):
+    session.start()
+    session.start_sensitisation()
+    block = session.schedule.blocks[0]
+    session.start_block(block)
+    assert session.block_index == block.index
+    session.log("something_happened")
+    session.end_block()
+    session.log("after_the_block")
+
+    rows = {row["event"]: row for row in _table(session, "log")}
+    assert rows["something_happened"]["block_index"] == str(block.index)
+    assert rows["after_the_block"]["block_index"] == "", "empty outside a block"
+
+
+def test_a_block_records_its_plan_and_what_actually_happened(session):
+    """The gap between plan and reality is data, not something to correct away."""
+    session.start()
+    session.start_sensitisation()
+    block = session.schedule.blocks[0]
+    session.start_block(block)
+    session.end_block()
+
+    rows = {row["event"]: row for row in _table(session, "log")}
+    assert f"planned {block.planned_offset_min:g} min" in rows["block_started"]["detail"]
+    assert "against plan" in rows["block_started"]["detail"]
+    assert "took" in rows["block_ended"]["detail"]
+    # Unset until open item 4 lands, and the log says so rather than printing a number.
+    assert "expected unset" in rows["block_ended"]["detail"]
+
+
+def test_a_block_cannot_start_before_session_t_zero(session):
+    """A block offset is measured from sensitisation; before t=0 there is nothing to record."""
+    session.start()
+    with pytest.raises(SessionError, match="before session t=0"):
+        session.start_block(session.schedule.blocks[0])
+
+
+def test_two_blocks_cannot_be_open_at_once(session):
+    session.start()
+    session.start_sensitisation()
+    session.start_block(session.schedule.blocks[0])
+    with pytest.raises(SessionError, match="still open"):
+        session.start_block(session.schedule.blocks[1])
+
+
+def test_ending_a_block_that_was_never_started_is_refused(session):
+    session.start()
+    with pytest.raises(SessionError, match="no block is open"):
+        session.end_block()
+
+
+def test_closing_the_session_ends_an_open_block(session):
+    """SPEC.md 7.4 wants an actual end for every block, including an aborted one."""
+    session.start()
+    session.start_sensitisation()
+    session.start_block(session.schedule.blocks[0])
+    session.close("emergency stop")
+
+    events = [row["event"] for row in _table(session, "log")]
+    assert events.index("block_ended") < events.index("session_aborted")
+
+
+def test_schedule_warnings_are_logged_at_startup(loaded, tmp_path):
+    """SPEC.md 7.3: they never block, so the session file has to carry them.
+
+    Driven by a crafted grid with a known fault rather than by whatever the live `schedule.yaml`
+    happens to warn about today. Asserting against the live count would quietly become `0 == 0`
+    the day open item 4 is resolved, and stop testing anything (PROGRESS.md decision 21).
+    """
+    schedule = {
+        **loaded.schedule,
+        "overrides": [{"index": 1, "offset_min": loaded.schedule["generate"][
+            "rekindle_offset_min"
+        ]}],
+    }
+    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "d"),
+                                            "cloud_sync_markers": []}}
+    config = cfg.Config(**{**loaded.__dict__, "hardware": hardware, "schedule": schedule})
+    made = Session(config, "04", 1, "SM", EXAMPLES)
+    made.start()
+    made.close()
+
+    with made.files.path("log").open(encoding="utf-8", newline="") as handle:
+        logged = [r for r in csv.DictReader(handle) if r["event"] == "schedule_warning"]
+    assert any("rekindle" in row["detail"] for row in logged)
+    assert all(row["severity"] == "warning" for row in logged)
+    assert len(logged) == len(made.schedule.warnings())
+
+
 # -- the garment ------------------------------------------------------------------------
 
 

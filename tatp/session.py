@@ -16,6 +16,7 @@ from pathlib import Path
 
 from tatp import allocation as alloc
 from tatp import provenance
+from tatp import schedule as sched
 from tatp.clock import Clock
 from tatp.config import REPO_ROOT, Config, hash_files
 from tatp.datafiles import DataFileCollection
@@ -91,8 +92,12 @@ class Session:
         self.pattern_folder = pattern_folder
         self.patterns = load_folder(pattern_folder)
 
+        self.schedule = sched.generate(config.schedule)
+
         self.phase = PHASES[0]
         self.block_index: int | None = None
+        self._block: sched.Block | None = None
+        self._block_start_s: float | None = None
         self.aborted_reason = ""
         self.closed = False
 
@@ -192,6 +197,56 @@ class Session:
         self.clock.start_session()
         self.log("sensitisation_started")
 
+    # -- blocks ------------------------------------------------------------------------
+
+    def start_block(self, block: sched.Block) -> None:
+        """The experimenter has launched a block (SPEC.md 7.4).
+
+        Nothing here decides *when*: the software times and counts down, the experimenter
+        launches, and no block is ever skipped automatically. What is recorded is the planned
+        offset alongside the moment it actually began, so the drift is in the data rather than
+        corrected away.
+        """
+        if self._block is not None:
+            raise SessionError(
+                f"block {self._block.index} is still open; end it before starting "
+                f"block {block.index}"
+            )
+        if not self.clock.session_started:
+            raise SessionError(
+                f"block {block.index} was started before session t=0. Blocks are offsets from "
+                f"the start of sensitisation, so there is no honest actual-start to record."
+            )
+        self._block = block
+        self._block_start_s = self.clock.t_session_s()
+        self.block_index = block.index
+        started_min = self._block_start_s / 60.0
+        self.log(
+            "block_started",
+            origin="experimenter",
+            detail=f"{block.type}; planned {block.planned_offset_min:g} min, "
+            f"started {started_min:.2f} min, "
+            f"{started_min - block.planned_offset_min:+.2f} min against plan",
+        )
+
+    def end_block(self) -> None:
+        """Close the open block, recording how long it actually took."""
+        if self._block is None:
+            raise SessionError("no block is open")
+        block, start_s = self._block, self._block_start_s
+        actual_min = (self.clock.t_session_s() - start_s) / 60.0
+        planned = (
+            "unset" if block.expected_duration_min is None
+            else f"{block.expected_duration_min:g} min"
+        )
+        self.log(
+            "block_ended",
+            detail=f"{block.type}; took {actual_min:.2f} min, expected {planned}",
+        )
+        self._block = None
+        self._block_start_s = None
+        self.block_index = None
+
     def _record_garment(self, command: dict) -> None:
         """The garment reports what it did; the session adds the phase and the block."""
         self.files.write(
@@ -216,6 +271,10 @@ class Session:
             self.log("cloud_sync_folder", severity="warning", detail=self.cloud_sync_warning)
         for item in self.config.unresolved:
             self.log("unresolved_open_item", severity="warning", detail=str(item))
+        # SPEC.md 7.3: the schedule warns and never blocks, so the warnings have to be somewhere
+        # a session can be audited from afterwards rather than only in the preview.
+        for warning in self.schedule.warnings():
+            self.log("schedule_warning", severity="warning", detail=warning)
         if self.config.has_placeholder_text():
             self.log(
                 "placeholder_participant_text",
@@ -241,6 +300,10 @@ class Session:
         """Stop the garment, write the closing provenance, and flush. Safe to call twice."""
         if self.closed:
             return
+        # SPEC.md 7.4 wants an actual end for every block, which includes one the session was
+        # aborted out of. Closed here rather than at each abort path so it cannot be forgotten.
+        if self._block is not None:
+            self.end_block()
         self.aborted_reason = abort_reason
         if self.garment.connected:
             self.garment.stop()
