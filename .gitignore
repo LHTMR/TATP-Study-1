@@ -21,6 +21,10 @@ __pycache__/
 .vscode/
 .idea/
 
+# Machine-local build overrides: where conda lives on this machine, and nothing else.
+# The committed Makefile defaults to plain `conda` so the lab PC is unaffected.
+Makefile.local
+
 # Claude Code local overrides
 .claude/settings.local.json
 CLAUDE.local.md

@@ -683,12 +683,21 @@ The experimenter's substitution control belongs there too, for the same reason.
 
 ## Watch out for
 
-- **`conda` can vanish from `PATH` part-way through a session.** It happened in session 10:
-  `make` targets ran green for an hour, then every one of them failed with
-  `make: conda: No such file or directory`, and `which conda` found only the shell function
-  (whose `__conda_exe` is itself broken — see Environment above). Nothing in the repository
-  causes it and nothing in the repository should be changed to work around it. Start a new
-  shell. Until you have one, **you cannot run the gate, so do not report anything as verified.**
+- **If every `make` target says `conda: No such file or directory`, write `Makefile.local`.**
+  The Claude Code app's shell on this Mac runs with a minimal `PATH` that has no conda
+  directory in it, so the plain `conda` the Makefile defaults to is not found. `which conda`
+  is no help — it finds the shell function, whose `__conda_exe` is separately broken (see
+  Environment above). Restarting the app and rebooting the machine both leave that `PATH`
+  byte-identical, so **do not spend time restarting things**; the remedy is one gitignored
+  line:
+
+  ```
+  echo 'CONDA := /Users/sarmc72/miniconda3/bin/conda' > Makefile.local
+  ```
+
+  `which -a conda` in a normal terminal gives the path. The committed Makefile still defaults
+  to plain `conda`, so nothing about this reaches the lab PC. Until the gate runs, **do not
+  report anything as verified.**
 - The `PreToolUse` hook rejects `&&`, `||`, `;`, `|`, `$(`, backticks and newlines **even
   inside a quoted string** — including inside a `git commit -m` message, which is easy to trip
   over. Put throwaway code in a file under `tools/`, not in `python -c`, and not in `/tmp`: the

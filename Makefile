@@ -9,7 +9,17 @@
 # linter and the screenshot comparison. It says so when it runs, rather than letting a partial
 # gate look like a passing one.
 
-CONDA_RUN := conda run --no-capture-output -n tatp-study-1
+# `conda` is whatever is on PATH, which is right on the lab PC and in any normal shell. Some
+# shells -- the Claude Code app's, on this Mac -- run with a minimal PATH that has no conda
+# directory in it, and then every target here fails with "conda: No such file or directory".
+# Override CONDA in Makefile.local rather than editing this line: that file is gitignored, so a
+# machine-specific absolute path stays on the machine it describes and never reaches the lab PC.
+#
+#   echo 'CONDA := /Users/you/miniconda3/bin/conda' > Makefile.local
+CONDA ?= conda
+-include Makefile.local
+
+CONDA_RUN := $(CONDA) run --no-capture-output -n tatp-study-1
 
 .PHONY: check test test-one lint literals shots preview
 
