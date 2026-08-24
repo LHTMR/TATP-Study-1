@@ -7,7 +7,7 @@ fresh session should need nothing from any previous conversation.
 hardware limits. **`docs/NOTES.md`** holds what is merely logged: deviations from Bilaga 1,
 pilot-protocol checks, analysis-plan questions, process. Keep all three updated together.
 
-**Last updated:** 23 August 2026, session 10.
+**Last updated:** 24 August 2026, session 10.
 **Milestone:** 2 (the checks) — *in progress. The literals and blinding checks and the
 screenshot comparison are in the gate; the end-to-end validator is what remains.*
 
@@ -635,11 +635,60 @@ The experimenter's substitution control belongs there too, for the same reason.
    which is Milestone 5. Build it against what the slice actually does today and add each
    assertion as the thing it checks starts existing — do not write assertions that pass because
    there is nothing to check.
+
+   ### The validator, specified — read this before writing any of it
+
+   Agreed with S on 24 August 2026. The approach is the point: **an assertion is written only
+   when the thing it checks exists.** SPEC.md 17.3 was written for the finished software, so
+   taking its nine bullets as a checklist today produces a validator that is green because it
+   is empty — which is decision 21 and decision 35's lesson for the third time, and this time
+   it is foreseeable rather than discovered.
+
+   **Structure.** `tools/validate_session.py` runs a complete session headless — mock garment,
+   virtual participant, virtual experimenter, `Clock(speed=…)` — into a temporary data folder,
+   then reopens the written files and checks them. Two separable halves, and keeping them
+   separate is what lets the second half grow:
+
+   - a **runner**, which drives `run_session.py`'s path with `sim/responders.py` supplying key
+     presses instead of a person;
+   - a **checker**, a list of named assertions each of which declares what it needs. An
+     assertion whose precondition is absent must be **reported as `skipped: <reason>` and
+     counted**, never silently passed. A validator that prints "9 checks, 9 passed" when four
+     of them checked nothing is worse than one that prints "5 passed, 4 skipped (no schedule
+     yet)", because the first is trusted.
+
+   **What can be asserted today**, against the slice as it stands: every expected table exists
+   with the columns `DATA_SCHEMA.md` specifies and no missing values in required fields;
+   condition and limb match `allocation.csv` for that participant and session; timestamps
+   monotonic; all 40 provenance fields populated; the calibrated force is one of the filaments
+   in `filaments.yaml`; same seed reproduces an identical trial order; and no text violating
+   §16 appears in the participant-facing configuration (that one can call the same code as
+   `tests/test_blinding_text.py` rather than reimplementing it).
+
+   **What must be a declared skip until its milestone lands:** row counts matching the schedule
+   and every scheduled block appearing in order (Milestone 5 — one block runs today);
+   `out_of_range` set when and only when it should be (Milestone 3, the ladder); planned versus
+   actual offsets across a full grid (Milestone 5).
+
+   **`sim/responders.py` comes first and is the larger half.** SPEC.md 17.5 wants a normal
+   responder — the observer model from `docs/calibration_sim.py`, `rating = 40 + m·(log₁₀F −
+   log₁₀F₄₀) + noise` — and nine adversarial ones. Build the normal one plus however many
+   adversarial ones have an error path that exists to fire; the rest are Milestone 3 and 5 work
+   and should not be stubbed in advance. `docs/calibration_sim.py` is excluded from ruff on
+   purpose (decision 13) — import the model, do not reformat that file.
+
+   **Then** the `validate` target and deleting the INCOMPLETE GATE line from the Makefile.
 3. Run the **spec-review** agent before declaring Milestone 1 done
    ("Use the spec-review agent to review this diff against docs/SPEC.md").
 
 ## Watch out for
 
+- **`conda` can vanish from `PATH` part-way through a session.** It happened in session 10:
+  `make` targets ran green for an hour, then every one of them failed with
+  `make: conda: No such file or directory`, and `which conda` found only the shell function
+  (whose `__conda_exe` is itself broken — see Environment above). Nothing in the repository
+  causes it and nothing in the repository should be changed to work around it. Start a new
+  shell. Until you have one, **you cannot run the gate, so do not report anything as verified.**
 - The `PreToolUse` hook rejects `&&`, `||`, `;`, `|`, `$(`, backticks and newlines **even
   inside a quoted string** — including inside a `git commit -m` message, which is easy to trip
   over. Put throwaway code in a file under `tools/`, not in `python -c`, and not in `/tmp`: the
