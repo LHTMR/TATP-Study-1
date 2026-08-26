@@ -54,3 +54,19 @@ The software supports each; someone has to actually run it.
 |---|---|
 | N4.1 | **Manual data transfer to the LiU secure server** (`SPEC.md` §14.1) is outside the software. The process needs to exist and belongs in `SOP.md` when it is written. |
 | N4.2 | **Parallel Claude sessions get a branch.** Two agents sharing one working tree on `main` cannot tell whose uncommitted change is whose; this already caused one mis-attributed commit (`PROGRESS.md` decision 22). |
+
+## 5. The UI review, 26 Aug 2026
+
+`docs/UI_PRINCIPLES.md` was written first, on the `ui-review` branch, so the review had a stated
+standard rather than a reviewer's taste. Every screen state was read as a rendered PNG in both
+languages, graded validity / safety / usability / polish, and fixed in one pass.
+
+| # | What |
+|---|---|
+| N5.1 | **Stacked anchor labels were relabelling the scale.** On `pain` and `intensity`, in both languages, a label that would collide dropped to a second row with nothing tying it to its percentage. English `intensity` row 0 then read "no sensation at all … just uncomfortable" — a complete scale with the wrong top anchor, on the scale the whole touch calibration is rated against. Fixed by ticking every labelled anchor, which `SPEC.md` §10.2 permits ("no tick marks *beyond* the labelled anchors"), and running the tick down to the label's own row as a leader. Bilaga 1 fixes the anchor wordings and positions, so shortening a label was never available. `tests/test_vas.py` now asserts every anchor's tick sits at its own percentage. |
+| N5.2 | **The experimenter screen reflowed when a warning appeared.** Banners were ordinary layout items, so the phase and the instruction slid down at the moment something went wrong. The banner region is now reserved whether occupied or not, with a test that both banners fit inside it — a wording change that would overflow fails the suite rather than silently clipping a `SPEC.md` §12.4 warning. |
+| N5.3 | **"Frånkopplad" was typeset exactly like "Ansluten".** A disconnected garment was indistinguishable at a glance from a working one. Connected is now quiet secondary text and disconnected is red and bold. The two banners were also identically red despite demanding different responses, and are now red and amber. |
+| N5.4 | **The screen was a full-brightness light page** sharing a dim room with a near-black participant screen. Now dark, with one four-step type scale, and the instruction — what to do now — as the largest element rather than the always-on monofilament technique blurb. |
+| N5.5 | **Participant text moved between screens.** Message screens centred vertically while the VAS question sat near the top, so the first line to read shifted on every one of roughly 150 rating cycles. Both now top-align at the same fraction. The emergency-stop screen is bold, so it is not mistakable for a rest screen — weight rather than colour, because an alarming screen is the wrong thing to show someone who has just pressed the button. |
+| N5.6 | **`participant_en.yaml` welcome had a stray line break** ("… does not see your / answers."), from hard newlines in the block scalar colliding with word wrap. Swedish was unaffected — which is the case for reviewing the two languages as a pair. Wording unchanged; only the line breaking. |
+| N5.7 | **The reference screenshots are still unapproved.** None had ever been approved, so `make shots` compares nothing and the review could change screens freely. `make shots ARGS="--approve-all"` is S's to run once the new screens are accepted. |

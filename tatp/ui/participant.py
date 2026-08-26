@@ -29,7 +29,14 @@ from PySide6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
 from tatp.clock import Clock
 from tatp.config import Config
 from tatp.responder import Action, Responder
-from tatp.ui.vas import BACKGROUND, FOREGROUND, QT_KEYS, VasWidget
+from tatp.ui.vas import (
+    BACKGROUND,
+    FOREGROUND,
+    QT_KEYS,
+    QUESTION_Y_FRACTION,
+    SIDE_MARGIN_FRACTION,
+    VasWidget,
+)
 
 # How the window draws itself. Not study parameters (SPEC.md 4.2 lists timings, forces,
 # pressures, thresholds, rates and strings) -- the reference screenshots are what pin these
@@ -39,16 +46,26 @@ from tatp.ui.vas import BACKGROUND, FOREGROUND, QT_KEYS, VasWidget
 EMERGENCY_STOP_SCREEN = "emergency_stop"
 
 MESSAGE_POINT_SIZE = 26
-MESSAGE_MARGIN_PX = 80
 CUE_RADIUS_FRACTION = 0.09
 
 
 class _MessageScreen(QWidget):
-    """One block of centred text on the neutral background. Empty text is a blank screen."""
+    """One block of text on the neutral background. Empty text is a blank screen.
+
+    Horizontally centred, but **top-aligned at the same fraction as the VAS question** and
+    inside the same side margins, so the first line sits where the participant is already
+    looking whatever screen preceded it (UI_PRINCIPLES.md 5.5). Vertically centring instead
+    moves the text with every change of message length, which over roughly 150 rating cycles
+    is a search on every one of them.
+    """
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.text = ""
+        # Weight rather than wording is what marks the stop screen out from a rest screen
+        # (UI_PRINCIPLES.md 5.6). Not colour: an alarming screen is the wrong thing to show
+        # someone who has just pressed the button because something was unpleasant.
+        self.emphasised = False
 
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
@@ -56,11 +73,12 @@ class _MessageScreen(QWidget):
         painter.setPen(FOREGROUND)
         font = QFont(self.font())
         font.setPointSize(MESSAGE_POINT_SIZE)
+        font.setBold(self.emphasised)
         painter.setFont(font)
-        box = self.rect().adjusted(
-            MESSAGE_MARGIN_PX, MESSAGE_MARGIN_PX, -MESSAGE_MARGIN_PX, -MESSAGE_MARGIN_PX
-        )
-        painter.drawText(box, Qt.AlignCenter | Qt.TextWordWrap, self.text)
+        margin = int(self.width() * SIDE_MARGIN_FRACTION)
+        top = int(self.height() * QUESTION_Y_FRACTION)
+        box = self.rect().adjusted(margin, top, -margin, 0)
+        painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.text)
         painter.end()
 
 
@@ -151,11 +169,13 @@ class ParticipantWindow(QWidget):
     def show_message(self, key: str) -> None:
         """Show `screens.<key>` from the participant text file."""
         self.message.text = self.text["screens"][key]
+        self.message.emphasised = key == EMERGENCY_STOP_SCREEN
         self._show(self.message)
 
     def show_blank(self) -> None:
         """Nothing at all -- what the participant sees while a stimulus is being delivered."""
         self.message.text = ""
+        self.message.emphasised = False
         self._show(self.message)
 
     def show_emergency_stop(self) -> None:
@@ -172,6 +192,7 @@ class ParticipantWindow(QWidget):
         self.message.text = (
             f"{self.text['adjust_targets'][target_key]}\n\n{self.text['screens']['adjust']}"
         )
+        self.message.emphasised = False
         self._show(self.message, adjusting=True)
 
     def show_warning_cue(self) -> None:

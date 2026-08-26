@@ -180,7 +180,7 @@ def _boxes(widget, scale, text):
     metrics = QFontMetrics(font)
     return [
         (left, left + metrics.horizontalAdvance(label), row)
-        for label, left, row in widget._anchor_layout(metrics)
+        for label, left, row, _ in widget._anchor_layout(metrics)
     ]
 
 
@@ -210,6 +210,33 @@ def test_no_two_anchor_labels_overlap(by_language, scale, language):
             assert right <= other_left or other_right <= left, (
                 f"{language} {scale}: two anchor labels overlap on row {row}"
             )
+
+
+@pytest.mark.parametrize("scale", ("pain", "intensity", "pleasantness"))
+@pytest.mark.parametrize("language", ("sv", "en"))
+def test_every_anchor_is_ticked_at_its_own_percentage(by_language, scale, language):
+    """UI_PRINCIPLES.md 1.3, and the reason stacking is allowed at all.
+
+    A label may be clamped at the ends or dropped to a lower row; the tick may not move. It is
+    what tells the participant that "just noticeable" means 10 % of the line and not wherever
+    the words happened to fit. Without it, English `intensity` row 0 reads as a complete scale
+    running "no sensation at all ... just uncomfortable".
+    """
+    from PySide6.QtGui import QFont, QFontMetrics
+
+    widget, config = by_language[language]
+    text = config.participant_text["vas"][scale]
+    widget.show_scale(scale, text)
+    font = QFont(widget.font())
+    font.setPointSize(ANCHOR_POINT_SIZE)
+    placed = widget._anchor_layout(QFontMetrics(font))
+
+    by_label = {label: tick_x for label, _, _, tick_x in placed}
+    assert len(by_label) == len(text["anchors"]), "every anchor is drawn exactly once"
+    for anchor in text["anchors"]:
+        assert by_label[anchor["label"]] == pytest.approx(
+            widget._x_for(float(anchor["pct"]))
+        )
 
 
 def test_anchors_far_apart_stay_on_one_row(widget, loaded):

@@ -17,6 +17,7 @@ from tatp import config as cfg
 from tatp.clock import Clock
 from tatp.responder import Responder
 from tatp.session import Session
+from tatp.ui import experimenter as experimenter_ui
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 from tatp.ui.vas import QT_KEYS
@@ -184,6 +185,50 @@ def test_the_reduced_capability_banner_names_the_device(experimenter, session):
     window.refresh()
     assert window.reduced_capability_banner.isVisibleTo(window)
     assert session.garment.driver_name in window.reduced_capability_banner.text()
+
+
+def test_nothing_moves_when_the_banners_appear(experimenter):
+    """UI_PRINCIPLES.md 3.3. The banner region is reserved whether or not a banner is in it.
+
+    The experimenter learns where the phase and the instruction sit. If they slid down at the
+    moment a warning appeared, the warning would cost a re-read of the whole screen at exactly
+    the wrong time.
+    """
+    window, held = experimenter
+    held["override"] = {"placeholder_text": False, "reduced_capability_device": False}
+    window.refresh()
+    window.show()
+    quiet = (window.phase.pos().y(), window.instruction.pos().y())
+
+    held["override"] = {"placeholder_text": True, "reduced_capability_device": True}
+    window.refresh()
+    assert (window.phase.pos().y(), window.instruction.pos().y()) == quiet
+
+
+def test_both_banners_fit_the_reserved_region(experimenter):
+    """The reserved height is only honest if the warnings actually fit inside it.
+
+    A longer wording, or a second language, would otherwise clip a SPEC.md 12.4 banner rather
+    than push the layout -- which is worse than the reflow it was reserved to prevent.
+    """
+    window, held = experimenter
+    held["override"] = {"placeholder_text": True, "reduced_capability_device": True}
+    window.refresh()
+    window.show()
+    width = window.placeholder_banner.width()
+    needed = sum(
+        banner.heightForWidth(width)
+        for banner in (window.placeholder_banner, window.reduced_capability_banner)
+    )
+    assert needed <= experimenter_ui.BANNER_AREA_PX, (
+        f"the two banners need {needed} px but only {experimenter_ui.BANNER_AREA_PX} "
+        f"is reserved -- raise BANNER_AREA_PX"
+    )
+
+
+def test_the_two_banners_do_not_look_alike():
+    """UI_PRINCIPLES.md 3.4: different responses required, so different colours."""
+    assert experimenter_ui.PLACEHOLDER_COLOUR != experimenter_ui.REDUCED_CAPABILITY_COLOUR
 
 
 def test_the_session_identity_and_phase_are_shown(experimenter, session):

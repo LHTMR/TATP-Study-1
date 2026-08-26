@@ -21,7 +21,7 @@ CONDA ?= conda
 
 CONDA_RUN := $(CONDA) run --no-capture-output -n tatp-study-1
 
-.PHONY: check test test-one lint literals shots preview
+.PHONY: check test test-one lint literals shots preview ethics
 
 check: test lint shots
 	@echo
@@ -55,6 +55,15 @@ literals:
 #   make shots ARGS="--freeze"                require every screen approved and clean
 shots:
 	$(CONDA_RUN) python tools/shots.py $(ARGS)
+
+# The ethics folder reader (.claude/skills/ethics-folder). Read-only, and nothing it prints is
+# written anywhere. A target rather than a bare command because the folder lives outside the
+# repository, so only the Makefile's CONDA knows how to reach an interpreter -- an app shell with
+# no conda on PATH cannot run tools/read_ethics.py any other way.
+#   make ethics ARGS="--list"
+#   make ethics ARGS="Bilaga1_Forskningsplan_V2.docx --grep anchor --context 3"
+ethics:
+	$(CONDA_RUN) python tools/read_ethics.py $(ARGS)
 
 # The session timeline and its warnings (SPEC.md 7.2). No hardware, nothing written.
 #   make preview ARGS="--start 09:30"

@@ -31,12 +31,23 @@ MARKER_HALF_WIDTH_PX = 14
 MARKER_HEIGHT_PX = 22
 MARKER_GAP_PX = 10
 SIDE_MARGIN_FRACTION = 0.12
-LINE_Y_FRACTION = 0.58
-QUESTION_Y_FRACTION = 0.18
+# The line sits at a fixed fraction on every scale (UI_PRINCIPLES.md 1.6) and the question is
+# close enough above it to be read as one object with it. `QUESTION_Y_FRACTION` is shared with
+# the message screens, which top-align their text at the same fraction, so the first line a
+# participant reads never moves between screens (UI_PRINCIPLES.md 5.5).
+LINE_Y_FRACTION = 0.52
+QUESTION_Y_FRACTION = 0.30
 QUESTION_POINT_SIZE = 26
 ANCHOR_POINT_SIZE = 18
 ANCHOR_GAP_PX = 18
 ANCHOR_LABEL_GAP_PX = 16  # clear space required between two anchor labels sharing a row
+ANCHOR_TICK_WIDTH_PX = 2
+TICK_LABEL_GAP_PX = 6
+# An unstacked anchor gets a short stub: its label is directly beneath it, so nothing more is
+# needed to tie the two together. Drawing every tick down to the label row instead made the end
+# anchors read as a bracket enclosing the end label -- which the rendered screens showed and
+# the code did not.
+TICK_STUB_PX = 8
 
 # Key names as `config/hardware.yaml` writes them. A configured key that is not here is a
 # startup error rather than a key that silently does nothing.
@@ -240,8 +251,8 @@ class VasWidget(QWidget):
         margin = self.width() * SIDE_MARGIN_FRACTION
         return margin + (self.width() - 2 * margin) * percent / MAX_PCT
 
-    def _anchor_layout(self, metrics) -> list[tuple[str, float, int]]:
-        """Each anchor label as (text, left edge, row), stacking labels that would collide.
+    def _anchor_layout(self, metrics) -> list[tuple[str, float, int, float]]:
+        """Each anchor label as (text, left edge, row, tick x), stacking labels that collide.
 
         A label is centred under its own percentage, which is the whole point of an anchor --
         moving it sideways to make room would put "just noticeable" somewhere other than 10 %.
@@ -251,8 +262,15 @@ class VasWidget(QWidget):
         `pain` scale anchors 0/10 %, and at those spacings the Swedish labels overlap into
         illegibility at every window size the lab will use -- which the SPEC.md 17.4
         screenshots are what found.
+
+        **The tick x is what makes stacking safe, and is why this returns it.** A row on its
+        own relabels the scale: with the labels alone, English `intensity` row 0 reads "no
+        sensation at all ... just uncomfortable", which is a complete scale with the wrong top
+        anchor. `paintEvent` draws a tick from the line down to each label's own row, so a
+        label is tied to its percentage however far it has been clamped or dropped
+        (UI_PRINCIPLES.md 1.3).
         """
-        placed: list[tuple[str, float, int]] = []
+        placed: list[tuple[str, float, int, float]] = []
         row_right_edges: list[float] = []
         for anchor in sorted(self.anchors, key=lambda a: float(a["pct"])):
             label = str(anchor["label"])
@@ -271,7 +289,7 @@ class VasWidget(QWidget):
             if row == len(row_right_edges):
                 row_right_edges.append(0.0)
             row_right_edges[row] = left + width
-            placed.append((label, left, row))
+            placed.append((label, left, row, centre))
         return placed
 
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
@@ -296,13 +314,19 @@ class VasWidget(QWidget):
             int(self._x_for(MIN_PCT)), int(line_y), int(self._x_for(MAX_PCT)), int(line_y)
         )
 
-        # No numbers and no tick marks beyond the labelled anchors (SPEC.md 10.2).
+        # A tick at every labelled anchor and nowhere else, and no numbers anywhere
+        # (SPEC.md 10.2). The tick runs from the line down to its own label's row, so it is
+        # also the leader that ties a stacked label to its percentage.
         anchor_font = QFont(self.font())
         anchor_font.setPointSize(ANCHOR_POINT_SIZE)
         painter.setFont(anchor_font)
         metrics = painter.fontMetrics()
-        for label, left, row in self._anchor_layout(metrics):
-            baseline = line_y + ANCHOR_GAP_PX + metrics.ascent() + row * metrics.height()
+        for label, left, row, tick_x in self._anchor_layout(metrics):
+            tick_bottom = line_y + ANCHOR_GAP_PX + row * metrics.height()
+            painter.setPen(QPen(FOREGROUND, ANCHOR_TICK_WIDTH_PX))
+            drawn_to = tick_bottom if row else line_y + TICK_STUB_PX
+            painter.drawLine(int(tick_x), int(line_y), int(tick_x), int(drawn_to))
+            baseline = tick_bottom + TICK_LABEL_GAP_PX + metrics.ascent()
             painter.drawText(int(left), int(baseline), label)
 
         if self.state.visible:

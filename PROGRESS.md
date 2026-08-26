@@ -7,9 +7,27 @@ fresh session should need nothing from any previous conversation.
 hardware limits. **`docs/NOTES.md`** holds what is merely logged: deviations from Bilaga 1,
 pilot-protocol checks, analysis-plan questions, process. Keep all three updated together.
 
-**Last updated:** 24 August 2026, session 10.
+**Last updated:** 26 August 2026, session 11.
 **Milestone:** 2 (the checks) — *in progress. The literals and blinding checks and the
 screenshot comparison are in the gate; the end-to-end validator is what remains.*
+**Branch:** `ui-review`, not yet merged.
+
+**Session 11 was a UI design pass, on the `ui-review` branch, before `sim/responders.py`.**
+`docs/UI_PRINCIPLES.md` is new and normative: measurement validity, blinding and approved
+wording, safety and legibility, consistency, intuitiveness — in that precedence order, with a
+grading scheme for review findings. It was written *first*, so the review had a stated standard
+rather than a reviewer's taste, and the approved wording in `config/text/` is named in it as the
+authority rather than the ethics documents.
+
+All 60 screen states were then reviewed as rendered PNGs in both languages and every finding
+fixed in one pass: the VAS anchors are ticked so a stacked label can no longer relabel the
+scale, the experimenter screen has a reserved banner region, a real reading order, a dark
+palette and a distinguished disconnected state, and the participant message screens no longer
+move between rating cycles. `docs/NOTES.md` §5 has the findings. 272 tests.
+
+**The reference screenshots are still unapproved** — none ever were, so `make shots` compares
+nothing. `make shots ARGS="--approve-all"` is S's call once the new screens are accepted, and
+until then the screenshot leg of `make check` is not actually guarding anything.
 
 **Session 10** built the three checks SPEC.md 17.2 and 17.4 name and nothing else did:
 `tools/lint_literals.py`, `tests/test_blinding_text.py` against the new `config/blinding.yaml`,
