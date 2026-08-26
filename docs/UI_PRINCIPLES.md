@@ -25,6 +25,18 @@ dropped to another row with nothing tying it to its position is a validity failu
 relabels the scale.
 
 1.4 No numbers, and no tick marks anywhere except at a labelled anchor (`docs/SPEC.md` §10.2).
+A tick straddles the line, above and below it, rather than hanging beneath it: a tick that only
+descends reads as a bracket around the label under it, and competes with the label rows instead
+of belonging to the line. The tick is subordinate to the line — thinner, and no more prominent —
+because the line is the scale and the tick is an annotation on it.
+
+1.4a **A tick attracts responses to itself.** This is measured, not hypothetical (Behavior
+Research Methods 2023: marking a VAS cut mean absolute error from 3.02 to 0.82 units, because
+respondents place marks near the ticks). Here the attractors are the anchors Bilaga 1 fixes —
+"just painful", "just noticeable", "just uncomfortable" — which are categorical landmarks
+participants are meant to use, so the pull is wanted. It is still a property of the primary
+outcome's distribution, logged in `docs/NOTES.md`, and it is the reason no tick is ever added
+anywhere else on the line.
 
 1.5 The line is straight, unbroken and of uniform weight along its whole length. Participants are
 trained that twice as far along means twice as much (Bilaga 1 §3.6.1, after Price et al. 1983);
@@ -42,6 +54,12 @@ beyond what the content itself requires.
 
 1.9 Marker behaviour is fixed by `docs/SPEC.md` §10.2: hidden until the first press, then 25 %
 after a left press and 75 % after a right. Not a presentation choice.
+
+1.10 **Where a task presents repeated trials, the participant must be able to tell one trial
+from the next without counting.** A response is only interpretable if it is known which
+presentation it answers. Each trial therefore ends with its choice shown back long enough to be
+seen, and begins after a blank that is unmistakably a break rather than a lag. Both durations
+are config, pilot-tunable, and start at 0.5 s.
 
 ## 2. Blinding and approved wording
 
@@ -139,6 +157,37 @@ weight do that work, and the wording confirms it.
 
 5.7 **The mechanics of responding are visible where they are used, not only in the instructions
 screen** — but as the smallest cue that works, never as a paragraph competing with the question.
+
+### Controls the participant operates
+
+The participant holds a presenter remote: two large chevron buttons, **‹** and **›**, and two
+small buttons below them. Everything in this group follows from one idea — the screen should
+let the participant act without translating.
+
+5.8 **A control is drawn, not described.** Where a screen asks for a choice between options
+mapped to buttons, it renders the buttons rather than naming them in a sentence. "Left button:
+the first" is a translation step performed on every trial.
+
+5.9 **A drawn control carries the symbol that is physically on the button**, at its physical
+arrangement — the left chevron on the left, the right chevron on the right. If a button is
+relabelled on the device, the screen changes with it. A drawn control that does not match the
+thing under the participant's thumb is worse than a sentence.
+
+5.10 **A press is acknowledged visually at the moment it happens.** The drawn button shows a
+pressed state on button-down and releases on button-up. Without it the participant cannot tell a
+registered press from a missed one, and presses again.
+
+5.11 **Where a drawn control corresponds to a stimulus, the correspondence is shown at the
+moment the stimulus is delivered** — the button that means "this one" is emphasised while its
+stimulus plays. This is what ties the sensation, the button on screen, and the button under the
+thumb into one object, and it is why the emphasis is coincident with the stimulus rather than
+shown beforehand as a legend.
+
+5.12 **Where the press is the answer, there is no separate confirm.** A confirm step exists to
+allow adjustment before committing, and there is nothing to adjust in a two-alternative choice.
+Removing it also removes the failure mode where a participant chooses and then does not commit.
+This is a protocol property, so it lives in `docs/SPEC.md` and `docs/DATA_SCHEMA.md`, not only
+here.
 
 ## 6. How a screen is reviewed
 
