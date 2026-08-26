@@ -14,7 +14,21 @@ from PySide6.QtWidgets import QApplication
 from tatp import config as cfg
 from tatp.clock import Clock
 from tatp.responder import Action, Responder
-from tatp.ui.vas import ANCHOR_POINT_SIZE, QT_KEYS, VasState, VasWidget
+from tatp.ui.vas import (
+    ANCHOR_POINT_SIZE,
+    INTRODUCTION_POINT_SIZE,
+    LINE_WIDTH_PX,
+    LINE_Y_FRACTION,
+    MARKER_GAP_PX,
+    QT_KEYS,
+    QUESTION_POINT_SIZE,
+    TEXT_TO_LINE_GAP_PX,
+    TICK_STYLES,
+    VasState,
+    VasWidget,
+)
+
+SCALES = ("pain", "intensity", "pleasantness", "relaxation", "alertness")
 
 
 class FakeClock(Clock):
@@ -243,6 +257,95 @@ def test_anchors_far_apart_stay_on_one_row(widget, loaded):
     """Stacking is the exception. Two anchors at 0 and 100 % have no reason to be stacked."""
     boxes = _boxes(widget, "pleasantness", loaded.participant_text["vas"]["pleasantness"])
     assert {row for _, _, row in boxes} == {0}
+
+
+# -- the tick, UI_PRINCIPLES.md 1.4 --------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", sorted(TICK_STYLES))
+def test_every_candidate_tick_straddles_the_line_and_stays_under_it(name):
+    """The rules, not today's numbers -- these hold whichever variant S picks.
+
+    Asserting the chosen style's exact pixels would be decision 21's mistake again: a test that
+    is true on the day it is written and fails the day the decision lands.
+    """
+    style = TICK_STYLES[name]
+    assert style.rise_px > 0, "a tick that only descends reads as a bracket around its label"
+    assert style.width_px < LINE_WIDTH_PX, "the line is the scale; the tick annotates it"
+    assert style.rise_px < MARKER_GAP_PX, "the tick would be touched by the marker at an anchor"
+
+
+def _pixel_above_the_first_anchor(widget, config, style):
+    """What is drawn just above the line at the 0 % anchor, and a background pixel to match."""
+    widget.tick_style = style
+    widget.show_scale("pleasantness", config.participant_text["vas"]["pleasantness"])
+    image = widget.grab().toImage()
+    line_y = int(widget.height() * LINE_Y_FRACTION)
+    x = int(widget._x_for(0.0))
+    # Sampled clear of the line's own antialiasing, and clear of the marker's gap.
+    return (
+        image.pixel(x, line_y - MARKER_GAP_PX + 1),
+        image.pixel(x, line_y - MARKER_GAP_PX * 3),
+    )
+
+
+def test_the_tick_is_drawn_above_the_line_as_well_as_below(by_language):
+    """Straddling, in the pixels -- the rendered screens are what found the bracket reading.
+
+    With the negative control, because a pixel probe that cannot fail is not a check. The
+    hanging tick this replaced is the control: at rise 0 the same sample is background.
+    """
+    widget, config = by_language["en"]
+    style = widget.tick_style
+    variant = type(style)
+    hanging = variant(rise_px=0, drop_px=style.drop_px, width_px=style.width_px)
+    tall = variant(rise_px=MARKER_GAP_PX - 1, drop_px=style.drop_px, width_px=style.width_px)
+    try:
+        above, background = _pixel_above_the_first_anchor(widget, config, tall)
+        assert above != background, "nothing is drawn above the line at the 0 % anchor"
+
+        above, background = _pixel_above_the_first_anchor(widget, config, hanging)
+        assert above == background, "the probe finds a tick above the line where there is none"
+    finally:
+        widget.tick_style = style
+
+
+# -- the heading, UI_PRINCIPLES.md 5.3 and 1.7 ---------------------------------------------
+
+
+@pytest.mark.parametrize("scale", SCALES)
+@pytest.mark.parametrize("language", ("sv", "en"))
+def test_a_statement_outranks_the_question_that_introduces_it(by_language, scale, language):
+    """The RSQ scales rate the statement; the question only frames it."""
+    widget, config = by_language[language]
+    text = config.participant_text["vas"][scale]
+    widget.show_scale(scale, text)
+    blocks = widget.heading_blocks()
+
+    if not text.get("statement"):
+        assert blocks == [(text["question"], QUESTION_POINT_SIZE)]
+        return
+    (question, question_size), (statement, statement_size) = blocks
+    assert (question, statement) == (text["question"], text["statement"])
+    assert question_size == INTRODUCTION_POINT_SIZE
+    assert question_size < statement_size, "the framing question is set larger than the item"
+
+
+@pytest.mark.parametrize("scale", SCALES)
+@pytest.mark.parametrize("language", ("sv", "en"))
+def test_the_text_block_clears_the_line(by_language, scale, language):
+    """The line cannot move down to make room (UI_PRINCIPLES.md 1.6), so the text must fit.
+
+    At the lab window size, both languages, every scale. A failure here means the wording needs
+    shortening or the size reducing -- never the line moving.
+    """
+    widget, config = by_language[language]
+    widget.show_scale(scale, config.participant_text["vas"][scale])
+    clearance = widget.heading_clearance()
+    assert clearance >= TEXT_TO_LINE_GAP_PX, (
+        f"{language} {scale}: {clearance:.0f} px between the text and the line, "
+        f"where {TEXT_TO_LINE_GAP_PX} px are required"
+    )
 
 
 def test_confirming_emits_the_response(widget):

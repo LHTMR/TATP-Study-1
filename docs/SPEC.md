@@ -546,6 +546,9 @@ reverse.
    chained off the **fitted** reference values rather than the adjustment values.
 4. **Equalisation check against the reference only** — four comparisons, both orders, reference
    and test channel one after the other with a **3 s hold**. Prompt re-adjustment on mismatch.
+   The response is a **direct press on a drawn button** (§10.8): each stimulus emphasises its own
+   button as it plays, and the press that follows is the judgement, with no confirm and no
+   revising.
 5. **Pleasantness adjustment** with the pattern looped continuously, range **bounded to the
    fitted [P30, P80]**, two adjustments from different start points.
 6. **Preference selection — in every session.** The participant is presented with the available
@@ -593,6 +596,11 @@ without a code change.
 
 **`escape` must be explicitly disabled as a quit key.** The play button emits it, so a default
 binding would let a participant end a session by confirming a rating. Bind only the `period`.
+
+**What is printed on each button is configuration, not code.** `responder.button_symbols` in
+`hardware.yaml` records the glyph on each button, and a screen that draws a control draws that
+glyph (§10.8). Relabelling the remote is then a config change. The emergency stop deliberately
+has no entry: it is a button the participant is told about, never one a screen draws.
 
 ### 10.2 VAS
 
@@ -758,10 +766,44 @@ lab-side and must stay inaudible to the participant, which a *higher* noise leve
 **Yes/no answers are positional.** The two options are drawn at the left and right of the screen
 and selected with the corresponding large button, matching the physical layout of the response
 device (S, 23 Aug 2026). The affirmative is on the left throughout, so the mapping is one
-convention rather than one per question. `screens.comparison` already works this way.
+convention rather than one per question. This is the §10.8 choice screen; `still_audible` moves
+into the `choices` block when `audio.py` is built.
 
 Record the chosen level, whether masking was confirmed, the number of attempts, and whether
 earplugs were used, in the session file.
+
+### 10.8 Two-alternative choice screens
+
+Decided 26 Aug 2026 with S, from the session-11 UI review. Everywhere the participant chooses
+between two options mapped to the two large buttons — the equalisation comparison of §9 step 4,
+the masking check's `still_audible` (§10.7) — **the buttons are drawn and the press is the
+answer.**
+
+- **The control is drawn, not described.** The screen renders the two large buttons carrying the
+  symbols physically printed on them, in their physical arrangement, with an option label under
+  each. "Left button: the first" is a translation the participant performs on every trial, and
+  the comparison phase has dozens. The symbols live in `hardware.yaml` under
+  `responder.button_symbols`, because they describe the device rather than the language — a
+  relabelled remote is a config change and no code change. Approved wording that spells a symbol
+  inside a sentence is not covered by this and needs editing by hand.
+- **A press is acknowledged the moment it happens**, so a registered press is distinguishable
+  from a missed one and the participant does not press again.
+- **The button whose stimulus is playing is emphasised while it plays**, which is what ties the
+  sensation, the button on screen and the button under the thumb into one object. Emphasis is
+  weight, not brightness or colour: it must read as *this is the one you are feeling*, never as
+  a recommendation. It is coincident with the stimulus, never shown beforehand as a legend.
+- **No confirm.** A confirm step exists so a response can be adjusted before it is committed,
+  and there is nothing to adjust in a choice between two options. So the press is the response,
+  a choice cannot be revised, and there is no state in which a participant has chosen but not
+  committed. The play button does nothing on these screens.
+- **A press before both stimuli have been delivered is not a response.** The screen accepts
+  nothing until the protocol says the pair is finished; an early press is logged, not counted.
+- **Each trial is separable from the next without counting.** The chosen button is held visibly
+  chosen for `choice.feedback_s`, then the screen blanks for `choice.gap_s`. Both are perceptual
+  requirements — long enough to see, short enough not to feel like a lag — so both are config
+  and pilot-tunable, tuned by looking at the screen rather than derived.
+
+`docs/UI_PRINCIPLES.md` 1.10 and 5.8–5.12 carry the reasoning; this section is the requirement.
 
 ---
 

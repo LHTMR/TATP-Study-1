@@ -99,15 +99,28 @@ screens:
   adjust: |-
     Left button: weaker. Right button: stronger.
     Press ▶ when it feels right.
-  comparison: |-
-    Two touches, one after the other.
-    Which felt stronger?
-    Left button: the first. Right button: the second.
-    Press ▶ to confirm.
   preference: |-
     You will feel a few different kinds of touch.
     Use the two large buttons to move between them.
     Press ▶ to choose the one you like best.
+
+choices:
+  # Two-alternative screens where the buttons are DRAWN and the press itself is the answer
+  # (SPEC.md 10.8, UI_PRINCIPLES.md 5.8-5.12). Each has a question and the two option labels,
+  # which are written on the drawn buttons -- so an option label is a phrase, not a sentence.
+  #
+  # The affirmative or first-mentioned option is on the LEFT throughout, the same convention as
+  # `audio_setup.still_audible`, which has this shape and should move here when audio.py is
+  # built (docs/NOTES.md N5.12).
+  comparison:
+    # SPEC.md 9 step 4. Approved 23 Aug 2026 as a text screen; what has gone since is only the
+    # two lines the drawn buttons replace -- "Left button: the first. Right button: the second."
+    # and "Press ▶ to confirm." The question is unchanged.
+    question: |-
+      Two touches, one after the other.
+      Which felt stronger?
+    left: The first
+    right: The second
 
 audio_setup:
   # SPEC.md 10.7, the masking check. Drafted 23 Aug 2026 on S's instruction and APPROVED by S

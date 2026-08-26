@@ -1,8 +1,8 @@
 """The participant window. SPEC.md 10.
 
-One window holding three screens: a block of centred text, the visual warning cue that precedes
-every stimulus (SPEC.md 10.5), and the VAS. Which of them is showing is the whole of the
-window's state.
+One window holding four screens: a block of centred text, the visual warning cue that precedes
+every stimulus (SPEC.md 10.5), the VAS, and a two-alternative choice with its buttons drawn
+(SPEC.md 10.8). Which of them is showing is the whole of the window's state.
 
 It carries no wording of its own -- every string is looked up in
 `config/text/participant_{sv,en}.yaml` by key (SPEC.md 10.4), so a missing key raises where the
@@ -13,17 +13,18 @@ screen was asked for rather than showing a participant a blank.
 swallows everything else -- including `escape`, which the play button emits and which Qt would
 otherwise read as "close this window" (SPEC.md 10.1).
 
-The one screen that reads more than the emergency stop is the adjustment screen: the pressure
-adjustment of SPEC.md 10.3 is press-and-hold, so both the down and the up of every button matter
-and the window emits them as they happen. It does not itself know what a press means -- what a
-button does to the pressure is `tatp/touchcal.py`, so the participant window stays a display
+Two screens read more than the emergency stop. The adjustment screen: the pressure adjustment
+of SPEC.md 10.3 is press-and-hold, so both the down and the up of every button matter and the
+window emits them as they happen. And the choice screen, where the press itself is the response
+(SPEC.md 10.8). Neither knows what a press means -- what a button does to the pressure, and what
+a choice is a choice between, are `tatp/touchcal.py`, so the participant window stays a display
 with no protocol in it.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QGuiApplication, QPainter
+from PySide6.QtCore import QRect, Qt, QTimer, Signal
+from PySide6.QtGui import QFont, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
 
 from tatp.clock import Clock
@@ -33,10 +34,12 @@ from tatp.ui.vas import (
     BACKGROUND,
     FOREGROUND,
     QT_KEYS,
+    QUESTION_POINT_SIZE,
     QUESTION_Y_FRACTION,
     SIDE_MARGIN_FRACTION,
     VasWidget,
 )
+from tatp.units import MS_PER_S
 
 # How the window draws itself. Not study parameters (SPEC.md 4.2 lists timings, forces,
 # pressures, thresholds, rates and strings) -- the reference screenshots are what pin these
@@ -47,6 +50,27 @@ EMERGENCY_STOP_SCREEN = "emergency_stop"
 
 MESSAGE_POINT_SIZE = 26
 CUE_RADIUS_FRACTION = 0.09
+
+# The drawn response buttons (UI_PRINCIPLES.md 5.8-5.11). Sized and placed to match the remote
+# in the participant's hand: two buttons side by side, the left one on the left.
+BUTTON_CENTRE_FRACTIONS = (0.30, 0.70)
+BUTTON_WIDTH_FRACTION = 0.18
+BUTTON_HEIGHT_FRACTION = 0.18
+BUTTON_Y_FRACTION = 0.46
+BUTTON_RADIUS_PX = 16
+BUTTON_LINE_WIDTH_PX = 3
+# A stimulus playing thickens its button's outline rather than lighting it up: the emphasis says
+# "this is what you are feeling now", and anything brighter starts to read as a recommendation.
+BUTTON_EMPHASIS_WIDTH_PX = 9
+BUTTON_SYMBOL_POINT_SIZE = 52
+BUTTON_LABEL_POINT_SIZE = 20
+BUTTON_LABEL_GAP_PX = 22
+# The label may be wider than its button -- it is a phrase, the button is a symbol -- but not so
+# wide that two labels meet. The buttons' centres are 0.40 of the width apart, so this leaves a
+# gutter between them.
+BUTTON_LABEL_WIDTH_FRACTION = 0.34
+
+SIDES = ("left", "right")
 
 
 class _MessageScreen(QWidget):
@@ -100,6 +124,160 @@ class _CueScreen(QWidget):
         painter.end()
 
 
+class _ChoiceScreen(QWidget):
+    """A two-alternative choice, with the buttons drawn rather than described.
+
+    The screen renders the two large buttons of the response device carrying the symbols that
+    are physically on them, with an option label under each (UI_PRINCIPLES.md 5.8, 5.9). The
+    participant does not translate "left button: the first" into a thumb movement on every
+    trial; they press the button they can see.
+
+    **The press is the answer** (UI_PRINCIPLES.md 5.12). There is no confirm, because there is
+    nothing to adjust in a choice between two options, and so no state in which a participant
+    has chosen but not committed.
+
+    Three moments, and the protocol drives all three:
+
+    - `present()` puts the question and both buttons up, accepting nothing.
+    - `emphasise(side)` thickens one button's outline while its stimulus plays, which is what
+      ties the sensation to the button under the thumb (UI_PRINCIPLES.md 5.11). It is coincident
+      with the stimulus rather than a legend shown beforehand.
+    - `accept()` makes the next press the response.
+
+    After an accepted press the screen runs itself: the chosen button is held visibly chosen for
+    `feedback_s`, then the screen goes blank for `gap_s` and `gap_elapsed` fires. That sequence
+    is presentation, so it lives here -- but `chosen` is emitted on the press itself, not at the
+    end of it, so a protocol timing the response times the participant and not the animation.
+    """
+
+    chosen = Signal(str)  # "left" or "right"
+    gap_elapsed = Signal()
+    pressed_before_accepting = Signal()
+
+    def __init__(
+        self, choice_config: dict, responder: Responder, parent: QWidget | None = None
+    ):
+        super().__init__(parent)
+        self.responder = responder
+        self._feedback_ms = int(round(float(choice_config["feedback_s"]) * MS_PER_S))
+        self._gap_ms = int(round(float(choice_config["gap_s"]) * MS_PER_S))
+        self.question = ""
+        self.labels: dict[str, str] = {}
+        self.emphasised: str | None = None
+        self.selected: str | None = None
+        self.accepting = False
+        self.blank = False
+
+    # -- the three moments -------------------------------------------------------------
+
+    def present(self, text: dict) -> None:
+        """`text` is one entry of the `choices` block: a question and the two option labels."""
+        self.question = text["question"]
+        self.labels = {side: text[side] for side in SIDES}
+        self.emphasised = None
+        self.selected = None
+        self.accepting = False
+        self.blank = False
+        self.update()
+
+    def emphasise(self, side: str | None) -> None:
+        if side is not None and side not in SIDES:
+            raise KeyError(f"{side!r} is not a side of a two-alternative choice")
+        self.emphasised = side
+        self.update()
+
+    def accept(self) -> None:
+        self.emphasised = None
+        self.accepting = True
+        self.update()
+
+    def press(self, side: str) -> None:
+        """One response.
+
+        A press before the screen is accepting is reported rather than swallowed: trying to
+        answer before the stimuli are finished is something about the participant, and the
+        session logs it the way it logs a VAS confirm with no marker shown.
+        """
+        if not self.accepting:
+            self.pressed_before_accepting.emit()
+            return
+        self.accepting = False
+        self.selected = side
+        self.update()
+        self.chosen.emit(side)
+        QTimer.singleShot(self._feedback_ms, self._begin_gap)
+
+    def _begin_gap(self) -> None:
+        self.blank = True
+        self.update()
+        QTimer.singleShot(self._gap_ms, self.gap_elapsed.emit)
+
+    # -- drawing -----------------------------------------------------------------------
+
+    def _button_rect(self, side: str) -> QRect:
+        centre = BUTTON_CENTRE_FRACTIONS[SIDES.index(side)]
+        width = self.width() * BUTTON_WIDTH_FRACTION
+        height = self.height() * BUTTON_HEIGHT_FRACTION
+        return QRect(
+            int(self.width() * centre - width / 2),
+            int(self.height() * BUTTON_Y_FRACTION),
+            int(width),
+            int(height),
+        )
+
+    def _draw_button(self, painter: QPainter, side: str) -> None:
+        rect = self._button_rect(side)
+        action = Action.DECREASE if side == "left" else Action.INCREASE
+        pressed = self.selected == side
+
+        width = BUTTON_EMPHASIS_WIDTH_PX if self.emphasised == side else BUTTON_LINE_WIDTH_PX
+        painter.setPen(QPen(FOREGROUND, width))
+        painter.setBrush(FOREGROUND if pressed else Qt.NoBrush)
+        painter.drawRoundedRect(rect, BUTTON_RADIUS_PX, BUTTON_RADIUS_PX)
+
+        symbol_font = QFont(self.font())
+        symbol_font.setPointSize(BUTTON_SYMBOL_POINT_SIZE)
+        painter.setFont(symbol_font)
+        painter.setPen(BACKGROUND if pressed else FOREGROUND)
+        painter.drawText(rect, Qt.AlignCenter, self.responder.symbol_for(action))
+
+        label_font = QFont(self.font())
+        label_font.setPointSize(BUTTON_LABEL_POINT_SIZE)
+        painter.setFont(label_font)
+        painter.setPen(FOREGROUND)
+        label_width = int(self.width() * BUTTON_LABEL_WIDTH_FRACTION)
+        label_box = QRect(
+            rect.center().x() - label_width // 2,
+            rect.bottom() + BUTTON_LABEL_GAP_PX,
+            label_width,
+            self.height() - rect.bottom() - BUTTON_LABEL_GAP_PX,
+        )
+        painter.drawText(
+            label_box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.labels[side]
+        )
+
+    def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.fillRect(self.rect(), BACKGROUND)
+        if self.blank or not self.labels:
+            painter.end()
+            return
+
+        question_font = QFont(self.font())
+        question_font.setPointSize(QUESTION_POINT_SIZE)
+        painter.setFont(question_font)
+        painter.setPen(FOREGROUND)
+        margin = int(self.width() * SIDE_MARGIN_FRACTION)
+        top = int(self.height() * QUESTION_Y_FRACTION)
+        box = self.rect().adjusted(margin, top, -margin, 0)
+        painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.question)
+
+        for side in SIDES:
+            self._draw_button(painter, side)
+        painter.end()
+
+
 class ParticipantWindow(QWidget):
     """The participant's screen. Everything shown to a participant goes through here."""
 
@@ -110,6 +288,10 @@ class ParticipantWindow(QWidget):
     adjust_pressed = Signal(str)
     adjust_released = Signal(str)
     adjust_confirmed = Signal()
+    # The choice screen only (SPEC.md 10.8). `chosen` carries "left" or "right".
+    chosen = Signal(str)
+    choice_gap_elapsed = Signal()
+    pressed_before_accepting = Signal()
 
     def __init__(
         self,
@@ -129,15 +311,20 @@ class ParticipantWindow(QWidget):
         self.vas.confirmed.connect(self.confirmed)
         self.vas.emergency_stop.connect(self.emergency_stop)
         self.vas.pressed_without_marker.connect(self.pressed_without_marker)
+        self.choice = _ChoiceScreen(config.study1["choice"], responder)
+        self.choice.chosen.connect(self.chosen)
+        self.choice.gap_elapsed.connect(self.choice_gap_elapsed)
+        self.choice.pressed_before_accepting.connect(self.pressed_before_accepting)
 
         self.stack = QStackedWidget(self)
-        for screen in (self.message, self.cue, self.vas):
+        for screen in (self.message, self.cue, self.vas, self.choice):
             self.stack.addWidget(screen)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.stack)
 
         self._adjusting = False
+        self._choosing = False
         self.setFocusPolicy(Qt.StrongFocus)
         self.show_blank()
 
@@ -195,6 +382,25 @@ class ParticipantWindow(QWidget):
         self.message.emphasised = False
         self._show(self.message, adjusting=True)
 
+    def show_choice(self, key: str) -> None:
+        """Present `choices.<key>` with both buttons drawn, accepting nothing yet.
+
+        The protocol then calls `emphasise_choice` around each stimulus and `accept_choice`
+        when the pair is finished. Splitting them is what keeps a press during the first
+        stimulus from being read as an answer to a comparison the participant has not heard the
+        second half of.
+        """
+        self.choice.present(self.text["choices"][key])
+        self._show(self.choice, choosing=True)
+
+    def emphasise_choice(self, side: str | None) -> None:
+        """Mark the button whose stimulus is playing now; `None` clears it."""
+        self.choice.emphasise(side)
+
+    def accept_choice(self) -> None:
+        """From here the next press is the response (SPEC.md 10.8)."""
+        self.choice.accept()
+
     def show_warning_cue(self) -> None:
         self._show(self.cue)
 
@@ -203,10 +409,12 @@ class ParticipantWindow(QWidget):
         self.vas.show_scale(scale, self.text["vas"][scale])
         self._show(self.vas)
 
-    def _show(self, screen: QWidget, adjusting: bool = False) -> None:
-        # Set here rather than in the caller so that leaving the adjustment screen by any route
-        # -- including a blank shown by an emergency stop -- stops the window reading buttons.
+    def _show(self, screen: QWidget, adjusting: bool = False, choosing: bool = False) -> None:
+        # Set here rather than in the caller so that leaving either interactive screen by any
+        # route -- including a blank shown by an emergency stop -- stops the window reading
+        # buttons for it.
         self._adjusting = adjusting
+        self._choosing = choosing
         self.stack.setCurrentWidget(screen)
         # The VAS reads its own keys; every other screen leaves the window holding focus so the
         # emergency stop still works.
@@ -218,6 +426,15 @@ class ParticipantWindow(QWidget):
         action = self._action(event)
         if action is Action.EMERGENCY_STOP:
             self.emergency_stop.emit()
+        elif self._choosing and not event.isAutoRepeat():
+            # Auto-repeat cannot make a second choice: the screen stops accepting on the first
+            # press, and a held button is one press however long it is held.
+            if action is Action.DECREASE:
+                self.choice.press("left")
+            elif action is Action.INCREASE:
+                self.choice.press("right")
+            # A confirm press has nothing to confirm here (UI_PRINCIPLES.md 5.12) and is
+            # swallowed, so the play button cannot commit a choice that was never made.
         elif self._adjusting and not event.isAutoRepeat():
             # Auto-repeat is the operating system's idea of a held key. The adjustment reads the
             # hold itself, from the interval between the down and the up (SPEC.md 10.3), so a

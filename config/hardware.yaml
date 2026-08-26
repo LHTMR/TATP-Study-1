@@ -42,6 +42,19 @@ responder:
                                      # default quit binding would let a participant end the
                                      # session by confirming a rating, so escape is bound to
                                      # nothing at all (SPEC.md 10.1).
+  # WHAT IS PHYSICALLY PRINTED ON EACH BUTTON. A screen that draws a control draws the symbol
+  # the participant's thumb is resting on, at its physical arrangement (UI_PRINCIPLES.md 5.9),
+  # so relabelling the remote is a change here and nowhere else. This lives in hardware.yaml
+  # rather than in the text files because it describes the device, not the language -- the two
+  # participants' screens show the same glyph whichever language they read.
+  #
+  # NOT propagated into the approved wording: `screens.welcome`, `screens.self_start` and
+  # others spell "▶" inside their sentences, and those are S's strings to change. If the play
+  # button is relabelled, those need editing by hand (docs/NOTES.md N5.11).
+  button_symbols:
+    decrease: "‹"
+    increase: "›"
+    confirm: "▶"
 
 screens:
   # SPEC.md 20 item 9. Null means "primary screen, windowed", which is right for a

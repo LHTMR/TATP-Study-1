@@ -33,6 +33,15 @@ vas:
   hold_repeat_interval_s: 0.04
   no_response_warning_s: 60.0        # log a warning; never auto-advance (SPEC.md 8.3)
 
+choice:
+  # Two-alternative screens where the press IS the answer (SPEC.md 10.8, UI_PRINCIPLES.md
+  # 1.10, 5.12). Both are perceptual requirements rather than derived quantities -- long enough
+  # to be seen, short enough not to feel like a lag -- so they are tuned by looking at the
+  # screen during piloting, not calculated.
+  feedback_s: 0.5                    # the chosen button held visibly chosen after the press
+  gap_s: 0.5                         # blank between one trial and the next, so a participant
+                                     # can tell two presentations apart without counting
+
 pinprick:
   target_vas_pct: 40.0               # F40 is the quantity estimated
   slope_prior_vas_per_log10: 51.6    # SPEC.md 8.2 and 20 item 6: a simulated starting value,

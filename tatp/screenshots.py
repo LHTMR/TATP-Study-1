@@ -136,6 +136,8 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             _grab(window),
         )
 
+    yield from _choice_shots(window, text, language)
+
     window.show_blank()
     yield Shot(
         f"participant_{language}_blank",
@@ -160,6 +162,51 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         )
 
     yield from _vas_variant_shots(window, language)
+
+
+def _choice_shots(window: ParticipantWindow, text: dict, language: str) -> Iterator[Shot]:
+    """Every state of a drawn two-alternative choice (SPEC.md 10.8).
+
+    All four are photographed because each one is a claim the review checks: that the buttons
+    carry the device's own symbols, that emphasis is legible but not a recommendation, and that
+    a chosen button is unmistakably chosen. The blank between trials is already covered by
+    `participant_<language>_blank`, which is the same empty screen.
+    """
+    for key in sorted(text["choices"]):
+        name = f"participant_{language}_choice_{key}"
+        window.show_choice(key)
+        yield Shot(
+            f"{name}_waiting",
+            f"`choices.{key}` with both buttons drawn and neither emphasised -- the state "
+            f"before the first stimulus, {language}.",
+            _grab(window),
+        )
+
+        window.emphasise_choice("left")
+        yield Shot(
+            f"{name}_emphasis_left",
+            "The left button's outline thickened while its stimulus plays (UI_PRINCIPLES.md "
+            "5.11). It must read as `this is the one you are feeling`, never as a suggestion.",
+            _grab(window),
+        )
+
+        window.accept_choice()
+        yield Shot(
+            f"{name}_accepting",
+            "Both stimuli delivered, no emphasis, the next press is the answer. Identical to "
+            "the waiting state by design: nothing on screen may hint that a press is due.",
+            _grab(window),
+        )
+
+        window.choice.selected = "right"
+        window.choice.update()
+        yield Shot(
+            f"{name}_chosen_right",
+            "The right button shown back as chosen -- filled, its symbol reversed out. Set "
+            "directly rather than by pressing, because the press starts a timer that would "
+            "blank the screen before it could be grabbed.",
+            _grab(window),
+        )
 
 
 def _vas_variant_shots(window: ParticipantWindow, language: str) -> Iterator[Shot]:

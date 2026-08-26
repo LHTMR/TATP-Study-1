@@ -98,15 +98,28 @@ screens:
   adjust: |-
     Vänster knapp: svagare. Höger knapp: starkare.
     Tryck på ▶ när det känns rätt.
-  comparison: |-
-    Två beröringar, en i taget.
-    Vilken kändes starkast?
-    Vänster knapp: den första. Höger knapp: den andra.
-    Tryck på ▶ för att bekräfta.
   preference: |-
     Du får känna några olika sorters beröring.
     Använd de två stora knapparna för att växla mellan dem.
     Tryck på ▶ för att välja den du tycker bäst om.
+
+choices:
+  # Tvåvalsskärmar där knapparna RITAS ut och trycket i sig är svaret (SPEC.md 10.8,
+  # UI_PRINCIPLES.md 5.8-5.12). Var och en har en fråga och de två alternativens etiketter, som
+  # skrivs på de utritade knapparna -- en etikett är alltså en fras, inte en mening.
+  #
+  # Det jakande eller först nämnda alternativet ligger alltid till VÄNSTER, samma konvention som
+  # `audio_setup.still_audible`, som har samma form och bör flyttas hit när audio.py byggs
+  # (docs/NOTES.md N5.12).
+  comparison:
+    # SPEC.md 9 steg 4. Godkänd 23 aug 2026 som textskärm; det som utgått sedan dess är bara de
+    # två rader som de utritade knapparna ersätter -- "Vänster knapp: den första. Höger knapp:
+    # den andra." och "Tryck på ▶ för att bekräfta." Frågan är oförändrad.
+    question: |-
+      Två beröringar, en i taget.
+      Vilken kändes starkast?
+    left: Den första
+    right: Den andra
 
 audio_setup:
   # SPEC.md 10.7, maskeringskontrollen. Utkast 23 aug 2026 på S:s instruktion, godkänt av S

@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QPointF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
+from PySide6.QtCore import QPointF, QRect, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QWidget
 
 from tatp.clock import Clock
@@ -38,16 +38,49 @@ SIDE_MARGIN_FRACTION = 0.12
 LINE_Y_FRACTION = 0.52
 QUESTION_Y_FRACTION = 0.30
 QUESTION_POINT_SIZE = 26
+# The RSQ scales ask one framing question about a statement that is what the participant
+# actually rates (SPEC.md 10.6). The statement is therefore the larger of the two and the
+# question is set down to this, so the thing being rated is the thing that reads first
+# (UI_PRINCIPLES.md 5.3). Scales with no statement keep the question at QUESTION_POINT_SIZE.
+INTRODUCTION_POINT_SIZE = 17
+STATEMENT_GAP_PX = 26
+# Clear space below the whole text block. The line cannot move down to make room -- it sits at
+# LINE_Y_FRACTION on every scale (UI_PRINCIPLES.md 1.6) -- so this is checked rather than
+# applied: a text block that reaches into it needs shorter wording or a smaller size, and
+# `heading_clearance` is where that is caught.
+TEXT_TO_LINE_GAP_PX = 48
 ANCHOR_POINT_SIZE = 18
 ANCHOR_GAP_PX = 18
 ANCHOR_LABEL_GAP_PX = 16  # clear space required between two anchor labels sharing a row
-ANCHOR_TICK_WIDTH_PX = 2
 TICK_LABEL_GAP_PX = 6
-# An unstacked anchor gets a short stub: its label is directly beneath it, so nothing more is
-# needed to tie the two together. Drawing every tick down to the label row instead made the end
-# anchors read as a bracket enclosing the end label -- which the rendered screens showed and
-# the code did not.
-TICK_STUB_PX = 8
+
+
+@dataclass(frozen=True)
+class TickStyle:
+    """How an anchor tick crosses the line (UI_PRINCIPLES.md 1.4).
+
+    A tick straddles the line rather than hanging beneath it: one that only descends reads as a
+    bracket around the label under it and competes with the label rows instead of belonging to
+    the line. It is subordinate to the line -- `width_px` is thinner than `LINE_WIDTH_PX`,
+    because the line is the scale and the tick is an annotation on it.
+
+    **This is a variant mechanism awaiting one decision and nothing more.** The straddle is
+    settled; how far it rises and how heavy it is are a judgement about the rendered pixels, so
+    `tools/tick_variants.py` renders the three for S to choose between. When S chooses, collapse
+    this to plain constants -- a widget attribute nobody sets is a config option nothing reads.
+    """
+
+    rise_px: int  # above the line
+    drop_px: int  # below the line, when the label sits directly underneath
+    width_px: int
+
+
+TICK_STYLES = {
+    "shallow": TickStyle(rise_px=4, drop_px=8, width_px=1),
+    "even": TickStyle(rise_px=6, drop_px=8, width_px=1),
+    "tall": TickStyle(rise_px=8, drop_px=10, width_px=2),
+}
+DEFAULT_TICK_STYLE = "even"
 
 # Key names as `config/hardware.yaml` writes them. A configured key that is not here is a
 # startup error rather than a key that silently does nothing.
@@ -169,6 +202,7 @@ class VasWidget(QWidget):
 
         self.state = VasState(vas_config, clock)
         self.responder = responder
+        self.tick_style = TICK_STYLES[DEFAULT_TICK_STYLE]
         self.scale = ""
         self.question = ""
         self.statement = ""
@@ -292,40 +326,92 @@ class VasWidget(QWidget):
             placed.append((label, left, row, centre))
         return placed
 
+    def _draw_heading(self, painter: QPainter | None, line_y: float) -> float:
+        """Lay the heading out, and draw it if a painter is given.
+
+        Where a scale carries a statement, that statement is what is being rated and the
+        question only frames it, so the question is set smaller and the statement takes the
+        question size (UI_PRINCIPLES.md 5.3). Both are top-aligned from the same fraction as
+        every message screen, so the first line a participant reads never moves.
+
+        Returns the y the block ends at, which is what `heading_clearance` measures against the
+        line. Measuring and drawing are the same code deliberately: a clearance computed by a
+        second implementation would be a check on that implementation, not on the screen.
+        """
+        top = float(self.height() * QUESTION_Y_FRACTION)
+        margin = int(self.width() * SIDE_MARGIN_FRACTION)
+        flags = Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap
+        width = self.width() - 2 * margin
+
+        y = top
+        for index, (text, point_size) in enumerate(self.heading_blocks()):
+            font = QFont(self.font())
+            font.setPointSize(point_size)
+            box = QRect(margin, int(y), width, int(line_y - y))
+            drawn = QFontMetrics(font).boundingRect(box, flags, text)
+            if painter is not None:
+                painter.setFont(font)
+                painter.drawText(box, flags, text)
+            y = drawn.bottom() + (STATEMENT_GAP_PX if index == 0 else 0)
+        return y
+
+    def heading_blocks(self) -> list[tuple[str, int]]:
+        """The heading as text and point size, largest last where there are two."""
+        if not self.statement:
+            return [(self.question, QUESTION_POINT_SIZE)]
+        return [
+            (self.question, INTRODUCTION_POINT_SIZE),
+            (self.statement, QUESTION_POINT_SIZE),
+        ]
+
+    def heading_clearance(self) -> float:
+        """Pixels between the bottom of the text and the line.
+
+        The line cannot be pushed down to make room -- it sits at LINE_Y_FRACTION on every scale
+        (UI_PRINCIPLES.md 1.6) -- so a heading that crowds it needs shorter wording or a smaller
+        size. `tests/test_vas.py` holds this to TEXT_TO_LINE_GAP_PX for every scale in both
+        languages, at the lab window size. It is a test rather than an assertion in `paintEvent`
+        because Qt prints an exception raised inside a paint handler and carries on, which would
+        make a failing layout a line of stderr nobody reads.
+        """
+        line_y = self.height() * LINE_Y_FRACTION
+        return line_y - self._draw_heading(None, line_y)
+
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.fillRect(self.rect(), BACKGROUND)
-        painter.setPen(QPen(FOREGROUND, LINE_WIDTH_PX))
-
-        question_font = QFont(self.font())
-        question_font.setPointSize(QUESTION_POINT_SIZE)
-        painter.setFont(question_font)
-        top = int(self.height() * QUESTION_Y_FRACTION)
-        margin = int(self.width() * SIDE_MARGIN_FRACTION)
-        box = self.rect().adjusted(margin, top, -margin, 0)
-        heading = self.question
-        if self.statement:
-            heading = f"{self.question}\n\n{self.statement}"
-        painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, heading)
+        painter.setPen(FOREGROUND)
 
         line_y = self.height() * LINE_Y_FRACTION
+        self._draw_heading(painter, line_y)
+
+        painter.setPen(QPen(FOREGROUND, LINE_WIDTH_PX))
         painter.drawLine(
             int(self._x_for(MIN_PCT)), int(line_y), int(self._x_for(MAX_PCT)), int(line_y)
         )
 
         # A tick at every labelled anchor and nowhere else, and no numbers anywhere
-        # (SPEC.md 10.2). The tick runs from the line down to its own label's row, so it is
-        # also the leader that ties a stacked label to its percentage.
+        # (SPEC.md 10.2). It straddles the line, and below it runs down to its own label's row,
+        # so it is also the leader that ties a stacked label to its percentage.
+        style = self.tick_style
+        # The marker's tip sits MARKER_GAP_PX above the line, so a tick rising into that gap
+        # would be touched by the marker whenever a response lands on an anchor.
+        assert style.rise_px < MARKER_GAP_PX, (
+            f"a tick rising {style.rise_px} px reaches the marker, which sits "
+            f"{MARKER_GAP_PX} px above the line"
+        )
         anchor_font = QFont(self.font())
         anchor_font.setPointSize(ANCHOR_POINT_SIZE)
         painter.setFont(anchor_font)
         metrics = painter.fontMetrics()
         for label, left, row, tick_x in self._anchor_layout(metrics):
             tick_bottom = line_y + ANCHOR_GAP_PX + row * metrics.height()
-            painter.setPen(QPen(FOREGROUND, ANCHOR_TICK_WIDTH_PX))
-            drawn_to = tick_bottom if row else line_y + TICK_STUB_PX
-            painter.drawLine(int(tick_x), int(line_y), int(tick_x), int(drawn_to))
+            painter.setPen(QPen(FOREGROUND, style.width_px))
+            drawn_to = tick_bottom if row else line_y + style.drop_px
+            painter.drawLine(
+                int(tick_x), int(line_y - style.rise_px), int(tick_x), int(drawn_to)
+            )
             baseline = tick_bottom + TICK_LABEL_GAP_PX + metrics.ascent()
             painter.drawText(int(left), int(baseline), label)
 

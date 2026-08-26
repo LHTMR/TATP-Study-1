@@ -349,6 +349,16 @@ One row per estimation run — the fitted rating function and the targets read o
 
 One row per equalisation comparison, including catch trials (§9 step 4).
 
+The judgement is a **direct press on a drawn button** (§10.8): the press is the response, so
+there is no confirm event to record and no revised choice to distinguish from a final one. A
+press made before both stimuli have been delivered is not a response and produces no row — it
+goes to the `log`.
+
+**`equal` has no route through the interface and never had one.** The screen offers two buttons
+and the wording asks which felt stronger. It is left in the column's domain rather than deleted
+because removing a value is S's call, not the UI's — but nothing can currently write it, so an
+analysis that expects ties will not find them (`docs/NOTES.md` N5.13).
+
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|
 | timestamp_iso | iso8601 | - | yes | Wall clock at the first stimulus of the pair |

@@ -7,7 +7,7 @@ fresh session should need nothing from any previous conversation.
 hardware limits. **`docs/NOTES.md`** holds what is merely logged: deviations from Bilaga 1,
 pilot-protocol checks, analysis-plan questions, process. Keep all three updated together.
 
-**Last updated:** 26 August 2026, session 11.
+**Last updated:** 26 August 2026, session 12.
 **Milestone:** 2 (the checks) — *in progress. The literals and blinding checks and the
 screenshot comparison are in the gate; the end-to-end validator is what remains.*
 **Branch:** `ui-review`, not yet merged.
@@ -25,9 +25,43 @@ scale, the experimenter screen has a reserved banner region, a real reading orde
 palette and a distinguished disconnected state, and the participant message screens no longer
 move between rating cycles. `docs/NOTES.md` §5 has the findings. 272 tests.
 
+**Session 12 built all three items queued from that review**, on the same branch. The gate runs
+again — the `~/Documents` access the Mac revoked in session 11 has been restored, and `make
+check` passes at 309 tests, 66 screens.
+
+1. **The comparison screen is now a direct-press choice.** `_ChoiceScreen` in
+   `tatp/ui/participant.py`: the two large buttons drawn carrying the glyphs printed on the
+   remote, one emphasised while its own stimulus plays, the press itself the response, the
+   chosen button shown back for `choice.feedback_s` and a blank of `choice.gap_s` between
+   trials. `SPEC.md` §10.8 is new and is the requirement; §9 step 4, §10.1 and
+   `DATA_SCHEMA.md`'s `touchcal_compare` changed with it. `screens.comparison` became
+   `choices.comparison` — the question is S's approved wording unchanged, and what went is
+   exactly the two lines the drawn buttons replace.
+2. **The VAS ticks straddle the line.** Three variants for S to choose between: `make ticks`
+   writes six images to `screenshots/tick_variants/`. **This is the one thing waiting on S in
+   this session's work** — see below.
+3. **Alertness and relaxation** set the question smaller than the statement it introduces, and
+   `heading_clearance()` holds every scale in both languages clear of the line by
+   `TEXT_TO_LINE_GAP_PX`. That check is a test rather than an assertion in `paintEvent`,
+   because Qt prints an exception raised inside a paint handler and carries on.
+
+**Waiting on S, and not blocking anything:** which of the three tick styles. `make ticks`, then
+look at `screenshots/tick_variants/`. `even` is the default meanwhile. When S chooses, fold the
+numbers into `tatp/ui/vas.py` as constants and delete `TickStyle`, `TICK_STYLES`,
+`tools/tick_variants.py` and the `ticks` target — a variant mechanism outliving its decision is
+a config option nothing reads. It is not a `FOR_S.md` row: nothing stops until it is answered.
+
 **The reference screenshots are still unapproved** — none ever were, so `make shots` compares
 nothing. `make shots ARGS="--approve-all"` is S's call once the new screens are accepted, and
-until then the screenshot leg of `make check` is not actually guarding anything.
+until then the screenshot leg of `make check` is not actually guarding anything. **Do not
+approve them before the tick style is chosen**, or every VAS reference is frozen at a geometry
+that is about to change.
+
+**`_ChoiceScreen` has no protocol calling it yet.** The equalisation comparison of `SPEC.md` §9
+step 4 is Milestone 3; `touchcal_compare` was already a specified table with no writer. The
+screen is driven by tests and by the screenshot catalogue, not by a session — so the first thing
+Milestone 3 should do with it is drive it from `touchcal.py` and confirm the three-call
+sequence (`show_choice`, `emphasise_choice`, `accept_choice`) is the right shape in use.
 
 **Session 10** built the three checks SPEC.md 17.2 and 17.4 name and nothing else did:
 `tools/lint_literals.py`, `tests/test_blinding_text.py` against the new `config/blinding.yaml`,
@@ -168,7 +202,7 @@ function. Do not "fix" anything in the repository for this.
 | `tatp/responder.py` | **New.** R400 key mapping, with the `escape` rule machine-checked |
 | `tatp/ui/vas.py` | **New.** `VasState` (no Qt, all the behaviour) and `VasWidget` |
 | `tatp/session.py` | Session state, all 40 provenance keys, the log, blinding |
-| `tatp/ui/participant.py` | **New.** Three screens — text, warning cue, VAS — plus screen placement |
+| `tatp/ui/participant.py` | **New.** Four screens — text, warning cue, VAS, drawn choice — plus screen placement |
 | `tatp/ui/experimenter.py` | **New.** Banners, identity, phase, elapsed, garment state, open items, instruction |
 | `tatp/pinprick.py` | **New.** One application end to end. Search/bracket/estimate is Milestone 3 |
 | `tatp/touchcal.py` | **New.** The accelerating control, one anchor adjustment, one touch rating |
@@ -180,9 +214,10 @@ function. Do not "fix" anything in the repository for this.
 | `tatp/units.py` | **New.** `MS_PER_S` and `S_PER_MIN`. Conversions only, never config |
 | `tools/lint_literals.py` | **New.** SPEC.md 4.2, over the AST. `make literals` prints the inventory |
 | `tools/shots.py` | **New.** Entry point for the screenshot run; sets the offscreen platform |
+| `tools/tick_variants.py` | **New, and temporary.** `make ticks`. Delete with `TickStyle` once S picks one |
 | `config/blinding.yaml` | **New.** The forbidden terms of SPEC.md 16, reviewable by S |
-| `Makefile` | `check`, `test`, `test-one`, `lint`, `literals`, `shots`, `preview` |
-| `tests/` | 263 tests, all passing headless |
+| `Makefile` | `check`, `test`, `test-one`, `lint`, `literals`, `shots`, `ticks`, `preview` |
+| `tests/` | 309 tests, all passing headless |
 
 ## What does not exist yet
 
