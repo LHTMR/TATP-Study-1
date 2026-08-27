@@ -354,10 +354,13 @@ there is no confirm event to record and no revised choice to distinguish from a 
 press made before both stimuli have been delivered is not a response and produces no row — it
 goes to the `log`.
 
-**`equal` has no route through the interface and never had one.** The screen offers two buttons
-and the wording asks which felt stronger. It is left in the column's domain rather than deleted
-because removing a value is S's call, not the UI's — but nothing can currently write it, so an
-analysis that expects ties will not find them (`docs/NOTES.md` N5.13).
+**`equal` was dropped from the domain on 26 Aug 2026** (S). It had no route through the
+interface and never had one — the screen offers two buttons and the wording asks which felt
+stronger — and the equalisation design is a **forced choice between two** throughout: the
+comparison document sizes the check as a 2AFC, where a tie is not a response category but a
+missing one. `judgement` stays optional rather than becoming required, because the equalisation
+procedure does not exist yet and Milestone 3 may need a row for a trial that was abandoned; that
+is a different thing from a tie and should not be settled in advance (`docs/NOTES.md` N5.13).
 
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|
@@ -371,7 +374,7 @@ analysis that expects ties will not find them (`docs/NOTES.md` N5.13).
 | test_pressure_kpa | float | kPa | yes | Commanded on the test channel; 0 on a catch trial |
 | reference_pressure_kpa | float | kPa | yes | Commanded on the reference |
 | catch_trial | bool | - | yes | Zero-pressure catch trial (§9) |
-| judgement | str | - | no | `test_stronger`, `reference_stronger` or `equal` |
+| judgement | str | - | no | `test_stronger` or `reference_stronger`. A forced choice between two (§10.8) |
 | felt | bool | - | no | Catch trials only: whether anything was reported felt |
 | readjusted | bool | - | yes | Whether a re-adjustment was prompted and run |
 | valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4) |
