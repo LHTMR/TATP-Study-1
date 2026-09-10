@@ -21,7 +21,7 @@ CONDA ?= conda
 
 CONDA_RUN := $(CONDA) run --no-capture-output -n tatp-study-1
 
-.PHONY: check test test-one lint literals shots ticks preview ethics
+.PHONY: check test test-one lint literals shots layouts preview ethics
 
 check: test lint shots
 	@echo
@@ -56,11 +56,10 @@ literals:
 shots:
 	$(CONDA_RUN) python tools/shots.py $(ARGS)
 
-# The three candidate VAS tick styles, side by side, for S to choose between
-# (UI_PRINCIPLES.md 1.4). Temporary: delete this target with tools/tick_variants.py once the
-# chosen numbers are constants in tatp/ui/vas.py.
-ticks:
-	$(CONDA_RUN) python tools/tick_variants.py
+# Every VAS scale in each anchor layout -- the study's, and the alternative S keeps to show
+# colleagues. Writes to screenshots/vas_layouts/, which is not compared against anything.
+layouts:
+	$(CONDA_RUN) python tools/vas_layouts.py
 
 # The ethics folder reader (.claude/skills/ethics-folder). Read-only, and nothing it prints is
 # written anywhere. A target rather than a bare command because the folder lives outside the

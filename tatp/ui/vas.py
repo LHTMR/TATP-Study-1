@@ -44,43 +44,57 @@ QUESTION_POINT_SIZE = 26
 # (UI_PRINCIPLES.md 5.3). Scales with no statement keep the question at QUESTION_POINT_SIZE.
 INTRODUCTION_POINT_SIZE = 17
 STATEMENT_GAP_PX = 26
-# Clear space below the whole text block. The line cannot move down to make room -- it sits at
+# Clear space between the text block and the highest thing the scale draws -- a label above the
+# line, or the marker's top. The line cannot move down to make room -- it sits at
 # LINE_Y_FRACTION on every scale (UI_PRINCIPLES.md 1.6) -- so this is checked rather than
 # applied: a text block that reaches into it needs shorter wording or a smaller size, and
 # `heading_clearance` is where that is caught.
-TEXT_TO_LINE_GAP_PX = 48
+TEXT_TO_SCALE_GAP_PX = 24
 ANCHOR_POINT_SIZE = 18
 ANCHOR_GAP_PX = 18
 ANCHOR_LABEL_GAP_PX = 16  # clear space required between two anchor labels sharing a row
 TICK_LABEL_GAP_PX = 6
 
 
+# The anchor tick (UI_PRINCIPLES.md 1.4). It straddles the line rather than hanging below it --
+# one that only descends reads as a bracket around the label under it -- and it is thinner than
+# the line, because the line is the scale and the tick annotates it. The tallest of three
+# rendered candidates, chosen by S on 10 Sep 2026. It stays below the marker's tip
+# (MARKER_GAP_PX), so a rating landing on an anchor never touches its tick.
+TICK_RISE_PX = 8
+TICK_DROP_PX = 10
+TICK_WIDTH_PX = 2
+
+
 @dataclass(frozen=True)
-class TickStyle:
-    """How an anchor tick crosses the line (UI_PRINCIPLES.md 1.4).
+class AnchorLayout:
+    """Where the anchor labels go.
 
-    A tick straddles the line rather than hanging beneath it: one that only descends reads as a
-    bracket around the label under it and competes with the label rows instead of belonging to
-    the line. It is subordinate to the line -- `width_px` is thinner than `LINE_WIDTH_PX`,
-    because the line is the scale and the tick is an annotation on it.
+    `interior_above` is the study's layout (S, 10 Sep 2026) and the only one a session uses.
+    End labels sit centred on their ends, below the line, on the row nearest it. Interior
+    anchors -- 10 % and 90 % -- sit above the line, raised clear of the marker's whole height so
+    a rating near an anchor can never cover its name, with the tick run up to them as a leader.
 
-    **This is a variant mechanism awaiting one decision and nothing more.** The straddle is
-    settled; how far it rises and how heavy it is are a judgement about the rendered pixels, so
-    `tools/tick_variants.py` renders the three for S to choose between. When S chooses, collapse
-    this to plain constants -- a widget attribute nobody sets is a config option nothing reads.
+    `ends_outside` is kept so S can show colleagues the alternative, and is rendered only by
+    `make layouts`. Every label is below the line, and each end label hangs outwards so only
+    `end_inside_fraction` of it sits inside the line -- which needs a shorter line, or the long
+    Swedish end labels run into the screen edge.
     """
 
-    rise_px: int  # above the line
-    drop_px: int  # below the line, when the label sits directly underneath
-    width_px: int
+    line_margin_fraction: float
+    interior_above: bool
+    end_inside_fraction: float | None  # None centres an end label on its end
 
 
-TICK_STYLES = {
-    "shallow": TickStyle(rise_px=4, drop_px=8, width_px=1),
-    "even": TickStyle(rise_px=6, drop_px=8, width_px=1),
-    "tall": TickStyle(rise_px=8, drop_px=10, width_px=2),
+LAYOUTS = {
+    "interior_above": AnchorLayout(
+        line_margin_fraction=SIDE_MARGIN_FRACTION, interior_above=True, end_inside_fraction=None
+    ),
+    "ends_outside": AnchorLayout(
+        line_margin_fraction=0.16, interior_above=False, end_inside_fraction=0.15
+    ),
 }
-DEFAULT_TICK_STYLE = "even"
+STUDY_LAYOUT = "interior_above"
 
 # Key names as `config/hardware.yaml` writes them. A configured key that is not here is a
 # startup error rather than a key that silently does nothing.
@@ -202,7 +216,7 @@ class VasWidget(QWidget):
 
         self.state = VasState(vas_config, clock)
         self.responder = responder
-        self.tick_style = TICK_STYLES[DEFAULT_TICK_STYLE]
+        self.layout = LAYOUTS[STUDY_LAYOUT]
         self.scale = ""
         self.question = ""
         self.statement = ""
@@ -282,49 +296,79 @@ class VasWidget(QWidget):
     # -- drawing -----------------------------------------------------------------------
 
     def _x_for(self, percent: float) -> float:
-        margin = self.width() * SIDE_MARGIN_FRACTION
+        margin = self.width() * self.layout.line_margin_fraction
         return margin + (self.width() - 2 * margin) * percent / MAX_PCT
 
+    def _anchor_font(self) -> QFont:
+        font = QFont(self.font())
+        font.setPointSize(ANCHOR_POINT_SIZE)
+        return font
+
     def _anchor_layout(self, metrics) -> list[tuple[str, float, int, float]]:
-        """Each anchor label as (text, left edge, row, tick x), stacking labels that collide.
+        """Each anchor label as (text, left edge, row, tick x).
 
-        A label is centred under its own percentage, which is the whole point of an anchor --
-        moving it sideways to make room would put "just noticeable" somewhere other than 10 %.
-        So when two labels overlap, the second one drops to a row underneath instead.
+        Rows count outwards from the line: 0, 1, 2 below it, -1, -2 above. **The two end labels
+        always share row 0**, the one nearest the line, so the extremes of the scale read as a
+        pair at the same height (S, 10 Sep 2026). Interior anchors never take row 0: they go to
+        row -1 in the study layout and row 1 in the alternative, and move further out only if
+        they collide with a label already on that row.
 
-        This is not a hypothetical. The `intensity` scale anchors 0/10/90/100 % and the
-        `pain` scale anchors 0/10 %, and at those spacings the Swedish labels overlap into
-        illegibility at every window size the lab will use -- which the SPEC.md 17.4
-        screenshots are what found.
+        A label is never moved sideways to make room -- that would put "just noticeable"
+        somewhere other than 10 %. The labels on the `intensity` and `pain` scales do collide
+        at every window size the lab will use, which the SPEC.md 17.4 screenshots found.
 
-        **The tick x is what makes stacking safe, and is why this returns it.** A row on its
-        own relabels the scale: with the labels alone, English `intensity` row 0 reads "no
-        sensation at all ... just uncomfortable", which is a complete scale with the wrong top
-        anchor. `paintEvent` draws a tick from the line down to each label's own row, so a
-        label is tied to its percentage however far it has been clamped or dropped
+        **The tick x is what makes a label off row 0 safe, and is why this returns it.** A row
+        of labels on its own relabels the scale -- English `intensity` would read "no sensation
+        at all ... just uncomfortable", a complete scale with the wrong top anchor. `paintEvent`
+        runs every tick to its own label's row, so each label is tied to its percentage
         (UI_PRINCIPLES.md 1.3).
         """
         placed: list[tuple[str, float, int, float]] = []
-        row_right_edges: list[float] = []
+        right_edges: dict[int, float] = {}
+        inside = self.layout.end_inside_fraction
         for anchor in sorted(self.anchors, key=lambda a: float(a["pct"])):
             label = str(anchor["label"])
             width = metrics.horizontalAdvance(label)
-            centre = self._x_for(float(anchor["pct"]))
+            pct = float(anchor["pct"])
+            centre = self._x_for(pct)
+            left = centre - width / 2
+            if inside is not None and pct == MIN_PCT:
+                left = centre - (1 - inside) * width
+            elif inside is not None and pct == MAX_PCT:
+                left = centre - inside * width
             # Clamped so an end label stays on screen; the ends are where clamping bites.
-            left = min(max(centre - width / 2, 0.0), float(self.width() - width))
-            row = next(
-                (
-                    index
-                    for index, edge in enumerate(row_right_edges)
-                    if left >= edge + ANCHOR_LABEL_GAP_PX
-                ),
-                len(row_right_edges),
-            )
-            if row == len(row_right_edges):
-                row_right_edges.append(0.0)
-            row_right_edges[row] = left + width
+            left = min(max(left, 0.0), float(self.width() - width))
+
+            if pct in (MIN_PCT, MAX_PCT):
+                row, step = 0, 1
+            elif self.layout.interior_above:
+                row, step = -1, -1
+            else:
+                row, step = 1, 1
+            while left < right_edges.get(row, float("-inf")) + ANCHOR_LABEL_GAP_PX:
+                row += step
+            right_edges[row] = left + width
             placed.append((label, left, row, centre))
         return placed
+
+    def _label_geometry(self, row: int, metrics, line_y: float) -> tuple[float, float]:
+        """The baseline of a label on `row`, and the y its tick runs to.
+
+        Above the line, row -1 sits clear of the marker's whole height (MARKER_GAP_PX plus
+        MARKER_HEIGHT_PX), so the marker can never cover an interior anchor's name.
+        """
+        if row < 0:
+            bottom = (
+                line_y
+                - MARKER_GAP_PX
+                - MARKER_HEIGHT_PX
+                - 2 * TICK_LABEL_GAP_PX
+                + (row + 1) * metrics.height()
+            )
+            return bottom - metrics.descent(), bottom + TICK_LABEL_GAP_PX
+        top = line_y + ANCHOR_GAP_PX + row * metrics.height()
+        tick_end = top if row else line_y + TICK_DROP_PX
+        return top + TICK_LABEL_GAP_PX + metrics.ascent(), tick_end
 
     def _draw_heading(self, painter: QPainter | None, line_y: float) -> float:
         """Lay the heading out, and draw it if a painter is given.
@@ -365,17 +409,25 @@ class VasWidget(QWidget):
         ]
 
     def heading_clearance(self) -> float:
-        """Pixels between the bottom of the text and the line.
+        """Pixels between the bottom of the text and the highest thing the scale draws.
 
-        The line cannot be pushed down to make room -- it sits at LINE_Y_FRACTION on every scale
-        (UI_PRINCIPLES.md 1.6) -- so a heading that crowds it needs shorter wording or a smaller
-        size. `tests/test_vas.py` holds this to TEXT_TO_LINE_GAP_PX for every scale in both
-        languages, at the lab window size. It is a test rather than an assertion in `paintEvent`
-        because Qt prints an exception raised inside a paint handler and carries on, which would
-        make a failing layout a line of stderr nobody reads.
+        That is an interior label above the line where there is one, otherwise the top of the
+        marker, which can appear anywhere along the line. The line cannot be pushed down to make
+        room -- it sits at LINE_Y_FRACTION on every scale (UI_PRINCIPLES.md 1.6) -- so a heading
+        that crowds the scale needs shorter wording or a smaller size. `tests/test_vas.py` holds
+        this to TEXT_TO_SCALE_GAP_PX for every scale in both languages, at the lab window size.
+        It is a test rather than an assertion in `paintEvent` because Qt prints an exception
+        raised inside a paint handler and carries on, which would make a failing layout a line
+        of stderr nobody reads.
         """
         line_y = self.height() * LINE_Y_FRACTION
-        return line_y - self._draw_heading(None, line_y)
+        metrics = QFontMetrics(self._anchor_font())
+        tops = [line_y - MARKER_GAP_PX - MARKER_HEIGHT_PX]
+        for _, _, row, _ in self._anchor_layout(metrics):
+            if row < 0:
+                baseline, _ = self._label_geometry(row, metrics, line_y)
+                tops.append(baseline - metrics.ascent())
+        return min(tops) - self._draw_heading(None, line_y)
 
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
@@ -392,27 +444,16 @@ class VasWidget(QWidget):
         )
 
         # A tick at every labelled anchor and nowhere else, and no numbers anywhere
-        # (SPEC.md 10.2). It straddles the line, and below it runs down to its own label's row,
-        # so it is also the leader that ties a stacked label to its percentage.
-        style = self.tick_style
-        # The marker's tip sits MARKER_GAP_PX above the line, so a tick rising into that gap
-        # would be touched by the marker whenever a response lands on an anchor.
-        assert style.rise_px < MARKER_GAP_PX, (
-            f"a tick rising {style.rise_px} px reaches the marker, which sits "
-            f"{MARKER_GAP_PX} px above the line"
-        )
-        anchor_font = QFont(self.font())
-        anchor_font.setPointSize(ANCHOR_POINT_SIZE)
+        # (SPEC.md 10.2). It straddles the line and runs on to its own label's row, so it is
+        # also the leader tying a label off row 0 to its percentage.
+        anchor_font = self._anchor_font()
         painter.setFont(anchor_font)
-        metrics = painter.fontMetrics()
+        painter.setPen(QPen(FOREGROUND, TICK_WIDTH_PX))
+        metrics = QFontMetrics(anchor_font)
         for label, left, row, tick_x in self._anchor_layout(metrics):
-            tick_bottom = line_y + ANCHOR_GAP_PX + row * metrics.height()
-            painter.setPen(QPen(FOREGROUND, style.width_px))
-            drawn_to = tick_bottom if row else line_y + style.drop_px
-            painter.drawLine(
-                int(tick_x), int(line_y - style.rise_px), int(tick_x), int(drawn_to)
-            )
-            baseline = tick_bottom + TICK_LABEL_GAP_PX + metrics.ascent()
+            baseline, tick_end = self._label_geometry(row, metrics, line_y)
+            tick_start = line_y + TICK_DROP_PX if row < 0 else line_y - TICK_RISE_PX
+            painter.drawLine(int(tick_x), int(tick_start), int(tick_x), int(tick_end))
             painter.drawText(int(left), int(baseline), label)
 
         if self.state.visible:

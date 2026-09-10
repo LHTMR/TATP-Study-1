@@ -38,6 +38,15 @@ participants are meant to use, so the pull is wanted. It is still a property of 
 outcome's distribution, logged in `docs/NOTES.md`, and it is the reason no tick is ever added
 anywhere else on the line.
 
+1.4b **The end labels sit together on the row nearest the line; interior anchors sit above
+it, clear of the marker** (S, 10 Sep 2026). The extremes of a scale read as a pair when they
+share a height. An interior label above the line must clear the marker's whole height, because
+the marker is drawn above the line wherever the rating is, and 10 % and 90 % are exactly where
+participants are trained to aim — a label in the marker's band is hidden at the moment it is
+needed. Its tick runs up to it as the leader of 1.3. The alternative — every label below, end
+labels hanging outwards on a shorter line — is kept renderable (`make layouts`) for discussion
+and is never used in a session.
+
 1.5 The line is straight, unbroken and of uniform weight along its whole length. Participants are
 trained that twice as far along means twice as much (Bilaga 1 §3.6.1, after Price et al. 1983);
 any visual feature that makes one region of the line look different from another breaks that

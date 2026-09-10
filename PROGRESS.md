@@ -37,25 +37,20 @@ check` passes at 309 tests, 66 screens.
    `DATA_SCHEMA.md`'s `touchcal_compare` changed with it. `screens.comparison` became
    `choices.comparison` — the question is S's approved wording unchanged, and what went is
    exactly the two lines the drawn buttons replace.
-2. **The VAS ticks straddle the line.** Three variants for S to choose between: `make ticks`
-   writes six images to `screenshots/tick_variants/`. **This is the one thing waiting on S in
-   this session's work** — see below.
+2. **The VAS ticks straddle the line**, and the anchor layout is settled (S, 10 Sep 2026): the
+   tall tick, end labels together on the row nearest the line, interior anchors above it and
+   clear of the marker. `AnchorLayout` in `tatp/ui/vas.py` holds the study layout and one
+   alternative S keeps for colleagues; `make layouts` renders both to
+   `screenshots/vas_layouts/`. `docs/NOTES.md` N5.15 has the history.
 3. **Alertness and relaxation** set the question smaller than the statement it introduces, and
-   `heading_clearance()` holds every scale in both languages clear of the line by
-   `TEXT_TO_LINE_GAP_PX`. That check is a test rather than an assertion in `paintEvent`,
+   `heading_clearance()` holds every scale in both languages clear of the highest thing the
+   scale draws by `TEXT_TO_SCALE_GAP_PX`. That check is a test rather than an assertion in `paintEvent`,
    because Qt prints an exception raised inside a paint handler and carries on.
-
-**Waiting on S, and not blocking anything:** which of the three tick styles. `make ticks`, then
-look at `screenshots/tick_variants/`. `even` is the default meanwhile. When S chooses, fold the
-numbers into `tatp/ui/vas.py` as constants and delete `TickStyle`, `TICK_STYLES`,
-`tools/tick_variants.py` and the `ticks` target — a variant mechanism outliving its decision is
-a config option nothing reads. It is not a `FOR_S.md` row: nothing stops until it is answered.
 
 **The reference screenshots are still unapproved** — none ever were, so `make shots` compares
 nothing. `make shots ARGS="--approve-all"` is S's call once the new screens are accepted, and
-until then the screenshot leg of `make check` is not actually guarding anything. **Do not
-approve them before the tick style is chosen**, or every VAS reference is frozen at a geometry
-that is about to change.
+until then the screenshot leg of `make check` is not actually guarding anything. The VAS layout is now
+settled, so nothing in this session's work stands in the way of approving them.
 
 **New and specified, not built: the emergency stop rehearsal** (`SPEC.md` §10.9, S's decision
 26 Aug 2026). The participant presses `f5` once per session with the garment running, on the
@@ -223,10 +218,10 @@ function. Do not "fix" anything in the repository for this.
 | `tatp/units.py` | **New.** `MS_PER_S` and `S_PER_MIN`. Conversions only, never config |
 | `tools/lint_literals.py` | **New.** SPEC.md 4.2, over the AST. `make literals` prints the inventory |
 | `tools/shots.py` | **New.** Entry point for the screenshot run; sets the offscreen platform |
-| `tools/tick_variants.py` | **New, and temporary.** `make ticks`. Delete with `TickStyle` once S picks one |
+| `tools/vas_layouts.py` | **New.** `make layouts`. Every scale in the study layout and the kept alternative |
 | `config/blinding.yaml` | **New.** The forbidden terms of SPEC.md 16, reviewable by S |
-| `Makefile` | `check`, `test`, `test-one`, `lint`, `literals`, `shots`, `ticks`, `preview` |
-| `tests/` | 309 tests, all passing headless |
+| `Makefile` | `check`, `test`, `test-one`, `lint`, `literals`, `shots`, `layouts`, `preview` |
+| `tests/` | 347 tests, all passing headless |
 
 ## What does not exist yet
 

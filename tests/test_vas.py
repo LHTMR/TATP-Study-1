@@ -8,22 +8,27 @@ from __future__ import annotations
 
 import pytest
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtGui import QFontMetrics, QKeyEvent
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
 from tatp.clock import Clock
 from tatp.responder import Action, Responder
+from tatp.ui import vas as vas_module
 from tatp.ui.vas import (
     ANCHOR_POINT_SIZE,
     INTRODUCTION_POINT_SIZE,
+    LAYOUTS,
     LINE_WIDTH_PX,
     LINE_Y_FRACTION,
     MARKER_GAP_PX,
+    MARKER_HEIGHT_PX,
     QT_KEYS,
     QUESTION_POINT_SIZE,
-    TEXT_TO_LINE_GAP_PX,
-    TICK_STYLES,
+    STUDY_LAYOUT,
+    TEXT_TO_SCALE_GAP_PX,
+    TICK_RISE_PX,
+    TICK_WIDTH_PX,
     VasState,
     VasWidget,
 )
@@ -262,52 +267,115 @@ def test_anchors_far_apart_stay_on_one_row(widget, loaded):
 # -- the tick, UI_PRINCIPLES.md 1.4 --------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", sorted(TICK_STYLES))
-def test_every_candidate_tick_straddles_the_line_and_stays_under_it(name):
-    """The rules, not today's numbers -- these hold whichever variant S picks.
-
-    Asserting the chosen style's exact pixels would be decision 21's mistake again: a test that
-    is true on the day it is written and fails the day the decision lands.
-    """
-    style = TICK_STYLES[name]
-    assert style.rise_px > 0, "a tick that only descends reads as a bracket around its label"
-    assert style.width_px < LINE_WIDTH_PX, "the line is the scale; the tick annotates it"
-    assert style.rise_px < MARKER_GAP_PX, "the tick would be touched by the marker at an anchor"
+def test_the_tick_straddles_the_line_and_stays_under_the_marker():
+    """The rules the chosen numbers must obey, stated so a later retune cannot break them."""
+    assert TICK_RISE_PX > 0, "a tick that only descends reads as a bracket around its label"
+    assert TICK_WIDTH_PX < LINE_WIDTH_PX, "the line is the scale; the tick annotates it"
+    assert TICK_RISE_PX < MARKER_GAP_PX, "the marker would touch the tick at an anchor"
 
 
-def _pixel_above_the_first_anchor(widget, config, style):
+def _pixel_above_the_first_anchor(widget, config):
     """What is drawn just above the line at the 0 % anchor, and a background pixel to match."""
-    widget.tick_style = style
     widget.show_scale("pleasantness", config.participant_text["vas"]["pleasantness"])
     image = widget.grab().toImage()
     line_y = int(widget.height() * LINE_Y_FRACTION)
     x = int(widget._x_for(0.0))
-    # Sampled clear of the line's own antialiasing, and clear of the marker's gap.
+    # Inside the tick's rise but clear of the line's own antialiasing.
     return (
-        image.pixel(x, line_y - MARKER_GAP_PX + 1),
+        image.pixel(x, line_y - TICK_RISE_PX + 2),
         image.pixel(x, line_y - MARKER_GAP_PX * 3),
     )
 
 
-def test_the_tick_is_drawn_above_the_line_as_well_as_below(by_language):
+def test_the_tick_is_drawn_above_the_line_as_well_as_below(by_language, monkeypatch):
     """Straddling, in the pixels -- the rendered screens are what found the bracket reading.
 
     With the negative control, because a pixel probe that cannot fail is not a check. The
     hanging tick this replaced is the control: at rise 0 the same sample is background.
     """
     widget, config = by_language["en"]
-    style = widget.tick_style
-    variant = type(style)
-    hanging = variant(rise_px=0, drop_px=style.drop_px, width_px=style.width_px)
-    tall = variant(rise_px=MARKER_GAP_PX - 1, drop_px=style.drop_px, width_px=style.width_px)
-    try:
-        above, background = _pixel_above_the_first_anchor(widget, config, tall)
-        assert above != background, "nothing is drawn above the line at the 0 % anchor"
+    above, background = _pixel_above_the_first_anchor(widget, config)
+    assert above != background, "nothing is drawn above the line at the 0 % anchor"
 
-        above, background = _pixel_above_the_first_anchor(widget, config, hanging)
-        assert above == background, "the probe finds a tick above the line where there is none"
-    finally:
-        widget.tick_style = style
+    monkeypatch.setattr(vas_module, "TICK_RISE_PX", 0)
+    above, background = _pixel_above_the_first_anchor(widget, config)
+    assert above == background, "the probe finds a tick above the line where there is none"
+
+
+# -- where the labels go, S's decision of 10 Sep 2026 ---------------------------------------
+
+
+def _placed(widget, config, scale):
+    widget.show_scale(scale, config.participant_text["vas"][scale])
+    metrics = QFontMetrics(widget._anchor_font())
+    return widget._anchor_layout(metrics), metrics
+
+
+@pytest.mark.parametrize("layout", sorted(LAYOUTS))
+@pytest.mark.parametrize("scale", SCALES)
+@pytest.mark.parametrize("language", ("sv", "en"))
+def test_the_end_labels_share_the_row_nearest_the_line(
+    by_language, scale, language, layout, monkeypatch
+):
+    """The extremes of the scale read as a pair at one height, in either layout."""
+    widget, config = by_language[language]
+    monkeypatch.setattr(widget, "layout", LAYOUTS[layout])
+    placed, _ = _placed(widget, config, scale)
+    ends = {float(a["pct"]) for a in config.participant_text["vas"][scale]["anchors"]} & {
+        0.0,
+        100.0,
+    }
+    end_rows, interior_rows = [], []
+    for _, _, row, tick_x in placed:
+        is_end = any(tick_x == pytest.approx(widget._x_for(pct)) for pct in ends)
+        (end_rows if is_end else interior_rows).append(row)
+    assert end_rows == [0] * len(ends), f"{language} {scale}: end labels on rows {end_rows}"
+    assert 0 not in interior_rows, f"{language} {scale}: an interior label took row 0"
+
+
+@pytest.mark.parametrize("scale", SCALES)
+@pytest.mark.parametrize("language", ("sv", "en"))
+def test_the_marker_can_never_cover_an_anchor_name(by_language, scale, language):
+    """In the study layout interior labels sit above the line, clear of the marker's height.
+
+    The marker is drawn above the line wherever the rating is, and 10 % and 90 % are exactly
+    where participants are trained to aim -- so a label in its band would be hidden at the
+    moment it is needed. This is what sank the first above-line render.
+    """
+    widget, config = by_language[language]
+    assert widget.layout is LAYOUTS[STUDY_LAYOUT]
+    placed, metrics = _placed(widget, config, scale)
+    line_y = widget.height() * LINE_Y_FRACTION
+    marker_top = line_y - MARKER_GAP_PX - MARKER_HEIGHT_PX
+    for label, _, row, _ in placed:
+        baseline, _ = widget._label_geometry(row, metrics, line_y)
+        if row < 0:
+            assert baseline + metrics.descent() <= marker_top, f"{language}: {label!r}"
+        else:
+            assert baseline - metrics.ascent() > line_y, f"{language}: {label!r}"
+
+
+@pytest.mark.parametrize("scale", SCALES)
+@pytest.mark.parametrize("language", ("sv", "en"))
+def test_the_alternative_hangs_its_end_labels_without_hitting_the_screen_edge(
+    by_language, scale, language, monkeypatch
+):
+    """The shorter line is what makes the alternative work: no end label is clamped.
+
+    At the study's line length the long Swedish end labels ran into the screen edge, so the
+    overhang differed with the length of the words -- the inconsistency the row rule removed.
+    """
+    widget, config = by_language[language]
+    layout = LAYOUTS["ends_outside"]
+    monkeypatch.setattr(widget, "layout", layout)
+    placed, metrics = _placed(widget, config, scale)
+    inside = layout.end_inside_fraction
+    for label, left, _, tick_x in placed:
+        width = metrics.horizontalAdvance(label)
+        if tick_x == pytest.approx(widget._x_for(0.0)):
+            assert left == pytest.approx(tick_x - (1 - inside) * width), f"{label!r} clamped"
+        elif tick_x == pytest.approx(widget._x_for(100.0)):
+            assert left == pytest.approx(tick_x - inside * width), f"{label!r} clamped"
 
 
 # -- the heading, UI_PRINCIPLES.md 5.3 and 1.7 ---------------------------------------------
@@ -333,18 +401,19 @@ def test_a_statement_outranks_the_question_that_introduces_it(by_language, scale
 
 @pytest.mark.parametrize("scale", SCALES)
 @pytest.mark.parametrize("language", ("sv", "en"))
-def test_the_text_block_clears_the_line(by_language, scale, language):
+def test_the_text_block_clears_the_scale(by_language, scale, language):
     """The line cannot move down to make room (UI_PRINCIPLES.md 1.6), so the text must fit.
 
-    At the lab window size, both languages, every scale. A failure here means the wording needs
-    shortening or the size reducing -- never the line moving.
+    Measured to the highest thing the scale draws -- an interior label above the line, or the
+    marker's top. At the lab window size, both languages, every scale. A failure means the
+    wording needs shortening or the size reducing, never the line moving.
     """
     widget, config = by_language[language]
     widget.show_scale(scale, config.participant_text["vas"][scale])
     clearance = widget.heading_clearance()
-    assert clearance >= TEXT_TO_LINE_GAP_PX, (
-        f"{language} {scale}: {clearance:.0f} px between the text and the line, "
-        f"where {TEXT_TO_LINE_GAP_PX} px are required"
+    assert clearance >= TEXT_TO_SCALE_GAP_PX, (
+        f"{language} {scale}: {clearance:.0f} px between the text and the scale, "
+        f"where {TEXT_TO_SCALE_GAP_PX} px are required"
     )
 
 

@@ -7,7 +7,7 @@ data/
 # Screenshots: approved references are committed, working output is not.
 screenshots/current/
 screenshots/diff/
-screenshots/tick_variants/
+screenshots/vas_layouts/
 
 # Environment
 .venv/
