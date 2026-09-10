@@ -805,6 +805,62 @@ answer.**
 
 `docs/UI_PRINCIPLES.md` 1.10 and 5.8–5.12 carry the reasoning; this section is the requirement.
 
+### 10.9 Emergency stop rehearsal
+
+S's decision, 26 Aug 2026. **The participant presses the emergency stop once, for real, in every
+session, with the garment running.**
+
+Bilaga 1 §3.10 tells participants that pressing the stop will not disturb the experiment. That
+is a promise, and a promise about a button nobody has pressed is one the participant has no
+reason to believe at the moment they need it — which is the moment they are least willing to
+experiment. Rehearsing it converts the sentence into something they have seen happen.
+
+- **The software stop only** (`f5`, the blank-screen button on the remote). The hardware button
+  and the rapid depressurisation mechanism are the real safety path (§13) and act without the
+  software, so the software cannot detect a press of them and must not pretend to. Whether they
+  are demonstrated verbally is the experimenter's briefing, not this procedure.
+- **The garment is running**, so the participant feels the touch stop rather than only seeing a
+  screen change. A rehearsal on a dead system teaches where a button is; this one has to teach
+  what pressing it achieves.
+- **It uses the fixed CT-targeted pattern**, never the participant's own, for the same reason
+  §10.7 does: a condition-specific pattern in training would put the condition into a phase the
+  experimenter is present for (§16). `training.stop_rehearsal_pressure_kpa` is its own value and
+  not the masking check's — a pressure chosen so the garment is *audible* is not necessarily one
+  that is clearly *felt*, and the two should be free to diverge in piloting.
+- **It fires the real stop path.** Not a screen that looks like the stop: the same code, the same
+  log event, the same commanded zero. A rehearsal on a lookalike path trains the participant on
+  behaviour that will not recur, and leaves the real path still untested in the session.
+- **The resume is the point, and must be shown.** The participant sees the stop screen, then the
+  session resumes cleanly in front of them. Stopping and resuming is what §13's "resumption must
+  be genuinely clean" means in practice, and this is the one place it is exercised before it
+  matters.
+- **Every session**, because the button matters more than the ninety seconds it costs, and
+  because a participant who last pressed it four weeks ago has not rehearsed it.
+- **It is recorded** — that the rehearsal ran, and that the press was detected. A rehearsal the
+  participant did not actually complete is a different session from one they did.
+
+**Placement: immediately after the masking check (§10.7) and before touch calibration.** The
+garment is warm, the participant is already holding the remote and has just met the fixed
+pattern, and nothing is being measured yet, so a stop costs nothing. It cannot go *inside* the
+masking check, which the stop would abort.
+
+**Wording, approved by S 10 Sep 2026.** Goes under `screens:` in the participant text files when
+the rehearsal is built. The screen between the two is the real `screens.emergency_stop`,
+unchanged. "Press this button" assumes the stop button is drawn on screen, which needs a
+`responder.button_symbols.emergency_stop` entry and narrows the rule that `symbol_for` raises for
+the stop: never drawn *as an option on a response screen*, drawn here because pointing at it is
+the screen's purpose. Resume is the experimenter's, not a timer, and the garment start is
+preceded by the §10.5 warning cue.
+
+| Key | English | Svenska |
+|---|---|---|
+| `stop_rehearsal` | The touch is running now. / Press this button to stop it. / Nothing is lost — we carry straight on afterwards. | Beröringen är igång nu. / Tryck på den här knappen för att stänga av den. / Ingenting går förlorat — vi fortsätter direkt efteråt. |
+| `stop_rehearsal_done` | That is the stop button. / It works at any time, in any part of the visit. / (blank line) / Press ▶ to continue. | Det där är stoppknappen. / Den fungerar när som helst, under alla delar av besöket. / (tom rad) / Tryck på ▶ för att fortsätta. |
+
+**Not built.** It needs the garment running during a training phase, which arrives with
+`audio.py` and the masking check. Specified here so it lands with them rather than being
+remembered.
+
 ---
 
 ## 11. Experimenter interface
@@ -1009,6 +1065,10 @@ way must be impossible to mistake for a real one afterwards.
 - **Software emergency stop** on `f5`: immediately commands all channels to zero, logs the
   press, pauses, and offers resume. Bilaga 1 §3.10 says participants are told pressing it will
   not disturb the experiment, so resumption must be genuinely clean.
+- **The participant rehearses that stop once per session, with the garment running** (§10.9).
+  The promise in Bilaga 1 §3.10 is only credible to someone who has seen it kept, and the moment
+  a participant needs the button is the moment they are least willing to find out what it does.
+  The rehearsal fires the real path, not a lookalike.
 - **Hard pressure ceiling and rate limit in software, independent of participant adjustment.**
   `garment.pressure_ceiling_kpa` clamps every command, whatever its source, and the clamp lives
   in `GarmentController` rather than in each driver so it cannot differ between them.

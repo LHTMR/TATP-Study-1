@@ -57,6 +57,15 @@ until then the screenshot leg of `make check` is not actually guarding anything.
 approve them before the tick style is chosen**, or every VAS reference is frozen at a geometry
 that is about to change.
 
+**New and specified, not built: the emergency stop rehearsal** (`SPEC.md` §10.9, S's decision
+26 Aug 2026). The participant presses `f5` once per session with the garment running, on the
+fixed pattern, firing the real stop path, and watches the resume. It lands with `audio.py` and
+the masking check, because it needs a training phase with the garment running and there is not
+one yet. The wording is approved (S, 10 Sep 2026) and recorded in §10.9 ready to move into the
+participant text files. Still needed at build time: `training.stop_rehearsal_pressure_kpa` in
+`hardware.yaml`, a `button_symbols.emergency_stop` entry with the `symbol_for` rule narrowed,
+and a record of whether the press actually happened.
+
 **`_ChoiceScreen` has no protocol calling it yet.** The equalisation comparison of `SPEC.md` §9
 step 4 is Milestone 3; `touchcal_compare` was already a specified table with no writer. The
 screen is driven by tests and by the screenshot catalogue, not by a session — so the first thing
