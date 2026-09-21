@@ -131,10 +131,18 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         window.show_adjustment(key)
         yield Shot(
             f"participant_{language}_adjust_{key}",
-            f"The adjustment screen for the `{key}` anchor above the button instructions, "
-            f"{language}.",
+            f"The adjustment screen for `{key}`: the target, both large buttons drawn with "
+            f"their labels, and the confirm sentence, {language}.",
             _grab(window),
         )
+
+    window.show_preference()
+    yield Shot(
+        f"participant_{language}_preference",
+        f"The preference selection (SPEC.md 9 step 6): the opening line, both large buttons "
+        f"drawn with their labels, and the confirm sentence, {language}.",
+        _grab(window),
+    )
 
     yield from _choice_shots(window, text, language)
 
@@ -344,6 +352,12 @@ def run(approve: Callable[[str], bool] = lambda name: False) -> Result:
     CURRENT_DIR.mkdir(parents=True, exist_ok=True)
     REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
     DIFF_DIR.mkdir(parents=True, exist_ok=True)
+    # current/ and diff/ are this run's output only. Without clearing them, a retired screen's
+    # last image stays behind looking current -- which is how `screen_adjust` survived its
+    # removal and was reviewed as if it were live. Approved references are never touched here.
+    for folder in (CURRENT_DIR, DIFF_DIR):
+        for stale in folder.glob("*.png"):
+            stale.unlink()
 
     manifest = read_manifest()
     result = Result([], [], [], [])

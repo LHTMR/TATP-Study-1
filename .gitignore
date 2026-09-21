@@ -8,6 +8,9 @@ data/
 screenshots/current/
 screenshots/diff/
 screenshots/vas_layouts/
+# Renders kept because a decision was made from them, and no tool can produce them again.
+# See screenshots/archive/README.md; commit one deliberately if it must survive a clone.
+screenshots/archive/
 
 # Environment
 .venv/

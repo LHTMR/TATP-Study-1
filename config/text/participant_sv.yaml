@@ -40,7 +40,7 @@ vas:
       - {pct: 100.0, label: mycket behaglig}
   relaxation:
     # RSQ punkt 6, översatt från det tyska originalet "Ich fühle mich sehr entspannt."
-    question: Hur väl stämmer följande påståenden med hur du känner dig just nu?
+    question: Hur väl stämmer följande påstående med hur du känner dig just nu?
     statement: Jag känner mig mycket avslappnad.
     anchors:
       - {pct: 0.0, label: instämmer inte alls}
@@ -48,7 +48,7 @@ vas:
   alertness:
     # RSQ punkt 10 (R), från "Ich fühle mich erfrischt und wach." Tyskans *erfrischt* är
     # uppiggad, inte utvilad, därför "pigg och vaken" (SPEC.md 10.6).
-    question: Hur väl stämmer följande påståenden med hur du känner dig just nu?
+    question: Hur väl stämmer följande påstående med hur du känner dig just nu?
     statement: Jag känner mig pigg och vaken.
     anchors:
       - {pct: 0.0, label: instämmer inte alls}
@@ -95,13 +95,28 @@ screens:
   # en del av den betingelsens manipulation, inte en tillfällig ordvändning: den säger att
   # beröringen börjar FÖR ATT deltagaren tryckte. Mildra den inte till "tryck för att fortsätta".
   self_start: Tryck på ▶ när du är redo att beröringen ska börja.
-  adjust: |-
-    Vänster knapp: svagare. Höger knapp: starkare.
-    Tryck på ▶ när det känns rätt.
-  preference: |-
-    Du får känna några olika sorters beröring.
-    Använd de två stora knapparna för att växla mellan dem.
-    Tryck på ▶ för att välja den du tycker bäst om.
+
+controls:
+  # Skärmar som ritar ut de två stora knapparna med en etikett under var, en inledande rad ovanför
+  # och en bekräftelsemening under (UI_PRINCIPLES.md 5.8). Dessa har kvar ett bekräftelsesteg, till
+  # skillnad från `choices`, eftersom trycket inte är svaret: det flyttar något som deltagaren
+  # sedan bekräftar.
+  #
+  # Båda godkändes 23 aug 2026 som textskärmar. Det som utgick 10 sep 2026 är bara meningen som
+  # namnger knapparna -- "Vänster knapp: ... Höger knapp: ..." och "Använd de två stora knapparna
+  # för att växla mellan dem" -- som de utritade knapparna ersätter. Uppspelningsknappen ritas
+  # inte ut, så varje bekräftelserad nämner den fortfarande i ord.
+  adjust:
+    # SPEC.md 9 och 10.3. Den inledande raden är målet, från `adjust_targets`.
+    left: Svagare
+    right: Starkare
+    confirm: Tryck på ▶ när det känns rätt.
+  preference:
+    # SPEC.md 9 steg 6, valet av föredragen beröring.
+    intro: Du får känna några olika sorters beröring.
+    left: Föregående
+    right: Nästa
+    confirm: Tryck på ▶ för att välja den du tycker bäst om.
 
 choices:
   # Tvåvalsskärmar där knapparna RITAS ut och trycket i sig är svaret (SPEC.md 10.8,

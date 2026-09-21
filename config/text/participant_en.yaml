@@ -40,14 +40,14 @@ vas:
       - {pct: 100.0, label: very pleasant}
   relaxation:
     # RSQ item 6 (Steghaus & Poth 2022), adapted to a VAS. SPEC.md 10.6.
-    question: How accurately do the following statements describe how you feel right now?
+    question: How accurately does the following statement describe how you feel right now?
     statement: I'm feeling very relaxed.
     anchors:
       - {pct: 0.0, label: completely disagree}
       - {pct: 100.0, label: completely agree}
   alertness:
     # RSQ item 10 (R).
-    question: How accurately do the following statements describe how you feel right now?
+    question: How accurately does the following statement describe how you feel right now?
     statement: I'm feeling refreshed and awake.
     anchors:
       - {pct: 0.0, label: completely disagree}
@@ -96,13 +96,27 @@ screens:
   # part of that condition's manipulation, not incidental phrasing: it says the touch starts
   # BECAUSE the participant pressed. Do not soften it to "press to continue".
   self_start: Press ▶ when you're ready for the touch to start.
-  adjust: |-
-    Left button: weaker. Right button: stronger.
-    Press ▶ when it feels right.
-  preference: |-
-    You will feel a few different kinds of touch.
-    Use the two large buttons to move between them.
-    Press ▶ to choose the one you like best.
+
+controls:
+  # Screens that draw the two large buttons with a label under each, an opening line above them
+  # and a confirm sentence below (UI_PRINCIPLES.md 5.8). These keep a confirm, unlike `choices`,
+  # because the press is not the answer: it moves something the participant then commits to.
+  #
+  # Both were approved 23 Aug 2026 as text screens. What went, on 10 Sep 2026, is only the
+  # sentence naming the buttons -- "Left button: ... Right button: ..." and "Use the two large
+  # buttons to move between them" -- which the drawn buttons replace. The play button is not
+  # drawn, so every confirm line still names it in words.
+  adjust:
+    # SPEC.md 9 and 10.3. The opening line is the target, from `adjust_targets`.
+    left: Weaker
+    right: Stronger
+    confirm: Press ▶ when it feels right.
+  preference:
+    # SPEC.md 9 step 6, the preference selection.
+    intro: You will feel a few different kinds of touch.
+    left: Previous
+    right: Next
+    confirm: Press ▶ to choose the one you like best.
 
 choices:
   # Two-alternative screens where the buttons are DRAWN and the press itself is the answer

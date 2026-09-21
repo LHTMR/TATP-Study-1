@@ -289,6 +289,47 @@ def test_the_choice_screen_renders_in_every_state(participant):
     assert participant.grab().toImage() not in (waiting, emphasised)
 
 
+# -- the adjustment screen's drawn buttons, UI_PRINCIPLES.md 5.8 and 5.10 -----------------
+
+
+def test_the_adjustment_screen_carries_no_wording_of_its_own(participant, session):
+    text = session.config.participant_text
+    participant.show_adjustment("most_pleasant")
+    assert participant.stack.currentWidget() is participant.control
+    assert participant.control.target == text["adjust_targets"]["most_pleasant"]
+    controls = text["controls"]["adjust"]
+    assert participant.control.labels == {"left": controls["left"], "right": controls["right"]}
+    assert participant.control.confirm == controls["confirm"]
+
+
+def test_the_preference_screen_carries_no_wording_of_its_own(participant, session):
+    controls = session.config.participant_text["controls"]["preference"]
+    participant.show_preference()
+    assert participant.stack.currentWidget() is participant.control
+    assert participant.control.target == controls["intro"]
+    assert participant.control.labels == {"left": controls["left"], "right": controls["right"]}
+    assert participant.control.confirm == controls["confirm"]
+
+
+def test_a_held_button_is_drawn_pressed_until_it_is_released(participant):
+    """Press-and-hold, so the pressed state lasts exactly as long as the hold."""
+    participant.show_adjustment("most_pleasant")
+    key = QT_KEYS["pagedown"]
+    participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, key, Qt.NoModifier))
+    assert participant.control.held == {"right"}
+    unheld = participant.grab().toImage()
+    participant.keyReleaseEvent(QKeyEvent(QEvent.KeyRelease, key, Qt.NoModifier))
+    assert participant.control.held == set()
+    assert participant.grab().toImage() != unheld, "the pressed state was not drawn"
+
+
+def test_the_preference_screen_does_not_read_the_buttons(participant):
+    """Nothing moves between patterns yet, so a pressed state would be a false report."""
+    participant.show_preference()
+    participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, QT_KEYS["pagedown"], Qt.NoModifier))
+    assert participant.control.held == set()
+
+
 # -- the experimenter window -------------------------------------------------------------
 
 

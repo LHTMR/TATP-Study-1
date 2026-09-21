@@ -685,7 +685,7 @@ wording; the English in Bilaga 1 is itself the authors' translation.
 
 | | Deutsch (original) | English | Svenska |
 |---|---|---|---|
-| Question | *(Appendix A of the paper)* | How accurately do the following statements describe how you feel right now? | Hur väl stämmer följande påståenden med hur du känner dig just nu? |
+| Question | *(Appendix A of the paper)* | How accurately does the following statement describe how you feel right now? | Hur väl stämmer följande påstående med hur du känner dig just nu? |
 | Item 6 | Ich fühle mich sehr entspannt. | I'm feeling very relaxed. | Jag känner mig mycket avslappnad. |
 | Item 10 (R) | Ich fühle mich erfrischt und wach. | I'm feeling refreshed and awake. | Jag känner mig pigg och vaken. |
 | 0 % | | completely disagree | instämmer inte alls |

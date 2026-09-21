@@ -21,7 +21,7 @@ CONDA ?= conda
 
 CONDA_RUN := $(CONDA) run --no-capture-output -n tatp-study-1
 
-.PHONY: check test test-one lint literals shots layouts preview ethics
+.PHONY: check test test-one lint literals shots layouts archive preview ethics
 
 check: test lint shots
 	@echo
@@ -60,6 +60,12 @@ shots:
 # colleagues. Writes to screenshots/vas_layouts/, which is not compared against anything.
 layouts:
 	$(CONDA_RUN) python tools/vas_layouts.py
+
+# File a folder of renders under screenshots/archive/, dated by the newest file in it. Only for
+# renders nothing can produce again -- regenerable folders are refused, re-render those instead.
+#   make archive ARGS="tick_variants"
+archive:
+	$(CONDA_RUN) python tools/archive_screens.py $(ARGS)
 
 # The ethics folder reader (.claude/skills/ethics-folder). Read-only, and nothing it prints is
 # written anywhere. A target rather than a bare command because the folder lives outside the

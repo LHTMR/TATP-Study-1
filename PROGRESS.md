@@ -52,6 +52,23 @@ nothing. `make shots ARGS="--approve-all"` is S's call once the new screens are 
 until then the screenshot leg of `make check` is not actually guarding anything. The VAS layout is now
 settled, so nothing in this session's work stands in the way of approving them.
 
+**The drawn buttons then spread to the two screens that described them in words** (S, 10 and 21
+Sep 2026). `_ControlScreen` in `tatp/ui/participant.py` is an opening line, the two buttons, and
+a confirm sentence: the pressure adjustment uses it with the `adjust_targets` sentence, the
+preference selection with its own intro. Both keep a confirm, because unlike a `choices` screen
+the press is not the answer — it moves something the participant then commits to. `screens.adjust`
+and `screens.preference` became the `controls` block, and the English RSQ question went singular
+("does the following statement"), the Swedish with it. The preference screen does not read the
+buttons yet: nothing moves between patterns until Milestone 3, and a pressed state over a screen
+that did not change would be a false report.
+
+**`make shots` now clears `screenshots/current/` before rendering.** A retired screen's last
+image used to stay behind and was reviewed as current (`docs/NOTES.md` N5.17).
+`tools/archive_screens.py` (`make archive`) files renders that nothing can produce again under
+`screenshots/archive/`, which is gitignored and explained by a README there — the tick
+candidates S chose from are its first entry. It exists because `mv` is denied to the agent, and
+should stay that way.
+
 **New and specified, not built: the emergency stop rehearsal** (`SPEC.md` §10.9, S's decision
 26 Aug 2026). The participant presses `f5` once per session with the garment running, on the
 fixed pattern, firing the real stop path, and watches the resume. It lands with `audio.py` and
@@ -220,8 +237,9 @@ function. Do not "fix" anything in the repository for this.
 | `tools/shots.py` | **New.** Entry point for the screenshot run; sets the offscreen platform |
 | `tools/vas_layouts.py` | **New.** `make layouts`. Every scale in the study layout and the kept alternative |
 | `config/blinding.yaml` | **New.** The forbidden terms of SPEC.md 16, reviewable by S |
-| `Makefile` | `check`, `test`, `test-one`, `lint`, `literals`, `shots`, `layouts`, `preview` |
-| `tests/` | 347 tests, all passing headless |
+| `tools/archive_screens.py` | **New.** `make archive ARGS="<folder>"`. Files unrepeatable renders under `screenshots/archive/` |
+| `Makefile` | `check`, `test`, `test-one`, `lint`, `literals`, `shots`, `layouts`, `archive`, `preview` |
+| `tests/` | 351 tests, all passing headless |
 
 ## What does not exist yet
 

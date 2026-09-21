@@ -71,6 +71,8 @@ BUTTON_LABEL_GAP_PX = 22
 BUTTON_LABEL_WIDTH_FRACTION = 0.34
 
 SIDES = ("left", "right")
+# The adjustment screen's confirm sentence sits below the button labels.
+ADJUST_CONFIRM_Y_FRACTION = 0.76
 
 
 class _MessageScreen(QWidget):
@@ -214,48 +216,6 @@ class _ChoiceScreen(QWidget):
 
     # -- drawing -----------------------------------------------------------------------
 
-    def _button_rect(self, side: str) -> QRect:
-        centre = BUTTON_CENTRE_FRACTIONS[SIDES.index(side)]
-        width = self.width() * BUTTON_WIDTH_FRACTION
-        height = self.height() * BUTTON_HEIGHT_FRACTION
-        return QRect(
-            int(self.width() * centre - width / 2),
-            int(self.height() * BUTTON_Y_FRACTION),
-            int(width),
-            int(height),
-        )
-
-    def _draw_button(self, painter: QPainter, side: str) -> None:
-        rect = self._button_rect(side)
-        action = Action.DECREASE if side == "left" else Action.INCREASE
-        pressed = self.selected == side
-
-        width = BUTTON_EMPHASIS_WIDTH_PX if self.emphasised == side else BUTTON_LINE_WIDTH_PX
-        painter.setPen(QPen(FOREGROUND, width))
-        painter.setBrush(FOREGROUND if pressed else Qt.NoBrush)
-        painter.drawRoundedRect(rect, BUTTON_RADIUS_PX, BUTTON_RADIUS_PX)
-
-        symbol_font = QFont(self.font())
-        symbol_font.setPointSize(BUTTON_SYMBOL_POINT_SIZE)
-        painter.setFont(symbol_font)
-        painter.setPen(BACKGROUND if pressed else FOREGROUND)
-        painter.drawText(rect, Qt.AlignCenter, self.responder.symbol_for(action))
-
-        label_font = QFont(self.font())
-        label_font.setPointSize(BUTTON_LABEL_POINT_SIZE)
-        painter.setFont(label_font)
-        painter.setPen(FOREGROUND)
-        label_width = int(self.width() * BUTTON_LABEL_WIDTH_FRACTION)
-        label_box = QRect(
-            rect.center().x() - label_width // 2,
-            rect.bottom() + BUTTON_LABEL_GAP_PX,
-            label_width,
-            self.height() - rect.bottom() - BUTTON_LABEL_GAP_PX,
-        )
-        painter.drawText(
-            label_box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.labels[side]
-        )
-
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -263,19 +223,150 @@ class _ChoiceScreen(QWidget):
         if self.blank or not self.labels:
             painter.end()
             return
+        _draw_top_text(painter, self, self.question)
+        for side in SIDES:
+            _draw_button(
+                painter,
+                self,
+                self.responder,
+                side,
+                self.labels[side],
+                emphasised=self.emphasised == side,
+                pressed=self.selected == side,
+            )
+        painter.end()
 
-        question_font = QFont(self.font())
-        question_font.setPointSize(QUESTION_POINT_SIZE)
-        painter.setFont(question_font)
+
+class _ControlScreen(QWidget):
+    """An opening line, the two buttons drawn, and a confirm sentence.
+
+    Two screens have this shape: the pressure adjustment (SPEC.md 9, 10.3) and the preference
+    selection (SPEC.md 9 step 6). Both draw the buttons for the same reason as the choice screen
+    (UI_PRINCIPLES.md 5.8, 5.9) -- the participant presses the button they can see instead of
+    translating "left button: weaker" on every one of roughly thirty adjustments.
+
+    **Unlike a choice, both keep a confirm**, because here the press is not the answer: it moves
+    something -- a pressure, a position in a list -- that the participant then commits to
+    (UI_PRINCIPLES.md 5.12). The confirm stays a sentence rather than a third drawn button,
+    because the play button is one of the remote's two small buttons and no screen draws those
+    yet; their labels may change (docs/NOTES.md N5.11).
+
+    A held button is drawn pressed for exactly as long as it is held (UI_PRINCIPLES.md 5.10).
+    On the adjustment that also shows the participant that a hold is registering while the
+    pressure ramps, which a sentence cannot.
+    """
+
+    def __init__(self, responder: Responder, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.responder = responder
+        self.target = ""
+        self.labels: dict[str, str] = {}
+        self.confirm = ""
+        self.held: set[str] = set()
+
+    def present(self, opening: str, controls: dict) -> None:
+        """`opening` is the line above the buttons; `controls` one `controls` block."""
+        self.target = opening
+        self.labels = {side: controls[side] for side in SIDES}
+        self.confirm = controls["confirm"]
+        self.held.clear()
+        self.update()
+
+    def hold(self, side: str) -> None:
+        self.held.add(side)
+        self.update()
+
+    def release(self, side: str) -> None:
+        self.held.discard(side)
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.fillRect(self.rect(), BACKGROUND)
+        _draw_top_text(painter, self, self.target)
+        for side in SIDES:
+            _draw_button(
+                painter,
+                self,
+                self.responder,
+                side,
+                self.labels[side],
+                emphasised=False,
+                pressed=side in self.held,
+            )
+        font = QFont(self.font())
+        font.setPointSize(MESSAGE_POINT_SIZE)
+        painter.setFont(font)
         painter.setPen(FOREGROUND)
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
-        top = int(self.height() * QUESTION_Y_FRACTION)
+        top = int(self.height() * ADJUST_CONFIRM_Y_FRACTION)
         box = self.rect().adjusted(margin, top, -margin, 0)
-        painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.question)
-
-        for side in SIDES:
-            self._draw_button(painter, side)
+        painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.confirm)
         painter.end()
+
+
+def _draw_top_text(painter: QPainter, widget: QWidget, text: str) -> None:
+    """Text top-aligned where every participant screen starts reading (UI_PRINCIPLES.md 5.5)."""
+    font = QFont(widget.font())
+    font.setPointSize(QUESTION_POINT_SIZE)
+    painter.setFont(font)
+    painter.setPen(FOREGROUND)
+    margin = int(widget.width() * SIDE_MARGIN_FRACTION)
+    top = int(widget.height() * QUESTION_Y_FRACTION)
+    box = widget.rect().adjusted(margin, top, -margin, 0)
+    painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, text)
+
+
+def _button_rect(widget: QWidget, side: str) -> QRect:
+    centre = BUTTON_CENTRE_FRACTIONS[SIDES.index(side)]
+    width = widget.width() * BUTTON_WIDTH_FRACTION
+    height = widget.height() * BUTTON_HEIGHT_FRACTION
+    return QRect(
+        int(widget.width() * centre - width / 2),
+        int(widget.height() * BUTTON_Y_FRACTION),
+        int(width),
+        int(height),
+    )
+
+
+def _draw_button(
+    painter: QPainter,
+    widget: QWidget,
+    responder: Responder,
+    side: str,
+    label: str,
+    *,
+    emphasised: bool,
+    pressed: bool,
+) -> None:
+    """One large button of the remote, carrying its printed symbol, with a label under it."""
+    rect = _button_rect(widget, side)
+    action = Action.DECREASE if side == "left" else Action.INCREASE
+
+    width = BUTTON_EMPHASIS_WIDTH_PX if emphasised else BUTTON_LINE_WIDTH_PX
+    painter.setPen(QPen(FOREGROUND, width))
+    painter.setBrush(FOREGROUND if pressed else Qt.NoBrush)
+    painter.drawRoundedRect(rect, BUTTON_RADIUS_PX, BUTTON_RADIUS_PX)
+
+    symbol_font = QFont(widget.font())
+    symbol_font.setPointSize(BUTTON_SYMBOL_POINT_SIZE)
+    painter.setFont(symbol_font)
+    painter.setPen(BACKGROUND if pressed else FOREGROUND)
+    painter.drawText(rect, Qt.AlignCenter, responder.symbol_for(action))
+
+    label_font = QFont(widget.font())
+    label_font.setPointSize(BUTTON_LABEL_POINT_SIZE)
+    painter.setFont(label_font)
+    painter.setPen(FOREGROUND)
+    label_width = int(widget.width() * BUTTON_LABEL_WIDTH_FRACTION)
+    label_box = QRect(
+        rect.center().x() - label_width // 2,
+        rect.bottom() + BUTTON_LABEL_GAP_PX,
+        label_width,
+        widget.height() - rect.bottom() - BUTTON_LABEL_GAP_PX,
+    )
+    painter.drawText(label_box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, label)
 
 
 class ParticipantWindow(QWidget):
@@ -311,13 +402,14 @@ class ParticipantWindow(QWidget):
         self.vas.confirmed.connect(self.confirmed)
         self.vas.emergency_stop.connect(self.emergency_stop)
         self.vas.pressed_without_marker.connect(self.pressed_without_marker)
+        self.control = _ControlScreen(responder)
         self.choice = _ChoiceScreen(config.study1["choice"], responder)
         self.choice.chosen.connect(self.chosen)
         self.choice.gap_elapsed.connect(self.choice_gap_elapsed)
         self.choice.pressed_before_accepting.connect(self.pressed_before_accepting)
 
         self.stack = QStackedWidget(self)
-        for screen in (self.message, self.cue, self.vas, self.choice):
+        for screen in (self.message, self.cue, self.vas, self.control, self.choice):
             self.stack.addWidget(screen)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -376,11 +468,20 @@ class ParticipantWindow(QWidget):
         scale labels -- a participant is asked for a sensation the scale names, never for a
         position on a line.
         """
-        self.message.text = (
-            f"{self.text['adjust_targets'][target_key]}\n\n{self.text['screens']['adjust']}"
-        )
-        self.message.emphasised = False
-        self._show(self.message, adjusting=True)
+        target = self.text["adjust_targets"][target_key]
+        self.control.present(target, self.text["controls"]["adjust"])
+        self._show(self.control, adjusting=True)
+
+    def show_preference(self) -> None:
+        """The preference selection (SPEC.md 9 step 6): move between patterns, then choose.
+
+        The window does not read the buttons here. Nothing yet moves between patterns -- the
+        procedure is Milestone 3 -- and a screen that showed a pressed state while nothing
+        changed would be telling the participant something untrue.
+        """
+        controls = self.text["controls"]["preference"]
+        self.control.present(controls["intro"], controls)
+        self._show(self.control)
 
     def show_choice(self, key: str) -> None:
         """Present `choices.<key>` with both buttons drawn, accepting nothing yet.
@@ -442,6 +543,7 @@ class ParticipantWindow(QWidget):
             if action is Action.CONFIRM:
                 self.adjust_confirmed.emit()
             elif action is not None:
+                self.control.hold("left" if action is Action.DECREASE else "right")
                 self.adjust_pressed.emit(action.value)
         # Everything else is swallowed rather than passed on: off the VAS there is nothing a
         # press can mean, and Qt would close the window on `escape` (SPEC.md 10.1).
@@ -454,6 +556,7 @@ class ParticipantWindow(QWidget):
             and not event.isAutoRepeat()
             and action in (Action.DECREASE, Action.INCREASE)
         ):
+            self.control.release("left" if action is Action.DECREASE else "right")
             self.adjust_released.emit(action.value)
         event.accept()
 

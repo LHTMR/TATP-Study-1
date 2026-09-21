@@ -24,14 +24,17 @@ screens:
     session shows. (sv)
   experimenter_sv_reduced_capability_banner: The reduced-capability banner naming
     the driver in use (SPEC.md 12.4). (sv)
-  participant_en_adjust_just_noticeable: The adjustment screen for the `just_noticeable`
-    anchor above the button instructions, en.
-  participant_en_adjust_just_uncomfortable: The adjustment screen for the `just_uncomfortable`
-    anchor above the button instructions, en.
-  participant_en_adjust_match: The adjustment screen for the `match` anchor above
-    the button instructions, en.
-  participant_en_adjust_most_pleasant: The adjustment screen for the `most_pleasant`
-    anchor above the button instructions, en.
+  participant_en_adjust_just_noticeable: 'The adjustment screen for `just_noticeable`:
+    the target, both large buttons drawn with their labels, and the confirm sentence,
+    en.'
+  participant_en_adjust_just_uncomfortable: 'The adjustment screen for `just_uncomfortable`:
+    the target, both large buttons drawn with their labels, and the confirm sentence,
+    en.'
+  participant_en_adjust_match: 'The adjustment screen for `match`: the target, both
+    large buttons drawn with their labels, and the confirm sentence, en.'
+  participant_en_adjust_most_pleasant: 'The adjustment screen for `most_pleasant`:
+    the target, both large buttons drawn with their labels, and the confirm sentence,
+    en.'
   participant_en_blank: Nothing at all -- what the participant sees during a stimulus.
   participant_en_choice_comparison_accepting: 'Both stimuli delivered, no emphasis,
     the next press is the answer. Identical to the waiting state by design: nothing
@@ -45,12 +48,11 @@ screens:
   participant_en_choice_comparison_waiting: '`choices.comparison` with both buttons
     drawn and neither emphasised -- the state before the first stimulus, en.'
   participant_en_cue: 'The visual warning cue: one filled disc, centred, no wording.'
-  participant_en_screen_adjust: The participant text `screens.adjust`, centred, en.
+  participant_en_preference: 'The preference selection (SPEC.md 9 step 6): the opening
+    line, both large buttons drawn with their labels, and the confirm sentence, en.'
   participant_en_screen_emergency_stop: The participant text `screens.emergency_stop`,
     centred, en.
   participant_en_screen_paused: The participant text `screens.paused`, centred, en.
-  participant_en_screen_preference: The participant text `screens.preference`, centred,
-    en.
   participant_en_screen_self_start: The participant text `screens.self_start`, centred,
     en.
   participant_en_screen_session_end: The participant text `screens.session_end`, centred,
@@ -79,14 +81,17 @@ screens:
     and anchors and NO marker -- the state before the first press, en.
   participant_en_vas_relaxation_uncued: The `relaxation` scale with its question and
     anchors and NO marker -- the state before the first press, en.
-  participant_sv_adjust_just_noticeable: The adjustment screen for the `just_noticeable`
-    anchor above the button instructions, sv.
-  participant_sv_adjust_just_uncomfortable: The adjustment screen for the `just_uncomfortable`
-    anchor above the button instructions, sv.
-  participant_sv_adjust_match: The adjustment screen for the `match` anchor above
-    the button instructions, sv.
-  participant_sv_adjust_most_pleasant: The adjustment screen for the `most_pleasant`
-    anchor above the button instructions, sv.
+  participant_sv_adjust_just_noticeable: 'The adjustment screen for `just_noticeable`:
+    the target, both large buttons drawn with their labels, and the confirm sentence,
+    sv.'
+  participant_sv_adjust_just_uncomfortable: 'The adjustment screen for `just_uncomfortable`:
+    the target, both large buttons drawn with their labels, and the confirm sentence,
+    sv.'
+  participant_sv_adjust_match: 'The adjustment screen for `match`: the target, both
+    large buttons drawn with their labels, and the confirm sentence, sv.'
+  participant_sv_adjust_most_pleasant: 'The adjustment screen for `most_pleasant`:
+    the target, both large buttons drawn with their labels, and the confirm sentence,
+    sv.'
   participant_sv_blank: Nothing at all -- what the participant sees during a stimulus.
   participant_sv_choice_comparison_accepting: 'Both stimuli delivered, no emphasis,
     the next press is the answer. Identical to the waiting state by design: nothing
@@ -100,12 +105,11 @@ screens:
   participant_sv_choice_comparison_waiting: '`choices.comparison` with both buttons
     drawn and neither emphasised -- the state before the first stimulus, sv.'
   participant_sv_cue: 'The visual warning cue: one filled disc, centred, no wording.'
-  participant_sv_screen_adjust: The participant text `screens.adjust`, centred, sv.
+  participant_sv_preference: 'The preference selection (SPEC.md 9 step 6): the opening
+    line, both large buttons drawn with their labels, and the confirm sentence, sv.'
   participant_sv_screen_emergency_stop: The participant text `screens.emergency_stop`,
     centred, sv.
   participant_sv_screen_paused: The participant text `screens.paused`, centred, sv.
-  participant_sv_screen_preference: The participant text `screens.preference`, centred,
-    sv.
   participant_sv_screen_self_start: The participant text `screens.self_start`, centred,
     sv.
   participant_sv_screen_session_end: The participant text `screens.session_end`, centred,
