@@ -47,10 +47,10 @@ check` passes at 309 tests, 66 screens.
    scale draws by `TEXT_TO_SCALE_GAP_PX`. That check is a test rather than an assertion in `paintEvent`,
    because Qt prints an exception raised inside a paint handler and carries on.
 
-**The reference screenshots are still unapproved** — none ever were, so `make shots` compares
-nothing. `make shots ARGS="--approve-all"` is S's call once the new screens are accepted, and
-until then the screenshot leg of `make check` is not actually guarding anything. The VAS layout is now
-settled, so nothing in this session's work stands in the way of approving them.
+**The participant screenshots are now approved** (S, 21 Sep 2026), so the screenshot leg of
+`make check` guards them for the first time. The experimenter screens are still unarmed and
+wait on a review session of their own. `--approve-matching` was added for exactly this: arming
+happens a role at a time because reviewing does.
 
 **The drawn buttons then spread to the two screens that described them in words** (S, 10 and 21
 Sep 2026). `_ControlScreen` in `tatp/ui/participant.py` is an opening line, the two buttons, and
@@ -167,11 +167,16 @@ SPEC.md 17.3) does not exist, so the target prints a line saying so rather than 
 partial gate look like a passing one. Build it and delete that line — that is what is left of
 Milestone 2.
 
-**No screenshot is armed yet.** All 60 are catalogued and written, none has an approved
-reference, so none is compared — that is the SPEC.md 17.4 design, not an oversight. Arming them
-(`make shots ARGS="--approve-all"`, then committing `screenshots/reference/`) is **waiting on
-S**: it freezes the current layout, including session 10's anchor-stacking change, as the thing
-every later diff is measured against.
+**The 54 participant screens are armed; the 10 experimenter screens are not.** S approved the
+participant half on 21 Sep 2026, so `screenshots/reference/` now holds those images and every
+later diff is measured against them — change one deliberately and you must re-approve it in the
+same commit, or `make check` fails. The experimenter screens are catalogued and written but not
+compared, **pending S's review in a session of its own**; that is the SPEC.md 17.4 design, not
+an oversight. Arm them with:
+
+```
+make shots ARGS="--approve-matching 'experimenter_*'"
+```
 
 ```
 make check

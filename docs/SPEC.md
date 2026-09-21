@@ -1238,8 +1238,15 @@ is a failure.
 `screenshots/reference/` or does not. A screen with a reference is compared and any difference
 beyond a configured tolerance fails; a screen without one is not compared. Approving a screen
 arms it; deliberately changing one means reviewing the diff and re-approving, with
-`--approve-all` for a wording pass. This protects finished screens from collateral damage during
-the build without fighting intentional edits during piloting.
+`--approve-all` for a wording pass and `--approve-matching` for one role's screens. This
+protects finished screens from collateral damage during the build without fighting intentional
+edits during piloting.
+
+**Arming happens a role at a time, because reviewing does.** The participant screens were
+approved on 21 Sep 2026 and the experimenter screens deliberately were not, pending their own
+review. A half-armed catalogue is the normal state during a build, not a defect: approving
+everything at once would freeze screens nobody had read, which is the failure this design
+exists to avoid.
 
 A **freeze** command requires every entry to have an approved reference and every diff clean,
 and records the git SHA at freeze. That SHA goes into every subsequent data file, so any session

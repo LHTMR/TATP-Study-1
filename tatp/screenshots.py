@@ -34,6 +34,7 @@ import argparse
 import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from fnmatch import fnmatch
 
 import yaml
 from PySide6.QtGui import QImage, QPixmap
@@ -421,6 +422,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--approve", nargs="*", default=[], metavar="NAME", help="approve these screens"
     )
+    # Arming happens a role at a time, because reviewing happens a role at a time: the
+    # participant screens can be frozen while the experimenter's are still being read.
+    parser.add_argument(
+        "--approve-matching",
+        default=None,
+        metavar="GLOB",
+        help="approve every screen whose name matches, e.g. 'participant_*'",
+    )
     parser.add_argument(
         "--freeze",
         action="store_true",
@@ -444,7 +453,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if blocking else 0
 
     named = set(args.approve)
-    result = run(approve=(lambda name: True) if args.approve_all else (lambda n: n in named))
+    pattern = args.approve_matching
+
+    def approve(name: str) -> bool:
+        if args.approve_all:
+            return True
+        return name in named or (pattern is not None and fnmatch(name, pattern))
+
+    result = run(approve=approve)
     for failure in result.failures:
         print(failure)
     print(

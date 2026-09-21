@@ -52,6 +52,7 @@ literals:
 #   make shots ARGS="--write-manifest"        after adding or removing a screen
 #   make shots ARGS="--approve-all"           a wording pass across every screen
 #   make shots ARGS="--approve NAME"          arm one screen
+#   make shots ARGS="--approve-matching 'participant_*'"   arm one role's screens
 #   make shots ARGS="--freeze"                require every screen approved and clean
 shots:
 	$(CONDA_RUN) python tools/shots.py $(ARGS)
