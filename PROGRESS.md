@@ -47,10 +47,10 @@ check` passes at 309 tests, 66 screens.
    scale draws by `TEXT_TO_SCALE_GAP_PX`. That check is a test rather than an assertion in `paintEvent`,
    because Qt prints an exception raised inside a paint handler and carries on.
 
-**The participant screenshots are now approved** (S, 21 Sep 2026), so the screenshot leg of
-`make check` guards them for the first time. The experimenter screens are still unarmed and
-wait on a review session of their own. `--approve-matching` was added for exactly this: arming
-happens a role at a time because reviewing does.
+**All 64 screenshots are now approved** (S, 21 Sep 2026) — the participant half first, then the
+ten experimenter screens in their own review the same day. The screenshot leg of `make check`
+now guards the whole catalogue. `--approve-matching` was added for exactly this: arming happens
+a role at a time because reviewing does.
 
 **The drawn buttons then spread to the two screens that described them in words** (S, 10 and 21
 Sep 2026). `_ControlScreen` in `tatp/ui/participant.py` is an opening line, the two buttons, and
@@ -167,20 +167,20 @@ SPEC.md 17.3) does not exist, so the target prints a line saying so rather than 
 partial gate look like a passing one. Build it and delete that line — that is what is left of
 Milestone 2.
 
-**The 54 participant screens are armed; the 10 experimenter screens are not.** S approved the
-participant half on 21 Sep 2026, so `screenshots/reference/` now holds those images and every
-later diff is measured against them — change one deliberately and you must re-approve it in the
-same commit, or `make check` fails. The experimenter screens are catalogued and written but not
-compared, **pending S's review in a session of its own**; that is the SPEC.md 17.4 design, not
-an oversight. Arm them with:
+**All 64 screens are armed.** S approved the 54 participant screens and then the 10 experimenter
+screens on 21 Sep 2026, so `screenshots/reference/` holds every image in the catalogue and every
+later diff is measured against them — **change one deliberately and you must re-approve it in
+the same commit, or `make check` fails.** Re-approve a role's screens with:
 
 ```
 make shots ARGS="--approve-matching 'experimenter_*'"
 ```
 
-```
-make check
-```
+The experimenter window is armed **as Milestone 1 built it** — banners, identity, phase,
+elapsed, garment state, instruction, open items. The SPEC.md §11 parts that do not exist yet
+(zone diagram, per-channel hardware panel, countdown, the controls, the §11.1 fit preview) will
+change these five states when Milestone 5 adds them, and each change needs a fresh review and
+re-approval. The armed reference is not a statement that the screen is finished.
 
 ---
 

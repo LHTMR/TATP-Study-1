@@ -1243,10 +1243,10 @@ protects finished screens from collateral damage during the build without fighti
 edits during piloting.
 
 **Arming happens a role at a time, because reviewing does.** The participant screens were
-approved on 21 Sep 2026 and the experimenter screens deliberately were not, pending their own
-review. A half-armed catalogue is the normal state during a build, not a defect: approving
-everything at once would freeze screens nobody had read, which is the failure this design
-exists to avoid.
+approved on 21 Sep 2026 and the experimenter screens in their own review later the same day, so
+the catalogue is now fully armed. A half-armed catalogue is the normal state during a build, not
+a defect: approving everything at once would freeze screens nobody had read, which is the
+failure this design exists to avoid.
 
 A **freeze** command requires every entry to have an approved reference and every diff clean,
 and records the git SHA at freeze. That SHA goes into every subsequent data file, so any session
