@@ -546,6 +546,9 @@ reverse.
    chained off the **fitted** reference values rather than the adjustment values.
 4. **Equalisation check against the reference only** — four comparisons, both orders, reference
    and test channel one after the other with a **3 s hold**. Prompt re-adjustment on mismatch.
+   The response is a **direct press on a drawn button** (§10.8): each stimulus emphasises its own
+   button as it plays, and the press that follows is the judgement, with no confirm and no
+   revising.
 5. **Pleasantness adjustment** with the pattern looped continuously, range **bounded to the
    fitted [P30, P80]**, two adjustments from different start points.
 6. **Preference selection — in every session.** The participant is presented with the available
@@ -593,6 +596,11 @@ without a code change.
 
 **`escape` must be explicitly disabled as a quit key.** The play button emits it, so a default
 binding would let a participant end a session by confirming a rating. Bind only the `period`.
+
+**What is printed on each button is configuration, not code.** `responder.button_symbols` in
+`hardware.yaml` records the glyph on each button, and a screen that draws a control draws that
+glyph (§10.8). Relabelling the remote is then a config change. The emergency stop deliberately
+has no entry: it is a button the participant is told about, never one a screen draws.
 
 ### 10.2 VAS
 
@@ -677,7 +685,7 @@ wording; the English in Bilaga 1 is itself the authors' translation.
 
 | | Deutsch (original) | English | Svenska |
 |---|---|---|---|
-| Question | *(Appendix A of the paper)* | How accurately do the following statements describe how you feel right now? | Hur väl stämmer följande påståenden med hur du känner dig just nu? |
+| Question | *(Appendix A of the paper)* | How accurately does the following statement describe how you feel right now? | Hur väl stämmer följande påstående med hur du känner dig just nu? |
 | Item 6 | Ich fühle mich sehr entspannt. | I'm feeling very relaxed. | Jag känner mig mycket avslappnad. |
 | Item 10 (R) | Ich fühle mich erfrischt und wach. | I'm feeling refreshed and awake. | Jag känner mig pigg och vaken. |
 | 0 % | | completely disagree | instämmer inte alls |
@@ -758,10 +766,100 @@ lab-side and must stay inaudible to the participant, which a *higher* noise leve
 **Yes/no answers are positional.** The two options are drawn at the left and right of the screen
 and selected with the corresponding large button, matching the physical layout of the response
 device (S, 23 Aug 2026). The affirmative is on the left throughout, so the mapping is one
-convention rather than one per question. `screens.comparison` already works this way.
+convention rather than one per question. This is the §10.8 choice screen; `still_audible` moves
+into the `choices` block when `audio.py` is built.
 
 Record the chosen level, whether masking was confirmed, the number of attempts, and whether
 earplugs were used, in the session file.
+
+### 10.8 Two-alternative choice screens
+
+Decided 26 Aug 2026 with S, from the session-11 UI review. Everywhere the participant chooses
+between two options mapped to the two large buttons — the equalisation comparison of §9 step 4,
+the masking check's `still_audible` (§10.7) — **the buttons are drawn and the press is the
+answer.**
+
+- **The control is drawn, not described.** The screen renders the two large buttons carrying the
+  symbols physically printed on them, in their physical arrangement, with an option label under
+  each. "Left button: the first" is a translation the participant performs on every trial, and
+  the comparison phase has dozens. The symbols live in `hardware.yaml` under
+  `responder.button_symbols`, because they describe the device rather than the language — a
+  relabelled remote is a config change and no code change. Approved wording that spells a symbol
+  inside a sentence is not covered by this and needs editing by hand.
+- **A press is acknowledged the moment it happens**, so a registered press is distinguishable
+  from a missed one and the participant does not press again.
+- **The button whose stimulus is playing is emphasised while it plays**, which is what ties the
+  sensation, the button on screen and the button under the thumb into one object. Emphasis is
+  weight, not brightness or colour: it must read as *this is the one you are feeling*, never as
+  a recommendation. It is coincident with the stimulus, never shown beforehand as a legend.
+- **No confirm.** A confirm step exists so a response can be adjusted before it is committed,
+  and there is nothing to adjust in a choice between two options. So the press is the response,
+  a choice cannot be revised, and there is no state in which a participant has chosen but not
+  committed. The play button does nothing on these screens.
+- **A press before both stimuli have been delivered is not a response.** The screen accepts
+  nothing until the protocol says the pair is finished; an early press is logged, not counted.
+- **Each trial is separable from the next without counting.** The chosen button is held visibly
+  chosen for `choice.feedback_s`, then the screen blanks for `choice.gap_s`. Both are perceptual
+  requirements — long enough to see, short enough not to feel like a lag — so both are config
+  and pilot-tunable, tuned by looking at the screen rather than derived.
+
+`docs/UI_PRINCIPLES.md` 1.10 and 5.8–5.12 carry the reasoning; this section is the requirement.
+
+### 10.9 Emergency stop rehearsal
+
+S's decision, 26 Aug 2026. **The participant presses the emergency stop once, for real, in every
+session, with the garment running.**
+
+Bilaga 1 §3.10 tells participants that pressing the stop will not disturb the experiment. That
+is a promise, and a promise about a button nobody has pressed is one the participant has no
+reason to believe at the moment they need it — which is the moment they are least willing to
+experiment. Rehearsing it converts the sentence into something they have seen happen.
+
+- **The software stop only** (`f5`, the blank-screen button on the remote). The hardware button
+  and the rapid depressurisation mechanism are the real safety path (§13) and act without the
+  software, so the software cannot detect a press of them and must not pretend to. Whether they
+  are demonstrated verbally is the experimenter's briefing, not this procedure.
+- **The garment is running**, so the participant feels the touch stop rather than only seeing a
+  screen change. A rehearsal on a dead system teaches where a button is; this one has to teach
+  what pressing it achieves.
+- **It uses the fixed CT-targeted pattern**, never the participant's own, for the same reason
+  §10.7 does: a condition-specific pattern in training would put the condition into a phase the
+  experimenter is present for (§16). `training.stop_rehearsal_pressure_kpa` is its own value and
+  not the masking check's — a pressure chosen so the garment is *audible* is not necessarily one
+  that is clearly *felt*, and the two should be free to diverge in piloting.
+- **It fires the real stop path.** Not a screen that looks like the stop: the same code, the same
+  log event, the same commanded zero. A rehearsal on a lookalike path trains the participant on
+  behaviour that will not recur, and leaves the real path still untested in the session.
+- **The resume is the point, and must be shown.** The participant sees the stop screen, then the
+  session resumes cleanly in front of them. Stopping and resuming is what §13's "resumption must
+  be genuinely clean" means in practice, and this is the one place it is exercised before it
+  matters.
+- **Every session**, because the button matters more than the ninety seconds it costs, and
+  because a participant who last pressed it four weeks ago has not rehearsed it.
+- **It is recorded** — that the rehearsal ran, and that the press was detected. A rehearsal the
+  participant did not actually complete is a different session from one they did.
+
+**Placement: immediately after the masking check (§10.7) and before touch calibration.** The
+garment is warm, the participant is already holding the remote and has just met the fixed
+pattern, and nothing is being measured yet, so a stop costs nothing. It cannot go *inside* the
+masking check, which the stop would abort.
+
+**Wording, approved by S 10 Sep 2026.** Goes under `screens:` in the participant text files when
+the rehearsal is built. The screen between the two is the real `screens.emergency_stop`,
+unchanged. "Press this button" assumes the stop button is drawn on screen, which needs a
+`responder.button_symbols.emergency_stop` entry and narrows the rule that `symbol_for` raises for
+the stop: never drawn *as an option on a response screen*, drawn here because pointing at it is
+the screen's purpose. Resume is the experimenter's, not a timer, and the garment start is
+preceded by the §10.5 warning cue.
+
+| Key | English | Svenska |
+|---|---|---|
+| `stop_rehearsal` | The touch is running now. / Press this button to stop it. / Nothing is lost — we carry straight on afterwards. | Beröringen är igång nu. / Tryck på den här knappen för att stänga av den. / Ingenting går förlorat — vi fortsätter direkt efteråt. |
+| `stop_rehearsal_done` | That is the stop button. / It works at any time, in any part of the visit. / (blank line) / Press ▶ to continue. | Det där är stoppknappen. / Den fungerar när som helst, under alla delar av besöket. / (tom rad) / Tryck på ▶ för att fortsätta. |
+
+**Not built.** It needs the garment running during a training phase, which arrives with
+`audio.py` and the masking check. Specified here so it lands with them rather than being
+remembered.
 
 ---
 
@@ -967,6 +1065,10 @@ way must be impossible to mistake for a real one afterwards.
 - **Software emergency stop** on `f5`: immediately commands all channels to zero, logs the
   press, pauses, and offers resume. Bilaga 1 §3.10 says participants are told pressing it will
   not disturb the experiment, so resumption must be genuinely clean.
+- **The participant rehearses that stop once per session, with the garment running** (§10.9).
+  The promise in Bilaga 1 §3.10 is only credible to someone who has seen it kept, and the moment
+  a participant needs the button is the moment they are least willing to find out what it does.
+  The rehearsal fires the real path, not a lookalike.
 - **Hard pressure ceiling and rate limit in software, independent of participant adjustment.**
   `garment.pressure_ceiling_kpa` clamps every command, whatever its source, and the clamp lives
   in `GarmentController` rather than in each driver so it cannot differ between them.
@@ -1136,8 +1238,15 @@ is a failure.
 `screenshots/reference/` or does not. A screen with a reference is compared and any difference
 beyond a configured tolerance fails; a screen without one is not compared. Approving a screen
 arms it; deliberately changing one means reviewing the diff and re-approving, with
-`--approve-all` for a wording pass. This protects finished screens from collateral damage during
-the build without fighting intentional edits during piloting.
+`--approve-all` for a wording pass and `--approve-matching` for one role's screens. This
+protects finished screens from collateral damage during the build without fighting intentional
+edits during piloting.
+
+**Arming happens a role at a time, because reviewing does.** The participant screens were
+approved on 21 Sep 2026 and the experimenter screens in their own review later the same day, so
+the catalogue is now fully armed. A half-armed catalogue is the normal state during a build, not
+a defect: approving everything at once would freeze screens nobody had read, which is the
+failure this design exists to avoid.
 
 A **freeze** command requires every entry to have an approved reference and every diff clean,
 and records the git SHA at freeze. That SHA goes into every subsequent data file, so any session

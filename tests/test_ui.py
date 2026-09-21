@@ -8,6 +8,8 @@ up as a failure rather than as a screen that quietly stops updating.
 
 from __future__ import annotations
 
+import time
+
 import pytest
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QKeyEvent
@@ -15,13 +17,15 @@ from PySide6.QtWidgets import QApplication, QLabel
 
 from tatp import config as cfg
 from tatp.clock import Clock
-from tatp.responder import Responder
+from tatp.responder import Action, Responder, ResponderError
 from tatp.session import Session
+from tatp.ui import experimenter as experimenter_ui
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 from tatp.ui.vas import QT_KEYS
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
+SPIN_TIMEOUT_S = 5.0
 
 
 @pytest.fixture(scope="module")
@@ -131,6 +135,201 @@ def test_the_window_renders_headless(participant):
     assert not pixmap.isNull()
 
 
+# -- the drawn choice screen, SPEC.md 10.8 -------------------------------------------------
+
+
+def _spin(condition) -> None:
+    """Run the event loop until `condition`, which is how the feedback and gap timers fire."""
+    deadline = time.monotonic() + SPIN_TIMEOUT_S
+    while not condition():
+        if time.monotonic() > deadline:
+            raise AssertionError("the choice screen never reached the expected state")
+        QApplication.processEvents()
+        time.sleep(0.001)
+
+
+def test_the_choice_screen_carries_no_wording_of_its_own(participant, session):
+    """SPEC.md 10.4, again: the question and both option labels come from the text file."""
+    text = session.config.participant_text["choices"]["comparison"]
+    participant.show_choice("comparison")
+    assert participant.stack.currentWidget() is participant.choice
+    assert participant.choice.question == text["question"]
+    assert participant.choice.labels == {"left": text["left"], "right": text["right"]}
+
+
+def test_a_missing_choice_key_raises_rather_than_showing_a_blank(participant):
+    with pytest.raises(KeyError):
+        participant.show_choice("no_such_choice")
+
+
+def test_the_drawn_buttons_carry_the_devices_own_symbols(participant, session):
+    """UI_PRINCIPLES.md 5.9: relabel the remote and the screen follows, with no code change."""
+    symbols = session.config.hardware["responder"]["button_symbols"]
+    responder = participant.choice.responder
+    assert responder.symbol_for(Action.DECREASE) == symbols["decrease"]
+    assert responder.symbol_for(Action.INCREASE) == symbols["increase"]
+
+
+def test_no_symbol_is_drawn_for_the_emergency_stop(participant):
+    """A screen that drew the stop button would be inviting the press."""
+    with pytest.raises(ResponderError, match="button_symbols"):
+        participant.choice.responder.symbol_for(Action.EMERGENCY_STOP)
+
+
+def test_the_press_is_the_response_and_there_is_no_confirm(participant):
+    """UI_PRINCIPLES.md 5.12. The play button must not commit a choice nobody made."""
+    chosen = []
+    participant.chosen.connect(chosen.append)
+    participant.show_choice("comparison")
+    participant.accept_choice()
+
+    _press(participant, "period")
+    assert chosen == [], "the confirm key produced a response on a screen with no confirm"
+
+    _press(participant, "pagedown")
+    assert chosen == ["right"]
+
+
+def test_a_press_before_the_stimuli_are_finished_is_reported_not_counted(participant):
+    """The answer is to a pair, so a press during the first half answers nothing."""
+    chosen, early = [], []
+    participant.chosen.connect(chosen.append)
+    participant.pressed_before_accepting.connect(lambda: early.append(1))
+
+    participant.show_choice("comparison")
+    participant.emphasise_choice("left")
+    _press(participant, "pageup")
+    assert chosen == []
+    assert early == [1]
+
+    participant.accept_choice()
+    _press(participant, "pageup")
+    assert chosen == ["left"]
+
+
+def test_a_choice_cannot_be_revised(participant):
+    """No confirm means no window in which a choice is made but not committed."""
+    chosen = []
+    participant.chosen.connect(chosen.append)
+    participant.show_choice("comparison")
+    participant.accept_choice()
+
+    _press(participant, "pageup")
+    _press(participant, "pagedown")
+    assert chosen == ["left"]
+
+
+def test_emphasis_marks_one_button_and_accepting_clears_it(participant):
+    """UI_PRINCIPLES.md 5.11: the emphasis is coincident with the stimulus, not a legend."""
+    participant.show_choice("comparison")
+    assert participant.choice.emphasised is None
+
+    participant.emphasise_choice("right")
+    assert participant.choice.emphasised == "right"
+
+    participant.accept_choice()
+    assert participant.choice.emphasised is None
+
+
+def test_an_emphasis_on_neither_side_is_refused(participant):
+    participant.show_choice("comparison")
+    with pytest.raises(KeyError):
+        participant.emphasise_choice("middle")
+
+
+def test_the_chosen_button_is_shown_back_then_the_screen_blanks(participant):
+    """UI_PRINCIPLES.md 1.10: one trial is told from the next without counting them."""
+    gaps = []
+    participant.choice_gap_elapsed.connect(lambda: gaps.append(1))
+    participant.show_choice("comparison")
+    participant.accept_choice()
+    _press(participant, "pagedown")
+
+    # Shown back first: the response is emitted on the press, the acknowledgement outlives it.
+    assert participant.choice.selected == "right"
+    assert not participant.choice.blank
+
+    _spin(lambda: participant.choice.blank)
+    _spin(lambda: gaps == [1])
+
+
+def test_leaving_the_choice_screen_stops_it_reading_buttons(participant):
+    """As for the adjustment screen: any route off it disarms the input, an abort included."""
+    chosen = []
+    participant.chosen.connect(chosen.append)
+    participant.show_choice("comparison")
+    participant.accept_choice()
+
+    participant.show_emergency_stop()
+    _press(participant, "pagedown")
+    assert chosen == []
+
+
+def test_the_emergency_stop_works_on_the_choice_screen(participant):
+    """SPEC.md 13: on every screen, and this one reads two other keys."""
+    stops = []
+    participant.emergency_stop.connect(lambda: stops.append(1))
+    participant.show_choice("comparison")
+    participant.accept_choice()
+    _press(participant, "f5")
+    assert stops == [1]
+
+
+def test_the_choice_screen_renders_in_every_state(participant):
+    """Each state is a different picture, so a state that stopped drawing would be caught."""
+    participant.show_choice("comparison")
+    waiting = participant.grab().toImage()
+
+    participant.emphasise_choice("left")
+    emphasised = participant.grab().toImage()
+    assert emphasised != waiting
+
+    participant.choice.selected = "right"
+    participant.choice.update()
+    assert participant.grab().toImage() not in (waiting, emphasised)
+
+
+# -- the adjustment screen's drawn buttons, UI_PRINCIPLES.md 5.8 and 5.10 -----------------
+
+
+def test_the_adjustment_screen_carries_no_wording_of_its_own(participant, session):
+    text = session.config.participant_text
+    participant.show_adjustment("most_pleasant")
+    assert participant.stack.currentWidget() is participant.control
+    assert participant.control.target == text["adjust_targets"]["most_pleasant"]
+    controls = text["participant_controls"]["adjust"]
+    assert participant.control.labels == {"left": controls["left"], "right": controls["right"]}
+    assert participant.control.confirm == controls["confirm"]
+
+
+def test_the_preference_screen_carries_no_wording_of_its_own(participant, session):
+    controls = session.config.participant_text["participant_controls"]["preference"]
+    participant.show_preference()
+    assert participant.stack.currentWidget() is participant.control
+    assert participant.control.target == controls["intro"]
+    assert participant.control.labels == {"left": controls["left"], "right": controls["right"]}
+    assert participant.control.confirm == controls["confirm"]
+
+
+def test_a_held_button_is_drawn_pressed_until_it_is_released(participant):
+    """Press-and-hold, so the pressed state lasts exactly as long as the hold."""
+    participant.show_adjustment("most_pleasant")
+    key = QT_KEYS["pagedown"]
+    participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, key, Qt.NoModifier))
+    assert participant.control.held == {"right"}
+    unheld = participant.grab().toImage()
+    participant.keyReleaseEvent(QKeyEvent(QEvent.KeyRelease, key, Qt.NoModifier))
+    assert participant.control.held == set()
+    assert participant.grab().toImage() != unheld, "the pressed state was not drawn"
+
+
+def test_the_preference_screen_does_not_read_the_buttons(participant):
+    """Nothing moves between patterns yet, so a pressed state would be a false report."""
+    participant.show_preference()
+    participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, QT_KEYS["pagedown"], Qt.NoModifier))
+    assert participant.control.held == set()
+
+
 # -- the experimenter window -------------------------------------------------------------
 
 
@@ -184,6 +383,50 @@ def test_the_reduced_capability_banner_names_the_device(experimenter, session):
     window.refresh()
     assert window.reduced_capability_banner.isVisibleTo(window)
     assert session.garment.driver_name in window.reduced_capability_banner.text()
+
+
+def test_nothing_moves_when_the_banners_appear(experimenter):
+    """UI_PRINCIPLES.md 3.3. The banner region is reserved whether or not a banner is in it.
+
+    The experimenter learns where the phase and the instruction sit. If they slid down at the
+    moment a warning appeared, the warning would cost a re-read of the whole screen at exactly
+    the wrong time.
+    """
+    window, held = experimenter
+    held["override"] = {"placeholder_text": False, "reduced_capability_device": False}
+    window.refresh()
+    window.show()
+    quiet = (window.phase.pos().y(), window.instruction.pos().y())
+
+    held["override"] = {"placeholder_text": True, "reduced_capability_device": True}
+    window.refresh()
+    assert (window.phase.pos().y(), window.instruction.pos().y()) == quiet
+
+
+def test_both_banners_fit_the_reserved_region(experimenter):
+    """The reserved height is only honest if the warnings actually fit inside it.
+
+    A longer wording, or a second language, would otherwise clip a SPEC.md 12.4 banner rather
+    than push the layout -- which is worse than the reflow it was reserved to prevent.
+    """
+    window, held = experimenter
+    held["override"] = {"placeholder_text": True, "reduced_capability_device": True}
+    window.refresh()
+    window.show()
+    width = window.placeholder_banner.width()
+    needed = sum(
+        banner.heightForWidth(width)
+        for banner in (window.placeholder_banner, window.reduced_capability_banner)
+    )
+    assert needed <= experimenter_ui.BANNER_AREA_PX, (
+        f"the two banners need {needed} px but only {experimenter_ui.BANNER_AREA_PX} "
+        f"is reserved -- raise BANNER_AREA_PX"
+    )
+
+
+def test_the_two_banners_do_not_look_alike():
+    """UI_PRINCIPLES.md 3.4: different responses required, so different colours."""
+    assert experimenter_ui.PLACEHOLDER_COLOUR != experimenter_ui.REDUCED_CAPABILITY_COLOUR
 
 
 def test_the_session_identity_and_phase_are_shown(experimenter, session):

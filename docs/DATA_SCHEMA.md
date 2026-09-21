@@ -349,6 +349,19 @@ One row per estimation run — the fitted rating function and the targets read o
 
 One row per equalisation comparison, including catch trials (§9 step 4).
 
+The judgement is a **direct press on a drawn button** (§10.8): the press is the response, so
+there is no confirm event to record and no revised choice to distinguish from a final one. A
+press made before both stimuli have been delivered is not a response and produces no row — it
+goes to the `log`.
+
+**`equal` was dropped from the domain on 26 Aug 2026** (S). It had no route through the
+interface and never had one — the screen offers two buttons and the wording asks which felt
+stronger — and the equalisation design is a **forced choice between two** throughout: the
+comparison document sizes the check as a 2AFC, where a tie is not a response category but a
+missing one. `judgement` stays optional rather than becoming required, because the equalisation
+procedure does not exist yet and Milestone 3 may need a row for a trial that was abandoned; that
+is a different thing from a tie and should not be settled in advance (`docs/NOTES.md` N5.13).
+
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|
 | timestamp_iso | iso8601 | - | yes | Wall clock at the first stimulus of the pair |
@@ -361,7 +374,7 @@ One row per equalisation comparison, including catch trials (§9 step 4).
 | test_pressure_kpa | float | kPa | yes | Commanded on the test channel; 0 on a catch trial |
 | reference_pressure_kpa | float | kPa | yes | Commanded on the reference |
 | catch_trial | bool | - | yes | Zero-pressure catch trial (§9) |
-| judgement | str | - | no | `test_stronger`, `reference_stronger` or `equal` |
+| judgement | str | - | no | `test_stronger` or `reference_stronger`. A forced choice between two (§10.8) |
 | felt | bool | - | no | Catch trials only: whether anything was reported felt |
 | readjusted | bool | - | yes | Whether a re-adjustment was prompted and run |
 | valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4) |

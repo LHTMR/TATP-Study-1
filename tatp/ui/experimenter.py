@@ -21,27 +21,62 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from tatp.units import S_PER_MIN
 
-# Presentation only, not study parameters (SPEC.md 4.2). The banners are red and large because
-# SPEC.md 12.4 requires them to be unmissable; the reference screenshots pin the rest.
-BANNER_STYLE = (
-    "background-color: #b00020; color: #ffffff; padding: 14px; font-weight: bold;"
-)
-BANNER_POINT_SIZE = 18
-HEADING_POINT_SIZE = 22
-INSTRUCTION_POINT_SIZE = 16
+# Presentation only, not study parameters (SPEC.md 4.2). The reference screenshots pin these.
+#
+# Dark, because this screen shares a dim room with a participant looking at a near-black one,
+# and a full-brightness page is then the brightest object in their field of view
+# (UI_PRINCIPLES.md 3.5).
+BACKGROUND = "#141414"
+FOREGROUND = "#ebebeb"
+SECONDARY = "#9a9a9a"
+# The two banners mean different things and demand different responses, so they do not look
+# alike (UI_PRINCIPLES.md 3.4): red is "do not run a participant at all", amber is "this
+# session runs but its touch data will not be valid".
+PLACEHOLDER_COLOUR = "#b00020"
+REDUCED_CAPABILITY_COLOUR = "#8a5a00"
+WARNING_COLOUR = "#e0a12a"
+DISCONNECTED_COLOUR = "#e0453f"
+
+# One scale, four steps, each meaning a level rather than a screen's local preference
+# (UI_PRINCIPLES.md 4.3).
+SIZE_SMALL = 15
+SIZE_BODY = 18
+SIZE_LARGE = 24
+SIZE_HEADLINE = 32
+
+IDENTITY_SEPARATOR = "  ·  "
+MARGIN_PX = 24
+GROUP_GAP_PX = 22
+# The banner region is always this tall, occupied or not, so that nothing below it moves when a
+# banner appears -- a layout that reflows at the moment something has gone wrong is a layout
+# that gets misread (UI_PRINCIPLES.md 3.3). `tests/test_ui.py` asserts both banners fit, so a
+# wording change that would overflow fails the suite rather than silently clipping a warning.
+# Sized with headroom, and deliberately not trimmed to what the current wording needs at the
+# current window width: a narrower window wraps a banner onto more lines, so a snug value would
+# clip the moment the lab used a smaller window than the one this was measured in.
+BANNER_AREA_PX = 240
+BANNER_PADDING_PX = 12
 
 
-def _label(point_size: int, wrap: bool = False) -> QLabel:
+def _label(point_size: int, wrap: bool = False, colour: str = FOREGROUND) -> QLabel:
     made = QLabel()
     made.setWordWrap(wrap)
     font = made.font()
     font.setPointSize(point_size)
     made.setFont(font)
+    made.setStyleSheet(f"color: {colour};")
     return made
+
+
+def _banner_style(colour: str) -> str:
+    return (
+        f"background-color: {colour}; color: #ffffff; "
+        f"padding: {BANNER_PADDING_PX}px; font-weight: bold;"
+    )
 
 
 def _elapsed_text(seconds: float) -> str:
@@ -62,36 +97,58 @@ class ExperimenterWindow(QWidget):
         self.text = experimenter_text
         self.read_view = read_view
 
-        self.placeholder_banner = _label(BANNER_POINT_SIZE, wrap=True)
-        self.placeholder_banner.setStyleSheet(BANNER_STYLE)
-        self.reduced_capability_banner = _label(BANNER_POINT_SIZE, wrap=True)
-        self.reduced_capability_banner.setStyleSheet(BANNER_STYLE)
+        self.setStyleSheet(f"background-color: {BACKGROUND};")
 
-        self.identity = _label(INSTRUCTION_POINT_SIZE)
-        self.phase = _label(HEADING_POINT_SIZE)
-        self.elapsed = _label(INSTRUCTION_POINT_SIZE)
-        self.garment = _label(INSTRUCTION_POINT_SIZE)
-        self.open_items = _label(INSTRUCTION_POINT_SIZE, wrap=True)
-        self.instruction = _label(HEADING_POINT_SIZE, wrap=True)
-        self.technique = _label(INSTRUCTION_POINT_SIZE, wrap=True)
-        self.status = _label(INSTRUCTION_POINT_SIZE)
+        self.placeholder_banner = _label(SIZE_BODY, wrap=True)
+        self.placeholder_banner.setStyleSheet(_banner_style(PLACEHOLDER_COLOUR))
+        self.reduced_capability_banner = _label(SIZE_BODY, wrap=True)
+        self.reduced_capability_banner.setStyleSheet(
+            _banner_style(REDUCED_CAPABILITY_COLOUR)
+        )
+
+        # Who and where, in the smallest size on the screen: it is looked up once at the start
+        # of a session and never needed at a glance again (UI_PRINCIPLES.md 5.2).
+        self.identity = _label(SIZE_SMALL, colour=SECONDARY)
+        self.phase = _label(SIZE_LARGE)
+        self.elapsed = _label(SIZE_LARGE, colour=SECONDARY)
+        self.garment = _label(SIZE_BODY, colour=SECONDARY)
+        self.open_items = _label(SIZE_BODY, wrap=True, colour=WARNING_COLOUR)
+        # What to do now is the largest thing on the screen, because it is the one thing that
+        # has to be readable from where the experimenter is standing (UI_PRINCIPLES.md 3.1).
+        self.instruction = _label(SIZE_HEADLINE, wrap=True)
+        self.technique = _label(SIZE_SMALL, wrap=True, colour=SECONDARY)
+        self.status = _label(SIZE_BODY, colour=SECONDARY)
 
         self.technique.setText(self.text["instructions"]["monofilament"])
 
+        banner_area = QWidget()
+        banner_area.setFixedHeight(BANNER_AREA_PX)
+        banners = QVBoxLayout(banner_area)
+        banners.setContentsMargins(0, 0, 0, 0)
+        banners.addWidget(self.placeholder_banner)
+        banners.addWidget(self.reduced_capability_banner)
+        banners.addStretch(1)
+
+        # Read top to bottom: who and where, then phase and clock, then what to do now, then
+        # anything wrong. The gaps are what carry that order -- an evenly spaced list of labels
+        # has no order at all (UI_PRINCIPLES.md 5.2).
+        status_row = QHBoxLayout()
+        status_row.addWidget(self.phase)
+        status_row.addStretch(1)
+        status_row.addWidget(self.elapsed)
+
         layout = QVBoxLayout(self)
-        for widget in (
-            self.placeholder_banner,
-            self.reduced_capability_banner,
-            self.identity,
-            self.phase,
-            self.elapsed,
-            self.garment,
-            self.open_items,
-            self.instruction,
-            self.technique,
-            self.status,
-        ):
-            layout.addWidget(widget)
+        layout.setContentsMargins(MARGIN_PX, MARGIN_PX, MARGIN_PX, MARGIN_PX)
+        layout.addWidget(banner_area)
+        layout.addWidget(self.identity)
+        layout.addLayout(status_row)
+        layout.addWidget(self.garment)
+        layout.addSpacing(GROUP_GAP_PX)
+        layout.addWidget(self.instruction)
+        layout.addWidget(self.technique)
+        layout.addWidget(self.status)
+        layout.addSpacing(GROUP_GAP_PX)
+        layout.addWidget(self.open_items)
         layout.addStretch(1)
         layout.setAlignment(Qt.AlignTop)
         self.refresh()
@@ -126,7 +183,7 @@ class ExperimenterWindow(QWidget):
         session_text = text["session"]
         limb = text["terms"]["limbs"][view["limb"]]
         self.identity.setText(
-            "   ".join(
+            IDENTITY_SEPARATOR.join(
                 (
                     session_text["participant"].format(value=view["participant_code"]),
                     session_text["session_number"].format(value=view["session_number"]),
@@ -141,8 +198,16 @@ class ExperimenterWindow(QWidget):
         self.elapsed.setText(
             text["status"]["elapsed"].format(time=_elapsed_text(view["elapsed_s"]))
         )
-        connected = "connected" if view["garment_connected"] else "disconnected"
-        self.garment.setText(text["status"][connected])
+        # Connected is the quiet, expected state; disconnected is loud. A hazard state that is
+        # typeset exactly like a working one is indistinguishable at a glance, which is the
+        # only way this line is ever read (UI_PRINCIPLES.md 3.2).
+        connected = bool(view["garment_connected"])
+        self.garment.setText(text["status"]["connected" if connected else "disconnected"])
+        self.garment.setStyleSheet(
+            f"color: {SECONDARY};"
+            if connected
+            else f"color: {DISCONNECTED_COLOUR}; font-weight: bold;"
+        )
 
         items = view["unresolved_open_items"]
         self.open_items.setText(

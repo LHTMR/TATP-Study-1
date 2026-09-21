@@ -27,10 +27,29 @@ and both are S's to do — ask rather than guess:
 
 1. **Add the folder as a working directory** for the session. Then the `Read` tool works
    directly on anything in it, which covers text, markdown and the article PDFs.
-2. **Set `TATP_ETHICS_DIR`** to the same path, for the one helper below.
+2. **Set `TATP_ETHICS_DIR`** to the same path, for the one helper below. On a machine where it
+   is already known, it is in the gitignored `Makefile.local`, as
+   `export TATP_ETHICS_DIR := /the/path`.
 
-If `Read` returns a permission error, the folder has not been added. Say so and ask; do not try
-to route around it.
+**If the folder is not available, stop and ask for it before doing anything else.** Not after
+answering from memory, not after proceeding on an assumption, and not in a note at the end.
+`Read` returning a permission error, or `make ethics` reporting `TATP_ETHICS_DIR is not set`,
+both mean the same thing: the answer this skill was invoked for cannot be obtained yet.
+
+Ask in one message: name the question that needs the folder, and ask S to add it as a working
+directory and give the path. Then wait.
+
+What not to do while waiting, because each of them produces something that reads as sourced and
+is not:
+
+- Answer from general knowledge, or from what `docs/SPEC.md` restates, and flag the gap
+  afterwards. The flag gets lost; the answer stays.
+- Write the value, wording or rule anyway with a "to be confirmed against Bilaga 1" note.
+- Guess the path, search the filesystem for it, or reconstruct it from a path seen earlier in
+  the session.
+
+If part of the task genuinely does not depend on the folder, do that part and say plainly which
+part is waiting. If the whole task depends on it, stop.
 
 ## The one helper
 
@@ -39,17 +58,25 @@ argument is always **relative to the ethics root**, which is what keeps an outsi
 the command — `.claude/hooks/check_bash.py` resolves every path token in a Bash command and
 refuses any that lands outside the repository.
 
+**Run it through `make ethics`, not as a bare command.** The Claude Code app's shell on this Mac
+has neither `python` nor `conda` on PATH, so `python tools/read_ethics.py …` fails with
+`command not found` and the absolute conda path is refused by the hook for landing outside the
+repository. The Makefile is the only place that knows how to reach an interpreter.
+
 ```bash
-python tools/read_ethics.py --list
+make ethics ARGS="--list"
 ```
 
 ```bash
-python tools/read_ethics.py Bilaga1_Forskningsplan_V2.docx
+make ethics ARGS="Bilaga1_Forskningsplan_V2.docx"
 ```
 
 ```bash
-python tools/read_ethics.py support_documents/article_summaries.md --grep "anchor" --context 3
+make ethics ARGS="support_documents/article_summaries.md --grep anchor --context 3"
 ```
+
+`--grep` takes one term. The hook refuses `|` even inside quotes, so there is no alternation —
+run a second `make ethics` rather than trying to combine terms.
 
 Grep before dumping. `Bilaga1_Forskningsplan_V2.docx` and `article_summaries.md` are large, and
 `--grep` with `--context` usually answers the question in a tenth of the tokens. For an article

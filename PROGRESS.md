@@ -7,9 +7,82 @@ fresh session should need nothing from any previous conversation.
 hardware limits. **`docs/NOTES.md`** holds what is merely logged: deviations from Bilaga 1,
 pilot-protocol checks, analysis-plan questions, process. Keep all three updated together.
 
-**Last updated:** 24 August 2026, session 10.
+**Last updated:** 26 August 2026, session 12.
 **Milestone:** 2 (the checks) — *in progress. The literals and blinding checks and the
 screenshot comparison are in the gate; the end-to-end validator is what remains.*
+**Branch:** `ui-review`, not yet merged.
+
+**Session 11 was a UI design pass, on the `ui-review` branch, before `sim/responders.py`.**
+`docs/UI_PRINCIPLES.md` is new and normative: measurement validity, blinding and approved
+wording, safety and legibility, consistency, intuitiveness — in that precedence order, with a
+grading scheme for review findings. It was written *first*, so the review had a stated standard
+rather than a reviewer's taste, and the approved wording in `config/text/` is named in it as the
+authority rather than the ethics documents.
+
+All 60 screen states were then reviewed as rendered PNGs in both languages and every finding
+fixed in one pass: the VAS anchors are ticked so a stacked label can no longer relabel the
+scale, the experimenter screen has a reserved banner region, a real reading order, a dark
+palette and a distinguished disconnected state, and the participant message screens no longer
+move between rating cycles. `docs/NOTES.md` §5 has the findings. 272 tests.
+
+**Session 12 built all three items queued from that review**, on the same branch. The gate runs
+again — the `~/Documents` access the Mac revoked in session 11 has been restored, and `make
+check` passes at 309 tests, 66 screens.
+
+1. **The comparison screen is now a direct-press choice.** `_ChoiceScreen` in
+   `tatp/ui/participant.py`: the two large buttons drawn carrying the glyphs printed on the
+   remote, one emphasised while its own stimulus plays, the press itself the response, the
+   chosen button shown back for `choice.feedback_s` and a blank of `choice.gap_s` between
+   trials. `SPEC.md` §10.8 is new and is the requirement; §9 step 4, §10.1 and
+   `DATA_SCHEMA.md`'s `touchcal_compare` changed with it. `screens.comparison` became
+   `choices.comparison` — the question is S's approved wording unchanged, and what went is
+   exactly the two lines the drawn buttons replace.
+2. **The VAS ticks straddle the line**, and the anchor layout is settled (S, 10 Sep 2026): the
+   tall tick, end labels together on the row nearest the line, interior anchors above it and
+   clear of the marker. `AnchorLayout` in `tatp/ui/vas.py` holds the study layout and one
+   alternative S keeps for colleagues; `make layouts` renders both to
+   `screenshots/vas_layouts/`. `docs/NOTES.md` N5.15 has the history.
+3. **Alertness and relaxation** set the question smaller than the statement it introduces, and
+   `heading_clearance()` holds every scale in both languages clear of the highest thing the
+   scale draws by `TEXT_TO_SCALE_GAP_PX`. That check is a test rather than an assertion in `paintEvent`,
+   because Qt prints an exception raised inside a paint handler and carries on.
+
+**All 64 screenshots are now approved** (S, 21 Sep 2026) — the participant half first, then the
+ten experimenter screens in their own review the same day. The screenshot leg of `make check`
+now guards the whole catalogue. `--approve-matching` was added for exactly this: arming happens
+a role at a time because reviewing does.
+
+**The drawn buttons then spread to the two screens that described them in words** (S, 10 and 21
+Sep 2026). `_ControlScreen` in `tatp/ui/participant.py` is an opening line, the two buttons, and
+a confirm sentence: the pressure adjustment uses it with the `adjust_targets` sentence, the
+preference selection with its own intro. Both keep a confirm, because unlike a `choices` screen
+the press is not the answer — it moves something the participant then commits to. `screens.adjust`
+and `screens.preference` became the `controls` block, and the English RSQ question went singular
+("does the following statement"), the Swedish with it. The preference screen does not read the
+buttons yet: nothing moves between patterns until Milestone 3, and a pressed state over a screen
+that did not change would be a false report.
+
+**`make shots` now clears `screenshots/current/` before rendering.** A retired screen's last
+image used to stay behind and was reviewed as current (`docs/NOTES.md` N5.17).
+`tools/archive_screens.py` (`make archive`) files renders that nothing can produce again under
+`screenshots/archive/`, which is gitignored and explained by a README there — the tick
+candidates S chose from are its first entry. It exists because `mv` is denied to the agent, and
+should stay that way.
+
+**New and specified, not built: the emergency stop rehearsal** (`SPEC.md` §10.9, S's decision
+26 Aug 2026). The participant presses `f5` once per session with the garment running, on the
+fixed pattern, firing the real stop path, and watches the resume. It lands with `audio.py` and
+the masking check, because it needs a training phase with the garment running and there is not
+one yet. The wording is approved (S, 10 Sep 2026) and recorded in §10.9 ready to move into the
+participant text files. Still needed at build time: `training.stop_rehearsal_pressure_kpa` in
+`hardware.yaml`, a `button_symbols.emergency_stop` entry with the `symbol_for` rule narrowed,
+and a record of whether the press actually happened.
+
+**`_ChoiceScreen` has no protocol calling it yet.** The equalisation comparison of `SPEC.md` §9
+step 4 is Milestone 3; `touchcal_compare` was already a specified table with no writer. The
+screen is driven by tests and by the screenshot catalogue, not by a session — so the first thing
+Milestone 3 should do with it is drive it from `touchcal.py` and confirm the three-call
+sequence (`show_choice`, `emphasise_choice`, `accept_choice`) is the right shape in use.
 
 **Session 10** built the three checks SPEC.md 17.2 and 17.4 name and nothing else did:
 `tools/lint_literals.py`, `tests/test_blinding_text.py` against the new `config/blinding.yaml`,
@@ -94,15 +167,20 @@ SPEC.md 17.3) does not exist, so the target prints a line saying so rather than 
 partial gate look like a passing one. Build it and delete that line — that is what is left of
 Milestone 2.
 
-**No screenshot is armed yet.** All 60 are catalogued and written, none has an approved
-reference, so none is compared — that is the SPEC.md 17.4 design, not an oversight. Arming them
-(`make shots ARGS="--approve-all"`, then committing `screenshots/reference/`) is **waiting on
-S**: it freezes the current layout, including session 10's anchor-stacking change, as the thing
-every later diff is measured against.
+**All 64 screens are armed.** S approved the 54 participant screens and then the 10 experimenter
+screens on 21 Sep 2026, so `screenshots/reference/` holds every image in the catalogue and every
+later diff is measured against them — **change one deliberately and you must re-approve it in
+the same commit, or `make check` fails.** Re-approve a role's screens with:
 
 ```
-make check
+make shots ARGS="--approve-matching 'experimenter_*'"
 ```
+
+The experimenter window is armed **as Milestone 1 built it** — banners, identity, phase,
+elapsed, garment state, instruction, open items. The SPEC.md §11 parts that do not exist yet
+(zone diagram, per-channel hardware panel, countdown, the controls, the §11.1 fit preview) will
+change these five states when Milestone 5 adds them, and each change needs a fresh review and
+re-approval. The armed reference is not a statement that the screen is finished.
 
 ---
 
@@ -150,7 +228,7 @@ function. Do not "fix" anything in the repository for this.
 | `tatp/responder.py` | **New.** R400 key mapping, with the `escape` rule machine-checked |
 | `tatp/ui/vas.py` | **New.** `VasState` (no Qt, all the behaviour) and `VasWidget` |
 | `tatp/session.py` | Session state, all 40 provenance keys, the log, blinding |
-| `tatp/ui/participant.py` | **New.** Three screens — text, warning cue, VAS — plus screen placement |
+| `tatp/ui/participant.py` | **New.** Four screens — text, warning cue, VAS, drawn choice — plus screen placement |
 | `tatp/ui/experimenter.py` | **New.** Banners, identity, phase, elapsed, garment state, open items, instruction |
 | `tatp/pinprick.py` | **New.** One application end to end. Search/bracket/estimate is Milestone 3 |
 | `tatp/touchcal.py` | **New.** The accelerating control, one anchor adjustment, one touch rating |
@@ -162,9 +240,11 @@ function. Do not "fix" anything in the repository for this.
 | `tatp/units.py` | **New.** `MS_PER_S` and `S_PER_MIN`. Conversions only, never config |
 | `tools/lint_literals.py` | **New.** SPEC.md 4.2, over the AST. `make literals` prints the inventory |
 | `tools/shots.py` | **New.** Entry point for the screenshot run; sets the offscreen platform |
+| `tools/vas_layouts.py` | **New.** `make layouts`. Every scale in the study layout and the kept alternative |
 | `config/blinding.yaml` | **New.** The forbidden terms of SPEC.md 16, reviewable by S |
-| `Makefile` | `check`, `test`, `test-one`, `lint`, `literals`, `shots`, `preview` |
-| `tests/` | 263 tests, all passing headless |
+| `tools/archive_screens.py` | **New.** `make archive ARGS="<folder>"`. Files unrepeatable renders under `screenshots/archive/` |
+| `Makefile` | `check`, `test`, `test-one`, `lint`, `literals`, `shots`, `layouts`, `archive`, `preview` |
+| `tests/` | 351 tests, all passing headless |
 
 ## What does not exist yet
 

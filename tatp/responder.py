@@ -30,6 +30,10 @@ class Responder:
         block = hardware["responder"]
         self.device = block.get("device", "")
         self.ignored = tuple(block["ignore_keys"])
+        # What is printed on each button. A screen that draws a control must draw the symbol
+        # that is physically under the participant's thumb (UI_PRINCIPLES.md 5.9), so it is read
+        # from the device's own configuration rather than written into the screen that draws it.
+        self._symbols = dict(block["button_symbols"])
 
         self._by_key: dict[str, Action] = {}
         for action in Action:
@@ -65,3 +69,17 @@ class Responder:
 
     def is_ignored(self, key: str) -> bool:
         return key in self.ignored
+
+    def symbol_for(self, action: Action) -> str:
+        """What is printed on the button for `action`. A missing one raises, never blanks.
+
+        The emergency stop has none: it is a button a participant is told about, never one a
+        screen draws, and a screen that drew it would be inviting the press.
+        """
+        try:
+            return self._symbols[action.value]
+        except KeyError:
+            raise ResponderError(
+                f"responder.button_symbols has no entry for {action.value!r}, so no screen can "
+                f"draw that button (UI_PRINCIPLES.md 5.9)"
+            ) from None
