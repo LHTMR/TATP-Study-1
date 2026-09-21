@@ -96,7 +96,10 @@ screens:
   # beröringen börjar FÖR ATT deltagaren tryckte. Mildra den inte till "tryck för att fortsätta".
   self_start: Tryck på ▶ när du är redo att beröringen ska börja.
 
-controls:
+participant_controls:
+  # Namnet syftar på deltagarens egna knappar: `controls:` i försöksledarfilerna är redan den
+  # rollens knappetiketter, och en nyckel som betyder två saker är en fälla för en senare läsare.
+  #
   # Skärmar som ritar ut de två stora knapparna med en etikett under var, en inledande rad ovanför
   # och en bekräftelsemening under (UI_PRINCIPLES.md 5.8). Dessa har kvar ett bekräftelsesteg, till
   # skillnad från `choices`, eftersom trycket inte är svaret: det flyttar något som deltagaren

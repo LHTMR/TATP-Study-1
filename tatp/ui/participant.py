@@ -265,7 +265,7 @@ class _ControlScreen(QWidget):
         self.held: set[str] = set()
 
     def present(self, opening: str, controls: dict) -> None:
-        """`opening` is the line above the buttons; `controls` one `controls` block."""
+        """`opening` goes above the buttons; `controls` is one `participant_controls` entry."""
         self.target = opening
         self.labels = {side: controls[side] for side in SIDES}
         self.confirm = controls["confirm"]
@@ -469,7 +469,7 @@ class ParticipantWindow(QWidget):
         position on a line.
         """
         target = self.text["adjust_targets"][target_key]
-        self.control.present(target, self.text["controls"]["adjust"])
+        self.control.present(target, self.text["participant_controls"]["adjust"])
         self._show(self.control, adjusting=True)
 
     def show_preference(self) -> None:
@@ -479,7 +479,7 @@ class ParticipantWindow(QWidget):
         procedure is Milestone 3 -- and a screen that showed a pressed state while nothing
         changed would be telling the participant something untrue.
         """
-        controls = self.text["controls"]["preference"]
+        controls = self.text["participant_controls"]["preference"]
         self.control.present(controls["intro"], controls)
         self._show(self.control)
 

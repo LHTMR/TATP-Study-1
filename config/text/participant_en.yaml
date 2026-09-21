@@ -97,7 +97,10 @@ screens:
   # BECAUSE the participant pressed. Do not soften it to "press to continue".
   self_start: Press ▶ when you're ready for the touch to start.
 
-controls:
+participant_controls:
+  # Named for the participant's own buttons, because `controls:` in the experimenter files is
+  # already that role's button labels -- one key meaning two things is a trap for a later reader.
+  #
   # Screens that draw the two large buttons with a label under each, an opening line above them
   # and a confirm sentence below (UI_PRINCIPLES.md 5.8). These keep a confirm, unlike `choices`,
   # because the press is not the answer: it moves something the participant then commits to.

@@ -297,13 +297,13 @@ def test_the_adjustment_screen_carries_no_wording_of_its_own(participant, sessio
     participant.show_adjustment("most_pleasant")
     assert participant.stack.currentWidget() is participant.control
     assert participant.control.target == text["adjust_targets"]["most_pleasant"]
-    controls = text["controls"]["adjust"]
+    controls = text["participant_controls"]["adjust"]
     assert participant.control.labels == {"left": controls["left"], "right": controls["right"]}
     assert participant.control.confirm == controls["confirm"]
 
 
 def test_the_preference_screen_carries_no_wording_of_its_own(participant, session):
-    controls = session.config.participant_text["controls"]["preference"]
+    controls = session.config.participant_text["participant_controls"]["preference"]
     participant.show_preference()
     assert participant.stack.currentWidget() is participant.control
     assert participant.control.target == controls["intro"]
