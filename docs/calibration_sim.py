@@ -3,6 +3,10 @@
 Compares candidate procedures for estimating F40 -- the monofilament force at which
 median pain VAS = 40 -- on the Aesthesio ladder.  Observer model and all assumptions
 are documented in section 5.1 of the companion note.  Run with: python3 calibration_sim.py
+
+The two driver blocks are under `if __name__=="__main__"` so that sim/ and the tests can import
+the observer model without running 4000 iterations.  Nothing else here is to be tidied: the
+numbers in the companion note must stay traceable to this code as it was run.
 """
 import numpy as np
 rng = np.random.default_rng(20260822)
@@ -107,12 +111,13 @@ def run(title,med,sig,N=4000,prior_start=None):
     for r in rows:
         print(f"{r['label']:<40}{r['n']:>6.1f}{r['rmse']:>8.3f}{r['steps']:>7.2f}{r['ok']:>15.0f}%{r['p40']:>7.1f}{r['p70']:>7.1f}")
 
-print(f"slope s = {S_FIXED:.1f} VAS pts per log10 unit (fixed across scenarios)")
-print(f"one filament step (0.246 log10) = {0.246*S_FIXED:.1f} VAS pts")
-run("PRE-S",600,10)
-run("POST-S",130,10)
-run("POST-S, noisy reporter (s unchanged)",130,18)
-run("POST-S, informed prior start",130,10,prior_start=4)
+if __name__=="__main__":
+    print(f"slope s = {S_FIXED:.1f} VAS pts per log10 unit (fixed across scenarios)")
+    print(f"one filament step (0.246 log10) = {0.246*S_FIXED:.1f} VAS pts")
+    run("PRE-S",600,10)
+    run("POST-S",130,10)
+    run("POST-S, noisy reporter (s unchanged)",130,18)
+    run("POST-S, informed prior start",130,10,prior_start=4)
 
 # ---- Sensitivity: what if the assumed fixed slope is wrong? ----------------
 def run_slope_misspec(title,med,sig,N=4000,start=0):
@@ -143,5 +148,6 @@ def run_slope_misspec(title,med,sig,N=4000,start=0):
         rm=np.sqrt((np.array(e)**2).mean())
         print(f"    w={w:.2f}  RMSE {rm:.3f}  ({rm/STEP:.2f} steps)  right filament {100*np.mean(ok):.0f}%")
 
-run_slope_misspec("POST-S",130,10)
-run_slope_misspec("POST-S noisy reporter",130,18)
+if __name__=="__main__":
+    run_slope_misspec("POST-S",130,10)
+    run_slope_misspec("POST-S noisy reporter",130,18)

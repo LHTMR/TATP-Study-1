@@ -109,8 +109,27 @@ this the right choice, and both are load-bearing for §17:
   dependent on GPU and driver.
 
 Timing is handled with `time.perf_counter()` and Qt timers. Sound with `sounddevice` (white
-noise is generated, not a file). Randomisation with `numpy.random.Generator`, seeded and
-recorded.
+noise is generated, not a file).
+
+**Randomisation is seeded and recorded everywhere, and uses two generators with a boundary
+between them.**
+
+- **Offline randomisation uses `numpy.random.Generator`** — today only the allocation
+  (`tools/make_allocation.py`), which is run once, seeded from the command line, and whose
+  output is committed with the seed in a `#` header line inside the CSV. Its reproducibility
+  rests on the committed file, not on re-running it.
+- **Randomisation inside a running session uses `random.Random`**, held as `Session.rng` and
+  seeded from `rng_seed`, which is drawn when not supplied and recorded in the provenance either
+  way (§14). Virtual participants (§17.5) draw from a generator supplied by the caller, of this
+  same type, so a simulated session reproduces from the seed its own data file carries.
+
+**A known weakness, recorded rather than papered over:** it is the session generator, not the
+allocation one, whose stream must still reproduce years later from a recorded seed — and
+`random.Random` gives a weaker guarantee of stream stability across Python versions than
+`numpy.random.Generator` does. The two are the wrong way round on that criterion. Nothing in the
+study depends on it yet, because no analysis re-runs a session from its seed; changing it later
+means reseeding `Session` and re-recording, and would invalidate reproduction of any session
+recorded before the change. `docs/LOG.md` N5.20 has it.
 
 Other environment facts:
 

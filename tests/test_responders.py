@@ -9,6 +9,8 @@ pass while the VAS rules changed underneath it.
 
 from __future__ import annotations
 
+import functools
+import math
 import random
 
 import pytest
@@ -67,7 +69,7 @@ def play_adjustment(presses, state: AdjustmentState):
         now += press.hold_s
         # The trial ticks while a button is down; one tick at the end of the hold is enough,
         # because the travel is a closed-form integral and not a per-tick accumulation
-        # (PROGRESS.md decision 28).
+        # (docs/LOG.md N6.23).
         state.tick(now)
         state.release(press.action, now)
     raise AssertionError("the plan never confirmed")
@@ -76,22 +78,51 @@ def play_adjustment(presses, state: AdjustmentState):
 # -- the observer model ----------------------------------------------------------------------
 
 
-def test_the_slope_matches_the_simulation_it_is_taken_from():
-    """`SLOPE_VAS_PER_LOG10` is repeated from docs/calibration_sim.py, so it can drift.
+def load_calibration_sim():
+    """Import docs/calibration_sim.py by path, executing it. It is a record, not a package.
 
-    That file cannot be imported -- it runs a 4000-iteration simulation at import time and has
-    no `__main__` guard -- and must not be reformatted (PROGRESS.md decision 13). So the
-    expression is read back out of it and evaluated, which keeps the value single-sourced
-    without touching the record of how it was run.
+    Importable at all only since its two driver blocks went under a `__main__` guard (22 Sep
+    2026); before that an import ran 4000 iterations and printed. Nothing else about the file
+    changed, so its numbers stay traceable to the code as it was run (docs/LOG.md N6.8).
     """
-    import math
+    import importlib.util
     from pathlib import Path
 
     source = Path(__file__).resolve().parent.parent / "docs" / "calibration_sim.py"
-    lines = [ln for ln in source.read_text().splitlines() if ln.startswith("S_FIXED")]
-    assert len(lines) == 1, f"expected one S_FIXED assignment in {source.name}, found {lines}"
-    expression = lines[0].split("=", 1)[1].strip().replace("np.", "math.")
-    assert sim.SLOPE_VAS_PER_LOG10 == pytest.approx(eval(expression, {"math": math}))
+    spec = importlib.util.spec_from_file_location("calibration_sim", source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# Cached for the tests that only want the constants, because each execution pays for numpy.
+# `load_calibration_sim` stays uncached so that the test asserting the import is silent does a
+# real one -- a cached call executes no module code and would pass however loud the file got.
+calibration_sim = functools.cache(load_calibration_sim)
+
+
+def test_the_slope_matches_the_simulation_it_is_taken_from():
+    """`SLOPE_VAS_PER_LOG10` is repeated from docs/calibration_sim.py, so it could drift."""
+    assert sim.SLOPE_VAS_PER_LOG10 == pytest.approx(calibration_sim().S_FIXED)
+
+
+def test_the_pain_model_matches_the_simulation_it_is_taken_from():
+    """The whole model, not just its slope -- the reason the file is worth importing.
+
+    `rate()` there draws its own noise from a module-level generator, so it is compared at the
+    noise the responder would have drawn, supplied to both.
+    """
+    reference = calibration_sim()
+    for force_mn in (98.0, 255.0, 588.0):
+        expected = 40 + reference.S_FIXED * (math.log10(force_mn) - math.log10(255.0))
+        assert sim.pain_rating_pct(force_mn, 255.0, noise_vas=0.0) == pytest.approx(expected)
+
+
+def test_importing_the_simulation_runs_nothing(capsys):
+    """The guard is what makes the import above cheap. If a driver call ever escapes it, this
+    fails rather than the suite quietly growing a 4000-iteration simulation in it."""
+    load_calibration_sim()
+    assert capsys.readouterr().out == ""
 
 
 def test_the_rating_at_f40_is_forty_by_definition():
@@ -101,8 +132,6 @@ def test_the_rating_at_f40_is_forty_by_definition():
 def test_doubling_the_force_adds_the_slope_times_log_two():
     """A whole log unit either side of F40 falls off the scale and is clipped, so the slope is
     checked over a step that stays on it -- which is also the only range the study visits."""
-    import math
-
     at = sim.pain_rating_pct(255.0, 255.0, noise_vas=0.0)
     doubled = sim.pain_rating_pct(510.0, 255.0, noise_vas=0.0)
     assert doubled - at == pytest.approx(sim.SLOPE_VAS_PER_LOG10 * math.log10(2.0))
@@ -168,7 +197,7 @@ def test_the_normal_responder_rates_a_stronger_stimulus_higher(vas_config):
 
 def test_the_same_seed_gives_the_same_ratings(vas_config):
     """SPEC.md 17.3 asserts a session is reproducible from its seed, which is only true if the
-    virtual participant draws from a generator the session owns (PROGRESS.md decision 18)."""
+    virtual participant draws from a generator the session owns (docs/LOG.md N6.13)."""
     def run():
         responder = sim.Responder(random.Random(SEED))
         state = VasState(vas_config, FakeClock())
@@ -213,7 +242,7 @@ def test_rates_maximum_clears_the_intolerable_threshold(loaded, vas_config):
 
 
 def test_confirming_without_moving_produces_no_response(vas_config):
-    """PROGRESS.md decision 16: there is nothing to record, so nothing is recorded."""
+    """docs/LOG.md N6.11: there is nothing to record, so nothing is recorded."""
     responder = sim.ConfirmsWithoutMoving(random.Random(SEED))
     state = VasState(vas_config, FakeClock())
     plan = responder.vas_actions("pain", 255.0, vas_config)
@@ -266,7 +295,7 @@ def test_an_unknown_adjustment_target_raises_rather_than_guessing(adjustment_con
 
 
 def test_tapping_accumulates_the_exploration_the_minimum_is_measured_against(adjustment_config):
-    """`min_exploration_kpa` is recorded, not enforced (PROGRESS.md decision 29), so what
+    """`min_exploration_kpa` is recorded, not enforced (docs/LOG.md N2.5), so what
     matters is that a normal responder genuinely explores rather than confirming on the spot."""
     state = AdjustmentState(adjustment_config, 0.0, 250.0, start_kpa=0.0)
     responder = sim.Responder(random.Random(SEED))
@@ -284,7 +313,7 @@ def test_holding_to_maximum_stops_at_the_range_end(adjustment_config):
 
 
 def test_holding_to_maximum_takes_the_real_seconds_the_ramp_needs(adjustment_config):
-    """The hold cannot be accelerated away (PROGRESS.md decision 27), so the validator pays it.
+    """The hold cannot be accelerated away (docs/LOG.md N6.22), so the validator pays it.
     If this number ever drops to nothing, the hold has stopped being a hold."""
     responder = sim.HoldsToMaximum(random.Random(SEED))
     plan = responder.adjustment_actions("just_uncomfortable", 0.0, adjustment_config)

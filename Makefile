@@ -21,7 +21,7 @@ CONDA ?= conda
 
 CONDA_RUN := $(CONDA) run --no-capture-output -n tatp-study-1
 
-.PHONY: check test test-one lint literals shots layouts archive preview ethics
+.PHONY: check test test-one lint literals shots layouts archive preview ethics calibration-sim
 
 check: test lint shots
 	@echo
@@ -76,6 +76,14 @@ archive:
 #   make ethics ARGS="Bilaga1_Forskningsplan_V2.docx --grep anchor --context 3"
 ethics:
 	$(CONDA_RUN) python tools/read_ethics.py $(ARGS)
+
+# The calibration simulation behind docs/calibration_methods_comparison.md. Takes a couple of
+# minutes and writes nothing -- it prints the tables in that document, so the numbers there can
+# be reproduced rather than taken on trust. A target because the file sits in docs/ and is not
+# one of the `python tools/...` forms the permission rules match, so there is no other way to
+# run it from an agent session. Do not tidy the file it runs (docs/LOG.md N6.8).
+calibration-sim:
+	$(CONDA_RUN) python docs/calibration_sim.py
 
 # The session timeline and its warnings (SPEC.md 7.2). No hardware, nothing written.
 #   make preview ARGS="--start 09:30"

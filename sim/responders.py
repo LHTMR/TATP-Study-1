@@ -13,13 +13,13 @@ models; they are three press policies over one interface. Only the normal respon
 model at all.
 
 **This module imports no Qt**, so every responder is testable without a display, in the same way
-`VasState` is separated from `VasWidget` (PROGRESS.md decision 14). Delivering these presses as
+`VasState` is separated from `VasWidget` (docs/LOG.md N6.9). Delivering these presses as
 key events is the validator runner's job, not this module's.
 
 **What is here and what is not.** SPEC.md 17.5 names one normal responder and nine adversarial
 ones. An adversarial responder exists to assert that a specific error path fires, so one whose
 error path does not exist yet would assert nothing while looking as though it did -- which is
-the failure `PROGRESS.md` records under decisions 21 and 35 and again in the validator note. The
+the failure `docs/LOG.md` records under N6.16 and N6.27 and `SPEC.md` 17.3 builds its rule on. The
 six built here are the ones whose path exists in today's code. The three deferred are named in
 `DEFERRED` below, with the milestone that will make each of them mean something.
 """
@@ -35,10 +35,11 @@ from tatp.responder import Action
 
 # From `docs/calibration_sim.py`, which is the record of the simulation behind
 # `docs/calibration_methods_comparison.md` section 5.1 and is excluded from ruff so that its
-# numbers stay traceable to the code as it was run (PROGRESS.md decision 13). It is repeated
-# here rather than imported because that module runs its 4000-iteration simulation at import
-# time and has no `__main__` guard; `tests/test_responders.py` reads the expression back out of
-# that file and fails if the two ever disagree, so it is still single-sourced.
+# numbers stay traceable to the code as it was run (docs/LOG.md N6.8). It is repeated
+# here rather than imported so that this module depends on no numpy and no file outside the
+# package; `tests/test_responders.py` imports that file and fails if the two ever disagree, so
+# it is still single-sourced. That import became possible on 22 Sep 2026, when the simulation's
+# two driver blocks went under a `__main__` guard -- the only change made to it.
 #
 # Ng et al. 2024 give a Weber fraction of 0.88 on the hand dorsum, so one JND is log10(1.88) in
 # log10 force. In 2AFC that is d' ~ 1, making the mean shift sqrt(2) * sigma_disc; with a
@@ -132,7 +133,7 @@ class Press:
     """One button press. `hold_s` is real seconds held down; 0 is a tap.
 
     Real, not scaled: the adjustment's tap threshold and ramp describe a hand and are read off
-    `Clock.real_elapsed_s()` (PROGRESS.md decision 27). A hold that the accelerated clock
+    `Clock.real_elapsed_s()` (docs/LOG.md N6.22). A hold that the accelerated clock
     shortened would be a different control, not a faster session.
     """
 
@@ -166,9 +167,9 @@ def adjustment_presses(target_kpa: float, start_kpa: float, tap_step_kpa: float
     """Taps from the start pressure to the target, then a confirm.
 
     Taps rather than a hold, because a tap costs no real time while a hold must be held for real
-    seconds (decision 27 again) -- and because tapping is what the range end the adjustment
+    seconds (N6.22 again) -- and because tapping is what the range end the adjustment
     starts from invites. The exploration this accumulates is the distance travelled, which is
-    what `min_exploration_kpa` is measured against (decision 29).
+    what `min_exploration_kpa` is measured against (docs/LOG.md N2.5).
     """
     assert tap_step_kpa > 0, "adjustment.tap_step_kpa must be positive"
     action = Action.DECREASE if target_kpa < start_kpa else Action.INCREASE
@@ -183,7 +184,7 @@ class Responder:
     """The normal responder: the observer model, and presses that reach what it decides.
 
     `rng` is a `random.Random`, supplied by the caller and never created here, so a simulated
-    session is reproducible from the seed the session itself records (PROGRESS.md decision 18).
+    session is reproducible from the seed the session itself records (docs/LOG.md N6.13).
     """
 
     name = "normal"
@@ -274,7 +275,7 @@ class RatesRandomly(Responder):
 class ConfirmsWithoutMoving(Responder):
     """Presses confirm with the marker never shown.
 
-    Asserts the path of PROGRESS.md decision 16: `VasState.confirm()` returns None, the widget
+    Asserts the path of docs/LOG.md N6.11: `VasState.confirm()` returns None, the widget
     emits `pressed_without_marker` instead of `confirmed`, and the session logs the press rather
     than writing a rating row with an invented value.
     """
@@ -290,7 +291,7 @@ class StopsMidRating(Responder):
     """Presses the emergency stop instead of answering.
 
     Asserts SPEC.md 13 end to end: the garment stops, the participant screen changes, the event
-    is logged with its trial index, and -- PROGRESS.md decision 24 -- no `pinprick` row is
+    is logged with its trial index, and -- docs/LOG.md N6.19 -- no `pinprick` row is
     written, because no rating was given and there is no honest value for those columns.
     """
 
