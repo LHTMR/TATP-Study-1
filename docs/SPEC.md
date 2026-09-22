@@ -1270,11 +1270,42 @@ traces to the exact interface the participant saw.
 
 ### 17.5 Virtual participants and experimenters
 
-`sim/responders.py` — **normal**: the observer model from `calibration_sim.py`,
-rating = 40 + m·(log₁₀F − log₁₀F₄₀) + noise. **Adversarial**, each asserting a specific error
-path fires: rates everything 0; rates everything 100; rates randomly; F₄₀ below the bottom
-filament; F₄₀ above the top; confirms instantly without moving the marker; presses the emergency
-stop mid-block; stops responding; holds the pressure adjustment to maximum.
+**A responder's output is presses, not ratings.** The only input the software has is the four
+keys of §10.1, so a responder emits the sequence a thumb would produce and the rating is
+whatever `VasState` yields when those presses are delivered to it. A responder that returned a
+number directly would pass while the control the participant operates was broken.
+
+**Two observer models, because the study rates two different things.**
+
+- **Pinprick, the `pain` scale.** The model from `calibration_sim.py` and §5.1 of the comparison
+  document: rating = 40 + m·(log₁₀F − log₁₀F₄₀) + noise, clipped to the scale. The slope m is
+  51.6 VAS points per log₁₀ unit of force, derived there from the Ng et al. (2024) Weber
+  fraction of 0.88 on the hand dorsum. The 40 is not a parameter: F₄₀ is defined as the force at
+  which the median pain rating is 40 (§8).
+- **Touch, the `intensity` scale.** Linear in log pressure between the simulated participant's
+  two anchor pressures, which are placed at the two percentages the scale labels — 10 %
+  "just noticeable" and 90 % "just uncomfortable" (§10.4). **This is a plausible monotone
+  mapping, not a grounded model, and it is stated as such wherever it appears.** The pinprick
+  model must not be reused here: it is derived from pinprick discrimination on the hand dorsum
+  and says nothing about garment pressure, so borrowing it would put a number carrying
+  provenance where nothing has been measured.
+
+The remaining scales — pleasantness, relaxation, alertness — are not functions of a stimulus, so
+a normal responder answers them from a fixed disposition plus noise rather than from a model.
+
+Every responder draws from a generator supplied by the caller, never a module-level one, so a
+simulated session stays reproducible from the seed the session records (§14).
+
+**Adversarial**, each asserting a specific error path fires: rates everything 0; rates everything
+100; rates randomly; F₄₀ below the bottom filament; F₄₀ above the top; confirms instantly without
+moving the marker; presses the emergency stop mid-block; stops responding; holds the pressure
+adjustment to maximum.
+
+**An adversarial responder is built only once the path it asserts exists.** One whose error path
+has no code yet asserts nothing while appearing in the count, which makes the validator read as
+more complete than it is — the failure §17.3 describes. Those not yet built are named in the
+module with the milestone that will give each one something to fire, and a test fails if that
+list stops naming them.
 
 `sim/experimenters.py` — **normal**, plus adversarial: enters a participant code and session
 number that already have a completed session; enters session 3 before session 2; enters
