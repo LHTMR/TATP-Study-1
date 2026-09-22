@@ -124,7 +124,7 @@ between them.**
   same type, so a simulated session reproduces from the seed its own data file carries.
 
 Which generator sits on which side of that boundary is an open question, not a settled design:
-`docs/LOG.md` N5.20 has it, with the gate.
+`docs/LOG.md` N6.35 has it, with the gate.
 
 Other environment facts:
 

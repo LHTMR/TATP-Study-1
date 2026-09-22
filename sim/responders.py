@@ -19,9 +19,9 @@ key events is the validator runner's job, not this module's.
 **What is here and what is not.** SPEC.md 17.5 names one normal responder and nine adversarial
 ones. An adversarial responder exists to assert that a specific error path fires, so one whose
 error path does not exist yet would assert nothing while looking as though it did -- which is
-the failure `docs/LOG.md` records under N6.16 and N6.27 and `SPEC.md` 17.3 builds its rule on. The
-six built here are the ones whose path exists in today's code. The three deferred are named in
-`DEFERRED` below, with the milestone that will make each of them mean something.
+the failure `docs/LOG.md` records under N6.16 and N6.27 and `SPEC.md` 17.3 builds its rule
+on. The six built here are the ones whose path exists in today's code. The three deferred are
+named in `DEFERRED` below, with the milestone that will make each of them mean something.
 """
 
 from __future__ import annotations

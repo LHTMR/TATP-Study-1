@@ -277,6 +277,8 @@ class Adjustment(QObject):
 
         self.start_iso = ""
         self._start_s = 0.0
+        self._press_event_ms: int | None = None
+        self._press_s = 0.0
         self._t_session_s: float | None = None
         self.timed_out = False
 
@@ -320,12 +322,28 @@ class Adjustment(QObject):
         self._tick.start()
         self._timeout.start(self.session.clock.scaled_ms(self.timeout_s))
 
-    def _on_pressed(self, action_value: str) -> None:
-        self.state.press(Action(action_value), self.session.clock.real_elapsed_s())
+    def _on_pressed(self, action_value: str, event_ms: int) -> None:
+        now_s = self.session.clock.real_elapsed_s()
+        self._press_event_ms = event_ms
+        self._press_s = now_s
+        self.state.press(Action(action_value), now_s)
         self._log_button("button_down", action_value)
 
-    def _on_released(self, action_value: str) -> None:
-        self.state.release(Action(action_value), self.session.clock.real_elapsed_s())
+    def _on_released(self, action_value: str, event_ms: int) -> None:
+        # The release is placed by the events' own timestamps, not by when this handler runs:
+        # the press handler writes a log row, and a stalled write would otherwise lengthen the
+        # press past the tap threshold and lose the tap. A stall long enough for a tick to run
+        # before this handler (over `hold_delay_s`) can still move the pressure as a hold.
+        if self._press_event_ms is None:
+            # Held down before this screen appeared, so the press never reached this trial.
+            # AdjustmentState ignores a release it holds no press for; the time is irrelevant.
+            now_s = self.session.clock.real_elapsed_s()
+        else:
+            held_ms = event_ms - self._press_event_ms
+            assert held_ms >= 0, f"the release's timestamp is {-held_ms} ms before its press"
+            now_s = self._press_s + held_ms / MS_PER_S
+        self.state.release(Action(action_value), now_s)
+        self._press_event_ms = None
         self._log_button("button_up", action_value)
         self._command()
 

@@ -4,10 +4,11 @@
 # active. Recipes are spawned through /bin/sh, which does not define the `conda` shell function,
 # so `conda` here is always the binary on PATH.
 #
-# `check` is the gate. It is NOT complete yet: the end-to-end validator
-# (tools/validate_session.py, SPEC.md 17.3) does not exist, so `check` runs the unit tests, the
-# linter and the screenshot comparison. It says so when it runs, rather than letting a partial
-# gate look like a passing one.
+# `check` is the gate (SPEC.md 17.1): unit tests, linter, end-to-end validator, screenshots.
+# Every stage runs even when an earlier one fails, and the last line names every stage that
+# failed -- "exits non-zero listing every failure" -- rather than stopping at the first.
+# The validator reports the SPEC.md 17.3 assertions it cannot make yet as skipped, and counts
+# them, so a green gate says how much of it is still waiting on later milestones.
 
 # `conda` is whatever is on PATH, which is right on the lab PC and in any normal shell. Some
 # shells -- the Claude Code app's, on this Mac -- run with a minimal PATH that has no conda
@@ -21,11 +22,17 @@ CONDA ?= conda
 
 CONDA_RUN := $(CONDA) run --no-capture-output -n tatp-study-1
 
-.PHONY: check test test-one lint literals shots layouts archive preview ethics calibration-sim
+.PHONY: check test test-one lint validate literals shots layouts archive preview ethics calibration-sim
 
-check: test lint shots
-	@echo
-	@echo "INCOMPLETE GATE: the end-to-end validator (make validate) is not built yet."
+GATE_STAGES := test lint validate shots
+
+check:
+	@failed=""; \
+	for stage in $(GATE_STAGES); do \
+		$(MAKE) --no-print-directory $$stage || failed="$$failed $$stage"; \
+	done; \
+	if [ -n "$$failed" ]; then echo; echo "GATE FAILED:$$failed"; exit 1; fi; \
+	echo; echo "GATE PASSED: $(GATE_STAGES)"
 
 test:
 	$(CONDA_RUN) python -m pytest -q
@@ -40,6 +47,11 @@ test-one:
 
 lint:
 	$(CONDA_RUN) python -m ruff check .
+
+# The slice run twice headless with one seed, then its data files checked (SPEC.md 17.3).
+# Writes to data/_validate/, which it clears first.
+validate:
+	$(CONDA_RUN) python tools/validate_session.py $(ARGS)
 
 # The SPEC.md 4.2 literals inventory. The violations are already a test (tests/test_no_literals.py,
 # so `make check` covers them); this target is for reading the list of named constants the rule

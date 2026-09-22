@@ -259,6 +259,46 @@ def test_the_adjustment_commands_the_garment_it_is_adjusting(running):
     assert commands, "the pressure the participant set must reach the device"
 
 
+def _stamped(kind, name, stamp_ms):
+    event = QKeyEvent(kind, QT_KEYS[name], Qt.NoModifier)
+    event.setTimestamp(stamp_ms)
+    return event
+
+
+def test_a_tap_survives_a_stall_in_the_press_handler(running, loaded):
+    """A slow write between press and release must not turn a tap into nothing.
+
+    Found by the validator: the press handler writes a log row, and a stalled write delayed the
+    release handler past `tap_max_duration_s`. The press is now timed from the events' own
+    stamps. The stall here sits between the thresholds, where a misread press moves nothing.
+    """
+    session, participant, experimenter = running
+    adjustment = touchcal.Adjustment(
+        session, participant, experimenter, touchcal.anchor_plans(session.config)[0]
+    )
+    adjustment.start()
+    adjust = loaded.hardware["adjustment"]
+    stall_s = (float(adjust["tap_max_duration_s"]) + float(adjust["hold_delay_s"])) / 2
+    participant.adjust_pressed.connect(lambda *_: time.sleep(stall_s))
+    before = adjustment.state.pressure_kpa
+
+    participant.keyPressEvent(_stamped(QEvent.KeyPress, "pagedown", 1000))
+    participant.keyReleaseEvent(_stamped(QEvent.KeyRelease, "pagedown", 1050))
+    assert adjustment.state.pressure_kpa == before + adjustment.state.tap_step_kpa
+
+
+def test_a_release_whose_press_came_before_the_screen_is_ignored(running):
+    """A button already held when the adjustment appeared: the release moves nothing."""
+    session, participant, experimenter = running
+    adjustment = touchcal.Adjustment(
+        session, participant, experimenter, touchcal.anchor_plans(session.config)[0]
+    )
+    adjustment.start()
+    before = adjustment.state.pressure_kpa
+    participant.keyReleaseEvent(_stamped(QEvent.KeyRelease, "pagedown", 1000))
+    assert adjustment.state.pressure_kpa == before
+
+
 def test_every_button_edge_reaches_the_log(running):
     """SPEC.md 10.3: the search path is recoverable, not just the final setting."""
     session, participant, _ = running

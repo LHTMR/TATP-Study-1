@@ -140,3 +140,7 @@ cues:
   # A visual warning cue precedes every stimulus (SPEC.md 10.5).
   warning_lead_s: 1.0
   warning_duration_s: 0.5
+  # How far a recorded interval (cue to stimulus, stimulus to rating cue) may stray from its
+  # configured value before the end-to-end validator fails it (SPEC.md 17.3). The spec names
+  # no tolerance, so this is S's to set (open item L5). Null until then; the check is skipped.
+  interval_tolerance_s: null

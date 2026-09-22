@@ -153,3 +153,12 @@ items:
          so they are marked placeholders rather than invented. Every such string is prefixed
          PLACEHOLDER so it cannot reach a participant unnoticed.
     blocks_use: true
+
+  - item: "L5"
+    summary: Tolerance on recorded intervals, for the end-to-end validator
+    resolved_when: {file: study1.yaml, path: "cues.interval_tolerance_s"}
+    fix: SPEC.md 17.3 asks for "intervals within tolerance" without naming one. Until it is set,
+         tools/validate_session.py reports intervals_within_tolerance as skipped. Needed by
+         Milestone 5, when the full grid makes intervals worth checking; deferrable until
+         piloting.
+    blocks_use: false
