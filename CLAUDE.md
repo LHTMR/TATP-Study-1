@@ -96,8 +96,12 @@ and a rule matching only the bare form prompts on the one you would naturally co
   breaks the match and prompts:
   - **No environment-variable prefix.** Not `QT_QPA_PLATFORM=offscreen pytest`. Set the
     variable in `tests/conftest.py` or in the tool itself. (`env` is denied anyway.)
-  - **No `git -C <path>`.** The working directory is already the repository root, so plain
-    `git status`, `git add -A`, `git commit` are both shorter and matchable.
+  - **No `git -C <path>`, and no `cd <path> &&` in front.** The working directory is already
+    the repository root (or the worktree, for a stream agent), so plain `git status`,
+    `git add -A`, `git commit` are both shorter and matchable.
+  - **No newline inside a command.** A multi-line `git commit -m "…"` prompts even though
+    `git commit` is allowed, because a newline can hide a second command. Write the message to
+    a file in the session scratchpad and use `git commit -F <file>`.
   - Prefer `make check` over its parts. Subprocesses a Makefile spawns are not
     permission-checked, so the Makefile is the right home for the env vars and the
     `conda run` invocations.
