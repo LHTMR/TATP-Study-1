@@ -74,8 +74,8 @@ PREVIOUS_TIMEPOINT = "previous_timepoint"
 PINPRICK_TABLE = "pinprick"
 BRUSH_TABLE = "brush"
 
-# Which `pinprick` offset shifts the prior into each time point (SPEC.md 8.2). Pre-S of session 1
-# has no previous time point and starts from `start_filament_label_g_session1_pre_s` instead.
+# Which `pinprick` offset shifts the prior into each time point (SPEC.md 8.2). Pre-S of
+# session 1 has no previous time point and starts from `start_filament_label_g_session1_pre_s`.
 FIRST_SESSION = 1
 OFFSET_KEYS = {
     "pre_sensitisation": "expected_offset_steps_between_sessions",
@@ -104,7 +104,9 @@ class Filament:
     @property
     def force_mn(self) -> float:
         """What the estimator fits: the weighed force where there is one (SPEC.md 8.1)."""
-        return self.force_nominal_mn if self.force_measured_mn is None else self.force_measured_mn
+        if self.force_measured_mn is None:
+            return self.force_nominal_mn
+        return self.force_measured_mn
 
 
 def ladder(config: Config) -> tuple[Filament, ...]:
@@ -146,7 +148,7 @@ def fixed_slope_f40(
 
 
 def nearest_index(forces_mn: Sequence[float], force_mn: float) -> int:
-    """The filament nearest in log force; the ladder is log-spaced. A tie goes to the lighter."""
+    """The filament nearest in log force (the ladder is log-spaced); a tie goes lighter."""
     target = math.log10(force_mn)
     return min(range(len(forces_mn)), key=lambda i: abs(math.log10(forces_mn[i]) - target))
 
@@ -289,7 +291,7 @@ class LongProtocolState:
         max_applications: int,
         rng: random.Random,
     ):
-        assert 0 <= start < n_filaments, f"start index {start} is off a {n_filaments}-rung ladder"
+        assert 0 <= start < n_filaments, f"start {start} is off a {n_filaments}-rung ladder"
         self.n_filaments = n_filaments
         self.start = start
         self.target_pct = target_pct
@@ -478,7 +480,8 @@ class IntolerableCap:
         return not was_global and self.global_cap is not None
 
     def cap_for(self, region: str, site: int) -> int | None:
-        caps = [c for c in (self.site_caps.get((region, site)), self.global_cap) if c is not None]
+        candidates = (self.site_caps.get((region, site)), self.global_cap)
+        caps = [c for c in candidates if c is not None]
         return min(caps) if caps else None
 
     def allows(self, region: str, site: int, index: int) -> bool:
@@ -491,6 +494,13 @@ class IntolerableCap:
         if any(cap is None for cap in caps):
             return None
         return max(caps)
+
+
+def jittered_isi_s(rng: random.Random, isi_min_s: float, isi_max_s: float) -> float:
+    """The interval after an application: uniform over the configured range (SPEC.md 8.3)."""
+    seconds = rng.uniform(isi_min_s, isi_max_s)
+    assert isi_min_s <= seconds <= isi_max_s
+    return seconds
 
 
 def place(
@@ -887,7 +897,7 @@ class _Series(Procedure):
 
     def __init__(self, rig: Rig, isi_min_s: float, isi_max_s: float):
         super().__init__(rig)
-        assert 0 < isi_min_s <= isi_max_s, f"ISI range {isi_min_s}..{isi_max_s} s is not a range"
+        assert 0 < isi_min_s <= isi_max_s, f"ISI {isi_min_s}..{isi_max_s} s is not a range"
         self.isi_min_s = isi_min_s
         self.isi_max_s = isi_max_s
         self.applications = 0
@@ -953,7 +963,8 @@ class _Series(Procedure):
         self._wait_then_next()
 
     def _wait_then_next(self) -> None:
-        seconds = self.session.rng.uniform(self.isi_min_s, self.isi_max_s)
+        seconds = jittered_isi_s(self.session.rng, self.isi_min_s, self.isi_max_s)
+        self.session.log("interval", detail=f"{seconds:.2f} s")
         self.wait(seconds, self._advance)
 
     def _advance(self) -> None:
@@ -969,6 +980,8 @@ class _Series(Procedure):
     # -- discard and repeat (SPEC.md 11) ------------------------------------------------
 
     def _on_discard(self) -> None:
+        if not self.running:
+            return  # built but not yet started: the discard is some other procedure's
         if self._discardable is None or self.rig.interruptions.active is not None:
             self.session.log(
                 "discard_ignored",
@@ -1003,7 +1016,7 @@ class _Series(Procedure):
 
 @dataclass(frozen=True)
 class LongResult:
-    """A completed long protocol: what later phases need. The record is `calibration_pinprick`."""
+    """A completed long protocol, as later phases need it. The record is in the data files."""
 
     phase: str
     region: str
@@ -1078,6 +1091,7 @@ class LongProtocol(_Series):
         self.state: LongProtocolState | None = None
         self._awaiting_fit: LongResult | None = None
         self._last: tuple[Planned, int] | None = None  # the planned application and its site
+        self._logged_plan: list[int] | None = None
         self.experimenter.fit_accepted.connect(self._on_fit_accepted)
         self.experimenter.fit_rerun_requested.connect(self._on_fit_rerun)
 
@@ -1114,12 +1128,13 @@ class LongProtocol(_Series):
         if ceiling == 0 and not state.finished:
             self.session.log("cap_bars_every_filament", severity="warning", detail=self.region)
             state.bar_everything()
-        was_measuring = state.measuring
         planned = state.next(ceiling)
         if planned is None:
             self._conclude()
             return
-        if state.measuring and not was_measuring:
+        if state.measuring and state.plan is not self._logged_plan:
+            # Identity, not equality: a re-bracket after a discard draws a new list.
+            self._logged_plan = state.plan
             order = ", ".join(self.filaments[i].label_g for i in state.plan)
             # The order is a draw from the session RNG; logging it makes the draw auditable
             # without replaying the seed (SPEC.md 8.2).
@@ -1149,14 +1164,17 @@ class LongProtocol(_Series):
             run_index=self.run_index,
         )
         self.apply(
-            lambda: PinprickTrial(self.session, self.participant, self.experimenter, application),
+            lambda: PinprickTrial(
+                self.session, self.participant, self.experimenter, application
+            ),
             self._rated,
         )
 
     def _rated(self, trial: PinprickTrial, response) -> None:
         planned, site = self._last
         applied = ladder_index(self.filaments, trial.applied_label_g)
-        self.state.record(Outcome(planned.index, applied, response.rating_percent, planned.purpose))
+        rating = response.rating_percent
+        self.state.record(Outcome(planned.index, applied, rating, planned.purpose))
         _record_ceiling(self, trial, response, applied, site)
         self.interval(PINPRICK_TABLE, trial)
 
@@ -1324,7 +1342,7 @@ def _record_ceiling(protocol, trial: PinprickTrial, response, applied: int, site
 
 @dataclass(frozen=True)
 class RatingSeriesResult:
-    """A completed short protocol or brush protocol: the median, and the ratings it came from."""
+    """A completed short or brush protocol: the median, and the ratings it came from."""
 
     region: str
     stimulus: str  # the filament's gram label, or `brush`
@@ -1441,7 +1459,9 @@ class ShortProtocol(_RatingSeries):
             site_index=site,
         )
         self.apply(
-            lambda: PinprickTrial(self.session, self.participant, self.experimenter, application),
+            lambda: PinprickTrial(
+                self.session, self.participant, self.experimenter, application
+            ),
             self._rated,
         )
 
