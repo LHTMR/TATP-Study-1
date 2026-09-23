@@ -62,15 +62,24 @@ The permissions in `.claude/settings.json` have three tiers, and the split is de
   sends data off the machine (`curl`, `ssh`, `scp`, …), rewriting the environment outside
   `environment.yml`, destroying git history (`git push`, `git reset --hard`, `git clean`), and
   writes to OneDrive on either machine.
-- **Ask** covers commands that can destroy uncommitted work, which a branch does not protect:
-  `rm`, `git checkout` / `git restore` (use `git switch` to change branch, `git rm` to delete a
-  tracked file), and the shell wrappers (`bash -c`, `eval`), which hide the real command inside
-  a string.
+  Recursive `rm` (`rm -r`, `rm -rf`, …) is denied too: a single-file `rm` is enough for
+  anything the build does, and a recursive one is how a folder of participant data disappears.
+- **Ask** is kept to `ln`, `git config` and the shell wrappers (`bash -c`, `eval`), which hide
+  the real command inside a string. Nothing the build does needs them. Write the command out
+  instead.
 - **Allow** covers everything the parallel streams need to run without a person watching: every
-  `make` target, `conda run -n tatp-study-1 …`, `mv`, `cp`, `git worktree`, `git merge`,
-  `git cherry-pick`, and `WebSearch` / `WebFetch` for research. A background agent cannot answer
-  a prompt, so a command it needs that prompts stalls the stream.
+  `make` target, `conda run -n tatp-study-1 …`, single-file `rm`, `mv`, `cp`, `git checkout` /
+  `git restore`, `git worktree`, `git merge`, `git cherry-pick`, and `WebSearch` / `WebFetch`
+  for research. **No agent should ever wait on S for a permission.** A command that prompts
+  means the command was written wrongly (see the hard rules below), so rewrite it rather than
+  asking. Commit often: `git restore` is allowed, and a branch protects only what is committed.
 - Everything else is left to the session's permission mode.
+
+**The Bash tool on the lab PC sometimes fails to start**, with
+`bash.exe: *** fatal error - add_item ("\??\C:\Program Files\Git", "/", ...) failed, errno 1`.
+That is Git Bash failing to launch, not your command failing, and running the same command again
+works. **Retry once, unchanged.** It seems to happen most when several shells start at once, so
+prefer `Read` / `Grep` / `Glob` to shell commands, and do not fire several Bash calls in parallel.
 
 `conda run … python tools/…` is allowed **both with and without `--no-capture-output`**. The
 Makefile uses the flag, so that is the spelling in front of you when you run a tool by hand,
@@ -241,10 +250,28 @@ protection**, so these rules relax the ones above for the length of the push.
 3. Implementation-only choices (a data structure, a function's shape) need no research and no
    row. Use judgement.
 
-**Still S's, and never decided by the build:** new participant-facing wording, anything that
-touches blinding (§16), and hardware or safety limits (pressure, rate, sound level). These get
-the two-places rule — a `PLACEHOLDER` plus an open item — and the build carries on around them.
-The startup banner makes them impossible to miss at the pilot.
+**Participant wording.** Look in the ethics documents first (the `ethics-folder` skill). If the
+wording is there, use it verbatim. If it is not, **write it**, keeping to `docs/SPEC.md` §16 and
+`docs/UI_PRINCIPLES.md`, and mark it for S's review:
+
+- a `# DRAFT (LOG N7.x): written by the build, not ethics-sourced` comment on the key, in both
+  language files;
+- a row in `docs/LOG.md` §7, giving the key and the text.
+
+Do not prefix it `PLACEHOLDER`. That would raise the placeholder banner on every session and
+hide the gaps that genuinely are placeholders. `tests/test_blinding_text.py` still has to pass.
+
+**Still S's, and never decided by the build:** anything that weakens blinding (§16), and hardware
+or safety limits (pressure, rate, sound level). These get the two-places rule — a `PLACEHOLDER`
+plus an open item — and the build carries on around them. The startup banner makes them
+impossible to miss at the pilot.
+
+**Nothing waits on S to fetch a paper.** Research works from what is openly reachable: open
+access, PubMed Central / Europe PMC, preprints, author copies, abstracts. When a source that
+matters could only be read as an abstract, the report says so and lowers its confidence. The
+decision is **taken anyway**, and the paper is listed under "To fetch" in
+`docs/research/README.md`. If S drops PDFs into `docs/research/sources/` (gitignored — papers
+are copyrighted), a later session re-checks the affected reports. Until then nothing is blocked.
 
 **Streams.** The main session is the integrator. It cuts each stream branch from
 `accel/integration`, fixes the shared interfaces first (config keys, schema tables, the

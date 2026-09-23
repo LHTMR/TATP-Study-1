@@ -34,6 +34,8 @@ LOCAL_SETUP.md
 
 # Claude Code local overrides
 .claude/settings.local.json
+# Full-text papers S supplies for the research reports. Copyrighted, so never committed.
+docs/research/sources/
 # Per-agent working copies for parallel streams; each is a branch, not part of this tree.
 .claude/worktrees/
 CLAUDE.local.md

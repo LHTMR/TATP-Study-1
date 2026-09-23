@@ -30,12 +30,21 @@ protocol and its papers), pain and secondary hyperalgesia models, CT-targeted to
 experimental design. Then established reference implementations, such as PsychoPy, the
 reference repositories in `docs/SPEC.md` §5.2 and published QST software. Blogs and forums count
 only as pointers to a primary source. Cite every claim with a link, and a DOI where one exists.
-If a source is paywalled and you saw only the abstract, say so.
+
+**Never stop because a paper is paywalled.** Look for a readable copy first:
+- PubMed Central and Europe PMC (`europepmc.org` serves full text for open-access papers);
+- the Unpaywall API (`api.unpaywall.org/v2/<doi>?email=…`) for a legal open copy;
+- preprint servers, and the author's own page;
+- `docs/research/sources/`, if S has dropped the PDF there.
+
+If only the abstract is readable, work from it, say so in the report, and lower the confidence.
+Add the paper to the "To fetch" table in `docs/research/README.md`, with its DOI and the report
+that wants it. Always give a recommendation. "Needs the full text" is not a recommendation.
 
 ## What you must not do
 
-- **Never write participant-facing wording.** Wording is ethics-bound. If the question needs
-  new text, say so and stop there.
+- **Do not write participant-facing wording.** The main session writes it, under the rules in
+  `CLAUDE.md`. You may report what published protocols tell participants, with the source.
 - **Never recommend anything that weakens blinding** (`docs/SPEC.md` §16), however well
   supported.
 - **Never recommend a hardware limit** (pressure, rate, sound level) as settled. Those are S's.

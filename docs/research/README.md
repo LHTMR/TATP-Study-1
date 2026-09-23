@@ -9,3 +9,12 @@ Numbers are never reused.
 
 | # | Question | Confidence | Decision |
 |---|---|---|---|
+
+## To fetch
+
+Papers a report could read only as an abstract. **Nothing waits on these.** Each decision was
+taken without the full text. If S drops a PDF into `docs/research/sources/` (gitignored, because
+papers are copyrighted), a later session re-reads it and updates the report that cited it.
+
+| DOI | Title | Wanted by |
+|---|---|---|
