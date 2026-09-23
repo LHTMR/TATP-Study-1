@@ -34,6 +34,8 @@ LOCAL_SETUP.md
 
 # Claude Code local overrides
 .claude/settings.local.json
+# Per-agent working copies for parallel streams; each is a branch, not part of this tree.
+.claude/worktrees/
 CLAUDE.local.md
 
 # A commit message with a blank line in it cannot be passed to `git commit -m`: the PreToolUse

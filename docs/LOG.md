@@ -124,3 +124,15 @@ Carried over from the old `PROGRESS.md` on 23 Sep 2026, where they were numbered
 | N6.29 | **Unit conversions live in `tatp/units.py` and never in `config/`.** They had been written six times under three names, each a chance to write `100.0` and get a plausible wrong number. There are sixty seconds in a minute whatever S decides, so a configurable `s_per_min` would be a setting that can be wrong. |
 | N6.30 | **A `QObject` with no parent is collected the moment nothing holds it**, and a collected protocol object silently stops answering the participant's buttons. Two tests failed this way. Whatever runs a protocol must hold a reference to it, as `SliceRunner` does. |
 | N6.31 | **To test the data-write failure path, make the *file* read-only, not the folder.** Directory permissions do not stop an append to an existing file. |
+
+## 7. Decisions taken without S during the acceleration push
+
+From 23 Sep 2026 S asked for the build to move to a lab-testable version without waiting on them
+for each decision (`CLAUDE.md`, "Acceleration push"). Every choice the spec does not settle and
+that affects what is measured, recorded or shown gets a row here, marked **[R]**, so S can
+review them together. Where a `decision-research` report informed it, the row links it under
+`docs/research/`. **Confidence** is the research agent's: high, medium or low. Low-confidence rows
+are the ones worth S's time first.
+
+| # | Decision | Report | Confidence |
+|---|---|---|---|

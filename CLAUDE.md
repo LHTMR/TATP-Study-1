@@ -62,10 +62,15 @@ The permissions in `.claude/settings.json` have three tiers, and the split is de
   sends data off the machine (`curl`, `ssh`, `scp`, …), rewriting the environment outside
   `environment.yml`, destroying git history (`git push`, `git reset --hard`, `git clean`), and
   writes to OneDrive on either machine.
-- **Ask** covers commands that are usually fine but can destroy work: `rm`, `mv`, `cp`,
-  `git checkout` / `git restore` (use `git switch` to change branch), and the shell wrappers
-  (`bash -c`, `eval`), which hide the real command inside a string.
-- Everything else is either allowed or left to the session's permission mode.
+- **Ask** covers commands that can destroy uncommitted work, which a branch does not protect:
+  `rm`, `git checkout` / `git restore` (use `git switch` to change branch, `git rm` to delete a
+  tracked file), and the shell wrappers (`bash -c`, `eval`), which hide the real command inside
+  a string.
+- **Allow** covers everything the parallel streams need to run without a person watching: every
+  `make` target, `conda run -n tatp-study-1 …`, `mv`, `cp`, `git worktree`, `git merge`,
+  `git cherry-pick`, and `WebSearch` / `WebFetch` for research. A background agent cannot answer
+  a prompt, so a command it needs that prompts stalls the stream.
+- Everything else is left to the session's permission mode.
 
 `conda run … python tools/…` is allowed **both with and without `--no-capture-output`**. The
 Makefile uses the flag, so that is the spelling in front of you when you run a tool by hand,
@@ -121,9 +126,10 @@ hidden from the experimenter screen as well** — recorded in the data, never di
 
 Use one when the answer needs many files read but only the conclusion matters.
 
-Do **not** use subagents to write the implementation. Edits belong in the main session so they
-land in one reviewable diff and the reasoning stays connected. Always give a subagent a specific
-question, and tell it to return findings rather than file contents.
+During the acceleration push (below), implementation subagents are allowed, one per stream, each
+in its own worktree on its own branch. Otherwise, edits belong in the main session so they land
+in one reviewable diff. Always give a subagent a specific task or question, and tell it to return
+findings rather than file contents.
 
 **A subagent protects context, not budget.** Its work happens in a separate window and only its
 final message comes back, so the files it reads never touch this conversation. But its tokens
@@ -139,6 +145,8 @@ wrong answer.
 | Extract a convention or protocol detail from a reference repo | `haiku`, or `sonnet` if the protocol is intricate | ~10 | Bounded retrieval, and the answer is verifiable at a glance |
 | Investigate a failure spanning several modules | `sonnet` | ~25 | Real diagnosis, but the hypothesis comes back here to be checked |
 | **Adversarial review at each milestone** | **`inherit` — never downgrade** | ~40 | Last line of defence. A weak reviewer produces false comfort, which is worse than no review |
+| Implement one stream of the push | `inherit` | — | Writes code other streams merge against. A cheaper model here costs more in integration |
+| Research a decision (`decision-research`) | `inherit` | ~40 | Its report is what S reviews instead of the decision itself |
 
 Invoke the reviewer by name: **"Use the spec-review agent to review this diff against
 docs/SPEC.md."** It is defined in `.claude/agents/spec-review.md`, so the criteria stay the same
@@ -150,8 +158,8 @@ the right default — downgrade deliberately, not by habit.
 
 ## Committing
 
-- Work on `main` during the initial build — the repository is new and nothing depends on it.
-  Branch once there is a pilotable version worth protecting.
+- **Branches are the protection.** `main` only receives merges that pass `make check` and have
+  been reviewed. Work happens on `accel/integration` and the stream branches cut from it.
 - **Commit at every milestone in `docs/SPEC.md` §18 with `make check` passing**, and commit
   smaller working increments in between.
 - **Never end a session with the repository broken.** If something is half-finished, either
@@ -217,7 +225,54 @@ Doing only one of the two is how a guess ends up in the study. When S settles an
 config value and update its `fix` to record the decision, in the same commit.
 
 Only genuinely non-blocking things belong in `open_items.yaml`. If something blocks the build,
-**stop and ask.** Do not park a blocker in a list and carry on.
+**stop and ask** — except during the acceleration push, below.
+
+## Acceleration push — from 23 Sep 2026 until S ends it
+
+S wants a **lab-testable build with the mock garment** as fast as possible: Milestones 2–5 and
+the Milestone 6 documents. S has delegated decisions to the build. **Branching is the
+protection**, so these rules relax the ones above for the length of the push.
+
+**Decide, don't ask, and leave a trail.** When the spec does not settle something:
+
+1. If it affects what is measured, recorded or shown, spawn the **`decision-research`** agent
+   with one precise question. It writes a sourced report to `docs/research/R<nn>-…md`.
+2. Take the decision, and add a row to `docs/LOG.md` §7 marked **[R]** that links the report.
+3. Implementation-only choices (a data structure, a function's shape) need no research and no
+   row. Use judgement.
+
+**Still S's, and never decided by the build:** new participant-facing wording, anything that
+touches blinding (§16), and hardware or safety limits (pressure, rate, sound level). These get
+the two-places rule — a `PLACEHOLDER` plus an open item — and the build carries on around them.
+The startup banner makes them impossible to miss at the pilot.
+
+**Streams.** The main session is the integrator. It cuts each stream branch from
+`accel/integration`, fixes the shared interfaces first (config keys, schema tables, the
+protocol-runner call shape) so streams do not invent them twice, and then runs one
+implementation agent per stream with `isolation: "worktree"`. Worktrees live under
+`.claude/worktrees/`, which is gitignored. Each stream agent:
+
+- works only on its own branch, commits small working increments, and runs `make check` before
+  each commit;
+- owns the files its milestone names. For a shared file (`config/*.yaml`, the text files,
+  `docs/DATA_SCHEMA.md`, `tatp/session.py`, `run_session.py`), it adds and does not restructure,
+  so merges stay mechanical;
+- does not edit `docs/STATUS.md`. The integrator rewrites it after each merge. The agent returns
+  its `docs/LOG.md` §7 rows in its final message rather than editing the file, because every
+  stream appending to one table is a guaranteed conflict.
+
+**Review before every merge into `accel/integration`**, in this order:
+
+1. `/code-review high` on the stream's diff, for correctness bugs.
+2. The **spec-review** agent, for the spec. Both run at full strength.
+
+Fix what survives, then merge, then run `make check` on the integration branch. `main` receives
+`accel/integration` only at a milestone boundary, with `make check` passing.
+
+**Screenshots.** A stream may re-approve the screens it deliberately changed, in the same
+commit. It must name each one in its final message, and the integrator records it in
+`docs/LOG.md` §7, so S can review every re-approved screen in one sitting before the pilot.
+Re-approving a screen the stream did not mean to change is a bug, not an approval.
 
 ## Working style
 
