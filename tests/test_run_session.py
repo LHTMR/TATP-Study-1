@@ -113,7 +113,7 @@ def _run_slice(runner) -> None:
 
 
 def test_the_pattern_folder_has_no_default():
-    """Defaulting it would silently substitute the provisional mockups (FOR_S A3.2)."""
+    """Defaulting it would silently substitute the provisional mockups (open item 5)."""
     with pytest.raises(SystemExit):
         run_session.parse_args([a for a in ARGV if a not in ("--patterns", str(EXAMPLES))])
 

@@ -296,7 +296,7 @@ class Adjustment(QObject):
         """Take the channel to the start pressure and hand the buttons to the participant."""
         clock = self.session.clock
         self.start_iso = clock.wall_iso()
-        # Real seconds: `duration_s` is how long a participant took, which is the FOR_S A3.6
+        # Real seconds: `duration_s` is how long a participant took, which is the open item 8
         # measurement and must not be reported scaled.
         self._start_s = clock.real_elapsed_s()
         self._t_session_s = clock.t_session_s()

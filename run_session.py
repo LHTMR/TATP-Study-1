@@ -13,7 +13,7 @@ a session that may be run with a real participant, and both are already a banner
 experimenter screen and a warning row in the log (SPEC.md 12.4, 20). They are printed here as
 well, because someone starting the software from a terminal should see them before the windows
 appear -- but they do not prevent the run, which is what makes the software pilotable while
-`FOR_S.md` is still open.
+`config/open_items.yaml` is still open.
 """
 
 from __future__ import annotations
@@ -164,7 +164,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         required=True,
         help="garment pattern folder; there is no default, because defaulting to the "
         "provisional mockups in config/patterns/examples/ would substitute them silently "
-        "(FOR_S A3.2)",
+        "(open item 5)",
     )
     parser.add_argument("--participant-language", default="sv", choices=("sv", "en"))
     parser.add_argument("--experimenter-language", default="en", choices=("sv", "en"))

@@ -11,6 +11,10 @@
 #                every element of a list must be non-null.
 # `blocks_use`   true  -> the study cannot be RUN for real until this is settled
 #                false -> piloting is fine without it
+#
+# This is the only list of what is waiting on S. There is no separate human-readable copy to
+# keep in step with it: `fix` says what is needed and when, and run_session.py and the
+# experimenter banner print every unresolved item at startup.
 
 items:
   - item: "1"
@@ -36,8 +40,10 @@ items:
   - item: "4"
     summary: The session schedule grid -- block spacing and expected block durations
     resolved_when: {file: schedule.yaml, path: "generate.settled"}
-    fix: "Piloting (SPEC.md 7). Add `settled: true` under `generate:` once the grid is fixed.
-         `generate.expected_duration_min` is part of the same question and is null until then;
+    fix: "Piloting (SPEC.md 7). The grid is clash-free at 8 min spacing with every block
+         ESTIMATED at 4 min (S, 23 Aug 2026). Replace `generate.expected_duration_min` with
+         what a block really takes -- the session records that on every block, so the pilot
+         produces it for free -- then add `settled: true` under `generate:`.
          `tatp.schedule.generate` refuses a grid declared settled while a duration is still
          null, so the two cannot drift apart."
     blocks_use: false
@@ -52,13 +58,16 @@ items:
     summary: Slope prior, pooled across participants
     resolved_when: {file: study1.yaml, path: "pinprick.slope_prior_source"}
     fix: Re-estimate from pilot data pooled across participants, never per participant
-         (SPEC.md 8.2). Set to `pilot_pooled_YYYY-MM-DD` once done; 51.6 is simulated.
+         (SPEC.md 8.2). Set to `pilot_pooled_YYYY-MM-DD` once done; 51.6 is simulated. S -- if
+         the pilot does not yield enough data for a better estimate, keep the simulated,
+         literature-based value.
     blocks_use: false
 
   - item: "7"
     summary: Expected pre-S to post-S offset for the informed prior
     resolved_when: {file: study1.yaml, path: "pinprick.expected_offset_confirmed"}
-    fix: Confirm -2.7 ladder steps against pilot data (SPEC.md 8.2)
+    fix: Confirm -2.7 ladder steps (Scheuren et al.) against pilot data (SPEC.md 8.2). S -- if
+         the pilot does not yield enough data for a better estimate, keep Scheuren's value.
     blocks_use: false
 
   - item: "8"

@@ -112,7 +112,7 @@ def test_provenance_is_populated_from_the_real_environment(session):
     assert re.fullmatch(r"[0-9a-f]{64}", values["allocation_sha256"])
     assert re.fullmatch(r"[0-9a-f]{64}", values["pattern_sha256"])
     assert values["pattern_names"] == "static_sham;sweep_01cms;sweep_03cms;sweep_20cms"
-    assert values["filaments_measured"] == "false", "the set has not been weighed (FOR_S A3.1)"
+    assert values["filaments_measured"] == "false", "the set has not been weighed (open item 1)"
     assert values["filament_calibration_date"] == ""
 
 

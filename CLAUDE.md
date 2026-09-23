@@ -159,13 +159,16 @@ the right default — downgrade deliberately, not by habit.
 Context is the constraint that governs everything else. The way to survive it is to keep the
 state on disk rather than in the conversation, so that any fresh session can pick up.
 
-- **`PROGRESS.md` is the handover file.** Keep it current: what is done, what is in flight,
-  what is next, and any decision taken that is not already in `docs/SPEC.md`. Update it at
-  every milestone and before stopping for any reason.
-- **`FOR_S.md` is S's queue** and **`docs/NOTES.md` is the log of everything else worth
-  keeping.** See below — update both in the same breath as `PROGRESS.md`.
-- Between `docs/SPEC.md`, `PROGRESS.md`, `FOR_S.md` and the git log, a new session should need
-  nothing from the previous conversation.
+Three documents, and each has one job — **spec, status, log**:
+
+- **`docs/SPEC.md` is the spec** — what the software must do.
+- **`PROGRESS.md` is the status**, and the handover file. Keep it current: what is done, what
+  is in flight, what is next, and any decision taken that is not already in `docs/SPEC.md`.
+  Update it at every milestone and before stopping for any reason.
+- **`docs/NOTES.md` is the log** of everything else worth keeping. See below — update it in
+  the same breath as `PROGRESS.md`.
+- Between `docs/SPEC.md`, `PROGRESS.md` and the git log, a new session should need nothing
+  from the previous conversation.
 - `/clear` between unrelated tasks. A long session carrying failed approaches performs worse
   than a fresh one with a better prompt.
 - Prefer a targeted grep to reading a whole file. Do not re-read a file already read this
@@ -178,44 +181,40 @@ state on disk rather than in the conversation, so that any fresh session can pic
 - After a compaction, re-read `PROGRESS.md` and `docs/SPEC.md` §18 before continuing — the
   summary will not have kept the detail.
 
-## `FOR_S.md` — the queue of things the build cannot settle by itself
+## What is waiting on S — `config/open_items.yaml`
 
-`PROGRESS.md` is for the next session. **`FOR_S.md` is for S**, and it is the only file S
-should have to read to know what is waiting on them. Keep it current or it becomes actively
-misleading — a stale queue is worse than no queue, because it gets trusted.
+Things only S can supply — a value, a wording or a decision from outside the repository, such
+as measured forces, a pressure limit or a serial protocol, without which I would have to guess
+— live in **`config/open_items.yaml`** and nowhere else. It is machine-checked, and every
+unresolved item is printed at startup. There is no separate queue document: an earlier
+`FOR_S.md` duplicated this list by hand and drifted from it, which is why it was deleted.
+Refer to an item by its number (`open item 4`, `L2`), which is never reused or renumbered.
 
-**One list, and the boundary is load-bearing: things only S can supply.** A value, a wording or
-a decision from outside the repository — measured forces, a pressure limit, a serial protocol —
-without which I would have to guess. Each row is one or two sentences, carries a gate, and is
-**deleted when resolved**, in the same commit as the config change that resolved it. Item IDs
-are never reused or renumbered.
+Deviations from Bilaga 1, checks the pilot protocol needs, analysis-plan questions and process
+go in **`docs/NOTES.md`**, which is a log, not a queue. It exists so that when S reviews
+something, the thing they are looking at has a written history to ask about. Do not ask S to
+review what I wrote: S has their own review process, and anything worth their eye is flagged in
+the chat when it happens.
 
-**Nothing else goes in it.** In particular, do not ask S to review what I wrote: S has their own
-review process, and anything worth their eye is flagged in the chat when it happens. Deviations
-from Bilaga 1, checks the pilot protocol needs, analysis-plan questions and process go in
-**`docs/NOTES.md`**, which is a log, not a queue — it exists so that when S reviews something,
-the thing they are looking at has a written history to ask about.
-
-**The three-places rule.** Any time you would otherwise guess a value, invent a wording, or
-default something the spec does not fix, do all three of these or none:
+**The two-places rule.** Any time you would otherwise guess a value, invent a wording, or
+default something the spec does not fix, do both of these or neither:
 
 1. Leave a **clearly-marked placeholder** in `config/` — `null`, or a string prefixed
    `PLACEHOLDER`. Never a plausible-looking constant.
 2. Add an entry to **`config/open_items.yaml`** with a `resolved_when:` path, so the startup
    warning is automatic rather than remembered. Items the spec does not number get `Ln`.
-3. Add a row to **`FOR_S.md`** with the gate at which it stops being deferrable.
+   `fix` says what is needed and when it stops being deferrable (bring-up, piloting, or
+   before a real participant).
 
-Doing one or two of the three is how a guess ends up in the study. `open_items.yaml` is the
-machine-checked list and `FOR_S.md` is the human-readable one; **they must never disagree.**
-When an item's `resolved_when:` path stops being null, delete its row from `FOR_S.md` in the
-same commit.
+Doing only one of the two is how a guess ends up in the study. When S settles an item, set the
+config value and update its `fix` to record the decision, in the same commit.
 
-Only genuinely non-blocking things belong in `FOR_S.md`. If something blocks the build, the
-rule above it applies instead — **stop and ask.** Do not park a blocker in a list and carry on.
+Only genuinely non-blocking things belong in `open_items.yaml`. If something blocks the build,
+**stop and ask.** Do not park a blocker in a list and carry on.
 
 ## Working style
 
 - IMPORTANT: build in vertical slices. One thin path through every layer that runs end to end,
   then widen. Do not build one layer completely before starting the next.
 - Anything in `docs/SPEC.md` §20 that is still unresolved stays a clearly-marked placeholder
-  that warns at startup. Never quietly default it — see the three-places rule above.
+  that warns at startup. Never quietly default it — see the two-places rule above.

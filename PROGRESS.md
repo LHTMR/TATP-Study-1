@@ -1,11 +1,12 @@
 # PROGRESS
 
-Handover file (CLAUDE.md). Between `docs/SPEC.md`, this file, `FOR_S.md` and the git log, a
-fresh session should need nothing from any previous conversation.
+The status, and the handover file (CLAUDE.md). Between `docs/SPEC.md` (the spec), this file
+and the git log, a fresh session should need nothing from any previous conversation.
 
-**`FOR_S.md`** holds only what S must supply or decide for the build to move — values, wordings,
-hardware limits. **`docs/NOTES.md`** holds what is merely logged: deviations from Bilaga 1,
-pilot-protocol checks, analysis-plan questions, process. Keep all three updated together.
+**`docs/NOTES.md`** is the log: deviations from Bilaga 1, pilot-protocol checks, analysis-plan
+questions, process. **`config/open_items.yaml`** is the one list of what S must supply or decide
+— values, wordings, hardware limits — and startup prints every unresolved item. `FOR_S.md`,
+which duplicated that list by hand, was deleted on 23 Sep 2026 (`docs/NOTES.md` N4.4).
 
 **Last updated:** 23 September 2026, session 13 (on the Windows lab PC).
 **Milestone:** 2 (the checks) — *in progress. The literals and blinding checks and the
@@ -435,8 +436,8 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23�
     threshold and a ramp rate describe the participant's hand. Scaling them does not make a
     session faster, it makes the control different: at speed 100 no press is short enough to be
     a tap and a hold crosses the whole range in 60 ms. `Clock.real_elapsed_s()` was added for
-    this, and `duration_s` on a `touchcal_adjust` row uses it too — that column is the FOR_S
-    A3.6 measurement and must not be reported scaled. **The adjustment time-out stays scaled**,
+    this, and `duration_s` on a `touchcal_adjust` row uses it too — that column is the open
+    item 8 measurement and must not be reported scaled. **The adjustment time-out stays scaled**,
     because that one is the session waiting for the participant rather than the participant
     acting. This was found by a test, not by reasoning: the first taps moved nothing.
 
@@ -497,7 +498,7 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23�
 3. **Four locally-raised open items (`L1`–`L4`)**, for values the spec *requires to exist* but
    does not fix: the software pressure ceiling (200 kPa is a working value, not an agreed
    limit), the pressure rate limit (60 kPa/s), audio levels in dBFS, and the participant screen
-   text. All in `FOR_S.md`.
+   text. All in `config/open_items.yaml`.
 
 4. **Participant screen text is a placeholder, deliberately.** Every such string begins
    `PLACEHOLDER`, `Config.has_placeholder_text()` detects them, and the experimenter screen is
@@ -607,7 +608,7 @@ Items 20–26 are session 6.
 
     c. **`force_applied_mn` falls back to the label force while the set is unweighed.** My
        previous session had made it optional and left it empty, which would have made Protocol A
-       impossible to pilot at all — and `FOR_S.md` A3.4 asks for the slope prior to be
+       impossible to pilot at all — and open item 6 asks for the slope prior to be
        re-estimated *from pilot data*. It is now required and always populated: measured where
        there is one, nominal otherwise. Nothing is hidden, because `force_measured_mn` is empty
        on exactly those rows. Every force column now describes the filament that actually

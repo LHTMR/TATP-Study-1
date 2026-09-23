@@ -4,10 +4,10 @@ Observations that should not be lost but are nobody's blocker: deliberate deviat
 Bilaga 1, checks that must reach the pilot protocol, questions the analysis plan should answer
 before data exists, and process that sits outside the software.
 
-**This file is not a queue.** `FOR_S.md` is the queue, and it holds only what S must supply for
-the build to move. Nothing here needs an answer to keep building; each entry exists so that when
-S reviews, the thing they are looking at has a written history. Build state and decisions taken
-are in `PROGRESS.md`; the specification is `docs/SPEC.md`.
+**This file is the log, and it is not a queue.** What S must supply for the build to move is in
+`config/open_items.yaml`. Nothing here needs an answer to keep building; each entry exists so
+that when S reviews, the thing they are looking at has a written history. The status and the
+decisions taken are in `PROGRESS.md`; the spec is `docs/SPEC.md`.
 
 ---
 
@@ -55,6 +55,7 @@ The software supports each; someone has to actually run it.
 | N4.1 | **Manual data transfer to the LiU secure server** (`SPEC.md` §14.1) is outside the software. The process needs to exist and belongs in `SOP.md` when it is written. |
 | N4.2 | **Parallel Claude sessions get a branch.** Two agents sharing one working tree on `main` cannot tell whose uncommitted change is whose; this already caused one mis-attributed commit (`PROGRESS.md` decision 22). |
 | N4.3 | **Claude Code permissions loosened, 23 Sep 2026 (S's decision).** The earlier setup denied every command that could wrap another (`find`, `sed`, `bash -c`, …) and ran a `PreToolUse` hook that refused shell operators, even inside quotes, and any path outside the repository. It caused too many refusals on legitimate work (multi-line commit messages, regex alternation, the session scratchpad). On the Windows lab PC it did not work at all: it called `python3`, which is not on that PC's PATH, and `os.path.commonpath` raised on Windows paths. Its main reason for existing no longer holds, because Claude Code now checks each part of a compound command against the rules itself. Now: deny covers only what the study depends on (`data/`, network tools, environment installs, destructive git, OneDrive on both machines), and commands that can destroy work move to `ask`. **What was given up:** nothing mechanical stops a `tools/` script's `--out` path from pointing outside the repository; CLAUDE.md's rule and the session's permission mode are what hold it. |
+| N4.4 | **`FOR_S.md` deleted, 23 Sep 2026 (S's instruction).** The docs review of 23 Aug 2026 (`5ea3541`) was meant to leave three documents — spec (`SPEC.md`), status (`PROGRESS.md`), log (this file). It moved the review and process material here but kept `FOR_S.md` as a hand-maintained copy of `config/open_items.yaml`, and the two drifted apart, which CLAUDE.md said must never happen: its row on the response-box labels had no open item (and was already answered by `hardware.yaml` `responder.button_symbols`, N5.11), its row on building the conda env on the lab PC stayed after the lab-PC setup (`5fc8036`) did it, and open item 4's `fix` still called the block durations null after they became 4-min estimates. `open_items.yaml` is now the only list. S's two pilot-fallback decisions from the deleted rows (keep the simulated slope prior and Scheuren's offset if the pilot is too small to re-estimate them) moved into the `fix` of open items 6 and 7. The three-places rule in CLAUDE.md is now two places. |
 
 ## 5. The UI review, 26 Aug 2026
 

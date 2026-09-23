@@ -422,7 +422,7 @@ def test_the_configured_schedule_generates_the_blocks_the_study_needs():
 
 
 def test_the_configured_grid_does_not_put_a_block_on_the_rekindle():
-    """It did before the pause was added; block 7 landed exactly on it (FOR_S A3.3)."""
+    """It did before the pause was added; block 7 landed exactly on it (open item 4)."""
     schedule = sched.generate(cfg.load("sv", "en").schedule)
     rekindle = schedule.window("rekindle")
     assert not any(

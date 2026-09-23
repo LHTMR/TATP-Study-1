@@ -163,7 +163,7 @@ def test_the_label_force_is_fitted_while_the_set_is_unweighed(running):
     _run_trial(running)
     row = _rows(session, "pinprick")[0]
     assert row["force_nominal_mn"] == "255.0", "the chart's force for the 26 g, not a rounding"
-    assert row["force_measured_mn"] == "", "the set is unweighed (FOR_S A3.1)"
+    assert row["force_measured_mn"] == "", "the set is unweighed (open item 1)"
     assert row["force_applied_mn"] == "255.0", "so the estimator fits the nominal force"
 
 
