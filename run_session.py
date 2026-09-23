@@ -175,13 +175,13 @@ def warnings_for(config: cfg.Config) -> list[str]:
     return lines
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
-    config = cfg.load(args.participant_language, args.experimenter_language)
-    for line in warnings_for(config):
-        print(f"WARNING: {line}", file=sys.stderr)
+def build(config: cfg.Config, args: argparse.Namespace) -> SliceRunner:
+    """Everything `main` starts, up to but not including the event loop.
 
-    app = application(config.hardware)
+    Separate so that `tools/validate_session.py` drives the path a session takes rather than a
+    copy of its wiring (SPEC.md 17.3). The QApplication must already exist; the runner is
+    returned unstarted.
+    """
     session = Session(
         config,
         args.participant,
@@ -198,14 +198,23 @@ def main(argv: list[str] | None = None) -> int:
     participant.place(config.hardware["screens"])
     participant.show()
     experimenter.show()
+    return SliceRunner(Rig(session, participant, experimenter))
 
-    runner = SliceRunner(Rig(session, participant, experimenter))
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    config = cfg.load(args.participant_language, args.experimenter_language)
+    for line in warnings_for(config):
+        print(f"WARNING: {line}", file=sys.stderr)
+
+    app = application(config.hardware)
+    runner = build(config, args)
     runner.start()
     app.exec()
 
     # Nothing above catches an exception, so reaching here means the loop ended. The session is
     # closed by the runner; closing twice is safe and covers a window shut by hand.
-    session.close()
+    runner.session.close()
     return 0 if runner.completed else 1
 
 
