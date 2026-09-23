@@ -1,102 +1,77 @@
 # STATUS
 
-**Last updated:** 23 September 2026.
-**Milestone:** 2 (the checks), in progress. Acceleration push under way (`CLAUDE.md`).
+**Last updated:** 24 September 2026.
+**Milestone:** 5 (the session), next. Milestones 2, 3 and 4 are merged. Acceleration push under
+way (`CLAUDE.md`).
 **Branch:** `accel/integration`.
 
 ---
 
 ## Where things stand
 
-**Milestone 1, the vertical slice, is complete.** `run_session.py` opens both windows and runs
-one anchor adjustment and one touch intensity rating. It then sets session t=0 and runs one
-pinprick application inside intervention block 1 against the mock garment. It writes
-`touchcal_adjust`, `touch_ratings`, `pinprick`, `garment`, `log` and `session`.
+**The protocols exist, but only the Milestone 1 slice runs them.** `run_session.py` still runs
+`SliceRunner`: one adjustment, one touch rating, one pinprick application. Everything else is
+built and unit-tested as `Procedure`s (`tatp/procedure.py`), waiting for the Milestone 5
+sequencer to call them.
 
-**Milestone 2 is missing one thing, the end-to-end validator.** `make check` runs the 351 unit
-tests, the literals linter, the forbidden-terms test and the screenshot comparison, in
-parallel. It passes on the lab PC in about 52 s, down from 251 s (`docs/LOG.md` N6.32). It
-prints `INCOMPLETE GATE` because `tools/validate_session.py` does not exist.
+- **Milestone 2:** `tools/validate_session.py` and `sim/`. `make check` is the full gate: 617
+  tests, ruff, the validator (19 passed, 6 skipped) and 86 screens. It takes about 1–2 minutes.
+- **Milestone 3, Protocol A:** `LongProtocol`, `ShortProtocol` and `BrushProtocol` in
+  `tatp/pinprick.py`; `AreaMapping` and `MappingLedger` in `tatp/mapping.py`.
+- **Milestone 4, Protocol B:** `TouchCalibration` → `TouchCalibrationResult.for_condition()`,
+  and `DeliveryStart` in `tatp/touchcal.py`. `tatp/audio.py`, plus `MaskingCheck` and
+  `StopRehearsal` in `tatp/setup_checks.py`.
+- **Shared interfaces:** `tatp/interruption.py` owns the stop, the pause and the resume. The
+  experimenter's actions are signals on `ExperimenterWindow`, with no buttons yet.
 
-**All 64 screens are approved and armed.** S approved them on 21 Sep 2026 and re-approved them
-in the committed Roboto font on 23 Sep.
+**For S to review, in `docs/LOG.md` §7:**
+- the decisions taken during the push. The low-confidence ones are N7.C2 (the stage-1 gate
+  numbers) and N7.B2 (the prior offsets, open item LB1);
+- one drafted wording, N7.C1;
+- 22 newly approved screens, N7.C24.
+
+The stop-rehearsal screen shows `PLACEHOLDER` in its button until L12 is answered.
 
 ---
 
 ## Next steps
 
-The push runs as streams (`CLAUDE.md`, "Acceleration push"). The integrator's order:
+**Milestone 5, in two streams cut from `accel/integration`:**
 
-1. **Fix the shared interfaces on `accel/integration` and commit** before any stream starts:
-   config keys, `docs/DATA_SCHEMA.md` tables, and the call shape of a protocol runner.
-2. **Launch three stream agents in parallel, each in its own worktree:** A is the validator
-   and the virtual participant (finishes Milestone 2, detail below). B is Protocol A
-   (Milestone 3). C is Protocol B plus `audio.py`, the masking check and the stop rehearsal
-   (Milestone 4).
-3. **As each stream finishes,** run `/code-review high`, then the spec-review agent. Fix what
-   they find, merge, and run `make check` on `accel/integration`.
-4. **Then Milestone 5 and the launcher, then the SOP and README.**
+1. **The session sequencer**, `tatp/session_runner.py`, replacing `SliceRunner`. It covers:
+   - **Setup:** the masking check, then the stop rehearsal.
+   - **Touch calibration.**
+   - **Pre-sensitisation:** the long protocol, the short primary protocol and brush.
+   - **Sensitisation and capsaicin:** timed and prompted only.
+   - **Post-sensitisation:** the same measures, plus mapping.
+   - **The intervention:** twelve blocks, launched by the experimenter, with the garment
+     delivering `for_condition(session.condition)` and a rekindle that switches the garment off
+     and on.
+   - **Post-intervention.**
 
-Stream A's work, in detail:
+   Also in this stream:
+   - one `IntolerableCap` per time point, and the F₄₀ prior carried forward (`prior_for`);
+   - the noise stopped around mapping, and the pacing cue made audible;
+   - due and overdue alerts;
+   - the outstanding-distances prompt at close;
+   - **resume (SPEC.md §15)** from the data files, including `touchcal_channels`;
+   - the validator's full-grid checks becoming live.
+2. **The experimenter screen and the launcher:**
+   - buttons for every `ExperimenterWindow` signal;
+   - the zone diagram, the hardware panel, the countdown and the fit preview;
+   - the launcher of §4.1.
 
-1. **Write `sim/responders.py`** (`SPEC.md` §17.5). Start with the normal responder, then add
-   only those adversarial responders whose error path exists today. Candidates are:
-   - confirming without moving the marker (`pressed_without_marker`);
-   - pressing the emergency stop mid-trial;
-   - holding the adjustment at maximum (the ceiling clamp).
+   These change the armed experimenter screens, so every one needs S's re-approval.
 
-   Check that each one really fires before keeping it.
-
-2. **Write `tools/validate_session.py`** to the build rule in `SPEC.md` §17.3.
-
-   Assert today:
-   - the tables and their columns;
-   - no required value missing;
-   - condition and limb match `allocation.csv`;
-   - monotonic timestamps;
-   - provenance fields populated;
-   - the calibrated force is a filament in `filaments.yaml`;
-   - the same seed gives the same trial order;
-   - the §16 blinding check.
-
-   Declare as skips until their milestone lands:
-   - row counts and block order (Milestone 5);
-   - `out_of_range` (Milestone 3);
-   - planned against actual offsets across a full grid (Milestone 5).
-
-3. **Add a `validate` target to the `Makefile`, and delete its `INCOMPLETE GATE` line.**
-
-4. **Close Milestone 2.** Run the spec-review agent, make `make check` pass, and commit.
+Review each stream (`/code-review high`, then spec-review) before it merges, and run `make check`
+on the integration branch after.
 
 ---
 
 ## Later
 
-In outline. Items marked *(specified)* already have their spec, schema, config and approved
-wording, but no code.
-
-- **Milestone 3, Protocol A in full.**
-  - The long protocol's search, measurement and fixed-slope estimate.
-  - The short protocol's jitter and site rotation, brush, and SH area mapping.
-  - The intolerable cap *(specified; the flag is already written, nothing enforces it)*, and
-    the experimenter's substitution control.
-- **Milestone 4, Protocol B in full.**
-  - The estimation run and fit *(specified)*, gain matching and pleasantness.
-  - Equalisation *(specified)*. It is the intended caller of `_ChoiceScreen`, which nothing
-    drives yet.
-  - The fit preview *(specified)*.
-  - `self_start_latency_ms` *(specified)*.
-- **Milestone 5, the session.**
-  - All twelve blocks, rekindle handling and resume.
-  - The rest of the experimenter screen: zone diagram, hardware panel, countdown and controls.
-    Each changes armed screens, so each needs S's re-approval.
-  - Alerts, and the launcher of §4.1.
-  - `audio.py`, which brings with it:
-    - the masking check *(specified)*;
-    - the emergency stop rehearsal *(specified)*;
-    - moving `audio_setup.still_audible` into `choices` (`docs/LOG.md` N5.12).
-  - The validator's skipped checks become live.
-- **Milestone 6, pilotable.** `SOP.md` and `README`, screenshots frozen, adversarial review.
-- **Hardware bring-up** (§18.2, a session with the real garment).
-  - The real driver, once the serial protocol is agreed (open item 14).
-  - `instruments.py`, and `HARDWARE_BRINGUP.md`.
+- **Milestone 6:** `SOP.md` and `README`, screenshots frozen, the final adversarial review.
+- **Hardware bring-up (§18.2):**
+  - the real driver (open item 14);
+  - the rate limit (L2) and the inflation rates (item 3);
+  - `instruments.py` and `HARDWARE_BRINGUP.md`.
