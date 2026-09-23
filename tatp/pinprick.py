@@ -645,6 +645,13 @@ class _RatedTrial(QObject):
         self.session.log("warning_cue", detail=f"trial {self.trial_index}")
 
         self.experimenter.set_instruction(instruction)
+        # The zone diagram marks where this stimulus goes (SPEC.md 11), and a filament brings
+        # the monofilament technique with it.
+        self.experimenter.set_target(
+            self.application.region,
+            self.application.site_index,
+            filament=isinstance(self.application, Application),
+        )
         self.experimenter.set_status("")
         self.experimenter.refresh()
         self._after(self.warning_duration_s, self._end_cue)

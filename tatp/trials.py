@@ -245,9 +245,26 @@ class ExperimenterChoice(Trial):
     def start(self) -> None:
         for name, signal in self.actions.items():
             self.listen(signal, self._slot(name))
+        # The window's Rebalance and Accept / Re-run are enabled exactly while a procedure waits
+        # on them, which only this trial knows.
+        self.experimenter.set_actions_enabled(**self._awaited(True))
         if self.show is not None:
             self.show()
         self.instruct(self.instruction, **self.values)
+
+    def _teardown(self) -> None:
+        super()._teardown()
+        self.experimenter.set_actions_enabled(**self._awaited(False))
+
+    def _awaited(self, waiting: bool) -> dict[str, bool]:
+        signals = list(self.actions.values())
+        window = self.experimenter
+        flags = {}
+        if window.rebalance_requested in signals:
+            flags["rebalance"] = waiting
+        if window.fit_accepted in signals or window.fit_rerun_requested in signals:
+            flags["fit_decision"] = waiting
+        return flags
 
     def _slot(self, name: str) -> Callable:
         def slot(*args: object) -> None:

@@ -6,24 +6,174 @@
 # is compared against screenshots/reference/ is only what has been approved.
 
 screens:
-  experimenter_en_disconnected: The garment reported disconnected. (en)
+  experimenter_en_abort_dialog: 'The abort confirmation: what happens to the data,
+    a reason field, and Abort disabled until a reason is typed. (en)'
+  experimenter_en_all_banners: 'All three banners at once: nothing below the reserved
+    region has moved (UI_PRINCIPLES.md 3.3). The fit-preview banner is amber like
+    the reduced-capability one (SPEC.md 11.1). (en)'
+  experimenter_en_awaiting_rebalance: 'The evenness question answered ''uneven'':
+    Rebalance and Start block both enabled, because the procedure waits on either.
+    (en)'
+  experimenter_en_block_due: 'The block is due: amber and bold in the same place as
+    the countdown. (en)'
+  experimenter_en_block_overdue: 'The block is overdue: red and bold, OVERDUE in capitals.
+    (en)'
+  experimenter_en_block_pinprick: 'A pinprick block in the intervention: the countdown
+    to the next block in grey, no pressures (hidden for blinding, SPEC.md 16) and
+    no placeholder in their place. (en)'
+  experimenter_en_block_touch: 'A touch block in the intervention: the one line shown
+    at every touch start in every condition, and nothing else that could differ between
+    them. (en)'
+  experimenter_en_brush_secondary: 'A brush stroke in the secondary zone: the dashed
+    ellipse outlined. (en)'
+  experimenter_en_countdown: 'Waiting for the next block: ''Next: block 3 (touch)
+    in 04:05'', grey. (en)'
+  experimenter_en_disconnected: 'The garment reported disconnected: red and bold in
+    the hardware panel, Connect enabled and Disconnect not. (en)'
+  experimenter_en_distances_dialog: 'The mapping distances window (SPEC.md 8.4): the
+    latest mapped phase selected, one field per path in path order, two typed with
+    either decimal mark. Non-modal: the session runs on behind it. (en)'
+  experimenter_en_error_dialog: 'The error dialog: a red title and the message as
+    raised. (en)'
+  experimenter_en_fit_preview_f40: 'The main window while the F40 fit preview (SPEC.md
+    11.1) is open, only with fit_preview.enabled: the banner saying what it costs,
+    Accept and Re-run enabled, and no rating anywhere on this window -- they are in
+    the preview window. (en)'
+  experimenter_en_fit_preview_f40_window: 'The fit preview window itself for `fit_preview_f40`:
+    the plot, the quality, what the session will use, and Accept / Re-run (en).'
+  experimenter_en_fit_preview_touch: 'The main window while the touch-calibration
+    fit preview is open: its instruction at a smaller size because it is long, Accept
+    and Re-run enabled. (en)'
+  experimenter_en_fit_preview_touch_window: 'The fit preview window itself for `fit_preview_touch`:
+    the plot, the quality, what the session will use, and Accept / Re-run (en).'
+  experimenter_en_hardware_pressures: 'Touch calibration: the hardware panel with
+    every channel''s pressure and one fault, in red. (en)'
+  experimenter_en_interrupted_emergency_stop: 'The participant pressed the stop: the
+    red line under the phase, Resume and Abort the only controls enabled, and nothing
+    else moved. (en)'
+  experimenter_en_interrupted_pause: 'The experimenter''s pause: the same line in
+    amber, Resume enabled. (en)'
+  experimenter_en_launcher: The launcher's four entries (SPEC.md 4.1), Design a pattern
+    disabled with its reason (en).
+  experimenter_en_launcher_instruments: 'Instruments and environment (SPEC.md 8.1):
+    every filament with its label, size, nominal force and a measured-force field;
+    the weighing date and balance; the optional room temperature and humidity (en).'
+  experimenter_en_launcher_preview: 'The schedule preview (SPEC.md 7.2): tools/preview_schedule.py''s
+    report, read-only (en).'
+  experimenter_en_launcher_resume: The resume question (SPEC.md 15), naming how long
+    ago the session began (en).
+  experimenter_en_launcher_session: 'The session dialog as it opens: the data folder
+    filled in from config, the pattern folder empty with no default, Start disabled
+    until a check passes (en).'
+  experimenter_en_launcher_session_checked: 'The session dialog after Check: a preflight
+    warning listed in amber, Start enabled because nothing refuses (en).'
+  experimenter_en_long_instruction: 'The longest instruction the session gives, set
+    down the type scale so it fits its region: nothing below it has moved, and the
+    controls are where they always are. (en)'
+  experimenter_en_mapping: 'A mapping path: the secondary zone outlined without a
+    site, the technique text shown because a filament is used, and Mapping distances
+    enabled now that a phase has been mapped. (en)'
   experimenter_en_open_items: Unresolved open items listed for the experimenter (SPEC.md
     20). (en)
+  experimenter_en_pinprick_primary: 'A pinprick application: the filament by its gram
+    label, the primary zone outlined on the diagram with its site beside it, the technique
+    text below, and the response pending -- never its value. (en)'
   experimenter_en_placeholder_banner: The unapproved-wording banner (SPEC.md 12.4),
     red and unmissable. (en)
-  experimenter_en_plain: No banners, no open items -- what a correctly configured
-    session shows. (en)
+  experimenter_en_plain: No banners, no open items, nothing scheduled -- a correctly
+    configured session at setup. Controls along the bottom, Resume, Rebalance and
+    the fit choice disabled; the zone diagram with no zone marked; the hardware panel
+    connected with no pressures. (en)
   experimenter_en_reduced_capability_banner: The reduced-capability banner naming
     the driver in use (SPEC.md 12.4). (en)
-  experimenter_sv_disconnected: The garment reported disconnected. (sv)
+  experimenter_en_rekindle_due: 'The rekindle is due: a timed event that is not a
+    block, named by its phase. (en)'
+  experimenter_en_rerun_dialog: The re-run reason, asked before a fit is discarded
+    (SPEC.md 11.1). (en)
+  experimenter_sv_abort_dialog: 'The abort confirmation: what happens to the data,
+    a reason field, and Abort disabled until a reason is typed. (sv)'
+  experimenter_sv_all_banners: 'All three banners at once: nothing below the reserved
+    region has moved (UI_PRINCIPLES.md 3.3). The fit-preview banner is amber like
+    the reduced-capability one (SPEC.md 11.1). (sv)'
+  experimenter_sv_awaiting_rebalance: 'The evenness question answered ''uneven'':
+    Rebalance and Start block both enabled, because the procedure waits on either.
+    (sv)'
+  experimenter_sv_block_due: 'The block is due: amber and bold in the same place as
+    the countdown. (sv)'
+  experimenter_sv_block_overdue: 'The block is overdue: red and bold, OVERDUE in capitals.
+    (sv)'
+  experimenter_sv_block_pinprick: 'A pinprick block in the intervention: the countdown
+    to the next block in grey, no pressures (hidden for blinding, SPEC.md 16) and
+    no placeholder in their place. (sv)'
+  experimenter_sv_block_touch: 'A touch block in the intervention: the one line shown
+    at every touch start in every condition, and nothing else that could differ between
+    them. (sv)'
+  experimenter_sv_brush_secondary: 'A brush stroke in the secondary zone: the dashed
+    ellipse outlined. (sv)'
+  experimenter_sv_countdown: 'Waiting for the next block: ''Next: block 3 (touch)
+    in 04:05'', grey. (sv)'
+  experimenter_sv_disconnected: 'The garment reported disconnected: red and bold in
+    the hardware panel, Connect enabled and Disconnect not. (sv)'
+  experimenter_sv_distances_dialog: 'The mapping distances window (SPEC.md 8.4): the
+    latest mapped phase selected, one field per path in path order, two typed with
+    either decimal mark. Non-modal: the session runs on behind it. (sv)'
+  experimenter_sv_error_dialog: 'The error dialog: a red title and the message as
+    raised. (sv)'
+  experimenter_sv_fit_preview_f40: 'The main window while the F40 fit preview (SPEC.md
+    11.1) is open, only with fit_preview.enabled: the banner saying what it costs,
+    Accept and Re-run enabled, and no rating anywhere on this window -- they are in
+    the preview window. (sv)'
+  experimenter_sv_fit_preview_f40_window: 'The fit preview window itself for `fit_preview_f40`:
+    the plot, the quality, what the session will use, and Accept / Re-run (sv).'
+  experimenter_sv_fit_preview_touch: 'The main window while the touch-calibration
+    fit preview is open: its instruction at a smaller size because it is long, Accept
+    and Re-run enabled. (sv)'
+  experimenter_sv_fit_preview_touch_window: 'The fit preview window itself for `fit_preview_touch`:
+    the plot, the quality, what the session will use, and Accept / Re-run (sv).'
+  experimenter_sv_hardware_pressures: 'Touch calibration: the hardware panel with
+    every channel''s pressure and one fault, in red. (sv)'
+  experimenter_sv_interrupted_emergency_stop: 'The participant pressed the stop: the
+    red line under the phase, Resume and Abort the only controls enabled, and nothing
+    else moved. (sv)'
+  experimenter_sv_interrupted_pause: 'The experimenter''s pause: the same line in
+    amber, Resume enabled. (sv)'
+  experimenter_sv_launcher: The launcher's four entries (SPEC.md 4.1), Design a pattern
+    disabled with its reason (sv).
+  experimenter_sv_launcher_instruments: 'Instruments and environment (SPEC.md 8.1):
+    every filament with its label, size, nominal force and a measured-force field;
+    the weighing date and balance; the optional room temperature and humidity (sv).'
+  experimenter_sv_launcher_preview: 'The schedule preview (SPEC.md 7.2): tools/preview_schedule.py''s
+    report, read-only (sv).'
+  experimenter_sv_launcher_resume: The resume question (SPEC.md 15), naming how long
+    ago the session began (sv).
+  experimenter_sv_launcher_session: 'The session dialog as it opens: the data folder
+    filled in from config, the pattern folder empty with no default, Start disabled
+    until a check passes (sv).'
+  experimenter_sv_launcher_session_checked: 'The session dialog after Check: a preflight
+    warning listed in amber, Start enabled because nothing refuses (sv).'
+  experimenter_sv_long_instruction: 'The longest instruction the session gives, set
+    down the type scale so it fits its region: nothing below it has moved, and the
+    controls are where they always are. (sv)'
+  experimenter_sv_mapping: 'A mapping path: the secondary zone outlined without a
+    site, the technique text shown because a filament is used, and Mapping distances
+    enabled now that a phase has been mapped. (sv)'
   experimenter_sv_open_items: Unresolved open items listed for the experimenter (SPEC.md
     20). (sv)
+  experimenter_sv_pinprick_primary: 'A pinprick application: the filament by its gram
+    label, the primary zone outlined on the diagram with its site beside it, the technique
+    text below, and the response pending -- never its value. (sv)'
   experimenter_sv_placeholder_banner: The unapproved-wording banner (SPEC.md 12.4),
     red and unmissable. (sv)
-  experimenter_sv_plain: No banners, no open items -- what a correctly configured
-    session shows. (sv)
+  experimenter_sv_plain: No banners, no open items, nothing scheduled -- a correctly
+    configured session at setup. Controls along the bottom, Resume, Rebalance and
+    the fit choice disabled; the zone diagram with no zone marked; the hardware panel
+    connected with no pressures. (sv)
   experimenter_sv_reduced_capability_banner: The reduced-capability banner naming
     the driver in use (SPEC.md 12.4). (sv)
+  experimenter_sv_rekindle_due: 'The rekindle is due: a timed event that is not a
+    block, named by its phase. (sv)'
+  experimenter_sv_rerun_dialog: The re-run reason, asked before a fit is discarded
+    (SPEC.md 11.1). (sv)
   participant_en_adjust_just_noticeable: 'The adjustment screen for `just_noticeable`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     en.'
