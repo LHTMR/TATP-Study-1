@@ -23,6 +23,7 @@ from PySide6.QtWidgets import QApplication
 import run_session
 from tatp import config as cfg
 from tatp.clock import Clock
+from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
@@ -65,7 +66,7 @@ def runner(app, loaded, tmp_path):
     participant = ParticipantWindow(config, Responder(config.hardware), session.clock)
     experimenter = ExperimenterWindow(config.experimenter_text, session.experimenter_view)
     session.set_phase("pre_sensitisation")
-    made = run_session.SliceRunner(session, participant, experimenter)
+    made = run_session.SliceRunner(Rig(session, participant, experimenter))
     yield made
     session.close()
 
@@ -98,7 +99,7 @@ def _answer_vas(participant) -> None:
 def _run_slice(runner) -> None:
     """Adjust, rate the touch, then rate one pinprick application -- the whole slice."""
     participant = runner.participant
-    runner.run()
+    runner.start()
     _press(participant, "pagedown")
     _press(participant, "period")
 
@@ -199,14 +200,42 @@ def test_the_participant_is_left_on_the_closing_screen(runner):
     assert runner.participant.stack.currentWidget() is runner.participant.message
 
 
-def test_an_emergency_stop_closes_the_session_as_aborted(runner):
-    """SPEC.md 13. A one-trial session has nothing to resume to, so it stops and records why."""
-    runner.run()
-    _press(runner.participant, "f5")
+def test_an_emergency_stop_pauses_the_slice_and_the_resume_repeats_the_step(runner):
+    """SPEC.md 13: the stop pauses and offers resume, and resumption is genuinely clean."""
+    participant = runner.participant
+    runner.start()
+    _press(participant, "pagedown")
+    _press(participant, "f5")
+
+    assert not runner.session.closed, "a stop pauses the session; it does not end it"
+    assert runner.session.garment.pressure_kpa[runner.channel] == 0.0
+    assert participant.message.text == (
+        runner.session.config.participant_text["screens"]["emergency_stop"]
+    )
+
+    runner.rig.interruptions.resume()
+    # The garment is restored after the warning cue, and then the adjustment starts again.
+    _spin(lambda: participant.stack.currentWidget() is participant.control)
+    _press(participant, "pagedown")
+    _press(participant, "period")
+    _answer_vas(participant)
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    _answer_vas(participant)
+
+    assert runner.completed
+    assert len(_rows(runner.session, "touchcal_adjust")) == 1, "the stopped trial wrote no row"
+    events = [r["event"] for r in _rows(runner.session, "log")]
+    assert events.index("emergency_stop") < events.index("resumed")
+    assert "step_repeated" in events
+
+
+def test_the_experimenter_abort_closes_the_session_with_its_reason(runner):
+    runner.start()
+    runner.experimenter.abort_requested.emit("participant unwell")
 
     assert not runner.completed
     assert runner.session.closed
-    assert runner.session.aborted_reason == run_session.ABORT_EMERGENCY_STOP
+    assert runner.session.aborted_reason == "participant unwell"
     aborts = [r for r in _rows(runner.session, "log") if r["event"] == "session_aborted"]
     assert len(aborts) == 1
     assert aborts[0]["severity"] == "warning"

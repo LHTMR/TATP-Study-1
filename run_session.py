@@ -28,6 +28,7 @@ from tatp import config as cfg
 from tatp import schedule, touchcal
 from tatp.clock import Clock
 from tatp.pinprick import Application, PinprickTrial
+from tatp.procedure import Procedure, Rig
 from tatp.responder import Responder
 from tatp.session import Session
 from tatp.ui.application import application
@@ -43,67 +44,55 @@ END_SCREEN = "session_end"
 FIRST_TRIAL_INDEX = 1
 FIRST_SITE_INDEX = 1
 
-ABORT_EMERGENCY_STOP = "emergency stop during the slice trial"
 
-
-class SliceRunner:
+class SliceRunner(Procedure):
     """Milestone 1's session: one adjustment, one touch rating, one block, one application.
 
     Milestones 3 and 4 replace this with the protocols in full and Milestone 5 with the
     schedule. It exists so that the slice is something that runs, rather than something only the
     test suite can reach -- and so that the three layers it touches (the garment, the VAS and
     the data files) are exercised together rather than one at a time.
+
+    An emergency stop pauses it and the experimenter's resume repeats the step it was in, as
+    for every procedure (`tatp/procedure.py`). The experimenter's abort is the only way it ends
+    early.
     """
 
-    def __init__(self, session: Session, participant: ParticipantWindow,
-                 experimenter: ExperimenterWindow):
-        self.session = session
-        self.participant = participant
-        self.experimenter = experimenter
+    def __init__(self, rig: Rig):
+        super().__init__(rig)
         self.completed = False
-        self.adjustment: touchcal.Adjustment | None = None
-        self.rating: touchcal.TouchRating | None = None
-        self.trial: PinprickTrial | None = None
         self.block: schedule.Block | None = None
-        self.channel = int(session.config.study1["touch_calibration"]["reference_channel"])
+        self.channel = int(self.session.config.study1["touch_calibration"]["reference_channel"])
+        self.experimenter.abort_requested.connect(self.abort)
 
     # -- the touch half ----------------------------------------------------------------
 
-    def run(self) -> None:
+    def begin(self) -> None:
         """Protocol B step 1, first anchor: adjust the reference channel (SPEC.md 9)."""
         self.session.set_phase("touch_calibration")
         self.session.garment.set_channel(self.channel, True)
         plan = touchcal.anchor_plans(self.session.config)[0]
-        self.adjustment = touchcal.Adjustment(
-            self.session, self.participant, self.experimenter, plan
+        self.run_trial(
+            lambda: touchcal.Adjustment(
+                self.session, self.participant, self.experimenter, plan
+            ),
+            self._adjusted,
         )
-        self.adjustment.finished.connect(self._adjusted)
-        self.adjustment.start()
 
     def _adjusted(self, produced_kpa) -> None:
-        if produced_kpa is None:
-            self._stopped()
-            return
-        self.rating = touchcal.TouchRating(
-            self.session,
-            self.participant,
-            self.experimenter,
-            touchcal.INTENSITY_SCALE,
-            self.channel,
+        self.run_trial(
+            lambda: touchcal.TouchRating(
+                self.session,
+                self.participant,
+                self.experimenter,
+                touchcal.INTENSITY_SCALE,
+                self.channel,
+            ),
+            self._rated,
         )
-        self.rating.finished.connect(self._rated)
-        self.rating.start()
 
     def _rated(self, response) -> None:
-        if response is None:
-            self._stopped()
-            return
         self.session.garment.stop()
-        self._run_trial()
-
-    # -- the pinprick half -------------------------------------------------------------
-
-    def _run_trial(self) -> None:
         # The slice steps straight from the calibration to the first intervention block, which
         # skips the phases the software only times (sensitisation, capsaicin) and the ones
         # whose protocols are Milestone 3 (pre- and post-sensitisation measures). What it must
@@ -123,29 +112,26 @@ class SliceRunner:
             filament_label_g=pinprick["start_filament_label_g_session1_pre_s"],
             site_index=FIRST_SITE_INDEX,
         )
-        self.trial = PinprickTrial(
-            self.session, self.participant, self.experimenter, application
+        self.run_trial(
+            lambda: PinprickTrial(
+                self.session, self.participant, self.experimenter, application
+            ),
+            self._finished,
         )
-        self.trial.finished.connect(self._finished)
-        self.trial.start()
 
     def _finished(self, response) -> None:
-        # A trial that ended in an emergency stop carries no response (SPEC.md 13). What the
-        # session does next is the session's decision, and for a one-trial session that is to
-        # stop and record why.
-        if response is None:
-            self._stopped()
-            return
         self.session.end_block()
         self.completed = True
         self.participant.show_message(END_SCREEN)
+        self.finish(response)
         self._close("")
 
     # -- the end -----------------------------------------------------------------------
 
-    def _stopped(self) -> None:
-        """An emergency stop anywhere in the slice ends it. The stop screen is already up."""
-        self._close(ABORT_EMERGENCY_STOP)
+    def abort(self, reason: str) -> None:
+        """The experimenter's abort (SPEC.md 11). Everything collected so far is kept."""
+        self.cancel()
+        self._close(reason)
 
     def _close(self, abort_reason: str) -> None:
         self.experimenter.refresh()
@@ -213,8 +199,8 @@ def main(argv: list[str] | None = None) -> int:
     participant.show()
     experimenter.show()
 
-    runner = SliceRunner(session, participant, experimenter)
-    runner.run()
+    runner = SliceRunner(Rig(session, participant, experimenter))
+    runner.start()
     app.exec()
 
     # Nothing above catches an exception, so reaching here means the loop ended. The session is

@@ -282,18 +282,16 @@ def test_short_exploration_is_recorded_rather_than_refused(running):
     assert row["min_exploration_met"] == "false"
 
 
-def test_an_emergency_stop_stops_the_garment_and_writes_no_row(running):
+def test_a_cancelled_adjustment_writes_no_row(running):
     """SPEC.md 13. Nothing was produced, so there is no produced pressure to record."""
     session, participant, _ = running
     adjustment, done = _run_adjustment(running)
-    _press(participant, "f5")
+    adjustment.cancel()
+    _press(participant, "period")
 
-    assert done == [None]
+    assert done == []
     assert not session.files.path("touchcal_adjust").exists()
-    assert session.garment.pressure_kpa[3] == 0.0
-    stops = [row for row in _rows(session, "log") if row["event"] == "emergency_stop"]
-    assert len(stops) == 1
-    assert stops[0]["severity"] == "error"
+    assert "trial_cancelled" in [row["event"] for row in _rows(session, "log")]
 
 
 def test_the_adjustment_times_out_rather_than_waiting_for_ever(running, monkeypatch):

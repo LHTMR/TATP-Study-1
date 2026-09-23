@@ -18,6 +18,9 @@ garment:
   pressure_rate_max_kpa_s: 60.0      # independent rate limit (SPEC.md 13). Local item L2.
   pressure_resolution_kpa: null      # SPEC.md 20 item 2
   inflation_rate_kpa_s: null         # per channel, from bring-up. SPEC.md 20 item 3
+  pattern_tick_interval_s: 0.005     # how often pattern events are delivered (SPEC.md 12.2).
+                                     # Onset jitter is up to one tick, so this sits well under
+                                     # the fastest pattern's 75 ms row interval.
 
 adjustment:
   # Accelerating two-button control (SPEC.md 10.3, comparison doc 7.5). All pilot-tunable.

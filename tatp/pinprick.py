@@ -57,7 +57,11 @@ class Application:
 
 
 class PinprickTrial(QObject):
-    """One application, driven by the clock. `finished` carries the rating, or None."""
+    """One application, driven by the clock. `finished` carries the rating.
+
+    A trial in the sense of `tatp/procedure.py`: an interruption is handled by whatever runs
+    it, which calls `cancel()`.
+    """
 
     finished = Signal(object)
 
@@ -111,7 +115,6 @@ class PinprickTrial(QObject):
             region=text["terms"]["regions"][self.application.region],
         )
         self.participant.confirmed.connect(self._on_confirmed)
-        self.participant.emergency_stop.connect(self._on_emergency_stop)
 
         clock = self.session.clock
         self.cue_onset_iso = clock.wall_iso()
@@ -169,21 +172,14 @@ class PinprickTrial(QObject):
         self.participant.show_blank()
         self.finished.emit(response)
 
-    def _on_emergency_stop(self) -> None:
-        """SPEC.md 13. The trial stops where it is; no rating was given, so no row is written.
+    def cancel(self) -> None:
+        """Abandoned by an interruption (SPEC.md 13). No rating was given, so no row is written.
 
-        The log carries the event and its timestamp, so what happened is recoverable. Deciding
-        what the session as a whole does next belongs to the session, not to one trial.
+        The stop itself -- the garment, the log, the screen -- is `tatp/interruption.py`'s.
+        What is recorded here is which trial was lost, so the repeat is traceable to it.
         """
         self._disconnect()
-        self.participant.show_emergency_stop()
-        self.session.log(
-            "emergency_stop",
-            origin="participant",
-            severity="error",
-            detail=f"during trial {self.application.trial_index}",
-        )
-        self.finished.emit(None)
+        self.session.log("trial_cancelled", detail=f"trial {self.application.trial_index}")
 
     def _write(self, response) -> None:
         application = self.application
@@ -220,8 +216,6 @@ class PinprickTrial(QObject):
             # SPEC.md 8.2: a rating at the top of the scale is the proxy for intolerable. The
             # flag is prospective -- it caps the applications after this one, not this one.
             intolerable=response.rating_percent >= self.intolerable_vas_pct,
-            # Set by the discard-and-repeat control, which arrives with SPEC.md 11.
-            discarded=False,
         )
 
     # -- plumbing ----------------------------------------------------------------------
@@ -244,4 +238,3 @@ class PinprickTrial(QObject):
         self._timer.stop()
         self._pending = None
         self.participant.confirmed.disconnect(self._on_confirmed)
-        self.participant.emergency_stop.disconnect(self._on_emergency_stop)

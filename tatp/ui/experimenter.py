@@ -14,13 +14,19 @@ It carries no wording of its own: every string comes from
 Milestone 1 builds the parts the pinprick slice needs. The zone diagram, the per-channel
 hardware panel with its disconnect/reconnect button, the countdown to the next scheduled event
 and the controls of SPEC.md 11 belong to Milestone 5.
+
+**The experimenter's actions are signals, and they exist before the buttons do.** Every action
+SPEC.md 11 gives the experimenter is declared below, so the protocols connect to one name for
+each and the virtual experimenter of SPEC.md 17.5 drives the same path a real one will.
+Milestone 5 draws the buttons that emit them. A protocol never reads a widget; it connects to a
+signal.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from tatp.units import S_PER_MIN
@@ -86,6 +92,30 @@ def _elapsed_text(seconds: float) -> str:
 
 class ExperimenterWindow(QWidget):
     """The lab-side screen. Never shows a rating and never shows the condition (SPEC.md 16)."""
+
+    # -- the experimenter's actions, SPEC.md 11 -----------------------------------------
+    # "Start block", and every other point where the software waits for the experimenter to say
+    # go: the next phase, the next path, "earplugs fitted". The software times; the
+    # experimenter launches (SPEC.md 7.4).
+    proceed_requested = Signal()
+    pause_requested = Signal()
+    resume_requested = Signal()
+    # Discard and repeat the last trial (SPEC.md 11). There is deliberately no skip.
+    discard_requested = Signal()
+    abort_requested = Signal(str)  # the reason, which is written to the session file
+    note_entered = Signal(str)
+    # The filament actually applied, when the experimenter substitutes a lower one for the one
+    # asked for (SPEC.md 8.2). Carries its gram label.
+    substitution_entered = Signal(str)
+    # The four mapping distances for one time point (SPEC.md 8.4): the phase, then a tuple of
+    # millimetres with None for any not yet measured. Entered whenever convenient.
+    distances_entered = Signal(str, object)
+    # The fit preview's choice (SPEC.md 11.1). A re-run carries the experimenter's reason.
+    fit_accepted = Signal()
+    fit_rerun_requested = Signal(str)
+    rebalance_requested = Signal()
+    garment_connect_requested = Signal()
+    garment_disconnect_requested = Signal()
 
     def __init__(
         self,

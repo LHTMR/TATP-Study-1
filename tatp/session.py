@@ -106,6 +106,7 @@ class Session:
         self.block_index: int | None = None
         self._block: sched.Block | None = None
         self._block_start_s: float | None = None
+        self._block_start_iso = ""
         self.aborted_reason = ""
         self.closed = False
 
@@ -235,6 +236,7 @@ class Session:
             )
         self._block = block
         self._block_start_s = self.clock.t_session_s()
+        self._block_start_iso = self.clock.wall_iso()
         self.block_index = block.index
         started_min = self._block_start_s / S_PER_MIN
         self.log(
@@ -245,12 +247,13 @@ class Session:
             f"{started_min - block.planned_offset_min:+.2f} min against plan",
         )
 
-    def end_block(self) -> None:
+    def end_block(self, aborted: bool = False) -> None:
         """Close the open block, recording how long it actually took."""
         if self._block is None:
             raise SessionError("no block is open")
         block, start_s = self._block, self._block_start_s
-        actual_min = (self.clock.t_session_s() - start_s) / S_PER_MIN
+        end_s = self.clock.t_session_s()
+        actual_min = (end_s - start_s) / S_PER_MIN
         planned = (
             "unset" if block.expected_duration_min is None
             else f"{block.expected_duration_min:g} min"
@@ -258,6 +261,19 @@ class Session:
         self.log(
             "block_ended",
             detail=f"{block.type}; took {actual_min:.2f} min, expected {planned}",
+        )
+        self.files.write(
+            "blocks",
+            timestamp_iso=self._block_start_iso,
+            block_index=block.index,
+            block_type=block.type,
+            planned_offset_min=block.planned_offset_min,
+            expected_duration_min=block.expected_duration_min,
+            started_t_session_s=start_s,
+            ended_t_session_s=end_s,
+            actual_duration_min=actual_min,
+            lateness_min=start_s / S_PER_MIN - block.planned_offset_min,
+            aborted=aborted,
         )
         self._block = None
         self._block_start_s = None
@@ -319,7 +335,7 @@ class Session:
         # SPEC.md 7.4 wants an actual end for every block, which includes one the session was
         # aborted out of. Closed here rather than at each abort path so it cannot be forgotten.
         if self._block is not None:
-            self.end_block()
+            self.end_block(aborted=bool(abort_reason))
         self.aborted_reason = abort_reason
         if self.garment.connected:
             self.garment.stop()

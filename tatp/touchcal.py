@@ -247,7 +247,8 @@ class AdjustmentState:
 class Adjustment(QObject):
     """One method-of-adjustment trial, driven by the participant's buttons. SPEC.md 9, 10.3.
 
-    `finished` carries the produced pressure in kPa, or None if the trial was stopped.
+    `finished` carries the produced pressure in kPa. A trial in the sense of
+    `tatp/procedure.py`: an interruption is handled by whatever runs it, which calls `cancel()`.
     """
 
     finished = Signal(object)
@@ -305,7 +306,6 @@ class Adjustment(QObject):
         self.participant.adjust_pressed.connect(self._on_pressed)
         self.participant.adjust_released.connect(self._on_released)
         self.participant.adjust_confirmed.connect(self._on_confirmed)
-        self.participant.emergency_stop.connect(self._on_emergency_stop)
 
         self.participant.show_adjustment(self.plan.target_key)
         self.experimenter.set_status(
@@ -371,23 +371,18 @@ class Adjustment(QObject):
         self._write()
         self.finished.emit(self.state.pressure_kpa)
 
-    def _on_emergency_stop(self) -> None:
-        """SPEC.md 13. The garment is stopped by the session; no row is written.
+    def cancel(self) -> None:
+        """Abandoned by an interruption (SPEC.md 13); no row is written.
 
-        Nothing was produced, so there is no produced pressure to record. The log carries the
-        event and the pressure that was commanded when it happened.
+        Nothing was produced, so there is no produced pressure to record. The garment is already
+        at zero -- `tatp/interruption.py` did that before anything else -- and the log carries
+        the pressure that was commanded when it happened.
         """
-        commanded = self.state.pressure_kpa
         self._end()
-        self.session.garment.stop()
-        self.participant.show_emergency_stop()
         self.session.log(
-            "emergency_stop",
-            origin="participant",
-            severity="error",
-            detail=f"during {self.plan.stage} adjustment at {commanded:.1f} kPa",
+            "trial_cancelled",
+            detail=f"{self.plan.stage} adjustment at {self.state.pressure_kpa:.1f} kPa",
         )
-        self.finished.emit(None)
 
     def _write(self) -> None:
         self.session.files.write(
@@ -426,7 +421,6 @@ class Adjustment(QObject):
         self.participant.adjust_pressed.disconnect(self._on_pressed)
         self.participant.adjust_released.disconnect(self._on_released)
         self.participant.adjust_confirmed.disconnect(self._on_confirmed)
-        self.participant.emergency_stop.disconnect(self._on_emergency_stop)
 
 
 class TouchRating(QObject):
@@ -458,7 +452,6 @@ class TouchRating(QObject):
 
     def start(self) -> None:
         self.participant.confirmed.connect(self._on_confirmed)
-        self.participant.emergency_stop.connect(self._on_emergency_stop)
         self.cue_iso = self.session.clock.wall_iso()
         self._t_session_s = self.session.clock.t_session_s()
         self.participant.show_vas(self.scale)
@@ -499,19 +492,10 @@ class TouchRating(QObject):
         self.participant.show_blank()
         self.finished.emit(response)
 
-    def _on_emergency_stop(self) -> None:
-        """SPEC.md 13. No rating was given, so no row is written."""
+    def cancel(self) -> None:
+        """Abandoned by an interruption (SPEC.md 13). No rating was given, so no row."""
         self._end()
-        self.session.garment.stop()
-        self.participant.show_emergency_stop()
-        self.session.log(
-            "emergency_stop",
-            origin="participant",
-            severity="error",
-            detail=f"during the {self.scale} rating",
-        )
-        self.finished.emit(None)
+        self.session.log("trial_cancelled", detail=f"the {self.scale} rating")
 
     def _end(self) -> None:
         self.participant.confirmed.disconnect(self._on_confirmed)
-        self.participant.emergency_stop.disconnect(self._on_emergency_stop)

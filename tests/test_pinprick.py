@@ -131,7 +131,6 @@ def test_one_trial_writes_one_valid_row(running):
     assert row["phase"] == "post_sensitisation"
     assert row["substituted"] == "false"
     assert row["intolerable"] == "false"
-    assert row["discarded"] == "false"
 
 
 def test_the_reaction_time_and_first_press_side_are_recorded(running):
@@ -236,18 +235,19 @@ def test_an_unknown_filament_is_refused_rather_than_guessed(running):
         trial.start()
 
 
-def test_an_emergency_stop_ends_the_trial_without_inventing_a_rating(running):
-    """SPEC.md 13. No rating was given, so no row is written; the log carries the event."""
+def test_a_cancelled_trial_writes_no_row_and_reports_nothing(running):
+    """SPEC.md 13. An interruption cancels the trial: no rating was given, none is invented."""
     session, participant, experimenter = running
     trial = PinprickTrial(session, participant, experimenter, APPLICATION)
     done = []
     trial.finished.connect(done.append)
     trial.start()
-    _press(participant, "f5")
+    trial.cancel()
+    _spin(lambda: session.clock.elapsed_s() > trial.rating_cue_delay_s * 2)
 
-    assert done == [None]
+    assert done == []
     assert not session.files.path("pinprick").exists()
-    stops = [row for row in _rows(session, "log") if row["event"] == "emergency_stop"]
-    assert len(stops) == 1
-    assert stops[0]["origin"] == "participant"
-    assert stops[0]["severity"] == "error"
+    assert "trial_cancelled" in [row["event"] for row in _rows(session, "log")]
+    # Nothing it connected is left behind to answer a later trial's confirm.
+    _press(participant.vas, "period")
+    assert done == []

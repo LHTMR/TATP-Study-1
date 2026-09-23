@@ -120,6 +120,27 @@ actions, warnings, notes, errors (§14.2).
 
 ---
 
+### blocks
+
+One row per scheduled block, written when it ends (§7.4). The planned offset, the actual start
+and the actual end, as columns rather than prose, so drift against the plan is a variable
+analysis can read directly.
+
+| Column | Type | Unit | Required | Description |
+|---|---|---|---|---|
+| timestamp_iso | iso8601 | - | yes | Wall clock at block start |
+| block_index | int | - | yes | The block's identity, which an override does not renumber |
+| block_type | str | - | yes | `pinprick` or `touch` |
+| planned_offset_min | float | min | yes | From the schedule, minutes from session t=0 |
+| expected_duration_min | float | min | no | The schedule's estimate; empty while it is unset (§20 item 4) |
+| started_t_session_s | float | s | yes | When the experimenter launched it |
+| ended_t_session_s | float | s | yes | When it ended |
+| actual_duration_min | float | min | yes | What it took |
+| lateness_min | float | min | yes | Actual start minus planned offset. Negative is early |
+| aborted | bool | - | yes | `true` when the session was aborted inside this block |
+
+---
+
 ### pinprick
 
 One row per monofilament application, both protocols, all phases (§14.2).
@@ -148,8 +169,9 @@ One row per monofilament application, both protocols, all phases (§14.2).
 | first_press_side | str | - | no | `left` or `right`; sets the marker's first position (§10.2) |
 | direction_changes | int | - | no | Marker direction reversals |
 | intolerable | bool | - | yes | `true` when this application's rating reached `pinprick.intolerable_vas_pct`, the proxy for intolerable (§8.2). Derived from `rating_percent`, so a trial with no response is `false` |
-| discarded | bool | - | yes | Experimenter discarded and repeated; the row is retained (§11) |
 | notes | str | - | no | Free text |
+
+A discarded application keeps its row here and gets a row in `discards` (§11).
 
 ---
 
@@ -198,7 +220,32 @@ One row per brush application — allodynia, primary and secondary regions (§8.
 | rt_s | float | s | no | From rating cue to confirm |
 | first_press_side | str | - | no | `left` or `right` |
 | direction_changes | int | - | no | Marker direction reversals |
-| discarded | bool | - | yes | Discarded and repeated |
+
+A discarded application keeps its row here and gets a row in `discards` (§11).
+
+---
+
+### discards
+
+One row per trial the experimenter discarded and repeated (§11). The discarded trial's own row
+stays in its table, unchanged.
+
+A table that is appended to and never rewritten cannot flag a row after it has been written, and
+the row cannot wait to be written until the discard window has passed, because a crash in
+between would lose a trial that was already collected (§14.3). So the discard is a row of its
+own, pointing at the discarded one by its `timestamp_iso`, which is unique within a table. To
+drop discarded trials, anti-join on (`table`, `trial_timestamp_iso`).
+
+| Column | Type | Unit | Required | Description |
+|---|---|---|---|---|
+| timestamp_iso | iso8601 | - | yes | Wall clock when the experimenter discarded it |
+| t_session_s | float | s | no | Seconds from session t=0 |
+| phase | str | - | yes | Phase |
+| block_index | int | - | no | Scheduled block, empty outside a block |
+| table | str | - | yes | The table holding the discarded row: `pinprick` or `brush` |
+| trial_timestamp_iso | iso8601 | - | yes | That row's `timestamp_iso` |
+| trial_index | int | - | yes | That row's `trial_index`, for reading the file by eye |
+| detail | str | - | no | Free text |
 
 ---
 
