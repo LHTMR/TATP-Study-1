@@ -21,14 +21,20 @@ CONDA ?= conda
 
 CONDA_RUN := $(CONDA) run --no-capture-output -n tatp-study-1
 
-.PHONY: check test test-one lint literals shots layouts archive preview ethics
+.PHONY: check test test-one lint literals shots layouts archive preview ethics env
 
-check: test lint shots
+# The parts are independent, so they run at once. `-k` keeps the others going when one fails, so
+# the gate still lists every failure (SPEC.md 17.1). Make 3.81 on the lab PC has no
+# --output-sync, so their lines can interleave; each part's summary line still says whose it is.
+check:
+	"$(MAKE)" -k -j4 test lint shots
 	@echo
 	@echo "INCOMPLETE GATE: the end-to-end validator (make validate) is not built yet."
 
+# Across every core (pytest-xdist). Tests must not share state through files or globals -- a
+# test that passes alone and fails here is the bug, not the parallelism.
 test:
-	$(CONDA_RUN) python -m pytest -q
+	$(CONDA_RUN) python -m pytest -q -n auto
 
 # One file, one test, or any other pytest arguments, without leaving the environment:
 #   make test-one ARGS="tests/test_touchcal.py -x --timeout=30"
@@ -76,6 +82,13 @@ archive:
 #   make ethics ARGS="Bilaga1_Forskningsplan_V2.docx --grep anchor --context 3"
 ethics:
 	$(CONDA_RUN) python tools/read_ethics.py $(ARGS)
+
+# Apply environment.yml to the env -- the only way a dependency changes (CLAUDE.md). The channel
+# is set here as well as in the Windows variable docs/SETUP.md step 5.6 asks for, because a
+# terminal opened before that variable existed falls back to Anaconda's servers and stops at
+# their terms of service, which the study does not accept.
+env:
+	CONDA_DEFAULT_CHANNELS=https://conda.anaconda.org/conda-forge $(CONDA) env update -f environment.yml --prune
 
 # The session timeline and its warnings (SPEC.md 7.2). No hardware, nothing written.
 #   make preview ARGS="--start 09:30"

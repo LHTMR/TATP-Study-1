@@ -124,6 +124,8 @@ Carried over from the old `PROGRESS.md` on 23 Sep 2026, where they were numbered
 | N6.29 | **Unit conversions live in `tatp/units.py` and never in `config/`.** They had been written six times under three names, each a chance to write `100.0` and get a plausible wrong number. There are sixty seconds in a minute whatever S decides, so a configurable `s_per_min` would be a setting that can be wrong. |
 | N6.30 | **A `QObject` with no parent is collected the moment nothing holds it**, and a collected protocol object silently stops answering the participant's buttons. Two tests failed this way. Whatever runs a protocol must hold a reference to it, as `SliceRunner` does. |
 | N6.31 | **To test the data-write failure path, make the *file* read-only, not the folder.** Directory permissions do not stop an append to an existing file. |
+| N6.32 | **`make check` went from 251 s to 52 s on the lab PC** (23 Sep 2026). Nearly all of it was the screenshot comparison, which called `QImage.pixel()` in a Python loop over about a million pixels per screen. It now compares ARGB32 words with numpy, which is the same count. pytest runs under xdist (`-n auto`, 35 s → 9 s), and the gate's parts run with `make -k -j4`. `--durations` found no slow test worth fixing: the cost is about 0.25 s of window and config set-up per test, spread evenly. |
+| N6.33 | **`make env` applies `environment.yml`**, with `CONDA_DEFAULT_CHANNELS` set to conda-forge for that one command. A terminal opened before the `docs/SETUP.md` step 5.6 variable existed falls back to Anaconda's servers and stops at their terms of service, which the study does not accept. |
 
 ## 7. Decisions taken without S during the acceleration push
 

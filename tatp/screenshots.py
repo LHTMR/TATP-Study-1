@@ -36,6 +36,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from fnmatch import fnmatch
 
+import numpy as np
 import yaml
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QWidget
@@ -324,12 +325,17 @@ def difference_fraction(left: QImage, right: QImage) -> float:
     """Fraction of pixels that differ. 1.0 if the two are not even the same size."""
     if left.size() != right.size() or left.format() != right.format():
         return 1.0
-    differing = sum(
-        left.pixel(x, y) != right.pixel(x, y)
-        for y in range(left.height())
-        for x in range(left.width())
-    )
-    return differing / (left.width() * left.height())
+    # Compared as ARGB32 words, which is what QImage.pixel() returns, so the result is the
+    # per-pixel count it always was. A Python loop over pixel() took minutes for 64 screens.
+    left_px, right_px = (_argb_words(image) for image in (left, right))
+    return float(np.count_nonzero(left_px != right_px)) / left_px.size
+
+
+def _argb_words(image: QImage) -> np.ndarray:
+    argb = image.convertToFormat(QImage.Format.Format_ARGB32)
+    rows = np.frombuffer(argb.constBits(), np.uint8).reshape(argb.height(), argb.bytesPerLine())
+    # Rows can be padded past the last pixel; the padding is not part of the image.
+    return rows[:, : argb.width() * 4].copy().view(np.uint32)
 
 
 @dataclass

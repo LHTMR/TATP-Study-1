@@ -26,6 +26,7 @@ dependencies:
   # Verification
   - pytest
   - pytest-qt          # driving Qt widgets in tests
+  - pytest-xdist       # `make test` runs across cores; the gate is slow on the lab PC
   - pillow             # screenshot pixel comparison
   - pandas             # data-file assertions in the validator
   - ruff               # lint and format

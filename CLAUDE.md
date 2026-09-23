@@ -15,8 +15,9 @@ conda env create -f environment.yml
 conda activate tatp-study-1
 ```
 
-Add a dependency by **editing `environment.yml` and running
-`conda env update -f environment.yml --prune`**. Never `conda install` or `pip install` — an
+Add a dependency by **editing `environment.yml` and running `make env`** (which runs
+`conda env update -f environment.yml --prune` pinned to conda-forge, so it never stops at
+Anaconda's terms of service). Never `conda install` or `pip install` — an
 ad-hoc install is invisible in the diff and will not exist on the lab PC. The Makefile targets
 run through `conda run -n tatp-study-1`, so they work whether or not the env is active.
 
