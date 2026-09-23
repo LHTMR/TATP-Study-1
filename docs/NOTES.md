@@ -54,6 +54,7 @@ The software supports each; someone has to actually run it.
 |---|---|
 | N4.1 | **Manual data transfer to the LiU secure server** (`SPEC.md` §14.1) is outside the software. The process needs to exist and belongs in `SOP.md` when it is written. |
 | N4.2 | **Parallel Claude sessions get a branch.** Two agents sharing one working tree on `main` cannot tell whose uncommitted change is whose; this already caused one mis-attributed commit (`PROGRESS.md` decision 22). |
+| N4.3 | **Claude Code permissions loosened, 23 Sep 2026 (S's decision).** The earlier setup denied every command that could wrap another (`find`, `sed`, `bash -c`, …) and ran a `PreToolUse` hook that refused shell operators, even inside quotes, and any path outside the repository. It caused too many refusals on legitimate work (multi-line commit messages, regex alternation, the session scratchpad). On the Windows lab PC it did not work at all: it called `python3`, which is not on that PC's PATH, and `os.path.commonpath` raised on Windows paths. Its main reason for existing no longer holds, because Claude Code now checks each part of a compound command against the rules itself. Now: deny covers only what the study depends on (`data/`, network tools, environment installs, destructive git, OneDrive on both machines), and commands that can destroy work move to `ask`. **What was given up:** nothing mechanical stops a `tools/` script's `--out` path from pointing outside the repository; CLAUDE.md's rule and the session's permission mode are what hold it. |
 
 ## 5. The UI review, 26 Aug 2026
 

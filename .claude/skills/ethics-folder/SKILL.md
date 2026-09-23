@@ -54,14 +54,12 @@ part is waiting. If the whole task depends on it, stop.
 ## The one helper
 
 `Read` cannot list a directory and cannot open `.docx`. `tools/read_ethics.py` does both. Its
-argument is always **relative to the ethics root**, which is what keeps an outside path out of
-the command — `.claude/hooks/check_bash.py` resolves every path token in a Bash command and
-refuses any that lands outside the repository.
+argument is always **relative to the ethics root**, so the folder's location never appears in
+a command or in the repository.
 
-**Run it through `make ethics`, not as a bare command.** The Claude Code app's shell on this Mac
+**Run it through `make ethics`, not as a bare command.** The Claude Code app's shell on the Mac
 has neither `python` nor `conda` on PATH, so `python tools/read_ethics.py …` fails with
-`command not found` and the absolute conda path is refused by the hook for landing outside the
-repository. The Makefile is the only place that knows how to reach an interpreter.
+`command not found`. The Makefile is the only place that knows how to reach an interpreter.
 
 ```bash
 make ethics ARGS="--list"
@@ -75,8 +73,7 @@ make ethics ARGS="Bilaga1_Forskningsplan_V2.docx"
 make ethics ARGS="support_documents/article_summaries.md --grep anchor --context 3"
 ```
 
-`--grep` takes one term. The hook refuses `|` even inside quotes, so there is no alternation —
-run a second `make ethics` rather than trying to combine terms.
+`--grep` takes one term. Run a second `make ethics` rather than trying to combine terms.
 
 Grep before dumping. `Bilaga1_Forskningsplan_V2.docx` and `article_summaries.md` are large, and
 `--grep` with `--context` usually answers the question in a tenth of the tokens. For an article

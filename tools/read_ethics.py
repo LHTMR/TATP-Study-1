@@ -1,10 +1,8 @@
 """Read a file from the ethics folder, by path relative to that folder.
 
 The folder lives outside this repository and its location is **not** recorded here -- set
-`TATP_ETHICS_DIR` to it. The argument is always relative to that root, which is what keeps an
-outside path out of the command: `.claude/hooks/check_bash.py` resolves every path token in a
-Bash command and refuses any that lands outside the repository, so a tool taking the real path
-as an argument could never be invoked.
+`TATP_ETHICS_DIR` to it. The argument is always relative to that root, so the folder's
+location never appears in a command or in the repository.
 
 The `Read` tool handles text and PDFs directly once the folder is added as a working directory.
 This exists for the two things it cannot do: listing the folder, and .docx.

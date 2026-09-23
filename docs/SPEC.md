@@ -185,7 +185,7 @@ TATP-Study-1/
 │   ├── reference/              approved images, committed
 │   └── manifest.yaml
 ├── data/                       gitignored (§14.1)
-├── .claude/                    settings.json and hooks/check_bash.py
+├── .claude/                    settings.json, agents/, skills/
 ├── CLAUDE.md
 ├── README.md  SOP.md  HARDWARE_BRINGUP.md
 ├── Makefile
@@ -1322,21 +1322,19 @@ mock-versus-real comparison run. Nothing on this list is attempted before that s
 
 ## 19. Running Claude Code on this project
 
-Already in place: `CLAUDE.md`, `.gitignore`, and — staged at `setup/claude/` for moving into
-`.claude/` — `settings.json` and `hooks/check_bash.py`.
+Already in place: `CLAUDE.md`, `.gitignore` and `.claude/settings.json`.
 
-The permission rules allow file operations inside the repository, the test and tool commands,
-read-only git plus add and commit, and documentation domains. They deny `git push`, `rm`, `mv`,
-`pip install`, `sudo`, reads and writes under `~/Library/CloudStorage`, reads and writes under
-`data/`, and all MCP tools. `disabledMcpjsonServers` is set to `["*"]`; this project needs no
-MCP servers, and removing them removes a class of uncertainty rather than managing it.
+The permission rules allow the test and tool commands, read-only git plus add and commit, and
+documentation domains. They ask before `rm`, `mv`, `cp`, `git checkout` / `git restore` and the
+shell wrappers. They deny `git push`, `pip` / `conda install`, `sudo`, network tools, writes
+under OneDrive (`~/Library/CloudStorage` on the Mac, `~/OneDrive*` on Windows), reads and writes
+under `data/`, and all MCP tools. `disabledMcpjsonServers` is set to `["*"]`; this project needs
+no MCP servers, and removing them removes a class of uncertainty rather than managing it.
 
-The `PreToolUse` hook on `Bash` exists because permission patterns match the command string and
-a compound command can satisfy a rule written for its first clause. It reads the tool call as
-JSON on **stdin**, and exits 2 — which blocks the call and returns the message to the model — if
-the command contains `&&`, `||`, `;`, `|`, `$(`, a backtick or a newline, or references a path
-outside the repository. CLAUDE.md carries the matching instruction so compliance is the default
-rather than a fight with the hook; the instruction is advisory, the hook is what makes it hold.
+There is no `PreToolUse` hook. An earlier one refused shell operators and outside-repository
+paths; Claude Code now checks each part of a compound command against the rules itself, and the
+hook's false positives and Windows failures cost more than the path check was worth (see
+`docs/NOTES.md`).
 
 ---
 

@@ -48,23 +48,19 @@ things that genuinely have no tool: running the test suite, git, conda.
 | Explore across many files where only the conclusion matters | a subagent | a pipeline |
 
 **`Glob` and `Grep` are not present in every session.** When they are missing, `ls`,
-`git ls-files` and `grep -rn` are allowed and are the fallback — that is why `grep` and `rg`
-are on the allow list while `find` is denied. `git ls-files` is usually the better of the three
-anyway: it lists exactly the tracked files and never descends into `data/`.
+`git ls-files` and `grep -rn` are the fallback. `git ls-files` is usually the best of them: it
+lists exactly the tracked files and never descends into `data/`.
 
-The deny list refuses `find`, `sed`, `awk`, `perl`, `tee`, `xargs` and the shell wrappers
-(`bash -c`, `sh`, `zsh`, `env`, `eval`, `exec`, `nohup`, `time`, `watch`) outright. Those are
-not arbitrary refusals: each is a way to run something the permission patterns would otherwise
-have matched and refused — `find -delete` deletes without invoking `rm`, `bash -c "…"` hides the
-real command inside a string. Denying the wrapper is what makes denying the wrapped thing mean
-anything. Same reason for `cp`, `ln`, `dd`, `truncate`, `unlink`, and for `git checkout` /
-`git restore` / `git config` (they discard uncommitted work or rewrite tool behaviour — use
-`git switch` to change branch).
+The permissions in `.claude/settings.json` have three tiers, and the split is deliberate:
 
-**One known hole, stated rather than papered over:** `conda run … python` can execute anything,
-and the Makefile needs it. It is narrowed to the four forms the Makefile actually uses
-(`python -m pytest`, `python -m tatp`, `python tools/…`, `python run_session.py`) rather than
-allowed wholesale. An ad-hoc `python -c` will prompt, which is the right outcome.
+- **Deny** is kept to what the study depends on: participant data (`data/`), anything that
+  sends data off the machine (`curl`, `ssh`, `scp`, …), rewriting the environment outside
+  `environment.yml`, destroying git history (`git push`, `git reset --hard`, `git clean`), and
+  writes to OneDrive on either machine.
+- **Ask** covers commands that are usually fine but can destroy work: `rm`, `mv`, `cp`,
+  `git checkout` / `git restore` (use `git switch` to change branch), and the shell wrappers
+  (`bash -c`, `eval`), which hide the real command inside a string.
+- Everything else is either allowed or left to the session's permission mode.
 
 `conda run … python tools/…` is allowed **both with and without `--no-capture-output`**. The
 Makefile uses the flag, so that is the spelling in front of you when you run a tool by hand,
@@ -72,14 +68,9 @@ and a rule matching only the bare form prompts on the one you would naturally co
 
 ## Hard rules
 
-- **One shell command per Bash call.** No `&&`, `||`, `;`, `|`, `$(...)` or backticks. A hook
-  enforces this; the rule is here so you do not fight it. The hook rejects those characters
-  even inside a quoted string, so `python -c "a=1; b=2"` is refused too — put the code in a
-  file under `tools/` instead of fighting the quoting.
-  - **This includes a `|` inside a regex**, so `grep -n "alpha\|beta"` and `grep -nE "a|b"`
-    are both refused. That is the hook working, not a bug: allowing `|` inside quotes is
-    exactly the hole that makes denying it elsewhere meaningless. **Run one `grep` per term.**
-    Alternation is never necessary and a second call is cheaper than three rejections.
+- **Prefer one shell command per Bash call.** Claude Code checks each part of a chained
+  command against the rules separately, so chaining is safe, but one unmatched part makes the
+  whole call prompt. Separate calls are easier to approve and to read back.
 - **Write the command so the permission rule can match it.** The rules in
   `.claude/settings.json` match a command *prefix*, so anything in front of the real command
   breaks the match and prompts:
@@ -90,12 +81,10 @@ and a rule matching only the bare form prompts on the one you would naturally co
   - Prefer `make check` over its parts. Subprocesses a Makefile spawns are not
     permission-checked, so the Makefile is the right home for the env vars and the
     `conda run` invocations.
-- **Never write outside this repository.** Not to OneDrive, not to a home directory, nowhere
-  else on the machine. This includes the session scratchpad: the hook resolves every path token
-  in a command — absolute, `~`-relative, and plain relative ones reached by `..` — and refuses
-  any that lands outside the repo, so temporary scripts go in `tools/`, not `/tmp`. This is
-  also what lets `Bash(… python tools/*)` be an allow rule despite `make_allocation.py` taking
-  an `--out` path.
+- **Never write outside this repository**, except throwaway files in the session scratchpad.
+  Not to OneDrive, not to a home directory, nowhere else on the machine. Deny rules cover
+  OneDrive, but nothing mechanical stops a tool's `--out` path pointing elsewhere
+  (`Bash(… python tools/*)` is an allow rule), so this rule is yours to keep.
 - **Never commit participant data.** `data/` is gitignored. If you find data in a commit, stop
   and say so.
 - **No literals in task code.** Timings, forces, pressures, thresholds, rates and every

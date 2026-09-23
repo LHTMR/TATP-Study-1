@@ -208,9 +208,8 @@ irrelevant to the Windows lab PC.
 names Anaconda's `defaults` channel, which demands a terms-of-service acceptance, so creating the
 env there needs `CONDA_DEFAULT_CHANNELS` pointed at conda-forge (see SETUP.md). With that,
 every package came from conda-forge, as on the Mac. `make check` on the lab PC fails only on the
-font problem (next steps, first item) and on `test_check_bash_hook.py`'s Windows-path case
-(the hook's `os.path.commonpath` raises on mixed absolute/relative Windows paths, which only
-matters to Claude Code on that machine).
+font problem (next steps, first item). The Bash hook, which also failed there, has been removed
+(item 8 below).
 
 **The `conda` shell function was broken in session 5's shell** — `CONDA_EXE` was unset, so
 `conda run …` exited 126 with "permission denied". The binary on `PATH` is fine, so
@@ -488,12 +487,11 @@ Items 1–8 were taken in session 1 and are unchanged; 9–13 are session 5; 23�
 7. **`static_sham` pattern** holds all five channels on, so the sham matches the moving patterns
    in spatial extent and differs only in motion. **Assumption — confirm at bring-up.**
 
-8. **Permissions and `CLAUDE.md` tightened** (see the git log): the bypass class is denied,
-   because each of `find`, `sed`, `bash -c` and the rest is a way to run something the deny list
-   would otherwise have caught. The one remaining hole — `conda run … python` — is stated in
-   `CLAUDE.md`, narrowed to the four forms the Makefile uses. Argument paths are constrained by
-   `.claude/hooks/check_bash.py`, which resolves every path token and refuses anything outside
-   the repository.
+8. **Permissions loosened, 23 Sep 2026** (S's decision; `docs/NOTES.md` has the reasoning).
+   Deny is kept to what the study depends on (`data/`, network tools, environment installs,
+   destructive git, OneDrive). `rm`, `mv`, `cp`, `git checkout` / `git restore` and the shell
+   wrappers moved to `ask`. `find`, `sed`, `awk` and the like are no longer denied. The
+   `PreToolUse` Bash hook and its test are deleted.
 
 9. **`play_pattern` takes no `params` dict**, though SPEC.md 12.1's signature has one. Every
    per-pattern parameter the spec names — row interval, channel ids, loop — lives in the
@@ -817,13 +815,6 @@ The experimenter's substitution control belongs there too, for the same reason.
   `which -a conda` in a normal terminal gives the path. The committed Makefile still defaults
   to plain `conda`, so nothing about this reaches the lab PC. Until the gate runs, **do not
   report anything as verified.**
-- The `PreToolUse` hook rejects `&&`, `||`, `;`, `|`, `$(`, backticks and newlines **even
-  inside a quoted string** — including inside a `git commit -m` message, which is easy to trip
-  over. Put throwaway code in a file under `tools/`, not in `python -c`, and not in `/tmp`: the
-  hook also refuses absolute paths outside the repository, which includes the session
-  scratchpad.
-- `mkdir` is not on the allow list. `DataFileCollection` creates its own folder, which is the
-  right place for it anyway.
 - **A `QObject` protocol object with no parent is collected the moment nothing holds it**, and a
   collected object silently stops answering the participant's buttons. Two tests failed this way
   before the reference was bound. `SliceRunner` holds each of its three.
