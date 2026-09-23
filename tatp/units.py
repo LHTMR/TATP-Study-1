@@ -17,3 +17,7 @@ from __future__ import annotations
 
 MS_PER_S = 1000.0
 S_PER_MIN = 60.0
+# The base of log10, for going back from a log axis to pressure and from decibels to amplitude.
+DECADE = 10.0
+# Decibels are twenty times the log of an amplitude ratio.
+DB_PER_AMPLITUDE_DECADE = 20.0

@@ -17,6 +17,7 @@ from pathlib import Path
 from tatp import allocation as alloc
 from tatp import provenance
 from tatp import schedule as sched
+from tatp.audio import Audio
 from tatp.clock import Clock
 from tatp.config import REPO_ROOT, Config, hash_files
 from tatp.datafiles import DataFileCollection
@@ -106,6 +107,7 @@ class Session:
         self.block_index: int | None = None
         self._block: sched.Block | None = None
         self._block_start_s: float | None = None
+        self._block_start_iso = ""
         self.aborted_reason = ""
         self.closed = False
 
@@ -114,13 +116,17 @@ class Session:
         self.fit_preview_enabled = config.study1["fit_preview"]["enabled"]
         self.fit_preview_reruns = 0
 
-        # SPEC.md 10.7. Set by the masking check, which is Milestone 4 -- the participant picks
-        # their own noise level, so there is no configured value to default these to. None
-        # means the check has not run, which is distinguishable from it having run and failed.
+        # SPEC.md 10.7, 10.9. Set by the masking check and the stop rehearsal and written to the
+        # session file when each ends (`record_masking`, `record_stop_rehearsal`) -- the
+        # participant picks their own noise level, so there is no configured value to default
+        # these to. None means the procedure has not run, which is distinguishable from it
+        # having run and failed.
         self.white_noise_level_dbfs: float | None = None
         self.masking_confirmed: bool | None = None
         self.masking_attempts = 0
         self.earplugs_used = False
+        self.stop_rehearsal_ran: bool | None = None
+        self.stop_rehearsal_press_detected: bool | None = None
 
         self.data_folder = Path(config.hardware["data"]["folder"])
         if not self.data_folder.is_absolute():
@@ -144,6 +150,9 @@ class Session:
         self.garment = DRIVERS[driver_name](
             Limits.from_config(config.hardware), self.clock, on_command=self._record_garment
         )
+        # SPEC.md 10.5, 10.7. Owned here beside the garment for the same reason: every phase
+        # needs it and none of them does it.
+        self.audio = Audio(config.hardware["audio"], self.clock, self.log)
 
     # -- blinding ----------------------------------------------------------------------
 
@@ -235,6 +244,7 @@ class Session:
             )
         self._block = block
         self._block_start_s = self.clock.t_session_s()
+        self._block_start_iso = self.clock.wall_iso()
         self.block_index = block.index
         started_min = self._block_start_s / S_PER_MIN
         self.log(
@@ -245,12 +255,13 @@ class Session:
             f"{started_min - block.planned_offset_min:+.2f} min against plan",
         )
 
-    def end_block(self) -> None:
+    def end_block(self, aborted: bool = False) -> None:
         """Close the open block, recording how long it actually took."""
         if self._block is None:
             raise SessionError("no block is open")
         block, start_s = self._block, self._block_start_s
-        actual_min = (self.clock.t_session_s() - start_s) / S_PER_MIN
+        end_s = self.clock.t_session_s()
+        actual_min = (end_s - start_s) / S_PER_MIN
         planned = (
             "unset" if block.expected_duration_min is None
             else f"{block.expected_duration_min:g} min"
@@ -258,6 +269,19 @@ class Session:
         self.log(
             "block_ended",
             detail=f"{block.type}; took {actual_min:.2f} min, expected {planned}",
+        )
+        self.files.write(
+            "blocks",
+            timestamp_iso=self._block_start_iso,
+            block_index=block.index,
+            block_type=block.type,
+            planned_offset_min=block.planned_offset_min,
+            expected_duration_min=block.expected_duration_min,
+            started_t_session_s=start_s,
+            ended_t_session_s=end_s,
+            actual_duration_min=actual_min,
+            lateness_min=start_s / S_PER_MIN - block.planned_offset_min,
+            aborted=aborted,
         )
         self._block = None
         self._block_start_s = None
@@ -319,24 +343,69 @@ class Session:
         # SPEC.md 7.4 wants an actual end for every block, which includes one the session was
         # aborted out of. Closed here rather than at each abort path so it cannot be forgotten.
         if self._block is not None:
-            self.end_block()
+            self.end_block(aborted=bool(abort_reason))
         self.aborted_reason = abort_reason
         if self.garment.connected:
             self.garment.stop()
             self.garment.disconnect()
+        self.audio.close()
         self.set_phase("session_end")
         if abort_reason:
             self.log("session_aborted", severity="warning", detail=abort_reason)
         self.log("session_ended")
+        # A session that ended before a setup procedure recorded its keys still writes them,
+        # empty and ahead of the closing keys, so the file keeps DATA_SCHEMA.md's key order.
+        if self.masking_confirmed is None:
+            self.files.write_session(
+                {
+                    "white_noise_level_dbfs": "",
+                    "masking_confirmed": "",
+                    "masking_attempts": "",
+                    "earplugs_used": "",
+                }
+            )
+        if self.stop_rehearsal_ran is None:
+            self.files.write_session(
+                {"stop_rehearsal_ran": "", "stop_rehearsal_press_detected": ""}
+            )
         self.files.write_session(
             {
                 "sensitisation_start_iso": self.clock.sensitisation_start_iso or "",
                 "session_end_iso": self.clock.wall_iso(),
                 "abort_reason": abort_reason,
+                # Known only at the end: a re-run can happen at any of the three time points.
+                "fit_preview_reruns": self.fit_preview_reruns,
             }
         )
         self.files.close()
         self.closed = True
+
+    # -- setup results -----------------------------------------------------------------
+
+    def record_masking(
+        self, level_dbfs: float, confirmed: bool, attempts: int, earplugs_used: bool
+    ) -> None:
+        """The masking check's outcome (SPEC.md 10.7), written once, when the check ends."""
+        self.white_noise_level_dbfs = level_dbfs
+        self.masking_confirmed = confirmed
+        self.masking_attempts = attempts
+        self.earplugs_used = earplugs_used
+        self.files.write_session(
+            {
+                "white_noise_level_dbfs": level_dbfs,
+                "masking_confirmed": confirmed,
+                "masking_attempts": attempts,
+                "earplugs_used": earplugs_used,
+            }
+        )
+
+    def record_stop_rehearsal(self, press_detected: bool) -> None:
+        """That the rehearsal ran and whether the press was detected (SPEC.md 10.9)."""
+        self.stop_rehearsal_ran = True
+        self.stop_rehearsal_press_detected = press_detected
+        self.files.write_session(
+            {"stop_rehearsal_ran": True, "stop_rehearsal_press_detected": press_detected}
+        )
 
     # -- provenance --------------------------------------------------------------------
 
@@ -389,7 +458,6 @@ class Session:
             # A session run with the preview on is not blind in the sense Bilaga 1 3.3
             # describes, so analysis must be able to tell it apart (SPEC.md 11.1).
             "fit_preview_enabled": self.fit_preview_enabled,
-            "fit_preview_reruns": self.fit_preview_reruns,
             "filament_calibration_date": self.config.filaments.get("weighing_date") or "",
             "filaments_measured": all(f["force_measured_mn"] is not None for f in filaments),
             "slope_prior_vas_per_log10": self.config.study1["pinprick"][
@@ -397,18 +465,17 @@ class Session:
             ],
             "room_temperature_c": room_temperature_c,
             "relative_humidity_pct": relative_humidity_pct,
-            # SPEC.md 10.7. The masking check fills these in setup and rewrites the row; they
-            # are declared here so the column exists from the first session rather than
-            # appearing when the procedure lands. Empty means the check has not run.
-            "white_noise_level_dbfs": self.white_noise_level_dbfs,
-            "masking_confirmed": self.masking_confirmed,
-            "masking_attempts": self.masking_attempts,
-            "earplugs_used": self.earplugs_used,
+            # The masking and stop-rehearsal keys are not here: they are measured in setup and
+            # written when each procedure ends (`record_masking`, `record_stop_rehearsal`). A
+            # session closed before then gets them empty from `DataFileCollection.close`.
             "data_folder": str(self.data_folder.resolve()),
             "cloud_sync_warning": self.cloud_sync_warning,
             "unresolved_open_items": ";".join(
                 item.number for item in self.config.unresolved
             ),
             "resumed_from_session_file": self.resumed_from,
+            # `run_session.py --clock-speed` promises this is recorded: an accelerated run's
+            # files look like a session's, and this is what tells them apart.
+            "clock_speed": self.clock.speed,
             "session_start_iso": self.session_start_iso,
         }

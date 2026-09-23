@@ -24,7 +24,7 @@ with no protocol in it.
 from __future__ import annotations
 
 from PySide6.QtCore import QRect, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QGuiApplication, QPainter, QPen
+from PySide6.QtGui import QFont, QFontMetrics, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
 
 from tatp.clock import Clock
@@ -47,6 +47,9 @@ from tatp.units import MS_PER_S
 # The screen every protocol shows after an emergency stop. A key in the participant text file,
 # not wording -- it lives here rather than in one protocol because both of them show it.
 EMERGENCY_STOP_SCREEN = "emergency_stop"
+# The one screen that draws the stop button, because pointing at it is its purpose (SPEC.md
+# 10.9). A key in the participant text file, not wording.
+STOP_REHEARSAL_SCREEN = "stop_rehearsal"
 
 MESSAGE_POINT_SIZE = 26
 CUE_RADIUS_FRACTION = 0.09
@@ -73,6 +76,10 @@ BUTTON_LABEL_WIDTH_FRACTION = 0.34
 SIDES = ("left", "right")
 # The adjustment screen's confirm sentence sits below the button labels.
 ADJUST_CONFIRM_Y_FRACTION = 0.76
+# The stop rehearsal's button sits below its three lines of text rather than where the two
+# large buttons go, which that text would overlap.
+STOP_BUTTON_Y_FRACTION = 0.62
+STOP_BUTTON_CENTRE_FRACTION = 0.5
 
 
 class _MessageScreen(QWidget):
@@ -92,6 +99,8 @@ class _MessageScreen(QWidget):
         # (UI_PRINCIPLES.md 5.6). Not colour: an alarming screen is the wrong thing to show
         # someone who has just pressed the button because something was unpleasant.
         self.emphasised = False
+        # The stop button's printed symbol, on the stop rehearsal only (SPEC.md 10.9).
+        self.stop_symbol: str | None = None
 
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
@@ -105,6 +114,9 @@ class _MessageScreen(QWidget):
         top = int(self.height() * QUESTION_Y_FRACTION)
         box = self.rect().adjusted(margin, top, -margin, 0)
         painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.text)
+        if self.stop_symbol is not None:
+            painter.setRenderHint(QPainter.Antialiasing)
+            _draw_symbol_button(painter, self, _stop_button_rect(self), self.stop_symbol)
         painter.end()
 
 
@@ -330,6 +342,34 @@ def _button_rect(widget: QWidget, side: str) -> QRect:
     )
 
 
+def _stop_button_rect(widget: QWidget) -> QRect:
+    width = widget.width() * BUTTON_WIDTH_FRACTION
+    height = widget.height() * BUTTON_HEIGHT_FRACTION
+    return QRect(
+        int(widget.width() * STOP_BUTTON_CENTRE_FRACTION - width / 2),
+        int(widget.height() * STOP_BUTTON_Y_FRACTION),
+        int(width),
+        int(height),
+    )
+
+
+def _draw_symbol_button(painter: QPainter, widget: QWidget, rect: QRect, symbol: str) -> None:
+    """A button outline carrying its printed symbol, with no label: the text above names it."""
+    painter.setPen(QPen(FOREGROUND, BUTTON_LINE_WIDTH_PX))
+    painter.setBrush(Qt.NoBrush)
+    painter.drawRoundedRect(rect, BUTTON_RADIUS_PX, BUTTON_RADIUS_PX)
+    symbol_font = QFont(widget.font())
+    symbol_font.setPointSize(BUTTON_SYMBOL_POINT_SIZE)
+    # Shrunk to fit if it is wider than the button: a symbol cut off at both edges stops
+    # being the symbol, and while it is a placeholder (local item L12) it must read as one.
+    room = rect.width() - 2 * BUTTON_RADIUS_PX
+    width = QFontMetrics(symbol_font).horizontalAdvance(symbol)
+    if width > room:
+        symbol_font.setPointSizeF(BUTTON_SYMBOL_POINT_SIZE * room / width)
+    painter.setFont(symbol_font)
+    painter.drawText(rect, Qt.AlignCenter, symbol)
+
+
 def _draw_button(
     painter: QPainter,
     widget: QWidget,
@@ -383,6 +423,13 @@ class ParticipantWindow(QWidget):
     chosen = Signal(str)
     choice_gap_elapsed = Signal()
     pressed_before_accepting = Signal()
+    # The play button on a message screen that says "Press ▶ to continue" (SPEC.md 10.9) or
+    # asks for the self-start press (SPEC.md 12.3). Emitted on any message screen; what it
+    # means is up to whoever is listening, and nothing listens on a screen that asks nothing.
+    message_confirmed = Signal()
+    # The visual warning cue has just gone up (SPEC.md 10.5). The rig sounds the audible cue
+    # from this, so the two cannot come apart.
+    warning_cue_shown = Signal()
 
     def __init__(
         self,
@@ -394,6 +441,11 @@ class ParticipantWindow(QWidget):
         super().__init__(parent)
         self.text = config.participant_text
         self.responder = responder
+        self.clock = clock
+        # Real seconds at the start of the latest key press, before anything else runs. The
+        # self-start latency is measured from here (SPEC.md 12.3), so it includes the software's
+        # own handling rather than starting after it.
+        self.last_press_real_s: float | None = None
         self._names = {key: name for name, key in QT_KEYS.items()}
 
         self.message = _MessageScreen()
@@ -449,12 +501,37 @@ class ParticipantWindow(QWidget):
         """Show `screens.<key>` from the participant text file."""
         self.message.text = self.text["screens"][key]
         self.message.emphasised = key == EMERGENCY_STOP_SCREEN
+        self.message.stop_symbol = (
+            self.responder.symbol_for(Action.EMERGENCY_STOP, pointing_at_stop=True)
+            if key == STOP_REHEARSAL_SCREEN
+            else None
+        )
         self._show(self.message)
 
     def show_blank(self) -> None:
         """Nothing at all -- what the participant sees while a stimulus is being delivered."""
         self.message.text = ""
         self.message.emphasised = False
+        self.message.stop_symbol = None
+        self._show(self.message)
+
+    def show_level_adjustment(self, key: str) -> None:
+        """`audio_setup.<key>`, with the two large buttons moving the noise (SPEC.md 10.7).
+
+        A text screen rather than the drawn-button control: the approved wording names the
+        buttons in its own sentences ("Left button: quieter"), and drawing them as well would
+        say it twice. The buttons are read exactly as on the pressure adjustment.
+        """
+        self.message.text = self.text["audio_setup"][key]
+        self.message.emphasised = False
+        self.message.stop_symbol = None
+        self._show(self.message, adjusting=True)
+
+    def show_audio_setup(self, key: str) -> None:
+        """`audio_setup.<key>` as a plain text screen, such as `settled`."""
+        self.message.text = self.text["audio_setup"][key]
+        self.message.emphasised = False
+        self.message.stop_symbol = None
         self._show(self.message)
 
     def show_emergency_stop(self) -> None:
@@ -475,13 +552,14 @@ class ParticipantWindow(QWidget):
     def show_preference(self) -> None:
         """The preference selection (SPEC.md 9 step 6): move between patterns, then choose.
 
-        The window does not read the buttons here. Nothing yet moves between patterns -- the
-        procedure is Milestone 3 -- and a screen that showed a pressed state while nothing
-        changed would be telling the participant something untrue.
+        The buttons are read as on the adjustment -- `adjust_pressed` moves between patterns
+        and `adjust_confirmed` chooses -- because the shape is the same: a press moves
+        something the participant then commits to (UI_PRINCIPLES.md 5.12). Which pattern is
+        playing is felt, never shown: a name or a number on screen would be a label.
         """
         controls = self.text["participant_controls"]["preference"]
         self.control.present(controls["intro"], controls)
-        self._show(self.control)
+        self._show(self.control, adjusting=True)
 
     def show_choice(self, key: str) -> None:
         """Present `choices.<key>` with both buttons drawn, accepting nothing yet.
@@ -504,6 +582,7 @@ class ParticipantWindow(QWidget):
 
     def show_warning_cue(self) -> None:
         self._show(self.cue)
+        self.warning_cue_shown.emit()
 
     def show_vas(self, scale: str) -> None:
         """Present `vas.<scale>` and start its reaction-time clock."""
@@ -524,9 +603,17 @@ class ParticipantWindow(QWidget):
     # -- input -------------------------------------------------------------------------
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        self.last_press_real_s = self.clock.real_elapsed_s()
         action = self._action(event)
         if action is Action.EMERGENCY_STOP:
             self.emergency_stop.emit()
+        elif (
+            action is Action.CONFIRM
+            and not self._adjusting
+            and not event.isAutoRepeat()
+            and self.stack.currentWidget() is self.message
+        ):
+            self.message_confirmed.emit()
         elif self._choosing and not event.isAutoRepeat():
             # Auto-repeat cannot make a second choice: the screen stops accepting on the first
             # press, and a held button is one press however long it is held.

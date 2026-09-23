@@ -70,12 +70,19 @@ class Responder:
     def is_ignored(self, key: str) -> bool:
         return key in self.ignored
 
-    def symbol_for(self, action: Action) -> str:
+    def symbol_for(self, action: Action, *, pointing_at_stop: bool = False) -> str:
         """What is printed on the button for `action`. A missing one raises, never blanks.
 
-        The emergency stop has none: it is a button a participant is told about, never one a
-        screen draws, and a screen that drew it would be inviting the press.
+        The emergency stop is never drawn as an option on a response screen: a screen that drew
+        it there would be inviting the press. The one exception is the stop rehearsal, whose
+        purpose is pointing at the button (SPEC.md 10.9), and it says so with
+        `pointing_at_stop` -- so the exception is visible at the one call that uses it.
         """
+        if action is Action.EMERGENCY_STOP and not pointing_at_stop:
+            raise ResponderError(
+                "the emergency stop is never drawn as an option on a response screen "
+                "(SPEC.md 10.9); only the stop rehearsal points at it"
+            )
         try:
             return self._symbols[action.value]
         except KeyError:

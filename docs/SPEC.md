@@ -856,9 +856,8 @@ preceded by the §10.5 warning cue.
 | `stop_rehearsal` | The touch is running now. / Press this button to stop it. / Nothing is lost — we carry straight on afterwards. | Beröringen är igång nu. / Tryck på den här knappen för att stänga av den. / Ingenting går förlorat — vi fortsätter direkt efteråt. |
 | `stop_rehearsal_done` | That is the stop button. / It works at any time, in any part of the visit. / (blank line) / Press ▶ to continue. | Det där är stoppknappen. / Den fungerar när som helst, under alla delar av besöket. / (tom rad) / Tryck på ▶ för att fortsätta. |
 
-**Not built.** It needs the garment running during a training phase, which arrives with
-`audio.py` and the masking check. Specified here so it lands with them rather than being
-remembered.
+**Built** in `tatp/setup_checks.py` (`StopRehearsal`), 24 Sep 2026. Its pressure and the stop
+button's printed symbol are open items L11 and L12.
 
 ---
 

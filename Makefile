@@ -4,10 +4,8 @@
 # active. Recipes are spawned through /bin/sh, which does not define the `conda` shell function,
 # so `conda` here is always the binary on PATH.
 #
-# `check` is the gate. It is NOT complete yet: the end-to-end validator
-# (tools/validate_session.py, SPEC.md 17.3) does not exist, so `check` runs the unit tests, the
-# linter and the screenshot comparison. It says so when it runs, rather than letting a partial
-# gate look like a passing one.
+# `check` is the gate (SPEC.md 17.1): the unit tests, the linter, the end-to-end validator and
+# the screenshot comparison.
 
 # `conda` is whatever is on PATH, which is right on the lab PC and in any normal shell. Some
 # shells -- the Claude Code app's, on this Mac -- run with a minimal PATH that has no conda
@@ -21,14 +19,18 @@ CONDA ?= conda
 
 CONDA_RUN := $(CONDA) run --no-capture-output -n tatp-study-1
 
-.PHONY: check test test-one lint literals shots layouts archive preview ethics
+.PHONY: check test test-one lint literals validate shots layouts archive preview ethics env
 
-check: test lint shots
-	@echo
-	@echo "INCOMPLETE GATE: the end-to-end validator (make validate) is not built yet."
+# The parts are independent, so they run at once. `-k` keeps the others going when one fails, so
+# the gate still lists every failure (SPEC.md 17.1). Make 3.81 on the lab PC has no
+# --output-sync, so their lines can interleave; each part's summary line still says whose it is.
+check:
+	"$(MAKE)" -k -j4 test lint validate shots
 
+# Across every core (pytest-xdist). Tests must not share state through files or globals -- a
+# test that passes alone and fails here is the bug, not the parallelism.
 test:
-	$(CONDA_RUN) python -m pytest -q
+	$(CONDA_RUN) python -m pytest -q -n auto
 
 # One file, one test, or any other pytest arguments, without leaving the environment:
 #   make test-one ARGS="tests/test_touchcal.py -x --timeout=30"
@@ -46,6 +48,12 @@ lint:
 # lets through, which is the part that needs a human eye rather than an assertion.
 literals:
 	$(CONDA_RUN) python tools/lint_literals.py --inventory
+
+# The end-to-end validator (SPEC.md 17.3): whole sessions headless, with the mock garment and
+# the virtual participant and experimenter of sim/, then named assertions on the data files.
+# Prints `N passed, M skipped (reasons)` and exits non-zero on any failure.
+validate:
+	$(CONDA_RUN) python tools/validate_session.py
 
 # Screen states as PNGs, compared against the approved references (SPEC.md 17.4). The bare
 # target is the gate's form: write every screen, compare the armed ones, fail on a difference.
@@ -76,6 +84,13 @@ archive:
 #   make ethics ARGS="Bilaga1_Forskningsplan_V2.docx --grep anchor --context 3"
 ethics:
 	$(CONDA_RUN) python tools/read_ethics.py $(ARGS)
+
+# Apply environment.yml to the env -- the only way a dependency changes (CLAUDE.md). The channel
+# is set here as well as in the Windows variable docs/SETUP.md step 5.6 asks for, because a
+# terminal opened before that variable existed falls back to Anaconda's servers and stops at
+# their terms of service, which the study does not accept.
+env:
+	CONDA_DEFAULT_CHANNELS=https://conda.anaconda.org/conda-forge $(CONDA) env update -f environment.yml --prune
 
 # The session timeline and its warnings (SPEC.md 7.2). No hardware, nothing written.
 #   make preview ARGS="--start 09:30"

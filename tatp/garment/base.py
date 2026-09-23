@@ -23,6 +23,7 @@ from dataclasses import dataclass
 
 from tatp.clock import Clock
 from tatp.garment.patterns import ChannelEvent, Pattern, expand
+from tatp.units import MS_PER_S
 
 
 class GarmentError(Exception):
@@ -84,6 +85,8 @@ class GarmentController(ABC):
         self._pattern_start_s: float | None = None
         self._pattern_delivered = 0
         self._channels_on: set[int] = set()
+        # The latest self-started pattern's press-to-first-command time (SPEC.md 12.3).
+        self.self_start_latency_ms: float | None = None
 
     @property
     def driver_name(self) -> str:
@@ -177,8 +180,16 @@ class GarmentController(ABC):
 
     # -- patterns ----------------------------------------------------------------------
 
-    def play_pattern(self, pattern: Pattern) -> None:
-        """Start a pattern. Events are delivered by `advance()`, driven by the session timer."""
+    def play_pattern(self, pattern: Pattern, pressed_at_real_s: float | None = None) -> None:
+        """Start a pattern. Events are delivered by `advance()`, driven by the session timer.
+
+        `pressed_at_real_s` is given only when the participant's own press started it (SPEC.md
+        12.3). Then the pattern's first events are delivered here, at once, and
+        `self_start_latency_ms` -- the press to the moment the first device command is issued --
+        is measured immediately before that command and written on the `pattern_start` row.
+        That row is therefore written after the first `channel_on` rows, once the latency is
+        known. Nothing is inserted into this path to be measured; it is measured as it stands.
+        """
         self._require_connected()
         unknown = set(pattern.channel_ids) - set(self.channels())
         if unknown:
@@ -190,7 +201,18 @@ class GarmentController(ABC):
         self._pattern_events = expand(pattern)
         self._pattern_start_s = self.clock.elapsed_s()
         self._pattern_delivered = 0
-        self._record("pattern_start", pattern_name=pattern.name)
+        self.self_start_latency_ms = None
+        if pressed_at_real_s is None:
+            self._record("pattern_start", pattern_name=pattern.name)
+            return
+        waited_s = self.clock.real_elapsed_s() - pressed_at_real_s
+        self.self_start_latency_ms = waited_s * MS_PER_S
+        self.advance()
+        self._record(
+            "pattern_start",
+            pattern_name=pattern.name,
+            self_start_latency_ms=self.self_start_latency_ms,
+        )
 
     def advance(self) -> None:
         """Deliver every pattern event now due. Called from the session's timer.

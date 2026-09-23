@@ -35,6 +35,15 @@ screens:
   participant_en_adjust_most_pleasant: 'The adjustment screen for `most_pleasant`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     en.'
+  participant_en_audio_setup_find_level: 'The masking check''s `audio_setup.find_level`
+    (SPEC.md 10.7), a text screen: its wording names the buttons itself, so none are
+    drawn, en.'
+  participant_en_audio_setup_mask_level: 'The masking check''s `audio_setup.mask_level`
+    (SPEC.md 10.7), a text screen: its wording names the buttons itself, so none are
+    drawn, en.'
+  participant_en_audio_setup_settled: 'The masking check''s `audio_setup.settled`
+    (SPEC.md 10.7), a text screen: its wording names the buttons itself, so none are
+    drawn, en.'
   participant_en_blank: Nothing at all -- what the participant sees during a stimulus.
   participant_en_choice_comparison_accepting: 'Both stimuli delivered, no emphasis,
     the next press is the answer. Identical to the waiting state by design: nothing
@@ -47,6 +56,23 @@ screens:
     one you are feeling`, never as a suggestion.
   participant_en_choice_comparison_waiting: '`choices.comparison` with both buttons
     drawn and neither emphasised -- the state before the first stimulus, en.'
+  participant_en_choice_evenness_accepting: 'Both stimuli delivered, no emphasis,
+    the next press is the answer. Identical to the waiting state by design: nothing
+    on screen may hint that a press is due.'
+  participant_en_choice_evenness_chosen_right: The right button shown back as chosen
+    -- filled, its symbol reversed out. Set directly rather than by pressing, because
+    the press starts a timer that would blank the screen before it could be grabbed.
+  participant_en_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
+    and neither emphasised -- the state before the first stimulus, en.'
+  participant_en_choice_still_audible_accepting: 'Both stimuli delivered, no emphasis,
+    the next press is the answer. Identical to the waiting state by design: nothing
+    on screen may hint that a press is due.'
+  participant_en_choice_still_audible_chosen_right: The right button shown back as
+    chosen -- filled, its symbol reversed out. Set directly rather than by pressing,
+    because the press starts a timer that would blank the screen before it could be
+    grabbed.
+  participant_en_choice_still_audible_waiting: '`choices.still_audible` with both
+    buttons drawn and neither emphasised -- the state before the first stimulus, en.'
   participant_en_cue: 'The visual warning cue: one filled disc, centred, no wording.'
   participant_en_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, en.'
@@ -59,6 +85,10 @@ screens:
     en.
   participant_en_screen_standby: The participant text `screens.standby`, centred,
     en.
+  participant_en_screen_stop_rehearsal: The participant text `screens.stop_rehearsal`,
+    centred, en.
+  participant_en_screen_stop_rehearsal_done: The participant text `screens.stop_rehearsal_done`,
+    centred, en.
   participant_en_screen_welcome: The participant text `screens.welcome`, centred,
     en.
   participant_en_vas_alertness_uncued: The `alertness` scale with its question and
@@ -92,6 +122,15 @@ screens:
   participant_sv_adjust_most_pleasant: 'The adjustment screen for `most_pleasant`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     sv.'
+  participant_sv_audio_setup_find_level: 'The masking check''s `audio_setup.find_level`
+    (SPEC.md 10.7), a text screen: its wording names the buttons itself, so none are
+    drawn, sv.'
+  participant_sv_audio_setup_mask_level: 'The masking check''s `audio_setup.mask_level`
+    (SPEC.md 10.7), a text screen: its wording names the buttons itself, so none are
+    drawn, sv.'
+  participant_sv_audio_setup_settled: 'The masking check''s `audio_setup.settled`
+    (SPEC.md 10.7), a text screen: its wording names the buttons itself, so none are
+    drawn, sv.'
   participant_sv_blank: Nothing at all -- what the participant sees during a stimulus.
   participant_sv_choice_comparison_accepting: 'Both stimuli delivered, no emphasis,
     the next press is the answer. Identical to the waiting state by design: nothing
@@ -104,6 +143,23 @@ screens:
     one you are feeling`, never as a suggestion.
   participant_sv_choice_comparison_waiting: '`choices.comparison` with both buttons
     drawn and neither emphasised -- the state before the first stimulus, sv.'
+  participant_sv_choice_evenness_accepting: 'Both stimuli delivered, no emphasis,
+    the next press is the answer. Identical to the waiting state by design: nothing
+    on screen may hint that a press is due.'
+  participant_sv_choice_evenness_chosen_right: The right button shown back as chosen
+    -- filled, its symbol reversed out. Set directly rather than by pressing, because
+    the press starts a timer that would blank the screen before it could be grabbed.
+  participant_sv_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
+    and neither emphasised -- the state before the first stimulus, sv.'
+  participant_sv_choice_still_audible_accepting: 'Both stimuli delivered, no emphasis,
+    the next press is the answer. Identical to the waiting state by design: nothing
+    on screen may hint that a press is due.'
+  participant_sv_choice_still_audible_chosen_right: The right button shown back as
+    chosen -- filled, its symbol reversed out. Set directly rather than by pressing,
+    because the press starts a timer that would blank the screen before it could be
+    grabbed.
+  participant_sv_choice_still_audible_waiting: '`choices.still_audible` with both
+    buttons drawn and neither emphasised -- the state before the first stimulus, sv.'
   participant_sv_cue: 'The visual warning cue: one filled disc, centred, no wording.'
   participant_sv_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, sv.'
@@ -116,6 +172,10 @@ screens:
     sv.
   participant_sv_screen_standby: The participant text `screens.standby`, centred,
     sv.
+  participant_sv_screen_stop_rehearsal: The participant text `screens.stop_rehearsal`,
+    centred, sv.
+  participant_sv_screen_stop_rehearsal_done: The participant text `screens.stop_rehearsal_done`,
+    centred, sv.
   participant_sv_screen_welcome: The participant text `screens.welcome`, centred,
     sv.
   participant_sv_vas_alertness_uncued: The `alertness` scale with its question and
