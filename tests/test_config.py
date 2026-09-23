@@ -106,6 +106,17 @@ def test_a_null_required_value_names_the_file_and_the_key(tmp_path):
         cfg.load("sv", "en", config_dir=config_dir)
 
 
+def test_a_missing_font_file_is_fatal_at_load(tmp_path):
+    config_dir = _config_copy(tmp_path)
+    path = config_dir / "hardware.yaml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("-Bold.ttf", "-Missing.ttf"),
+        encoding="utf-8",
+    )
+    with pytest.raises(cfg.ConfigError, match=r"font_files.*Missing.ttf.*does not exist"):
+        cfg.load("sv", "en", config_dir=config_dir)
+
+
 def test_a_missing_translation_key_is_fatal(tmp_path):
     """SPEC.md 10.4: never fall back silently to the other language."""
     config_dir = _config_copy(tmp_path)

@@ -20,12 +20,11 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PySide6.QtWidgets import QApplication  # noqa: E402 -- platform set before Qt loads
-
-from tatp import config as cfg  # noqa: E402
+from tatp import config as cfg  # noqa: E402 -- platform set before Qt loads
 from tatp.clock import Clock  # noqa: E402
 from tatp.responder import Action, Responder  # noqa: E402
 from tatp.screenshots import HEIGHT_PX, SCREENSHOT_DIR, WIDTH_PX  # noqa: E402
+from tatp.ui.application import application  # noqa: E402
 from tatp.ui.participant import ParticipantWindow  # noqa: E402
 from tatp.ui.vas import LAYOUTS  # noqa: E402
 
@@ -35,10 +34,10 @@ MARKER_PCT = 5.0
 
 
 def main() -> int:
-    QApplication.instance() or QApplication([])
     written = []
     for language in ("sv", "en"):
         config = cfg.load(language, language)
+        application(config.hardware)
         window = ParticipantWindow(config, Responder(config.hardware), Clock())
         window.resize(WIDTH_PX, HEIGHT_PX)
         for name, layout in LAYOUTS.items():

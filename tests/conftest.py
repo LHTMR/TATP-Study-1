@@ -26,3 +26,19 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # The package is imported from the repository root rather than installed, so tests run against
 # the working tree and not against a stale copy in site-packages.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import pytest  # noqa: E402 -- the platform and the path must be set first
+
+from tatp import config as cfg  # noqa: E402
+from tatp.ui.application import application  # noqa: E402
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _study_font():
+    """Every test measures text in the font the lab PC draws, not the platform's.
+
+    Created before any test's own `QApplication.instance() or QApplication([])`, which then
+    finds this one. Without it the layout tests measured the Mac's system font, and on
+    headless Windows measured empty boxes.
+    """
+    application(cfg.load("sv", "sv").hardware)

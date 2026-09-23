@@ -62,6 +62,19 @@ screens:
   participant_screen_index: null
   experimenter_screen_index: null
   participant_fullscreen: true
+  # The fonts every screen draws in, committed under fonts/ and installed at startup (S, 23 Sep
+  # 2026). Left to the platform, the Mac drew its system font and the lab PC Segoe UI, and
+  # headless Windows drew empty boxes -- so the approved screenshots described a screen the lab
+  # PC never showed. The first family is the study font, the closest of the candidates to the
+  # approved Mac renders. Later ones supply only characters it lacks -- DejaVu Sans is there
+  # for the confirm symbol, which Roboto does not have. Licences in fonts/README.md.
+  font_families:
+    - Roboto
+    - DejaVu Sans
+  font_files:
+    - fonts/Roboto/static/Roboto-Regular.ttf
+    - fonts/Roboto/static/Roboto-Bold.ttf
+    - fonts/DejaVu_Sans/DejaVuSans.ttf
 
 audio:
   # Continuous white noise with an alert tone mixed over it as the cue (SPEC.md 10.5).

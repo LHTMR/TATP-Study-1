@@ -38,11 +38,12 @@ from fnmatch import fnmatch
 
 import yaml
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QWidget
 
 from tatp import config as cfg
 from tatp.clock import Clock
 from tatp.responder import Action, Responder
+from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 
@@ -437,7 +438,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    QApplication.instance() or QApplication([])
+    application(cfg.load(LANGUAGES[0], LANGUAGES[0]).hardware)
 
     if args.write_manifest:
         catalogue = {shot.name: shot.description for shot in shots()}

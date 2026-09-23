@@ -30,6 +30,7 @@ from tatp.clock import Clock
 from tatp.pinprick import Application, PinprickTrial
 from tatp.responder import Responder
 from tatp.session import Session
+from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 
@@ -194,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
     for line in warnings_for(config):
         print(f"WARNING: {line}", file=sys.stderr)
 
-    app = QApplication.instance() or QApplication(sys.argv[:1])
+    app = application(config.hardware)
     session = Session(
         config,
         args.participant,

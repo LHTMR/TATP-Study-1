@@ -123,6 +123,8 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "responder.button_symbols.increase", str, None, None),
     ("hardware.yaml", "responder.button_symbols.confirm", str, None, None),
     ("hardware.yaml", "screens.participant_fullscreen", bool, None, None),
+    ("hardware.yaml", "screens.font_families[*]", str, None, None),
+    ("hardware.yaml", "screens.font_files[*]", str, None, None),
     ("hardware.yaml", "audio.enabled", bool, None, None),
     ("hardware.yaml", "audio.sample_rate_hz", int, 1, None),
     ("hardware.yaml", "audio.white_noise_start_dbfs", NUMBER, None, 0),
@@ -160,7 +162,10 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
 )
 
 # Files whose existence is asserted because another config value names them.
-REFERENCED_FILES = (("study1.yaml", "design.allocation_file"),)
+REFERENCED_FILES = (
+    ("study1.yaml", "design.allocation_file"),
+    ("hardware.yaml", "screens.font_files[*]"),
+)
 
 
 class ConfigError(Exception):
@@ -366,12 +371,12 @@ def load(
         _check(filename, path, expected, low, high, loaded)
 
     for filename, path in REFERENCED_FILES:
-        referenced = REPO_ROOT / str(resolve(loaded[filename], path)[0])
-        if not referenced.exists():
-            raise ConfigError(
-                f"{filename}: {path!r} names {referenced}, which does not exist. Generate it "
-                f"with tools/make_allocation.py."
-            )
+        for value in resolve(loaded[filename], path):
+            referenced = REPO_ROOT / str(value)
+            if not referenced.exists():
+                raise ConfigError(
+                    f"{filename}: {path!r} names {referenced}, which does not exist"
+                )
 
     for role in ("participant", "experimenter"):
         first, second = (TEXT_FILES[(role, lang)] for lang in languages)

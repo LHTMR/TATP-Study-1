@@ -7,10 +7,28 @@ fresh session should need nothing from any previous conversation.
 hardware limits. **`docs/NOTES.md`** holds what is merely logged: deviations from Bilaga 1,
 pilot-protocol checks, analysis-plan questions, process. Keep all three updated together.
 
-**Last updated:** 26 August 2026, session 12.
+**Last updated:** 23 September 2026, session 13 (on the Windows lab PC).
 **Milestone:** 2 (the checks) — *in progress. The literals and blinding checks and the
 screenshot comparison are in the gate; the end-to-end validator is what remains.*
-**Branch:** `ui-review`, not yet merged.
+**Branch:** `main`. `ui-review` was merged as PR #1.
+
+**Session 13 pinned the font, and `make check` now passes on the lab PC.** Every screen draws
+in **Roboto**, committed under `fonts/`, with **DejaVu Sans** as a fallback that supplies only
+▶, which Roboto lacks. Both are S's choice. `tatp/ui/application.py` is the one place a
+`QApplication` is made — by `run_session.py`, `make shots`, `make layouts` and, through a
+session fixture in `tests/conftest.py`, every test. It fails fast if a file will not load, if Qt
+would draw another family, or if there is no real bold. `config/hardware.yaml` `screens:`
+names the families and files, and `load()` checks that the files exist. A new test fails on any
+character in the configured text that no study font draws; that is what caught ▶, which had
+been an empty box on every "Tryck på ▶" screen with all 350 tests passing. **All 64 screens
+were re-rendered and re-approved by S** (23 Sep 2026). `docs/NOTES.md` N5.19 has the choice,
+including why Atkinson Hyperlegible was tried and dropped. 351 tests.
+
+Two things worth knowing from it. Text wraps to the window width, so the line breaks S
+approved hold only at the approved font and 1280×800 (N5.19). And `fonts/` on the lab PC also
+holds the untracked candidate downloads (Atkinson, IBM Plex, Noto, Source Sans, the rest of the
+Roboto zip), which S may delete. Only the files named in `hardware.yaml` and the licences are
+committed.
 
 **Session 11 was a UI design pass, on the `ui-review` branch, before `sim/responders.py`.**
 `docs/UI_PRINCIPLES.md` is new and normative: measurement validity, blinding and approved
@@ -207,9 +225,16 @@ irrelevant to the Windows lab PC.
 `docs/SETUP.md`. `environment.yml` now lists `nodefaults`. The managed Miniconda's `.condarc`
 names Anaconda's `defaults` channel, which demands a terms-of-service acceptance, so creating the
 env there needs `CONDA_DEFAULT_CHANNELS` pointed at conda-forge (see SETUP.md). With that,
-every package came from conda-forge, as on the Mac. `make check` on the lab PC fails only on the
-font problem (next steps, first item). The Bash hook, which also failed there, has been removed
-(item 8 below).
+every package came from conda-forge, as on the Mac. **`make check` passes on the lab PC** since
+the font was pinned in session 13. The Bash hook, which also failed there, has been removed
+(item 8 below). In the agent's Bash shell on the lab PC, bare `conda` is not on `PATH`, though
+`make` finds it. `conda.bat` works for a one-off, and the env's own `python.exe` is under
+`C:\Users\sarmc72\.conda\envs\tatp-study-1\`.
+
+**Not yet re-checked on the Mac.** The references are now lab-PC renders in the bundled font.
+The Mac should match within `TOLERANCE_FRACTION`, but that has not been run. If it does not,
+the difference is rasterisation between platforms, not the font, and the tolerance question
+goes to S rather than being loosened quietly.
 
 **The `conda` shell function was broken in session 5's shell** — `CONDA_EXE` was unset, so
 `conda run …` exited 126 with "permission denied". The binary on `PATH` is fine, so
@@ -245,6 +270,8 @@ function. Do not "fix" anything in the repository for this.
 | `tools/make_allocation.py` | Run once; the output is committed |
 | `tools/preview_schedule.py` | **New.** SPEC.md §7.2. `make preview`; launcher entry 4 when it exists |
 | `tatp/screenshots.py` | **New.** SPEC.md 17.4. Catalogue of 60 states, manifest, per-screen arming |
+| `tatp/ui/application.py` | **New.** The one place a `QApplication` is made; installs and asserts the study fonts |
+| `fonts/` | **New.** Roboto (study font) and DejaVu Sans (▶ only), with licences. See `fonts/README.md` |
 | `tatp/units.py` | **New.** `MS_PER_S` and `S_PER_MIN`. Conversions only, never config |
 | `tools/lint_literals.py` | **New.** SPEC.md 4.2, over the AST. `make literals` prints the inventory |
 | `tools/shots.py` | **New.** Entry point for the screenshot run; sets the offscreen platform |
@@ -705,35 +732,8 @@ never called, so **every row the slice wrote had an empty `t_session_s`**; and t
 put block 7 exactly on the rekindle, which nothing would have found until someone read a
 timeline. `make preview` is what found it.
 
-**Do this first: bundle and pin one font.** Found 23 Sep 2026, when the repository was first set
-up on the Windows lab PC. Until it is done, `make check` cannot pass on the lab PC, and nothing
-verifies what participants will actually see there.
-
-- **What happens.** Neither `config/` nor `tatp/ui/` names a font family, so every screen uses
-  the platform's default font. The 64 approved references in `screenshots/reference/` and the
-  pixel-level layout tests in `tests/test_vas.py` (clearance above the scale, end-label
-  overhang) were produced on the dev Mac in the macOS system font. On the lab PC:
-  - **Headless** (`QT_QPA_PLATFORM=offscreen`, i.e. every test and `make shots`): the offscreen
-    platform on Windows does not use the Windows font system. It reads font files from a
-    folder under the Qt install, which is empty, so **every character renders as an empty
-    box**. 17 VAS tests fail (they measure boxes) and 60 of 64 screens fail the comparison.
-  - **In a real session**: Qt would use Windows' default font (Segoe UI), whose metrics
-    differ. So the layout tests, even if they passed on the Mac, describe a screen that the
-    lab PC will not draw.
-- **The fix.** Commit one font file (regular and whatever weights are used) under the
-  repository, load it at startup with `QFontDatabase.addApplicationFont` in both the app and the
-  test/screenshot setup, and set it as the application font. Assert at startup that it loaded
-  and that it is the family actually in use (fail fast, since a silent fallback is exactly this
-  bug). Requirements: an open licence that allows redistribution (e.g. SIL OFL), and full
-  Swedish coverage (å ä ö Å Ä Ö), since the participant text is Swedish.
-- **The family is S's choice** because it changes what participants see. The family name and
-  file path belong in `config/`. If S has not chosen when this is built, apply the three-places
-  rule (placeholder, `open_items.yaml`, `FOR_S.md`). Do not pick one quietly.
-- **Then** re-render and re-approve every screen, since all 64 will change. S must review those
-  renders before re-approval. It is a wording/layout review like the 21 Sep one. Re-check the
-  `test_vas.py` clearance and overhang limits against the new font. If they fail, the fix is
-  wording or size, never moving the line (UI_PRINCIPLES.md 1.6).
-- **Done when** `make check` gives identical results on the Mac and on the lab PC.
+**The font is done (session 13), except the Mac half of its done-condition:** run `make check`
+on the Mac once and confirm it matches the lab PC (see Environment above).
 
 1. Run the **spec-review** agent, then commit Milestone 1
    ("Use the spec-review agent to review this diff against docs/SPEC.md").
