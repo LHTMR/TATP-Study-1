@@ -193,6 +193,16 @@ class ExperimenterWindow(QWidget):
         """Whether the response has been received (SPEC.md 11) -- never what it was."""
         self.status.setText(text)
 
+    # -- the fit preview (SPEC.md 11.1) -------------------------------------------------
+    # Stubs, so the session sequencer can wire the preview before the screen that draws it
+    # exists. Stream E replaces both with the real panel.
+
+    def show_fit_preview(self, fit: object) -> None:
+        """Show an `F40Fit` or a `FitReady` for the experimenter's decision."""
+
+    def hide_fit_preview(self) -> None:
+        """Take the preview down once the experimenter has decided."""
+
     # -- read from the session ----------------------------------------------------------
 
     def refresh(self) -> None:
