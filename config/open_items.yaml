@@ -140,9 +140,13 @@ items:
   - item: "L2"
     summary: Software pressure rate limit
     resolved_when: {file: hardware.yaml, path: "garment.pressure_rate_max_kpa_s_confirmed"}
-    fix: SPEC.md 13 requires a rate limit so that holding the up button cannot ramp to
+    fix: "SPEC.md 13 requires a rate limit so that holding the up button cannot ramp to
          maximum quickly, but does not give a number. 60 kPa/s is a working value chosen to
-         sit just above the 50 kPa/s top adjustment rate of SPEC.md 10.3.
+         sit just above the 50 kPa/s top adjustment rate of SPEC.md 10.3. S, 24 Sep 2026:
+         deferred to hardware bring-up. Set it from the measured inflation rate per channel
+         (open item 3), and decide then whether it should limit falling pressure as well as
+         rising (docs/LOG.md N7.A7). Until then 60 kPa/s stands, and holding the button can
+         never reach it."
     blocks_use: true
 
   - item: "L3"
