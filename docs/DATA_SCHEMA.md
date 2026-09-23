@@ -87,15 +87,17 @@ written, with an empty value — an absent row and an empty value must not be co
 | `slope_prior_vas_per_log10` | VAS·log₁₀⁻¹ | The fixed slope used by the estimator (§8.2) |
 | `room_temperature_c` | °C | Optional (§8.1) |
 | `relative_humidity_pct` | % | Optional (§8.1) |
-| `white_noise_level_dbfs` | dBFS | The level the participant set in the masking check (§10.7). Per session, not configured |
-| `masking_confirmed` | - | `true` when the participant reported the garment no longer audible |
-| `masking_attempts` | - | How many times the level was raised and re-asked, accumulated across an earplug restart. Above 1 means the first setting did not mask |
-| `earplugs_used` | - | `true` when earplugs were fitted under the headphones because raising the noise was not enough (§10.7) |
 | `data_folder` | - | Resolved absolute path |
 | `cloud_sync_warning` | - | The warning text if the data folder is inside a synced tree, else empty (§14.1) |
 | `unresolved_open_items` | - | Semicolon-separated §20 item numbers still on placeholders |
 | `resumed_from_session_file` | - | Filename resumed from, else empty (§15) |
 | `session_start_iso` | - | Process start, wall clock |
+| `white_noise_level_dbfs` | dBFS | The level the participant set in the masking check (§10.7). Per session, not configured. This key and the next five are written when their setup procedure ends, not at session start, so they follow the start keys; each value is also in `log` from the moment it is measured |
+| `masking_confirmed` | - | `true` when the participant reported the garment no longer audible |
+| `masking_attempts` | - | How many times the level was raised and re-asked, accumulated across an earplug restart. Above 1 means the first setting did not mask |
+| `earplugs_used` | - | `true` when earplugs were fitted under the headphones because raising the noise was not enough (§10.7) |
+| `stop_rehearsal_ran` | - | `true` once the emergency-stop rehearsal has run (§10.9); empty if it never did |
+| `stop_rehearsal_press_detected` | - | `true` when the participant's stop press was detected during the rehearsal; `false` if the experimenter moved on without one |
 | `sensitisation_start_iso` | - | Session t=0; empty until sensitisation begins |
 | `session_end_iso` | - | Written at close |
 | `abort_reason` | - | Empty unless the session was aborted |
@@ -382,13 +384,19 @@ One row per estimation run — the fitted rating function and the targets read o
 | r_squared | float | - | yes | Fit quality |
 | residual_sd | float | % | yes | Residual standard deviation in VAS points |
 | monotonic | bool | - | yes | `false` if the fitted slope is not positive |
+| spearman_rho | float | - | yes | Rank correlation of rating on pressure, catch trials excluded; the "non-monotonic" criterion alongside the slope (`docs/research/R30`) |
+| span_vas | float | % | yes | Fitted rating rise across the sampled bracket, `slope` times the bracket's width on the fit axis; the "flat" criterion (R30) |
 | stage1_pass | bool | - | yes | `false` if flat, non-monotonic or poorly fitting — the §9 stage 1 gate |
+| stage1_failures | str | - | no | Semicolon-separated reasons: `flat`, `non_monotonic`, `poor_residuals`. Empty when it passes |
 | bracket_min_kpa | float | kPa | yes | Lowest amplitude sampled |
 | bracket_max_kpa | float | kPa | yes | Highest amplitude sampled |
-| p20_kpa | float | kPa | yes | Control-condition target, inverted from the fit |
-| p30_kpa | float | kPa | yes | Lower bound of the pleasantness window |
-| p80_kpa | float | kPa | yes | Upper bound of the pleasantness window |
-| extrapolated | str | - | no | Comma-separated list of any of `p20`, `p30`, `p80` that fell outside the sampled bracket (§9) |
+| p20_kpa | float | kPa | no | Control-condition target, inverted from the fit. Empty when the fit does not rise, so cannot be inverted |
+| p30_kpa | float | kPa | no | Lower bound of the pleasantness window; empty as for `p20_kpa` |
+| p80_kpa | float | kPa | no | Upper bound of the pleasantness window; empty as for `p20_kpa` |
+| extrapolated | str | - | no | Comma-separated list of any of `p20`, `p30`, `p80` that fell outside the sampled bracket (§9), or could not be inverted at all |
+| catch_felt_fraction | float | - | no | Share of this run's zero-pressure catch trials rated at or above `catch_felt_min_pct`. Empty with no catch trials |
+| catch_flag | bool | - | yes | `true` when `catch_felt_fraction` exceeds `catch_felt_warn_fraction` (Berquin et al. 2010) |
+| valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4) |
 
 ---
 
@@ -415,15 +423,56 @@ is a different thing from a tie and should not be settled in advance (`docs/LOG.
 | t_session_s | float | s | no | Seconds from session t=0 |
 | channel | int | - | yes | Test channel |
 | reference_channel | int | - | yes | The reference, channel 3 (§9) |
-| comparison_index | int | - | yes | 1-based |
+| comparison_index | int | - | yes | 1-based, across the whole session's comparisons |
+| pass_index | int | - | yes | 1 for the first check of a channel; 2 after a re-adjustment (`docs/research/R33`) |
+| pair_index | int | - | yes | Which pair within the pass. A pair is both orders; a second pair runs only when the first favoured one channel in both (R33) |
 | order | str | - | yes | `test_first` or `reference_first` — both orders are run (§9) |
 | hold_s | float | s | yes | Hold per stimulus (§7.4 of the comparison doc) |
 | test_pressure_kpa | float | kPa | yes | Commanded on the test channel; 0 on a catch trial |
 | reference_pressure_kpa | float | kPa | yes | Commanded on the reference |
-| catch_trial | bool | - | yes | Zero-pressure catch trial (§9) |
+| catch_trial | bool | - | yes | Zero-pressure catch trial. Always `false` since the catch trials moved to the estimation run (§9); kept so older files still parse |
 | judgement | str | - | no | `test_stronger` or `reference_stronger`. A forced choice between two (§10.8) |
 | felt | bool | - | no | Catch trials only: whether anything was reported felt |
-| readjusted | bool | - | yes | Whether a re-adjustment was prompted and run |
+| readjusted | bool | - | yes | `true` on the comparison that completed a mismatch, when a re-adjustment of the channel follows it (R33) |
+| valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4) |
+
+---
+
+### touchcal_evenness
+
+One row per end-of-calibration evenness question (§9), asked while the fixed pattern plays at the
+calibrated level. A rebalance re-runs steps 3 and 4 and asks again, so there can be more than one.
+
+| Column | Type | Unit | Required | Description |
+|---|---|---|---|---|
+| timestamp_iso | iso8601 | - | yes | Wall clock at the answer |
+| t_session_s | float | s | no | Seconds from session t=0 |
+| check_index | int | - | yes | 1 for the first question, incremented after each rebalance |
+| level_kpa | float | kPa | yes | Reference-scale level the pattern played at; every channel through its gain |
+| judgement | str | - | yes | `even` or `uneven` |
+| rebalance_offered | bool | - | yes | `true` when an `uneven` answer put the rebalance to the experimenter; `false` once `evenness_max_rebalances` is used up |
+| valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4) |
+
+---
+
+### touchcal_preference
+
+One row per preference selection (§9 step 6) — every session, in every condition, so its presence
+is not a tell (§16). **Recorded, never displayed:** in the participant-preferred condition the
+chosen pattern is the condition's pattern.
+
+| Column | Type | Unit | Required | Description |
+|---|---|---|---|---|
+| timestamp_iso | iso8601 | - | yes | Wall clock when the selection began |
+| t_session_s | float | s | no | Seconds from session t=0 |
+| presentation_order | str | - | yes | The candidates in the order Previous/Next moved through them, semicolon-separated. Shuffled per session |
+| chosen_pattern | str | - | yes | The pattern chosen |
+| chosen_position | int | - | yes | Its position in `presentation_order`, from 1 |
+| moves | int | - | yes | Previous/Next presses before choosing |
+| candidates_felt | str | - | yes | Candidates the participant reached, in the order first reached |
+| all_felt | bool | - | yes | `true` when every candidate was felt before choosing |
+| level_kpa | float | kPa | no | Reference-scale level every candidate played at |
+| duration_s | float | s | yes | Real seconds from the first candidate to the choice |
 | valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4) |
 
 ---

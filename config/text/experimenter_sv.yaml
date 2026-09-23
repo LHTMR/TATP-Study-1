@@ -27,6 +27,13 @@ terms:
     # Böjda så att de passar "{region} zonen" under instructions nedan.
     primary: primära
     secondary: sekundära
+  stage1:
+    # Varför en skattning i beröringskalibreringen underkändes (SPEC.md 9). Anger vilken sorts
+    # fel, aldrig en skattning.
+    flat: platt
+    non_monotonic: stiger inte med trycket
+    poor_residuals: brusig
+    bracket_unusable: inget intervall mellan de två inställningarna
 
 phases:
   setup: Förberedelse
@@ -64,6 +71,30 @@ instructions:
   capsaicin_apply: Applicera 0,075 % capsaicin.
   await_participant: Väntar på deltagarens svar.
   response_received: Svar mottaget.
+  # Förberedelser och beröringskalibrering (SPEC.md 9, 10.7, 10.9). Ingen nämner ett mönster
+  # eller en betingelse.
+  masking_check: 'Ljudinställning: deltagaren ställer in brusnivån mot plagget.'
+  stop_rehearsal: >-
+    Övning med stoppknappen: deltagaren trycker nu på stoppknappen. När stoppskärmen visas,
+    tryck på Återuppta. Tryck på Gå vidare bara om deltagaren inte kan trycka.
+  stop_rehearsal_resume: Stoppet registrerades. Tryck på Återuppta för att fortsätta inför deltagaren.
+  touchcal_bracket: 'Beröringskalibrering, steg 1: deltagaren ställer in beröringen på mittkanalen.'
+  touchcal_estimation: 'Beröringskalibrering, steg 2: deltagaren skattar en serie beröringar.'
+  touchcal_match: 'Beröringskalibrering, steg 3: deltagaren matchar kanal {channel} mot mittkanalen.'
+  touchcal_equalise: 'Beröringskalibrering, steg 4: deltagaren jämför kanal {channel} med mittkanalen.'
+  touchcal_pleasantness: 'Beröringskalibrering, steg 5: deltagaren ställer in den behagligaste nivån.'
+  touchcal_evenness: 'Beröringskalibrering: deltagaren får frågan om rörelsen känns jämn.'
+  touchcal_preference: 'Beröringskalibrering, steg 6: deltagaren väljer en sorts beröring.'
+  touchcal_fit_review: Skattningen i beröringskalibreringen är klar. Godkänn den, eller gör om proceduren.
+  touchcal_stage1_failed: >-
+    Skattningen i beröringskalibreringen klarade inte kvalitetskontrollen ({value}). Gör om
+    proceduren, eller godkänn den för att fortsätta med skattningen flaggad.
+  touchcal_stage1_unusable: >-
+    Skattningen i beröringskalibreringen kan inte användas ({value}). Gör om proceduren, eller
+    avbryt sessionen.
+  touchcal_uneven: >-
+    Deltagaren upplever rörelsen som ojämn längs armen. Balansera om kanalerna, eller gå vidare.
+  self_start: Väntar på att deltagaren startar beröringen.
 
 controls:
   start_block: Starta block
@@ -115,6 +146,9 @@ warnings:
   masking_failed_after_earplugs: >-
     Fortfarande hörbart med öronproppar. Sessionen fortsätter och registreras som inte helt
     maskerad.
+  equalisation_mismatch: >-
+    Kanal {channel} matchar fortfarande inte mittkanalen efter omjustering. Sessionen fortsätter
+    och detta registreras.
 
 banners:
   reduced_capability: >-

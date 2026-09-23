@@ -68,6 +68,8 @@ LANGUAGES = ("sv", "en")
 # every scale still gets its uncued state, which is the one the wording review looks at.
 VARIANT_SCALE = "pain"
 MARKER_POSITIONS = (5.0, 50.0, 95.0)
+# The `choices` keys whose two options are two stimuli, so each button is emphasised in turn.
+PAIRED_CHOICES = ("comparison",)
 
 
 @dataclass(frozen=True)
@@ -139,6 +141,15 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             _grab(window),
         )
 
+    for key in sorted(k for k, v in text["audio_setup"].items() if isinstance(v, str)):
+        window.show_audio_setup(key)
+        yield Shot(
+            f"participant_{language}_audio_setup_{key}",
+            f"The masking check's `audio_setup.{key}` (SPEC.md 10.7), a text screen: its "
+            f"wording names the buttons itself, so none are drawn, {language}.",
+            _grab(window),
+        )
+
     window.show_preference()
     yield Shot(
         f"participant_{language}_preference",
@@ -193,13 +204,17 @@ def _choice_shots(window: ParticipantWindow, text: dict, language: str) -> Itera
             _grab(window),
         )
 
-        window.emphasise_choice("left")
-        yield Shot(
-            f"{name}_emphasis_left",
-            "The left button's outline thickened while its stimulus plays (UI_PRINCIPLES.md "
-            "5.11). It must read as `this is the one you are feeling`, never as a suggestion.",
-            _grab(window),
-        )
+        # Only a choice between two stimuli emphasises a button; a question about something
+        # already happening (`still_audible`, `evenness`) never reaches that state.
+        if key in PAIRED_CHOICES:
+            window.emphasise_choice("left")
+            yield Shot(
+                f"{name}_emphasis_left",
+                "The left button's outline thickened while its stimulus plays "
+                "(UI_PRINCIPLES.md 5.11). It must read as `this is the one you are feeling`, "
+                "never as a suggestion.",
+                _grab(window),
+            )
 
         window.accept_choice()
         yield Shot(

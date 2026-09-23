@@ -153,3 +153,36 @@ items:
          so they are marked placeholders rather than invented. Every such string is prefixed
          PLACEHOLDER so it cannot reach a participant unnoticed.
     blocks_use: true
+
+  # L10-L12 raised by Milestone 4 (stream C). Numbered from L10 so parallel streams adding
+  # their own do not collide; the gap is deliberate and numbers are never reused.
+  - item: "L10"
+    summary: Audio output device for the lab-side experimenter alerts
+    resolved_when: {file: hardware.yaml, path: "audio.experimenter_device"}
+    also: {file: hardware.yaml, path: "audio.participant_device"}
+    fix: "Bring-up, on the lab PC. SPEC.md 10.5 requires the experimenter alerts to be
+         inaudible to the participant, and null means the system default, which on the lab PC
+         may be the participant's headphones. Set audio.participant_device to the headphones
+         and audio.experimenter_device to a lab-side output, then meter as open item L3 says."
+    blocks_use: true
+
+  - item: "L11"
+    summary: Pressure for the emergency-stop rehearsal
+    resolved_when: {file: study1.yaml, path: "training.stop_rehearsal_pressure_kpa"}
+    fix: "S's value, before piloting with the valve garment (SPEC.md 10.9). A hardware/safety
+         number, so the build does not choose it: it must be clearly FELT, which the masking
+         check's audible 40 kPa need not be. While it is null the rehearsal runs with the real
+         stop path but commands no pressure, so the participant sees the stop and the resume
+         without feeling the touch stop -- which is the half of the rehearsal SPEC.md 10.9
+         says matters."
+    blocks_use: true
+
+  - item: "L12"
+    summary: The symbol physically on the emergency-stop button, drawn by the stop rehearsal
+    resolved_when: {file: hardware.yaml, path: "responder.emergency_stop_symbol_confirmed"}
+    fix: "S, before piloting. responder.button_symbols.emergency_stop is the marked
+         placeholder PLACEHOLDER, drawn as it stands on screens.stop_rehearsal. Put the glyph
+         printed on the R400's blank-screen button (or its new label, docs/LOG.md N5.11) there,
+         check tests/test_application.py still finds a font for it, and add
+         `emergency_stop_symbol_confirmed: <date>` under `responder:`."
+    blocks_use: true

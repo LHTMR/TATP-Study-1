@@ -26,6 +26,13 @@ terms:
   regions:
     primary: primary
     secondary: secondary
+  stage1:
+    # Why a touch-calibration estimate failed its quality check (SPEC.md 9). Says what kind of
+    # failure, never a rating.
+    flat: flat
+    non_monotonic: not rising with pressure
+    poor_residuals: noisy
+    bracket_unusable: no range between the two settings
 
 phases:
   setup: Setup
@@ -64,6 +71,30 @@ instructions:
   capsaicin_apply: Apply 0.075 % capsaicin.
   await_participant: Waiting for the participant's response.
   response_received: Response received.
+  # Setup and touch calibration (SPEC.md 9, 10.7, 10.9). None names a pattern or a condition.
+  masking_check: 'Audio setup: the participant is setting the noise level against the garment.'
+  stop_rehearsal: >-
+    Stop rehearsal: the participant will now press the stop button. When the stop screen shows,
+    press Resume. Press Proceed only if they cannot press it.
+  stop_rehearsal_resume: The stop was detected. Press Resume to carry on in front of the participant.
+  touchcal_bracket: 'Touch calibration, step 1: the participant sets the touch on the middle channel.'
+  touchcal_estimation: 'Touch calibration, step 2: the participant rates a series of touches.'
+  touchcal_match: 'Touch calibration, step 3: the participant matches channel {channel} to the middle channel.'
+  touchcal_equalise: 'Touch calibration, step 4: the participant compares channel {channel} with the middle channel.'
+  touchcal_pleasantness: 'Touch calibration, step 5: the participant sets the most pleasant level.'
+  touchcal_evenness: 'Touch calibration: the participant is asked whether the movement feels even.'
+  touchcal_preference: 'Touch calibration, step 6: the participant chooses a kind of touch.'
+  touchcal_fit_review: The touch-calibration estimate is ready. Accept it, or re-run the procedure.
+  touchcal_stage1_failed: >-
+    The touch-calibration estimate failed its quality check ({value}). Re-run the procedure, or
+    accept it to continue with the estimate flagged.
+  touchcal_stage1_unusable: >-
+    The touch-calibration estimate cannot be used ({value}). Re-run the procedure, or abort the
+    session.
+  touchcal_uneven: >-
+    The participant reports the movement as uneven along the arm. Rebalance the channels, or
+    proceed.
+  self_start: Waiting for the participant to start the touch.
 
 controls:
   start_block: Start block
@@ -115,6 +146,9 @@ warnings:
     start again from the beginning once they are fitted.
   masking_failed_after_earplugs: >-
     Still audible with earplugs. The session will continue and is recorded as not fully masked.
+  equalisation_mismatch: >-
+    Channel {channel} still does not match the middle channel after re-adjustment. The session
+    continues and this is recorded.
 
 banners:
   # SPEC.md 12.4: persistent and unmissable. A session run this way must be impossible to

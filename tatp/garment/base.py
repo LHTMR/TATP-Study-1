@@ -177,8 +177,14 @@ class GarmentController(ABC):
 
     # -- patterns ----------------------------------------------------------------------
 
-    def play_pattern(self, pattern: Pattern) -> None:
-        """Start a pattern. Events are delivered by `advance()`, driven by the session timer."""
+    def play_pattern(
+        self, pattern: Pattern, self_start_latency_ms: float | None = None
+    ) -> None:
+        """Start a pattern. Events are delivered by `advance()`, driven by the session timer.
+
+        `self_start_latency_ms` is given only when the participant's own press started it, and
+        goes on this command's `garment` row (SPEC.md 12.3).
+        """
         self._require_connected()
         unknown = set(pattern.channel_ids) - set(self.channels())
         if unknown:
@@ -190,7 +196,11 @@ class GarmentController(ABC):
         self._pattern_events = expand(pattern)
         self._pattern_start_s = self.clock.elapsed_s()
         self._pattern_delivered = 0
-        self._record("pattern_start", pattern_name=pattern.name)
+        self._record(
+            "pattern_start",
+            pattern_name=pattern.name,
+            self_start_latency_ms=self_start_latency_ms,
+        )
 
     def advance(self) -> None:
         """Deliver every pattern event now due. Called from the session's timer.

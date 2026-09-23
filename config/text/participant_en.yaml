@@ -96,6 +96,18 @@ screens:
   # part of that condition's manipulation, not incidental phrasing: it says the touch starts
   # BECAUSE the participant pressed. Do not soften it to "press to continue".
   self_start: Press ▶ when you're ready for the touch to start.
+  # SPEC.md 10.9, the emergency stop rehearsal. Approved by S 10 Sep 2026 and copied from the
+  # spec verbatim. The first is drawn with the stop button under it -- "this button" points at
+  # it; the screen between the two is the real `emergency_stop`, unchanged.
+  stop_rehearsal: |-
+    The touch is running now.
+    Press this button to stop it.
+    Nothing is lost — we carry straight on afterwards.
+  stop_rehearsal_done: |-
+    That is the stop button.
+    It works at any time, in any part of the visit.
+
+    Press ▶ to continue.
 
 participant_controls:
   # Named for the participant's own buttons, because `controls:` in the experimenter files is
@@ -126,9 +138,7 @@ choices:
   # (SPEC.md 10.8, UI_PRINCIPLES.md 5.8-5.12). Each has a question and the two option labels,
   # which are written on the drawn buttons -- so an option label is a phrase, not a sentence.
   #
-  # The affirmative or first-mentioned option is on the LEFT throughout, the same convention as
-  # `audio_setup.still_audible`, which has this shape and should move here when audio.py is
-  # built (docs/LOG.md N5.12).
+  # The affirmative or first-mentioned option is on the LEFT throughout (SPEC.md 10.7).
   comparison:
     # SPEC.md 9 step 4. Approved 23 Aug 2026 as a text screen; what has gone since is only the
     # two lines the drawn buttons replace -- "Left button: the first. Right button: the second."
@@ -138,6 +148,19 @@ choices:
       Which felt stronger?
     left: The first
     right: The second
+  still_audible:
+    # SPEC.md 10.7, the masking check. Approved by S 23 Aug 2026 under `audio_setup`, and moved
+    # here unchanged when audio.py was built (docs/LOG.md N5.12): it is a choice screen.
+    question: Can you still hear the garment?
+    left: Yes, I can hear it
+    right: No, the hiss covers it
+  # DRAFT (LOG N7.C1): written by the build, not ethics-sourced
+  evenness:
+    # SPEC.md 9, the end-of-calibration evenness check, asked while the pattern plays. "The
+    # movement" is how the check is phrased in the spec and the comparison document (7.4).
+    question: Does the movement feel even along your arm?
+    left: Yes, it feels even
+    right: No, it feels uneven
 
 audio_setup:
   # SPEC.md 10.7, the masking check. Drafted 23 Aug 2026 on S's instruction and APPROVED by S
@@ -157,12 +180,7 @@ audio_setup:
     Turn the hiss up until it covers that sound.
     Stop before the hiss itself becomes uncomfortable.
     Press ▶ when it is right.
-  still_audible:
-    # Two options drawn left and right, chosen with the matching large button (SPEC.md 10.7).
-    # The affirmative is on the left everywhere, so there is one convention to learn.
-    question: Can you still hear the garment?
-    left: Yes, I can hear it
-    right: No, the hiss covers it
+  # `still_audible` is under `choices` (docs/LOG.md N5.12).
   settled: |-
     That is the sound level set for today.
     It stays the same for the rest of the visit.
