@@ -27,6 +27,16 @@ terms:
     # Böjda så att de passar "{region} zonen" under instructions nedan.
     primary: primära
     secondary: sekundära
+  # mapping.path_ids i study1.yaml, fylls i {path}.
+  mapping_paths:
+    proximal: proximal
+    lateral: lateral
+    distal: distal
+    medial: medial
+  # Fylls i warnings.out_of_range (SPEC.md 8.2).
+  out_of_range:
+    below: det lättaste filamentet skattades redan på eller över målet
+    above: det tyngsta filamentet skattades fortfarande under målet
 
 phases:
   setup: Förberedelse
@@ -47,7 +57,8 @@ instructions:
     appliceringsstället utom synhåll för deltagaren.
   # Filamenten benämns med gramsiffran som står tryckt på dem (SPEC.md 8.1), kraften efter.
   apply_filament: Applicera filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen.
-  apply_brush: Borsta {region} zonen på plats {site}.
+  # Ett drag på cirka 2 cm, aldrig upprepat: upprepning höjer smärtan (docs/research/RB2).
+  apply_brush: Borsta {region} zonen på plats {site} -- ett enda drag på cirka 2 cm.
   mapping_path: Kartlägg bana {path}. Flytta 5 mm inåt vid varje signal och stanna när deltagaren markerar.
   # Läses högt före första banan. Kartläggningen instrueras muntligt och deltagaren svarar
   # muntligt, så det här är enda stället formuleringen finns -- det finns ingen deltagarskärm
@@ -57,11 +68,14 @@ instructions:
     Säg högt: "Jag kommer att röra vid dig med det här filamentet och flytta ett litet steg i
     taget mot det markerade området. Säg till så snart känslan tydligt förändras – brännande,
     ömmande eller vassare stick."
-  mapping_distances: Skriv in de fyra uppmätta avstånden i mm när det passar. Detta avbryter aldrig sessionen.
+  mapping_distances: Mät varje gräns från mitten av den primära zonen och skriv in de fyra avstånden i mm när det passar. Detta avbryter aldrig sessionen.
   fit_garment: Sätt på plagget och kontrollera att alla fem kanaler sitter rätt.
   thermode_start: Starta termoden på 50 °C. Programmet tar tid på fasen men styr inte enheten.
   thermode_rekindle: Återuppvärm nu. Plagget har avaktiverats och återaktiveras efteråt.
   capsaicin_apply: Applicera 0,075 % capsaicin.
+  # SPEC.md 7.4, 8.3: programmet tar tid, försöksledaren startar.
+  ready: Redo. Tryck på Starta block när deltagaren är redo.
+  mapping_ready: Bana {path} av {value}. Tryck på Starta block för att starta taktsignalen, och igen för att stoppa den vid gränsen.
   await_participant: Väntar på deltagarens svar.
   response_received: Svar mottaget.
 
@@ -87,6 +101,7 @@ status:
   next_event: 'Nästa: {phase} om {time}'
   block_due: Block {block} ska starta nu.
   block_overdue: Block {block} är FÖRSENAT.
+  discarded: Senaste trial kasserad. Den upprepas.
 
 warnings:
   experimenter_changed: >-
@@ -102,6 +117,23 @@ warnings:
   out_of_range: >-
     Kalibreringen tog slut på stegen ({value}). Yttersta filamentet används och försöket flaggas.
     Räkna med detta i en betydande andel av sessionerna.
+  application_cap: >-
+    Gränsen på {value} appliceringar är nådd. Bästa tillgängliga skattning används och
+    flaggas.
+  # SPEC.md 8.2 säkerhetsregel. Säger vad som spärras, aldrig vad som skattades.
+  intolerable_cap: >-
+    Plats {site} är nu spärrad: inget filament på eller över {filament} g appliceras där under
+    resten av denna tidpunkt.
+  intolerable_global_cap: >-
+    Flera platser är spärrade. Inget filament på eller över {filament} g appliceras på någon
+    plats under resten av denna tidpunkt.
+  substitution_unknown: Inget filament märkt {filament} g finns. Utbytet registrerades inte.
+  substitution_not_lower: >-
+    Filamentet {filament} g är inte lättare än det som efterfrågades. Det registreras som
+    applicerat.
+  distance_implausible: >-
+    Bana {path}: {value} mm ligger utanför det rimliga intervallet. Skriv samma värde igen för
+    att bekräfta det, eller skriv det rättade värdet.
   catch_trials_felt: >-
     Fler än tillåten andel av kontrolltrials utan tryck rapporterades som kända ({value}).
   schedule: 'Schemavarning, block {block}: {value}'

@@ -26,6 +26,16 @@ terms:
   regions:
     primary: primary
     secondary: secondary
+  # mapping.path_ids in study1.yaml, filled into {path}.
+  mapping_paths:
+    proximal: proximal
+    lateral: lateral
+    distal: distal
+    medial: medial
+  # Filled into warnings.out_of_range (SPEC.md 8.2).
+  out_of_range:
+    below: the lightest filament was already rated at or above the target
+    above: the heaviest filament was still rated below the target
 
 phases:
   setup: Setup
@@ -47,7 +57,8 @@ instructions:
     site out of the participant's view.
   # Filaments are named by the gram label printed on them (SPEC.md 8.1), with the force after.
   apply_filament: Apply the {filament} g filament ({force_mn} mN) at site {site}, {region} zone.
-  apply_brush: Brush the {region} zone at site {site}.
+  # One stroke of about 2 cm, never repeated: repetition raises pain (docs/research/RB2).
+  apply_brush: Brush the {region} zone at site {site} -- one single stroke of about 2 cm.
   mapping_path: Map path {path}. Step inward 5 mm on each cue and stop when the participant signals.
   # Read aloud before the first path. The mapping is instructed verbally and the participant
   # answers verbally, so this is the only place the wording exists -- there is no participant
@@ -57,11 +68,14 @@ instructions:
     Say aloud: "I will touch you with this filament, moving a small step at a time towards the
     marked area. Tell me as soon as the feeling clearly changes — burning, tenderness, or a
     sharper pricking."
-  mapping_distances: Enter the four measured distances in mm whenever convenient. This never blocks the session.
+  mapping_distances: Measure each border from the centre of the primary zone, and enter the four distances in mm whenever convenient. This never blocks the session.
   fit_garment: Fit the garment and confirm all five channels are seated.
   thermode_start: Start the thermode at 50 °C. The software times the phase and does not command the device.
   thermode_rekindle: Rekindle now. The garment has been deactivated and will be reactivated afterwards.
   capsaicin_apply: Apply 0.075 % capsaicin.
+  # SPEC.md 7.4, 8.3: the software times, the experimenter launches.
+  ready: Ready. Press Start block when the participant is ready.
+  mapping_ready: Path {path} of {value}. Press Start block to start the pacing cue, and again to stop it at the border.
   await_participant: Waiting for the participant's response.
   response_received: Response received.
 
@@ -87,6 +101,7 @@ status:
   next_event: 'Next: {phase} in {time}'
   block_due: Block {block} is due.
   block_overdue: Block {block} is OVERDUE.
+  discarded: Last trial discarded. It will be repeated.
 
 warnings:
   # Warn-and-continue, never block (SPEC.md 7.3, 11, 14.1).
@@ -103,6 +118,22 @@ warnings:
   out_of_range: >-
     The calibration ran out of ladder ({value}). The boundary filament will be used and the
     trial is flagged. Expect this in a meaningful fraction of sessions.
+  application_cap: >-
+    The limit of {value} applications was reached. The best available estimate is used and
+    flagged.
+  # SPEC.md 8.2 safety rule. Says what is barred, never what was rated.
+  intolerable_cap: >-
+    Site {site} is now capped: nothing at or above {filament} g is applied there for the rest
+    of this time point.
+  intolerable_global_cap: >-
+    Several sites are capped. Nothing at or above {filament} g is applied at any site for the
+    rest of this time point.
+  substitution_unknown: No filament labelled {filament} g is held. The substitution was not recorded.
+  substitution_not_lower: >-
+    The {filament} g filament is not lighter than the one asked for. It is recorded as applied.
+  distance_implausible: >-
+    Path {path}: {value} mm is outside the plausible range. Enter the same value again to
+    confirm it, or enter the corrected value.
   catch_trials_felt: >-
     More than the allowed share of zero-pressure catch trials were reported as felt ({value}).
   schedule: 'Schedule warning, block {block}: {value}'

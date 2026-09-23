@@ -153,8 +153,9 @@ One row per monofilament application, both protocols, all phases (§14.2).
 | block_index | int | - | no | Scheduled block, empty outside a block |
 | protocol | str | - | yes | `long` or `short` (§14.2) |
 | region | str | - | yes | `primary` or `secondary` hyperalgesic zone |
-| trial_index | int | - | yes | 1-based within the protocol run |
-| purpose | str | - | yes | `search` or `measure`; only `measure` enters the estimate (§8.2) |
+| trial_index | int | - | yes | 1-based within the protocol run, counting every application delivered, discarded ones included |
+| run_index | int | - | yes | Which long-protocol run the application belongs to; joins to `calibration_pinprick.run_index` (§11.1). `1` for the short protocol |
+| purpose | str | - | yes | `search` or `measure`; only `measure` enters the estimate (§8.2). Always `measure` for the short protocol |
 | filament_label_g | str | g | yes | Gram label of the filament the software asked for, e.g. `26`. The label printed on the filament is the identifier everywhere (§8.1); forces are companion values |
 | applied_filament_label_g | str | g | yes | Gram label of the filament actually applied. Equal to `filament_label_g` unless `substituted` (§8.2) |
 | force_nominal_mn | float | mN | yes | Manufacturer's stated force of the **applied** filament, from the Aesthesio data chart. Display, and the fallback for `force_applied_mn` until the set is weighed (§8.1) |
@@ -216,7 +217,8 @@ One row per brush application — allodynia, primary and secondary regions (§8.
 | trial_index | int | - | yes | 1-based |
 | site_index | int | - | yes | Rotates on every application |
 | cue_onset_iso | iso8601 | - | yes | Visual warning cue onset |
-| rating_percent | float | % | no | VAS response |
+| rating_cue_iso | iso8601 | - | no | When the rating was cued, `brush.rating_cue_delay_s` after the stimulus |
+| rating_percent | float | % | no | VAS response, on the scale `brush.rating_scale` names |
 | rt_s | float | s | no | From rating cue to confirm |
 | first_press_side | str | - | no | `left` or `right` |
 | direction_changes | int | - | no | Marker direction reversals |
