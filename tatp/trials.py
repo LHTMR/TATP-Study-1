@@ -221,7 +221,9 @@ class ExperimenterChoice(Trial):
     """Wait for one of the experimenter's actions (SPEC.md 11). Finishes with (name, args).
 
     `actions` maps a name to one of `ExperimenterWindow`'s signals. Milestone 5 draws the
-    buttons; the virtual experimenter of SPEC.md 17.5 emits the same signals.
+    buttons; the virtual experimenter of SPEC.md 17.5 emits the same signals. `show`, when
+    given, puts up what the participant sees meanwhile, so a repeat after an interruption puts
+    it back rather than leaving the stop screen up.
     """
 
     def __init__(
@@ -231,16 +233,20 @@ class ExperimenterChoice(Trial):
         experimenter,
         actions: Mapping[str, SignalInstance],
         instruction: str,
+        show: Callable[[], None] | None = None,
         **values: object,
     ):
         super().__init__(session, participant, experimenter)
         self.actions = dict(actions)
         self.instruction = instruction
+        self.show = show
         self.values = values
 
     def start(self) -> None:
         for name, signal in self.actions.items():
             self.listen(signal, self._slot(name))
+        if self.show is not None:
+            self.show()
         self.instruct(self.instruction, **self.values)
 
     def _slot(self, name: str) -> Callable:

@@ -10,6 +10,7 @@ import csv
 
 import pytest
 from PySide6.QtWidgets import QApplication
+from virtual_participant import Virtual, make_config, make_rig, press
 
 from tatp import config as cfg
 from tatp.audio import amplitude
@@ -23,7 +24,6 @@ from tatp.setup_checks import (
 )
 from tatp.touchcal import AdjustmentState
 from tatp.trials import Choice
-from virtual_participant import Virtual, make_config, make_rig, press
 
 
 @pytest.fixture(scope="module")

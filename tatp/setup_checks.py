@@ -231,11 +231,11 @@ class MaskingCheck(Procedure):
         self.session.audio.experimenter_alert("masking check failed")
         self.session.audio.stop_noise("earplug exchange")
         self.experimenter.set_status(warnings["masking_failed"])
-        self.participant.show_message(PAUSED_SCREEN)
         self.run_trial(
             lambda: ExperimenterChoice(
                 *self._windows(), {PROCEED: self.experimenter.proceed_requested},
-                "masking_check",
+                "earplugs",
+                show=lambda: self.participant.show_message(PAUSED_SCREEN),
             ),
             self._earplugs_fitted,
         )

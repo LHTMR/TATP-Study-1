@@ -10,11 +10,18 @@ import csv
 
 import pytest
 from PySide6.QtWidgets import QApplication
+from virtual_participant import (
+    P40_KPA,
+    SLOPE_VAS_PER_LOG10,
+    Virtual,
+    make_config,
+    make_rig,
+    press,
+)
 
 from tatp import config as cfg
 from tatp import touchcal
 from tatp.touchcal_maths import REFERENCE_STRONGER, TEST_STRONGER
-from virtual_participant import P40_KPA, SLOPE_VAS_PER_LOG10, Virtual, make_config, make_rig
 
 
 @pytest.fixture(scope="module")
@@ -153,8 +160,6 @@ def _flat(rig):
     def flat(trial):
         if isinstance(trial, touchcal.TouchRating):
             window = rig.participant
-            from virtual_participant import press
-
             press(window.vas, "pagedown")
             window.vas.state.percent = 50.0
             press(window.vas, "period")
@@ -242,8 +247,6 @@ def test_felt_catch_trials_are_flagged(rig):
         if isinstance(trial, touchcal.TouchRating) and not session.garment.status()[
             "channels_on"
         ]:
-            from virtual_participant import press
-
             press(rig.participant.vas, "pagedown")
             rig.participant.vas.state.percent = 30.0
             press(rig.participant.vas, "period")
@@ -344,8 +347,6 @@ def test_an_emergency_stop_mid_estimation_repeats_the_presentation_and_loses_not
     stopped = []
 
     def stop_once(trial):
-        from virtual_participant import press
-
         if (
             not stopped
             and isinstance(trial, touchcal.TouchRating)
@@ -415,8 +416,6 @@ def test_the_self_start_press_starts_the_pattern_and_records_its_latency(rig):
     done = []
     trial.finished.connect(done.append)
     trial.start()
-    from virtual_participant import press
-
     deadline_spins = 20000
     while not trial._connections and deadline_spins:
         QApplication.processEvents()

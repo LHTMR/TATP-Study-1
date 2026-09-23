@@ -174,7 +174,9 @@ def test_the_calibration_sim_observer_is_recovered(observer, sigma):
 # -- stage 1 ----------------------------------------------------------------------------
 
 
-CRITERIA = maths.Stage1Criteria(min_span_vas=40.0, min_spearman_rho=0.56, max_residual_sd_vas=25.0)
+CRITERIA = maths.Stage1Criteria(
+    min_span_vas=40.0, min_spearman_rho=0.56, max_residual_sd_vas=25.0
+)
 
 
 def _fit(ratings):

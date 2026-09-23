@@ -74,6 +74,7 @@ instructions:
   # Förberedelser och beröringskalibrering (SPEC.md 9, 10.7, 10.9). Ingen nämner ett mönster
   # eller en betingelse.
   masking_check: 'Ljudinställning: deltagaren ställer in brusnivån mot plagget.'
+  earplugs: Sätt öronpropparna under hörlurarna och tryck sedan på Gå vidare.
   stop_rehearsal: >-
     Övning med stoppknappen: deltagaren trycker nu på stoppknappen. När stoppskärmen visas,
     tryck på Återuppta. Tryck på Gå vidare bara om deltagaren inte kan trycka.

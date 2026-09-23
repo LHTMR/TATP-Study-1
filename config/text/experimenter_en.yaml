@@ -73,6 +73,7 @@ instructions:
   response_received: Response received.
   # Setup and touch calibration (SPEC.md 9, 10.7, 10.9). None names a pattern or a condition.
   masking_check: 'Audio setup: the participant is setting the noise level against the garment.'
+  earplugs: Fit the earplugs under the headphones, then press Proceed.
   stop_rehearsal: >-
     Stop rehearsal: the participant will now press the stop button. When the stop screen shows,
     press Resume. Press Proceed only if they cannot press it.
