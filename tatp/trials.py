@@ -251,7 +251,9 @@ class ExperimenterChoice(Trial):
 
     def _slot(self, name: str) -> Callable:
         def slot(*args: object) -> None:
-            self.session.log("experimenter_action", origin="experimenter", detail=name)
+            # A re-run's reason, a note: whatever the action carries goes in the log with it.
+            detail = f"{name}: {'; '.join(map(str, args))}" if args else name
+            self.session.log("experimenter_action", origin="experimenter", detail=detail)
             self.done((name, args))
 
         return slot

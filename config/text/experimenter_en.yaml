@@ -33,6 +33,8 @@ terms:
     non_monotonic: not rising with pressure
     poor_residuals: noisy
     bracket_unusable: no range between the two settings
+    unreachable: targets outside what the garment can deliver
+    empty_window: no pleasantness range left inside the garment's limits
 
 phases:
   setup: Setup
@@ -92,10 +94,21 @@ instructions:
   touchcal_stage1_unusable: >-
     The touch-calibration estimate cannot be used ({value}). Re-run the procedure, or abort the
     session.
+  touchcal_stage1_exhausted: >-
+    The touch-calibration estimate cannot be used ({value}) and the re-run limit is reached.
+    Accept to continue on a fallback that is recorded as not valid for analysis, or abort the
+    session.
+  touchcal_gain_undefined: >-
+    Channel {channel} was matched at 0 kPa again. Rebalance to repeat the match, or proceed
+    with this channel at the middle channel's pressure, which is recorded as not valid for
+    analysis.
   touchcal_uneven: >-
     The participant reports the movement as uneven along the arm. Rebalance the channels, or
     proceed.
-  self_start: Waiting for the participant to start the touch.
+  # Shown at the start of every touch delivery in EVERY condition, and nothing else is: only
+  # one condition is self-started, so any line about starting it would name that condition
+  # (SPEC.md 16). A test holds the experimenter screen identical across the three.
+  touch_start: 'Touch: the garment is being started.'
 
 controls:
   start_block: Start block

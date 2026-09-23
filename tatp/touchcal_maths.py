@@ -22,13 +22,18 @@ No literals (SPEC.md 4.2): every threshold is an argument, and its value is in
 
 from __future__ import annotations
 
+import math
 import random
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
 
 from tatp.units import DECADE
+
+# The largest power of ten a float holds; beyond it DECADE ** x overflows.
+MAX_LOG10 = sys.float_info.max_10_exp
 
 LOG_PRESSURE = "log_pressure"
 LINEAR_PRESSURE = "linear_pressure"
@@ -38,6 +43,10 @@ FIT_FORMS = (LOG_PRESSURE, LINEAR_PRESSURE)
 FLAT = "flat"
 NON_MONOTONIC = "non_monotonic"
 POOR_RESIDUALS = "poor_residuals"
+# A target the fit cannot deliver: not invertible, not finite, at or below zero, above the
+# ceiling, or a pleasantness window left empty once held inside [0, ceiling].
+UNREACHABLE = "unreachable"
+EMPTY_WINDOW = "empty_window"
 
 # Who won a two-alternative comparison (DATA_SCHEMA.md `touchcal_compare.judgement`).
 TEST_STRONGER = "test_stronger"
@@ -60,7 +69,11 @@ def to_axis(pressures_kpa: Sequence[float], fit_form: str) -> np.ndarray:
 
 
 def from_axis(x: float, fit_form: str) -> float:
+    """Back from the fit's axis to pressure. Never raises: a value too large for a float is
+    infinite, which `RatingFit.invert` reports as unreachable."""
     if fit_form == LOG_PRESSURE:
+        if x > MAX_LOG10:
+            return math.inf
         return float(DECADE ** x)
     if fit_form == LINEAR_PRESSURE:
         return float(x)
@@ -180,10 +193,15 @@ class RatingFit:
         return self.slope > 0
 
     def invert(self, rating_percent: float) -> float | None:
-        """The pressure the line predicts for `rating_percent`. None if it never rises."""
+        """The pressure the line predicts for `rating_percent`.
+
+        None if the line never rises, or rises so slowly that the pressure is beyond any number
+        -- a nearly flat fit. Never raises.
+        """
         if not self.monotonic:
             return None
-        return from_axis((rating_percent - self.intercept) / self.slope, self.fit_form)
+        pressure = from_axis((rating_percent - self.intercept) / self.slope, self.fit_form)
+        return pressure if math.isfinite(pressure) else None
 
     def extrapolated(self, pressure_kpa: float | None) -> bool:
         """Outside the sampled amplitudes, so read off the line beyond its data (SPEC.md 9)."""
@@ -330,10 +348,50 @@ class Delivery:
     pressure_kpa: Mapping[int, float] | None
 
 
-def per_channel(level_kpa: float, gains: Mapping[int, float], ceiling_kpa: float) -> dict:
-    """A reference-scale level on every channel, through its gain, held under the ceiling.
+def clamp(value_kpa: float, ceiling_kpa: float) -> float:
+    """Inside [0, ceiling], the range the garment can be commanded to (SPEC.md 13)."""
+    return min(max(value_kpa, 0.0), ceiling_kpa)
 
-    The ceiling is also enforced by the garment (SPEC.md 13); clamping here as well means the
-    number recorded as what a condition delivers is the number that can be delivered.
+
+def per_channel(
+    level_kpa: float, gains: Mapping[int, float], ceiling_kpa: float
+) -> tuple[dict[int, float], tuple[int, ...]]:
+    """A reference-scale level on every channel through its gain, held inside [0, ceiling].
+
+    Returns the levels and the channels that had to be clamped, so a clamp is recorded rather
+    than hidden. The ceiling is also enforced by the garment (SPEC.md 13); clamping here as
+    well means the number recorded as what a condition delivers is the number delivered.
     """
-    return {channel: min(level_kpa * g, ceiling_kpa) for channel, g in sorted(gains.items())}
+    levels, clamped = {}, []
+    for channel, g in sorted(gains.items()):
+        wanted = level_kpa * g
+        levels[channel] = clamp(wanted, ceiling_kpa)
+        if levels[channel] != wanted:
+            clamped.append(channel)
+    return levels, tuple(clamped)
+
+
+def usable_targets(
+    raw: Mapping[float, float | None],
+    sham_pct: float,
+    low_pct: float,
+    high_pct: float,
+    ceiling_kpa: float,
+) -> tuple[dict[float, float] | None, tuple[str, ...], tuple[float, ...]]:
+    """Whether the fitted targets can be delivered, and at what.
+
+    Returns (the targets held inside [0, ceiling], or None; the reasons they cannot be used;
+    the percentages that were clamped). A target that is missing or unreachable, a sham level
+    at zero, or a pleasantness window empty once clamped makes the estimate unusable -- a
+    stage-1 failure, put to the experimenter (SPEC.md 9).
+    """
+    if any(value is None for value in raw.values()):
+        return None, (UNREACHABLE,), ()
+    held = {pct: clamp(value, ceiling_kpa) for pct, value in raw.items()}
+    clamped = tuple(pct for pct in sorted(raw) if held[pct] != raw[pct])
+    reasons = []
+    if held[sham_pct] <= 0:
+        reasons.append(UNREACHABLE)
+    if held[low_pct] >= held[high_pct]:
+        reasons.append(EMPTY_WINDOW)
+    return (None if reasons else held), tuple(reasons), clamped

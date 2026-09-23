@@ -76,6 +76,17 @@ def test_the_cue_is_the_configured_margin_over_the_noise(audio, audio_config, lo
     assert logged[-1][0] == "participant_cue_tone", "every cue onset is timestamped"
 
 
+def test_the_cue_never_clips_and_says_when_its_margin_shrank(audio, logged):
+    audio.start_noise(audio.max_dbfs)
+    audio.participant_cue()
+    _, samples = audio.output.events[-1]
+    assert np.max(np.abs(samples)) <= 1.0 + 1e-9, "peak at or under full scale"
+    reduced = [fields for event, fields in logged if event == "participant_cue_margin_reduced"]
+    assert reduced, "the shortfall is logged"
+    played = [fields for event, fields in logged if event == "participant_cue_tone"][-1]
+    assert played["detail"] == f"{audio_module.CUE_MAX_DBFS:.1f} dBFS"
+
+
 def test_no_cue_sounds_without_the_noise_it_is_set_against(audio):
     audio.participant_cue()
     assert _events(audio) == []

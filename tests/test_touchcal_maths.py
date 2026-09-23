@@ -241,9 +241,44 @@ def test_only_an_order_free_winner_is_a_mismatch():
     assert maths.comparison_winner([]) is None
 
 
-def test_every_channel_gets_the_level_through_its_gain_under_the_ceiling():
-    levels = maths.per_channel(100.0, {1: 1.2, 3: 1.0, 5: 3.0}, 250.0)
+def test_every_channel_gets_the_level_through_its_gain_inside_the_range():
+    levels, clamped = maths.per_channel(100.0, {1: 1.2, 3: 1.0, 5: 3.0}, 250.0)
     assert levels == {1: pytest.approx(120.0), 3: 100.0, 5: 250.0}
+    assert clamped == (5,), "a clamp is reported, not hidden"
+    levels, clamped = maths.per_channel(-10.0, {1: 1.0}, 250.0)
+    assert levels == {1: 0.0} and clamped == (1,)
+
+
+def test_a_nearly_flat_fit_is_unreachable_rather_than_an_overflow():
+    """Item 3: 10 ** x for a tiny slope used to raise OverflowError."""
+    fit = maths.RatingFit(maths.LOG_PRESSURE, intercept=0.0, slope=1e-6, r_squared=0.0,
+                          residual_sd=0.0, span_vas=0.0, spearman_rho=0.0,
+                          bracket_min_kpa=1.0, bracket_max_kpa=2.0)
+    assert fit.invert(80.0) is None
+    assert maths.from_axis(1e6, maths.LOG_PRESSURE) == float("inf")
+
+
+def _raw(p20, p30, p80):
+    return {20.0: p20, 30.0: p30, 80.0: p80}
+
+
+def test_usable_targets_are_held_inside_the_range_and_the_clamp_reported():
+    held, reasons, clamped = maths.usable_targets(_raw(10.0, 20.0, 300.0), 20.0, 30.0, 80.0,
+                                                  250.0)
+    assert reasons == () and held[80.0] == 250.0 and clamped == (80.0,)
+
+
+@pytest.mark.parametrize(
+    "raw, reason",
+    [
+        (_raw(None, 20.0, 80.0), maths.UNREACHABLE),
+        (_raw(-5.0, 20.0, 80.0), maths.UNREACHABLE),
+        (_raw(10.0, 300.0, 400.0), maths.EMPTY_WINDOW),
+    ],
+)
+def test_targets_that_cannot_be_delivered_fail_stage_1(raw, reason):
+    held, reasons, _ = maths.usable_targets(raw, 20.0, 30.0, 80.0, 250.0)
+    assert held is None and reason in reasons
 
 
 def test_the_timing_only_stand_in_passes_through_the_step_1_settings():

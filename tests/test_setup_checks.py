@@ -20,7 +20,7 @@ from tatp.setup_checks import (
     MaskingResult,
     StopRehearsal,
     StopRehearsalResult,
-    noise_control_config,
+    noise_control,
 )
 from tatp.touchcal import AdjustmentState
 from tatp.trials import Choice
@@ -74,14 +74,14 @@ def _answers(*sides):
 
 
 def test_the_noise_control_is_the_pressure_control_in_decibels(loaded):
-    control = noise_control_config(loaded.hardware["adjustment"], loaded.hardware["audio"])
+    control = noise_control(loaded.hardware["adjustment"], loaded.hardware["audio"])
     audio = loaded.hardware["audio"]
     state = AdjustmentState(control, audio["white_noise_start_dbfs"],
                             audio["white_noise_max_dbfs"], audio["white_noise_start_dbfs"])
-    assert state.tap_step_kpa == audio["white_noise_step_db"]
-    assert state.rate_final_kpa_s == audio["noise_hold_rate_final_db_s"]
+    assert state.tap_step == audio["white_noise_step_db"]
+    assert state.rate_final_per_s == audio["noise_hold_rate_final_db_s"]
     assert state.hold_delay_s == loaded.hardware["adjustment"]["hold_delay_s"]
-    assert state.range_max_kpa == audio["white_noise_max_dbfs"], "the ceiling tops the control"
+    assert state.range_max == audio["white_noise_max_dbfs"], "the ceiling tops the control"
 
 
 # -- the masking check ------------------------------------------------------------------

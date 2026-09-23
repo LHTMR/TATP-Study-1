@@ -186,3 +186,14 @@ items:
          check tests/test_application.py still finds a font for it, and add
          `emergency_stop_symbol_confirmed: <date>` under `responder:`."
     blocks_use: true
+
+  - item: "L13"
+    summary: Whether the white-noise ceiling should also cap the participant cue
+    resolved_when: {file: hardware.yaml, path: "audio.cue_ceiling_decided"}
+    fix: "S, at bring-up with L3. The cue plays participant_cue_over_noise_db above the noise
+         and is held only so that a sine never clips (about -3 dBFS RMS), with a logged warning
+         when that shrinks the margin. With the noise at white_noise_max_dbfs the cue is
+         therefore louder than the noise ceiling. Whether it may be is a sound-level limit and
+         not the build's to decide. Record the decision (and any cap) under audio:, then add
+         `cue_ceiling_decided: <date>`."
+    blocks_use: true

@@ -63,6 +63,8 @@ PLEASANTNESS_TARGET = "most_pleasant"
 COMPARISON_CHOICE = "comparison"
 EVENNESS_CHOICE = "evenness"
 SELF_START_SCREEN = "self_start"
+# The one experimenter instruction at the start of every touch delivery, in every condition.
+TOUCH_START_INSTRUCTION = "touch_start"
 # `touchcal_compare.order` and `touchcal_evenness.judgement`.
 TEST_FIRST = "test_first"
 REFERENCE_FIRST = "reference_first"
@@ -95,6 +97,11 @@ class AdjustmentPlan:
     # Where the point is expected to be, when anything is known about it. Steps 3 and 5 chain
     # off the fitted reference values; step 1 has nothing to chain off, so it starts at an end.
     expected_kpa: float | None = None
+    # Which run of steps 1 and 2 this adjustment belongs to (a stage-1 re-run starts a new one),
+    # and which pass for this channel: a step 3 re-adjustment, a zero-setting repeat or a
+    # rebalance each match a channel again, and the earlier pass stays in the data.
+    run_index: int = 1
+    pass_index: int = 1
 
 
 def start_pressure_kpa(plan: AdjustmentPlan, start_offset_fraction: float) -> float:
@@ -117,7 +124,7 @@ def start_pressure_kpa(plan: AdjustmentPlan, start_offset_fraction: float) -> fl
     return min(max(start, plan.range_min_kpa), plan.range_max_kpa)
 
 
-def anchor_plans(config) -> tuple[AdjustmentPlan, ...]:
+def anchor_plans(config, run_index: int = 1) -> tuple[AdjustmentPlan, ...]:
     """Protocol B step 1: bracket the range on the reference channel (SPEC.md 9).
 
     One plan per anchor per adjustment, in the order they are run. The adjustable range is the
@@ -150,38 +157,48 @@ def anchor_plans(config) -> tuple[AdjustmentPlan, ...]:
                     range_min_kpa=0.0,
                     range_max_kpa=ceiling_kpa,
                     anchor_percent=float(anchor_percent),
+                    run_index=run_index,
                 )
             )
     return tuple(plans)
 
 
-class AdjustmentState:
-    """The accelerating control of SPEC.md 10.3. No Qt; the caller supplies the time."""
+def pressure_control(adjustment_config: dict) -> dict:
+    """The accelerating control's settings for a pressure, in kPa (SPEC.md 10.3)."""
+    return {
+        "tap_max_duration_s": adjustment_config["tap_max_duration_s"],
+        "tap_step": adjustment_config["tap_step_kpa"],
+        "hold_delay_s": adjustment_config["hold_delay_s"],
+        "hold_rate_initial_per_s": adjustment_config["hold_rate_initial_kpa_s"],
+        "hold_rate_final_per_s": adjustment_config["hold_rate_final_kpa_s"],
+        "hold_ramp_duration_s": adjustment_config["hold_ramp_duration_s"],
+    }
 
-    def __init__(
-        self,
-        adjustment_config: dict,
-        range_min_kpa: float,
-        range_max_kpa: float,
-        start_kpa: float,
-    ):
-        self.tap_max_duration_s = float(adjustment_config["tap_max_duration_s"])
-        self.tap_step_kpa = float(adjustment_config["tap_step_kpa"])
-        self.hold_delay_s = float(adjustment_config["hold_delay_s"])
-        self.rate_initial_kpa_s = float(adjustment_config["hold_rate_initial_kpa_s"])
-        self.rate_final_kpa_s = float(adjustment_config["hold_rate_final_kpa_s"])
-        self.ramp_duration_s = float(adjustment_config["hold_ramp_duration_s"])
+
+class AdjustmentState:
+    """The accelerating control of SPEC.md 10.3. No Qt; the caller supplies the time.
+
+    Unit-neutral: the value is whatever the caller controls -- kPa for a pressure
+    (`pressure_control`), dB for the noise (`tatp.setup_checks.noise_control`) -- and the step
+    and rates are in that unit. The tap and hold timings describe the participant's hand.
+    """
+
+    def __init__(self, control: dict, range_min: float, range_max: float, start: float):
+        self.tap_max_duration_s = float(control["tap_max_duration_s"])
+        self.tap_step = float(control["tap_step"])
+        self.hold_delay_s = float(control["hold_delay_s"])
+        self.rate_initial_per_s = float(control["hold_rate_initial_per_s"])
+        self.rate_final_per_s = float(control["hold_rate_final_per_s"])
+        self.ramp_duration_s = float(control["hold_ramp_duration_s"])
         # Stage boundary (CLAUDE.md): the control is described as accelerating, and a ramp of
         # zero length would divide by zero rather than merely being a different control.
         assert self.ramp_duration_s > 0, "adjustment.hold_ramp_duration_s must be positive"
-        assert range_min_kpa < range_max_kpa, (
-            f"the adjustable range {range_min_kpa}--{range_max_kpa} kPa is empty"
-        )
+        assert range_min < range_max, f"the adjustable range {range_min}--{range_max} is empty"
 
-        self.range_min_kpa = float(range_min_kpa)
-        self.range_max_kpa = float(range_max_kpa)
-        self.pressure_kpa = min(max(float(start_kpa), self.range_min_kpa), self.range_max_kpa)
-        self.exploration_kpa = 0.0
+        self.range_min = float(range_min)
+        self.range_max = float(range_max)
+        self.value = min(max(float(start), self.range_min), self.range_max)
+        self.exploration = 0.0
         self.button_events = 0
 
         self._held: Action | None = None
@@ -210,7 +227,7 @@ class AdjustmentState:
         # A press short enough to be a tap moves one step; a press long enough to have moved the
         # pressure already has moved it, and adding a step on release would double the last one.
         if not self._moved_by_hold and now_s - self._pressed_at_s <= self.tap_max_duration_s:
-            self._move(self._direction(action) * self.tap_step_kpa)
+            self._move(self._direction(action) * self.tap_step)
         self._held = None
 
     def tick(self, now_s: float) -> None:
@@ -220,7 +237,7 @@ class AdjustmentState:
         held_s = now_s - self._pressed_at_s - self.hold_delay_s
         if held_s <= 0:
             return
-        travelled = self._travel_kpa(held_s) - self._travel_kpa(self._held_travel_s)
+        travelled = self._travel(held_s) - self._travel(self._held_travel_s)
         self._held_travel_s = held_s
         if travelled > 0:
             self._moved_by_hold = True
@@ -228,18 +245,18 @@ class AdjustmentState:
 
     # -- the ramp ----------------------------------------------------------------------
 
-    def rate_kpa_s(self, held_s: float) -> float:
+    def rate_per_s(self, held_s: float) -> float:
         """The rate at `held_s` seconds into the hold, past the delay. SPEC.md 10.3."""
         if held_s <= 0:
             return 0.0
         if held_s >= self.ramp_duration_s:
-            return self.rate_final_kpa_s
+            return self.rate_final_per_s
         fraction = held_s / self.ramp_duration_s
-        return self.rate_initial_kpa_s + fraction * (
-            self.rate_final_kpa_s - self.rate_initial_kpa_s
+        return self.rate_initial_per_s + fraction * (
+            self.rate_final_per_s - self.rate_initial_per_s
         )
 
-    def _travel_kpa(self, held_s: float) -> float:
+    def _travel(self, held_s: float) -> float:
         """Distance travelled in the first `held_s` seconds of a hold.
 
         The integral of a linear ramp, in closed form rather than accumulated per tick, so the
@@ -248,26 +265,24 @@ class AdjustmentState:
         if held_s <= 0:
             return 0.0
         ramped = min(held_s, self.ramp_duration_s)
-        gained = self.rate_final_kpa_s - self.rate_initial_kpa_s
+        gained = self.rate_final_per_s - self.rate_initial_per_s
         # The 2 is the area of a triangle, not a study parameter (SPEC.md 4.2).
-        distance = self.rate_initial_kpa_s * ramped + gained * ramped * ramped / (
+        distance = self.rate_initial_per_s * ramped + gained * ramped * ramped / (
             2 * self.ramp_duration_s
         )
-        return distance + self.rate_final_kpa_s * max(0.0, held_s - self.ramp_duration_s)
+        return distance + self.rate_final_per_s * max(0.0, held_s - self.ramp_duration_s)
 
     # -- plumbing ----------------------------------------------------------------------
 
     def _direction(self, action: Action) -> float:
         return -1.0 if action is Action.DECREASE else 1.0
 
-    def _move(self, delta_kpa: float) -> None:
-        before = self.pressure_kpa
-        self.pressure_kpa = min(
-            max(self.pressure_kpa + delta_kpa, self.range_min_kpa), self.range_max_kpa
-        )
+    def _move(self, delta: float) -> None:
+        before = self.value
+        self.value = min(max(self.value + delta, self.range_min), self.range_max)
         # Travel that the range refused is not exploration: the participant learns nothing from
         # pressing against an end stop.
-        self.exploration_kpa += abs(self.pressure_kpa - before)
+        self.exploration += abs(self.value - before)
 
 
 class Adjustment(QObject):
@@ -299,7 +314,7 @@ class Adjustment(QObject):
         self.min_exploration_kpa = float(touch["min_exploration_kpa"])
         self.start_kpa = start_pressure_kpa(plan, float(touch["start_offset_fraction"]))
         self.state = AdjustmentState(
-            adjustment, plan.range_min_kpa, plan.range_max_kpa, self.start_kpa
+            pressure_control(adjustment), plan.range_min_kpa, plan.range_max_kpa, self.start_kpa
         )
 
         self.start_iso = ""
@@ -342,7 +357,7 @@ class Adjustment(QObject):
         self.session.log(
             "adjustment_started",
             detail=f"{self.plan.stage}, channel {self.plan.channel}, "
-            f"from {self.plan.start_direction} at {self.state.pressure_kpa:.1f} kPa",
+            f"from {self.plan.start_direction} at {self.state.value:.1f} kPa",
         )
         self._tick.start()
         self._timeout.start(self.session.clock.scaled_ms(self.timeout_s))
@@ -372,7 +387,7 @@ class Adjustment(QObject):
         # Re-commanded until the garment holds it, so a command the rate limit shortened is
         # finished on the following ticks rather than left short (SPEC.md 13).
         garment = self.session.garment
-        for channel, kpa in self.targets_kpa(self.state.pressure_kpa).items():
+        for channel, kpa in self.targets_kpa(self.state.value).items():
             target = min(kpa, garment.limits.pressure_ceiling_kpa)
             if target < kpa and not self._ceiling_logged:
                 self._ceiling_logged = True
@@ -391,7 +406,7 @@ class Adjustment(QObject):
         self.session.log(
             "adjustment_confirmed",
             origin="participant",
-            detail=f"{self.state.pressure_kpa:.1f} kPa after "
+            detail=f"{self.state.value:.1f} kPa after "
             f"{self.state.button_events} button events",
         )
         self._write()
@@ -399,7 +414,7 @@ class Adjustment(QObject):
             self.experimenter.text["instructions"]["response_received"]
         )
         self.experimenter.refresh()
-        self.finished.emit(self.state.pressure_kpa)
+        self.finished.emit(self.state.value)
 
     def _on_timeout(self) -> None:
         """SPEC.md 9: the method of adjustment has no stopping rule of its own.
@@ -416,7 +431,7 @@ class Adjustment(QObject):
             f"after {self.timeout_s} s",
         )
         self._write()
-        self.finished.emit(self.state.pressure_kpa)
+        self.finished.emit(self.state.value)
 
     def cancel(self) -> None:
         """Abandoned by an interruption (SPEC.md 13); no row is written.
@@ -428,7 +443,7 @@ class Adjustment(QObject):
         self._end()
         self.session.log(
             "trial_cancelled",
-            detail=f"{self.plan.stage} adjustment at {self.state.pressure_kpa:.1f} kPa",
+            detail=f"{self.plan.stage} adjustment at {self.state.value:.1f} kPa",
         )
 
     def _write(self) -> None:
@@ -437,18 +452,20 @@ class Adjustment(QObject):
             timestamp_iso=self.start_iso,
             t_session_s=self._t_session_s,
             stage=self.plan.stage,
+            run_index=self.plan.run_index,
+            pass_index=self.plan.pass_index,
             channel=self.plan.channel,
             reference_channel=self.plan.reference_channel,
             anchor_percent=self.plan.anchor_percent,
             adjustment_index=self.plan.adjustment_index,
             start_direction=self.plan.start_direction,
             start_pressure_kpa=self.start_kpa,
-            produced_pressure_kpa=self.state.pressure_kpa,
+            produced_pressure_kpa=self.state.value,
             range_min_kpa=self.plan.range_min_kpa,
             range_max_kpa=self.plan.range_max_kpa,
             duration_s=self.session.clock.real_elapsed_s() - self._start_s,
             button_events=self.state.button_events,
-            min_exploration_met=self.state.exploration_kpa >= self.min_exploration_kpa,
+            min_exploration_met=self.state.exploration >= self.min_exploration_kpa,
             timed_out=self.timed_out,
             # SPEC.md 12.4: a device that cannot set pressure per channel produces real timings
             # and unreal pressures, and an adjustment is entirely about the pressure.
@@ -459,7 +476,7 @@ class Adjustment(QObject):
         self.session.log(
             event,
             origin="participant",
-            detail=f"{action_value} at {self.state.pressure_kpa:.1f} kPa",
+            detail=f"{action_value} at {self.state.value:.1f} kPa",
         )
 
     def _end(self) -> None:
@@ -640,10 +657,13 @@ class PatternAdjustment(Adjustment):
 class EstimationPresentation(Trial):
     """One amplitude, or a catch trial, and its intensity rating (SPEC.md 9 step 2).
 
-    The cue, then the pressure, then `estimation_settle_s` of stimulus before the scale
-    appears, and the stimulus stays on until the participant confirms: the question asks how
-    intense the touch *is*, in the present tense (docs/research/R32). A catch trial commands
-    nothing and switches nothing on -- on a device whose channels are on/off at a hand-set
+    The pressure is reached first with the channel closed, before the cue, as the comparison
+    does: a ramp after onset would take longer the higher the amplitude, and a presentation
+    whose scale came up sooner than the others would give the catch trials away. So every
+    presentation, catch trials included, runs cue, onset, `estimation_settle_s`, scale -- the
+    same timing -- and the stimulus stays on until the participant confirms, because the
+    question asks how intense the touch *is* (docs/research/R32). A catch trial commands no
+    pressure and switches nothing on: on a device whose channels are on/off at a hand-set
     pressure, switching one on would be a real touch.
     """
 
@@ -660,7 +680,8 @@ class EstimationPresentation(Trial):
     def start(self) -> None:
         # From nothing, whatever an interrupted attempt or a restored garment left behind.
         self.session.garment.stop()
-        self.cue_then(self._onset)
+        levels = {} if self.plan.catch_trial else {self.channel: self.plan.pressure_kpa}
+        self.ramp_then(levels, lambda: self.cue_then(self._onset))
 
     def _onset(self) -> None:
         self.onset_iso = self.session.clock.wall_iso()
@@ -670,14 +691,9 @@ class EstimationPresentation(Trial):
             detail=f"run {self.run_index}, order {self.plan.presentation_order}, "
             f"{'catch' if self.plan.catch_trial else f'{self.plan.pressure_kpa:.1f} kPa'}",
         )
-        if self.plan.catch_trial:
-            self.after(self.settle_s, self._rate)
-            return
-        self.session.garment.set_channel(self.channel, True)
-        self.ramp_then(
-            {self.channel: self.plan.pressure_kpa},
-            lambda: self.after(self.settle_s, self._rate),
-        )
+        if not self.plan.catch_trial:
+            self.session.garment.set_channel(self.channel, True)
+        self.after(self.settle_s, self._rate)
 
     def _rate(self) -> None:
         rating = TouchRating(
@@ -902,43 +918,57 @@ class PreferenceSelection(Trial):
         self.done(chosen)
 
 
-# -- the self-start trial, SPEC.md 12.3 --------------------------------------------------
+# -- starting a touch delivery, SPEC.md 12.3 and 16 --------------------------------------
 
 
-class SelfStart(Trial):
-    """The participant starts the touch with the play button, and nothing is inserted between.
+class DeliveryStart(Trial):
+    """Start one condition's touch, looking the same on the experimenter's screen in all.
 
-    The pressures are commanded first, before the screen asks, so the press is followed by the
-    pattern start and by nothing else. There is no warning cue on this path: the participant's
-    own press is the onset, and a cue after it would be exactly the delay SPEC.md 12.3 forbids.
-    `self_start_latency_ms` -- the window's key-press time to the start command -- goes on the
-    `garment` row of that `pattern_start`, and the trial finishes with it.
+    **The experimenter screen is identical whatever the condition** (SPEC.md 16). Only the
+    participant-preferred condition is self-started, so anything the experimenter saw about the
+    self-start -- an instruction, a status, a "waiting for the participant" -- would name the
+    condition. This trial shows one neutral instruction, `TOUCH_START_INSTRUCTION`, and no
+    status, in every condition, and a test holds it to that. The caller chooses `self_start`
+    from `Session.condition`; this trial never reads the condition.
+
+    Both paths: the pressures are commanded first with every channel closed, then the warning
+    cue (SPEC.md 10.5). Then either the pattern starts, or the participant is asked to start it
+    (`screens.self_start`) and their press starts it with nothing inserted between (SPEC.md
+    12.3). The cue comes before the prompt, so it adds nothing after the press.
+
+    `self_start_latency_ms` runs from the window's key-press time to the moment the pattern's
+    first device command is issued, and is written on that `pattern_start` row by the garment.
+    The trial finishes with it, or with None when the touch was not self-started.
     """
 
-    def __init__(self, session, participant, experimenter, delivery: Delivery):
+    def __init__(self, session, participant, experimenter, delivery: Delivery,
+                 self_start: bool):
         super().__init__(session, participant, experimenter)
         self.delivery = delivery
+        self.self_start = self_start
 
     def start(self) -> None:
         self.session.garment.stop()
+        self.instruct(TOUCH_START_INSTRUCTION)
         levels = self.delivery.pressure_kpa or {}
-        self.ramp_then(levels, self._ready)
+        self.ramp_then(levels, lambda: self.cue_then(self._cued))
 
-    def _ready(self) -> None:
+    def _cued(self) -> None:
+        if not self.self_start:
+            self.session.garment.play_pattern(self.session.patterns[self.delivery.pattern_name])
+            self.session.garment.advance()
+            self.done(None)
+            return
         self.listen(self.participant.message_confirmed, self._pressed)
         self.participant.show_message(SELF_START_SCREEN)
-        self.instruct("self_start")
 
     def _pressed(self) -> None:
         garment = self.session.garment
-        pattern = self.session.patterns[self.delivery.pattern_name]
-        latency_ms = (
-            self.session.clock.real_elapsed_s() - self.participant.last_press_real_s
-        ) * MS_PER_S
-        garment.play_pattern(pattern, self_start_latency_ms=latency_ms)
-        # The pattern's first events are due at once; delivering them now rather than on the
-        # next pattern tick is the difference between no delay and up to one tick of it.
-        garment.advance()
+        garment.play_pattern(
+            self.session.patterns[self.delivery.pattern_name],
+            pressed_at_real_s=self.participant.last_press_real_s,
+        )
+        latency_ms = garment.self_start_latency_ms
         self.participant.show_blank()
         self.session.log("self_started", origin="participant", detail=f"{latency_ms:.1f} ms")
         self.done(latency_ms)
@@ -954,14 +984,16 @@ class TouchCalibrationResult:
     Every condition's delivery is here, computed the same way in every session: calibration
     never differs between conditions (SPEC.md 16), so the one that is used is picked by the
     caller from `Session.condition`, with `for_condition`. None of this reaches either screen.
+    The same numbers are in `touchcal_channels`, which is what a resumed session reads.
 
     - `sham`: the sham pattern, static, at P20 on every channel through its gain.
     - `ct_targeted` and `participant_preferred`: at the same level, the geometric mean of the
       two pleasantness settings, so the pattern is the only difference between them
       (docs/research/R31).
 
-    `valid_for_analysis` is false in timing-only mode (SPEC.md 12.4), where every pressure
-    here is a number the device never delivered.
+    `valid_for_analysis` is false in timing-only mode (SPEC.md 12.4), and whenever a fallback
+    stood in for a measured value -- `targets_source` other than `fit`, or a `gain_sources`
+    entry of `fallback_unit_gain`. The data says which.
     """
 
     run_index: int
@@ -969,8 +1001,10 @@ class TouchCalibrationResult:
     p20_kpa: float
     p30_kpa: float
     p80_kpa: float
+    targets_source: str
     match_level_kpa: float
     gains: dict[int, float]
+    gain_sources: dict[int, str]
     pleasant_kpa: float
     preferred_pattern: str
     stage1_pass: bool
@@ -987,6 +1021,36 @@ class TouchCalibrationResult:
         }[condition]
 
 
+@dataclass(frozen=True)
+class FitReady:
+    """What the fit preview shows the experimenter (SPEC.md 11.1). Milestone 5 draws it.
+
+    Emitted only while the preview is on, because it carries the participant's ratings.
+    `fit` is None when the step 1 bracket left nothing to sample.
+    """
+
+    run_index: int
+    points: tuple[tuple[float, float, bool], ...]  # (pressure kPa, rating %, catch trial)
+    fit: maths.RatingFit | None
+    r_squared: float | None
+    residual_sd: float | None
+    monotonic: bool | None
+    stage1_pass: bool
+    stage1_failures: tuple[str, ...]
+    p20_kpa: float | None
+    p30_kpa: float | None
+    p80_kpa: float | None
+
+
+# Where the targets and gains came from, as `touchcal_channels` records it.
+FROM_FIT = "fit"
+FROM_BRACKET_LINE = "bracket_line"
+FROM_DEVICE_RANGE = "device_range"
+GAIN_REFERENCE = "reference"
+GAIN_MATCHED = "matched"
+GAIN_FALLBACK = "fallback_unit_gain"
+
+
 # -- Protocol B in full ------------------------------------------------------------------
 
 
@@ -997,17 +1061,29 @@ class TouchCalibration(Procedure):
     condition. Each step is a trial run by `run_trial`, so an interruption repeats the trial it
     interrupted and nothing already written is touched (docs/LOG.md N7.1).
 
-    **The stage-1 gate** (SPEC.md 9) is decided before step 3 begins, because every later
-    step is built on the fit. A failing fit is put to the experimenter -- re-run steps 1 and 2,
-    or accept -- and so is every fit when the fit preview is on (SPEC.md 11.1). A fit that
-    cannot be inverted cannot be accepted: there would be no P20, P30 or P80 to carry on with.
-    A re-run keeps the discarded run's rows, its fit row marked `superseded`.
+    **The stage-1 gate** (SPEC.md 9) is decided before step 3, because every later step is
+    built on the fit. A fit fails when it is flat, non-monotonic or noisy, and also when the
+    targets it gives cannot be delivered: not invertible, at or below zero, or a pleasantness
+    window left empty once held inside [0, ceiling]. A failing fit is put to the experimenter,
+    and so is every fit when the fit preview is on (SPEC.md 11.1). Every run keeps its fit row;
+    a re-run marks the discarded one `superseded`.
+
+    - A usable estimate can be accepted, flagged, or re-run.
+    - An unusable one can only be re-run until `fit_preview.max_reruns` is used up. Then the
+      experimenter can accept, which continues on a **fallback** -- the targets read off the
+      line through the participant's own step 1 settings, or off the device's range if those
+      settings left no range -- or abort the session. A fallback is logged, recorded in
+      `touchcal_channels.targets_source`, and makes the calibration `valid_for_analysis: false`.
 
     **Timing-only mode** (SPEC.md 12.4). On a device that cannot set pressure per channel,
     every step runs with its real interaction and duration, every row is written
-    `valid_for_analysis: false`, and the gate never stops the session -- the pressures are
-    meaningless there, so a fit of them cannot fail in any sense that matters.
+    `valid_for_analysis: false`, and the gate never stops the session: an unusable estimate
+    goes straight to the fallback, because the pressures are not delivered anyway.
+
+    `fit_ready` carries the estimate to the fit preview, when the preview is on.
     """
+
+    fit_ready = Signal(object)
 
     def __init__(self, rig):
         super().__init__(rig)
@@ -1020,6 +1096,7 @@ class TouchCalibration(Procedure):
         self.max_reruns = int(config.study1["fit_preview"]["max_reruns"])
         garment = self.session.garment
         self.real = garment.per_channel_pressure
+        self.valid = self.real
         self.ceiling_kpa = garment.limits.pressure_ceiling_kpa
         self.reference = int(self.touch["reference_channel"])
         self.others = tuple(c for c in garment.channels() if c != self.reference)
@@ -1045,9 +1122,16 @@ class TouchCalibration(Procedure):
         self.rebalances = 0
         self.comparisons = 0
         self.fit: maths.RatingFit | None = None
+        self.raw_targets: dict[float, float | None] = {}
         self.targets: dict[float, float] = {}
+        self.targets_clamped: tuple[float, ...] = ()
+        self.targets_source = FROM_FIT
+        self.inverse: maths.RatingFit | None = None
         self.match_level_kpa = 0.0
         self.gains: dict[int, float] = {self.reference: 1.0}
+        self.gain_sources: dict[int, str] = {self.reference: GAIN_REFERENCE}
+        self.match_settings: dict[int, list[float]] = {}
+        self.match_passes: dict[int, int] = {}
         self.pleasant_kpa = 0.0
         self.stage1_pass = False
 
@@ -1062,9 +1146,12 @@ class TouchCalibration(Procedure):
         self.session.log("touch_calibration_run", detail=f"run {self.run_index}")
         self.anchor_settings: dict[float, list[float]] = {}
         self.fit = None
-        self.inverse = None
-        self.targets = {}
-        self._anchor(list(anchor_plans(self.session.config)))
+        self.raw_targets = {}
+        self.targets_clamped = ()
+        self.estimates: list[tuple[maths.EstimationPlan, float]] = []
+        self.catch_fraction: float | None = None
+        self.catch_flag = False
+        self._anchor(list(anchor_plans(self.session.config, self.run_index)))
 
     def _anchor(self, plans: list[AdjustmentPlan]) -> None:
         if not plans:
@@ -1100,15 +1187,13 @@ class TouchCalibration(Procedure):
                 detail=f"{low:.1f}--{high:.1f} kPa cannot be sampled on a {self.fit_form} axis",
             )
             if self.real:
-                self._decide(usable=False, reasons=(BRACKET_UNUSABLE,))
+                self._gate((BRACKET_UNUSABLE,), usable=False)
                 return
             # Timing-only: the pressures are not delivered anyway (SPEC.md 12.4). Sample the
             # device's whole range so the run still takes its real time.
-            low = float(self.session.config.hardware["adjustment"]["tap_step_kpa"])
-            high = self.ceiling_kpa
-            self.bracket = (low, high)
+            self.bracket = self._device_range()
         amplitudes = maths.estimation_amplitudes(
-            low, high, int(self.touch["estimation_n_amplitudes"]), self.fit_form
+            *self.bracket, int(self.touch["estimation_n_amplitudes"]), self.fit_form
         )
         n_catch = maths.catch_trial_count(
             len(amplitudes), float(self.touch["catch_trial_fraction"])
@@ -1116,8 +1201,11 @@ class TouchCalibration(Procedure):
         self.experimenter.set_instruction(
             self.experimenter.text["instructions"]["touchcal_estimation"]
         )
-        self.estimates: list[tuple[maths.EstimationPlan, float]] = []
         self._present(list(maths.estimation_plans(amplitudes, n_catch, self.session.rng)))
+
+    def _device_range(self) -> tuple[float, float]:
+        return (float(self.session.config.hardware["adjustment"]["tap_step_kpa"]),
+                self.ceiling_kpa)
 
     def _present(self, plans: list[maths.EstimationPlan]) -> None:
         if not plans:
@@ -1149,8 +1237,12 @@ class TouchCalibration(Procedure):
         catches = [rating for plan, rating in self.estimates if plan.catch_trial]
         fit = maths.fit_ratings([p for p, _ in rated], [r for _, r in rated], self.fit_form)
         self.fit = fit
-        self.targets = {pct: fit.invert(pct) for pct in self.derived_pct}
+        self.raw_targets = {pct: fit.invert(pct) for pct in self.derived_pct}
+        held, target_reasons, self.targets_clamped = maths.usable_targets(
+            self.raw_targets, self.sham_pct, self.low_pct, self.high_pct, self.ceiling_kpa
+        )
         reasons = maths.stage1_failures(fit, self.criteria)
+        reasons += tuple(r for r in target_reasons if r not in reasons)
         self.catch_fraction = maths.catch_felt_fraction(
             catches, float(self.touch["catch_felt_min_pct"])
         )
@@ -1167,6 +1259,12 @@ class TouchCalibration(Procedure):
             f"r2={fit.r_squared:.3f} sd={fit.residual_sd:.2f} rho={fit.spearman_rho:.3f} "
             f"span={fit.span_vas:.1f}; stage 1 {verdict}",
         )
+        if self.targets_clamped:
+            self.session.log(
+                "targets_clamped", severity="warning",
+                detail="held inside [0, ceiling]: "
+                + ", ".join(f"p{pct:g}" for pct in self.targets_clamped),
+            )
         if self.catch_flag:
             felt = round(self.catch_fraction * len(catches))
             self.session.log(
@@ -1178,46 +1276,71 @@ class TouchCalibration(Procedure):
                     value=f"{felt}/{len(catches)}"
                 )
             )
-        usable = all(value is not None for value in self.targets.values())
+        self._gate(reasons, usable=held is not None)
+
+    def _gate(self, reasons: tuple[str, ...], usable: bool) -> None:
         self.stage1_pass = not reasons
+        if self.preview:
+            self.fit_ready.emit(self._fit_ready(reasons))
         if self.preview or (reasons and self.real):
-            self._decide(usable=usable or not self.real, reasons=reasons)
+            self._decide(usable, reasons)
         else:
-            self._accept_fit(reasons)
+            self._accept(reasons, usable)
+
+    def _fit_ready(self, reasons: tuple[str, ...]) -> FitReady:
+        fit = self.fit
+        return FitReady(
+            run_index=self.run_index,
+            points=tuple((p.pressure_kpa, r, p.catch_trial) for p, r in self.estimates),
+            fit=fit,
+            r_squared=fit.r_squared if fit else None,
+            residual_sd=fit.residual_sd if fit else None,
+            monotonic=fit.monotonic if fit else None,
+            stage1_pass=not reasons,
+            stage1_failures=reasons,
+            p20_kpa=self.raw_targets.get(self.sham_pct),
+            p30_kpa=self.raw_targets.get(self.low_pct),
+            p80_kpa=self.raw_targets.get(self.high_pct),
+        )
 
     def _decide(self, usable: bool, reasons: tuple[str, ...]) -> None:
-        """Put the estimate to the experimenter: accept it, or re-run steps 1 and 2."""
+        """Put the estimate to the experimenter: accept it, or re-run steps 1 and 2.
+
+        Every instruction says truthfully what each choice will do from here.
+        """
         terms = self.experimenter.text["terms"]["stage1"]
         value = ", ".join(terms[r] for r in reasons)
+        exhausted = self.reruns >= self.max_reruns
         if not reasons:
             instruction = "touchcal_fit_review"
         elif usable:
             instruction = "touchcal_stage1_failed"
+        elif exhausted:
+            instruction = "touchcal_stage1_exhausted"
         else:
             instruction = "touchcal_stage1_unusable"
 
         def decided(outcome) -> None:
             name, args = outcome
-            if name == RERUN:
-                if self.reruns >= self.max_reruns:
-                    self.session.log("rerun_refused", severity="warning",
-                                     detail=f"{self.reruns} of {self.max_reruns} used")
+            if name == RERUN and exhausted:
+                self.session.log("rerun_refused", severity="warning",
+                                 detail=f"{self.reruns} of {self.max_reruns} re-runs used")
+                if usable:
+                    # "The re-run limit ... has been reached. This estimate will be used."
                     self.experimenter.set_status(
                         self.experimenter.text["dialogs"]["fit_rerun_exhausted"]
                     )
+                    self._accept(reasons, usable)
+                else:
                     self._decide(usable, reasons)
-                    return
-                self.reruns += 1
-                self.session.fit_preview_reruns += 1
-                if self.fit is not None:
-                    self._write_fit(superseded=True, reasons=reasons, rerun_reason=args[0])
-                self._start_run()
-            elif not usable:
-                self.session.log("accept_refused", severity="warning",
-                                 detail="the estimate cannot be inverted, so it cannot be used")
-                self._decide(usable, reasons)
+            elif name == RERUN:
+                self._rerun(reasons, args[0] if args else "")
+            elif usable or exhausted:
+                self._accept(reasons, usable)
             else:
-                self._accept_fit(reasons)
+                self.session.log("accept_refused", severity="warning",
+                                 detail="the estimate cannot be used; re-runs remain")
+                self._decide(usable, reasons)
 
         self.run_trial(
             lambda: ExperimenterChoice(
@@ -1232,13 +1355,28 @@ class TouchCalibration(Procedure):
             decided,
         )
 
+    def _rerun(self, reasons: tuple[str, ...], reason: str) -> None:
+        self.reruns += 1
+        # Only a re-run chosen from the fit preview counts as one (SPEC.md 11.1); a stage-1
+        # re-run with the preview off is its own event.
+        if self.preview:
+            self.session.fit_preview_reruns += 1
+        else:
+            self.session.log(
+                "touchcal_stage1_rerun", origin="experimenter", severity="warning",
+                detail=f"run {self.run_index}: {reason}",
+            )
+        self._write_fit(superseded=True, reasons=reasons, rerun_reason=reason)
+        self._start_run()
+
     def _write_fit(
         self, superseded: bool, reasons: tuple[str, ...], rerun_reason: str = ""
     ) -> None:
+        """Every run's fit row, including one with no fit at all (SPEC.md 11.1)."""
         fit = self.fit
-        targets = self.targets
+        raw = self.raw_targets
         extrapolated = [
-            f"p{pct:g}" for pct, kpa in sorted(targets.items()) if fit.extrapolated(kpa)
+            f"p{pct:g}" for pct, kpa in sorted(raw.items()) if fit and fit.extrapolated(kpa)
         ]
         self.session.files.write(
             "touchcal_fit",
@@ -1248,51 +1386,62 @@ class TouchCalibration(Procedure):
             run_index=self.run_index,
             superseded=superseded,
             rerun_reason=rerun_reason,
-            fit_form=fit.fit_form,
-            intercept=fit.intercept,
-            slope=fit.slope,
-            r_squared=fit.r_squared,
-            residual_sd=fit.residual_sd,
-            monotonic=fit.monotonic,
-            spearman_rho=fit.spearman_rho,
-            span_vas=fit.span_vas,
+            fit_form=self.fit_form,
+            intercept=fit.intercept if fit else None,
+            slope=fit.slope if fit else None,
+            r_squared=fit.r_squared if fit else None,
+            residual_sd=fit.residual_sd if fit else None,
+            monotonic=fit.monotonic if fit else None,
+            spearman_rho=fit.spearman_rho if fit else None,
+            span_vas=fit.span_vas if fit else None,
             stage1_pass=not reasons,
             stage1_failures=";".join(reasons),
-            bracket_min_kpa=fit.bracket_min_kpa,
-            bracket_max_kpa=fit.bracket_max_kpa,
-            p20_kpa=targets.get(self.sham_pct),
-            p30_kpa=targets.get(self.low_pct),
-            p80_kpa=targets.get(self.high_pct),
+            bracket_min_kpa=fit.bracket_min_kpa if fit else self.bracket[0],
+            bracket_max_kpa=fit.bracket_max_kpa if fit else self.bracket[1],
+            p20_kpa=raw.get(self.sham_pct),
+            p30_kpa=raw.get(self.low_pct),
+            p80_kpa=raw.get(self.high_pct),
             extrapolated=",".join(extrapolated),
+            targets_clamped=",".join(f"p{pct:g}" for pct in self.targets_clamped),
             catch_felt_fraction=self.catch_fraction,
             catch_flag=self.catch_flag,
             valid_for_analysis=self.real,
         )
 
-    def _accept_fit(self, reasons: tuple[str, ...]) -> None:
+    def _accept(self, reasons: tuple[str, ...], usable: bool) -> None:
         self._write_fit(superseded=False, reasons=reasons)
-        self.inverse = self.fit
-        if not self.fit.monotonic:
-            # Timing-only mode only (SPEC.md 12.4): `_decide` refuses this on a real device.
-            # The steps still need pressures to command so they take their real time, so they
-            # are read off the line through the step 1 bracket, and flagged.
-            percents = sorted(self.anchor_settings)
-            self.inverse = maths.line_through_anchors(
-                [(percents[0], self.bracket[0]), (percents[-1], self.bracket[1])],
-                self.fit_form,
-            )
-            self.targets = {pct: self.inverse.invert(pct) for pct in self.derived_pct}
-            self.session.log(
-                "timing_only_targets", severity="warning",
-                detail="no invertible fit; pressures read off the step 1 bracket, not valid "
-                "for analysis (SPEC.md 12.4)",
-            )
-        # docs/research/R31: matched, and checked, at the fitted P50 -- inside the range every
-        # condition is delivered in, so the gain is measured where it is used.
-        self.match_level_kpa = min(
+        if usable:
+            self.inverse = self.fit
+            self.targets_source = FROM_FIT
+        else:
+            self._fallback(reasons)
+        self.targets = {
+            pct: maths.clamp(self.inverse.invert(pct), self.ceiling_kpa)
+            for pct in self.derived_pct
+        }
+        # docs/research/R31: matched, and checked, at P50 -- inside the range every condition
+        # is delivered in, so the gain is measured where it is used.
+        self.match_level_kpa = maths.clamp(
             self.inverse.invert(float(self.touch["channel_match_pct"])), self.ceiling_kpa
         )
         self._match_all(self._equalise_all)
+
+    def _fallback(self, reasons: tuple[str, ...]) -> None:
+        """Targets that are not the fit, stated as such (the procedure's docstring)."""
+        percents = sorted(self.anchor_settings)
+        if maths.bracket_is_usable(*self.bracket, self.fit_form):
+            self.targets_source, (low, high) = FROM_BRACKET_LINE, self.bracket
+        else:
+            self.targets_source, (low, high) = FROM_DEVICE_RANGE, self._device_range()
+        self.inverse = maths.line_through_anchors(
+            [(percents[0], low), (percents[-1], high)], self.fit_form
+        )
+        self.valid = False
+        self.session.log(
+            "touchcal_fallback", severity="warning",
+            detail=f"run {self.run_index}: {', '.join(reasons)}; targets read off the "
+            f"{self.targets_source.replace('_', ' ')}, not valid for analysis",
+        )
 
     # -- step 3 ------------------------------------------------------------------------
 
@@ -1305,7 +1454,9 @@ class TouchCalibration(Procedure):
             return
         self._match_channel(channels[0], lambda: self._match_each(channels[1:], then))
 
-    def _match_channel(self, channel: int, then: Callable[[], None]) -> None:
+    def _match_channel(self, channel: int, then: Callable[[], None], zero_retries: int = 0):
+        """Both start points, then the gain. A 0 kPa setting is matched again, not guessed."""
+        self.match_passes[channel] = self.match_passes.get(channel, 0) + 1
         directions = list(self.touch["start_directions"])
         plans = [
             AdjustmentPlan(
@@ -1319,6 +1470,8 @@ class TouchCalibration(Procedure):
                 reference_channel=self.reference,
                 # Equal until shown otherwise: the gain the design assumes is 1.
                 expected_kpa=self.match_level_kpa,
+                run_index=self.run_index,
+                pass_index=self.match_passes[channel],
             )
             for index in range(int(self.touch["channel_match_adjustments"]))
         ]
@@ -1329,11 +1482,7 @@ class TouchCalibration(Procedure):
 
         def next_plan() -> None:
             if len(settings) == len(plans):
-                self.gains[channel] = self._gain(channel, settings)
-                self.session.log(
-                    "channel_gain", detail=f"channel {channel}: {self.gains[channel]:.3f}"
-                )
-                then()
+                matched(settings)
                 return
             plan = plans[len(settings)]
 
@@ -1352,19 +1501,56 @@ class TouchCalibration(Procedure):
                 ),
             )
 
+        def matched(values: list[float]) -> None:
+            self.match_settings[channel] = list(values)
+            if all(kpa > 0 for kpa in values) and self.match_level_kpa > 0:
+                self.gains[channel] = maths.gain(self.match_level_kpa, values)
+                self.gain_sources[channel] = GAIN_MATCHED
+                self.session.log(
+                    "channel_gain", detail=f"channel {channel}: {self.gains[channel]:.3f}"
+                )
+                then()
+                return
+            # A setting of 0 kPa has no gain: the channel felt as strong as the reference with
+            # nothing on it, which the design cannot represent. Matched again, then asked.
+            self.session.log(
+                "gain_undefined", severity="warning",
+                detail=f"channel {channel}, pass {self.match_passes[channel]}: a 0 kPa setting",
+            )
+            if zero_retries < int(self.touch["channel_match_zero_retries"]):
+                self._match_channel(channel, then, zero_retries + 1)
+            else:
+                self._ask_about_gain(channel, then)
+
         next_plan()
 
-    def _gain(self, channel: int, settings: list[float]) -> float:
-        if all(kpa > 0 for kpa in settings):
-            return maths.gain(self.match_level_kpa, settings)
-        # A matched setting of zero is no gain at all -- the channel was felt as strong as
-        # the reference with nothing on it, which the design cannot represent. Logged, and
-        # the channel is taken as matched at the reference's own pressure.
-        self.session.log(
-            "gain_undefined", severity="warning",
-            detail=f"channel {channel}: a setting of 0 kPa; gain taken as 1",
+    def _ask_about_gain(self, channel: int, then: Callable[[], None]) -> None:
+        def decided(outcome) -> None:
+            name, _ = outcome
+            if name == REBALANCE:
+                self._match_channel(channel, then)
+                return
+            # The experimenter's explicit choice, recorded as a fallback and never as a match.
+            self.gains[channel] = 1.0
+            self.gain_sources[channel] = GAIN_FALLBACK
+            self.valid = False
+            self.session.log(
+                "gain_fallback", origin="experimenter", severity="warning",
+                detail=f"channel {channel}: delivered at the reference's pressure (gain 1); "
+                "not valid for analysis",
+            )
+            then()
+
+        self.run_trial(
+            lambda: ExperimenterChoice(
+                *self._windows(),
+                {REBALANCE: self.experimenter.rebalance_requested,
+                 PROCEED: self.experimenter.proceed_requested},
+                "touchcal_gain_undefined",
+                channel=channel,
+            ),
+            decided,
         )
-        return 1.0
 
     # -- step 4 ------------------------------------------------------------------------
 
@@ -1403,8 +1589,9 @@ class TouchCalibration(Procedure):
                 order=orders[0],
                 pair_index=pair_index,
                 pass_index=pass_index,
-                test_pressure_kpa=min(self.match_level_kpa * self.gains[channel],
-                                      self.ceiling_kpa),
+                test_pressure_kpa=maths.clamp(
+                    self.match_level_kpa * self.gains[channel], self.ceiling_kpa
+                ),
                 reference_pressure_kpa=self.match_level_kpa,
             )
             last = pair_index == pairs_to_flag and len(orders) == 1
@@ -1462,8 +1649,9 @@ class TouchCalibration(Procedure):
     # -- step 5 ------------------------------------------------------------------------
 
     def _pleasantness(self) -> None:
-        low = self.targets[self.low_pct]
-        high = min(self.targets[self.high_pct], self.ceiling_kpa)
+        low, high = self.targets[self.low_pct], self.targets[self.high_pct]
+        # Stage boundary (CLAUDE.md): `usable_targets` refuses an empty window and the
+        # fallback lines cannot produce one, so reaching here with one is a defect.
         assert low < high, f"the pleasantness window {low:.1f}--{high:.1f} kPa is empty"
         directions = list(self.touch["start_directions"])
         plans = [
@@ -1473,8 +1661,9 @@ class TouchCalibration(Procedure):
                 target_key=PLEASANTNESS_TARGET,
                 adjustment_index=index + 1,
                 start_direction=directions[index % len(directions)],
-                range_min_kpa=max(low, 0.0),
+                range_min_kpa=low,
                 range_max_kpa=high,
+                run_index=self.run_index,
             )
             for index in range(int(self.touch["pleasantness_adjustments"]))
         ]
@@ -1508,11 +1697,21 @@ class TouchCalibration(Procedure):
 
     # -- the evenness check ------------------------------------------------------------
 
+    def _levels(self, level_kpa: float, what: str) -> dict[int, float]:
+        levels, clamped = maths.per_channel(level_kpa, self.gains, self.ceiling_kpa)
+        if clamped:
+            self.session.log(
+                "delivery_clamped", severity="warning",
+                detail=f"{what}: channels {', '.join(map(str, clamped))} held inside "
+                "[0, ceiling]",
+            )
+        return levels
+
     def _evenness(self) -> None:
         if not self.touch["evenness_check"]:
             self._preference()
             return
-        levels = maths.per_channel(self.pleasant_kpa, self.gains, self.ceiling_kpa)
+        levels = self._levels(self.pleasant_kpa, "evenness check")
         self.experimenter.set_instruction(
             self.experimenter.text["instructions"]["touchcal_evenness"]
         )
@@ -1571,7 +1770,7 @@ class TouchCalibration(Procedure):
     def _preference(self) -> None:
         order = list(self.pattern_config["preference_candidates"])
         self.session.rng.shuffle(order)
-        levels = maths.per_channel(self.pleasant_kpa, self.gains, self.ceiling_kpa)
+        levels = self._levels(self.pleasant_kpa, "preference selection")
         self.experimenter.set_instruction(
             self.experimenter.text["instructions"]["touchcal_preference"]
         )
@@ -1593,33 +1792,94 @@ class TouchCalibration(Procedure):
             ),
         )
 
-    def _finish_calibration(self, preferred: str) -> None:
-        def delivery(pattern: str, level_kpa: float) -> Delivery:
-            pressures = maths.per_channel(level_kpa, self.gains, self.ceiling_kpa)
-            return Delivery(pattern, pressures if self.real else None)
+    # -- the end -----------------------------------------------------------------------
 
+    def _finish_calibration(self, preferred: str) -> None:
         conditions = self.pattern_config["condition_pattern"]
+        sham_kpa = self.targets[self.sham_pct]
+        plan = {
+            "sham": (conditions["sham"], sham_kpa),
+            "ct_targeted": (conditions["ct_targeted"], self.pleasant_kpa),
+            "participant_preferred": (preferred, self.pleasant_kpa),
+        }
+        levels, clamped = {}, {}
+        for condition, (_, level_kpa) in plan.items():
+            levels[condition], clamped[condition] = maths.per_channel(
+                level_kpa, self.gains, self.ceiling_kpa
+            )
+            if clamped[condition]:
+                self.session.log(
+                    "delivery_clamped", severity="warning",
+                    detail=f"a delivery: channels {', '.join(map(str, clamped[condition]))} "
+                    "held inside [0, ceiling]",
+                )
+        self._write_channels(preferred, levels, clamped)
+        deliveries = {
+            condition: Delivery(pattern, levels[condition] if self.real else None)
+            for condition, (pattern, _) in plan.items()
+        }
         result = TouchCalibrationResult(
             run_index=self.run_index,
             reference_channel=self.reference,
-            p20_kpa=self.targets[self.sham_pct],
+            p20_kpa=sham_kpa,
             p30_kpa=self.targets[self.low_pct],
             p80_kpa=self.targets[self.high_pct],
+            targets_source=self.targets_source,
             match_level_kpa=self.match_level_kpa,
             gains=dict(self.gains),
+            gain_sources=dict(self.gain_sources),
             pleasant_kpa=self.pleasant_kpa,
             preferred_pattern=preferred,
             stage1_pass=self.stage1_pass,
-            valid_for_analysis=self.real,
-            sham=delivery(conditions["sham"], self.targets[self.sham_pct]),
-            ct_targeted=delivery(conditions["ct_targeted"], self.pleasant_kpa),
-            participant_preferred=delivery(preferred, self.pleasant_kpa),
+            valid_for_analysis=self.valid,
+            **deliveries,
         )
-        self.session.log("touch_calibration_done", detail=f"run {self.run_index}")
+        self.session.log(
+            "touch_calibration_done",
+            severity="info" if self.valid else "warning",
+            detail=f"run {self.run_index}"
+            + ("" if self.valid else "; not valid for analysis"),
+        )
         self.experimenter.set_instruction("")
         self.finish(result)
+
+    def _write_channels(self, preferred: str, levels: dict, clamped: dict) -> None:
+        """One row per channel: what a resumed session needs to deliver (SPEC.md 15).
+
+        Recorded, never displayed: the per-condition pressures and the preferred pattern are
+        data, and a screen that showed them would name the condition (SPEC.md 16).
+        """
+        stamp, t_session_s = self.session.clock.wall_iso(), self.session.clock.t_session_s()
+        for channel in sorted(self.gains):
+            self.session.files.write(
+                "touchcal_channels",
+                timestamp_iso=stamp,
+                t_session_s=t_session_s,
+                run_index=self.run_index,
+                channel=channel,
+                reference_channel=self.reference,
+                gain=self.gains[channel],
+                gain_source=self.gain_sources[channel],
+                match_settings_kpa=";".join(
+                    f"{kpa:.3f}" for kpa in self.match_settings.get(channel, [])
+                ),
+                match_level_kpa=self.match_level_kpa,
+                targets_source=self.targets_source,
+                p20_kpa=self.targets[self.sham_pct],
+                p30_kpa=self.targets[self.low_pct],
+                p80_kpa=self.targets[self.high_pct],
+                pleasant_kpa=self.pleasant_kpa,
+                sham_kpa=levels["sham"][channel],
+                ct_targeted_kpa=levels["ct_targeted"][channel],
+                participant_preferred_kpa=levels["participant_preferred"][channel],
+                participant_preferred_pattern=preferred,
+                clamped=";".join(c for c in levels if channel in clamped[c]),
+                valid_for_analysis=self.valid,
+            )
 
     # -- plumbing ----------------------------------------------------------------------
 
     def _windows(self) -> tuple:
         return self.session, self.participant, self.experimenter
+
+

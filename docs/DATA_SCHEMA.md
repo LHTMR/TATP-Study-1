@@ -322,6 +322,8 @@ One row per adjustment — Protocol B steps 1, 3 and 5 (§9).
 | timestamp_iso | iso8601 | - | yes | Wall clock at adjustment start |
 | t_session_s | float | s | no | Seconds from session t=0 |
 | stage | str | - | yes | `anchor`, `channel_match` or `pleasantness` |
+| run_index | int | - | yes | The run of steps 1 and 2 this belongs to; joins to `touchcal_fit`. A stage-1 re-run starts a new one |
+| pass_index | int | - | yes | For `channel_match`, which pass for this channel: 1, then one more for each step 4 re-adjustment, zero-setting repeat or rebalance. 1 for the other stages |
 | channel | int | - | yes | Channel adjusted |
 | reference_channel | int | - | no | Empty for `anchor` |
 | anchor_percent | float | % | no | Target VAS point: 10 or 90, the two labelled anchors. Empty for `pleasantness`, which has no target |
@@ -379,21 +381,22 @@ One row per estimation run — the fitted rating function and the targets read o
 | superseded | bool | - | yes | `true` if the experimenter re-ran after seeing this fit. The row is retained regardless — a procedure repeatable until it looks right is a forking path unless every attempt is kept |
 | rerun_reason | str | - | no | Free text the experimenter gave when re-running |
 | fit_form | str | - | yes | `log_pressure` or `linear_pressure` (§9 step 2) |
-| intercept | float | - | yes | `a` in `rating ~ a + b·log(pressure)` |
-| slope | float | - | yes | `b` |
-| r_squared | float | - | yes | Fit quality |
-| residual_sd | float | % | yes | Residual standard deviation in VAS points |
-| monotonic | bool | - | yes | `false` if the fitted slope is not positive |
-| spearman_rho | float | - | yes | Rank correlation of rating on pressure, catch trials excluded; the "non-monotonic" criterion alongside the slope (`docs/research/R30`) |
-| span_vas | float | % | yes | Fitted rating rise across the sampled bracket, `slope` times the bracket's width on the fit axis; the "flat" criterion (R30) |
-| stage1_pass | bool | - | yes | `false` if flat, non-monotonic or poorly fitting — the §9 stage 1 gate |
-| stage1_failures | str | - | no | Semicolon-separated reasons: `flat`, `non_monotonic`, `poor_residuals`. Empty when it passes |
-| bracket_min_kpa | float | kPa | yes | Lowest amplitude sampled |
-| bracket_max_kpa | float | kPa | yes | Highest amplitude sampled |
+| intercept | float | - | no | `a` in `rating ~ a + b·log(pressure)`. This and the six columns after it are empty when the run had no fit, because the step 1 bracket left nothing to sample (`stage1_failures` says `bracket_unusable`) |
+| slope | float | - | no | `b` |
+| r_squared | float | - | no | Fit quality |
+| residual_sd | float | % | no | Residual standard deviation in VAS points |
+| monotonic | bool | - | no | `false` if the fitted slope is not positive |
+| spearman_rho | float | - | no | Rank correlation of rating on pressure, catch trials excluded; the "non-monotonic" criterion alongside the slope (`docs/research/R30`) |
+| span_vas | float | % | no | Fitted rating rise across the sampled bracket, `slope` times the bracket's width on the fit axis; the "flat" criterion (R30) |
+| stage1_pass | bool | - | yes | `false` if flat, non-monotonic, poorly fitting, or its targets cannot be delivered — the §9 stage 1 gate |
+| stage1_failures | str | - | no | Semicolon-separated reasons: `flat`, `non_monotonic`, `poor_residuals`, `unreachable` (a target not invertible, not finite, or a sham level at or below zero), `empty_window` (P30 not below P80 once held inside [0, ceiling]), `bracket_unusable`. Empty when it passes |
+| bracket_min_kpa | float | kPa | yes | Lowest amplitude sampled; the step 1 setting when nothing was sampled |
+| bracket_max_kpa | float | kPa | yes | Highest amplitude sampled; likewise |
 | p20_kpa | float | kPa | no | Control-condition target, inverted from the fit. Empty when the fit does not rise, so cannot be inverted |
 | p30_kpa | float | kPa | no | Lower bound of the pleasantness window; empty as for `p20_kpa` |
 | p80_kpa | float | kPa | no | Upper bound of the pleasantness window; empty as for `p20_kpa` |
 | extrapolated | str | - | no | Comma-separated list of any of `p20`, `p30`, `p80` that fell outside the sampled bracket (§9), or could not be inverted at all |
+| targets_clamped | str | - | no | Comma-separated list of any of `p20`, `p30`, `p80` whose fitted value lay outside [0, ceiling] and was held inside it for delivery. The `p*_kpa` columns keep the fitted value |
 | catch_felt_fraction | float | - | no | Share of this run's zero-pressure catch trials rated at or above `catch_felt_min_pct`. Empty with no catch trials |
 | catch_flag | bool | - | yes | `true` when `catch_felt_fraction` exceeds `catch_felt_warn_fraction` (Berquin et al. 2010) |
 | valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4) |
@@ -435,6 +438,38 @@ is a different thing from a tie and should not be settled in advance (`docs/LOG.
 | felt | bool | - | no | Catch trials only: whether anything was reported felt |
 | readjusted | bool | - | yes | `true` on the comparison that completed a mismatch, when a re-adjustment of the channel follows it (R33) |
 | valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4) |
+
+---
+
+### touchcal_channels
+
+One row per channel per accepted touch calibration (§9) — what the intervention delivers, and
+what a resumed session reads back instead of recalibrating (§15). **Recorded, never displayed:**
+the per-condition pressures and the preferred pattern would name the condition on a screen (§16).
+Every value is on this channel, through its gain, and held inside [0, ceiling].
+
+| Column | Type | Unit | Required | Description |
+|---|---|---|---|---|
+| timestamp_iso | iso8601 | - | yes | Wall clock when the calibration finished |
+| t_session_s | float | s | no | Seconds from session t=0 |
+| run_index | int | - | yes | The accepted run; joins to `touchcal_fit` |
+| channel | int | - | yes | Channel |
+| reference_channel | int | - | yes | The reference, channel 3 (§9) |
+| gain | float | - | yes | Pressure this channel needs to feel like the reference, as a ratio (§9 step 3) |
+| gain_source | str | - | yes | `reference` (the reference itself, 1), `matched` (geometric mean of the settings over `match_level_kpa`), or `fallback_unit_gain` — the experimenter's recorded choice after a match that gave 0 kPa, delivered at the reference's pressure and not valid for analysis |
+| match_settings_kpa | str | kPa | no | This channel's last step 3 settings, semicolon-separated. Empty for the reference |
+| match_level_kpa | float | kPa | yes | Reference pressure the channels were matched at, P50 (`docs/research/R31`) |
+| targets_source | str | - | yes | Where P20/P30/P80 came from: `fit`; `bracket_line`, the line through the step 1 settings; or `device_range`, the line from the smallest step to the ceiling. The last two are fallbacks and make the row not valid for analysis |
+| p20_kpa | float | kPa | yes | Reference-scale P20 as delivered |
+| p30_kpa | float | kPa | yes | Reference-scale lower bound of the pleasantness window |
+| p80_kpa | float | kPa | yes | Reference-scale upper bound |
+| pleasant_kpa | float | kPa | yes | Reference-scale pleasantness level, geometric mean of the two step 5 settings |
+| sham_kpa | float | kPa | yes | What the sham condition delivers on this channel |
+| ct_targeted_kpa | float | kPa | yes | What the CT-targeted condition delivers on this channel |
+| participant_preferred_kpa | float | kPa | yes | What the participant-preferred condition delivers on this channel; equal to `ct_targeted_kpa` by design (R31) |
+| participant_preferred_pattern | str | - | yes | The pattern chosen in the preference selection |
+| clamped | str | - | no | Semicolon-separated conditions whose level on this channel was held inside [0, ceiling] |
+| valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4), or when any fallback stood in for a measured value |
 
 ---
 
@@ -495,5 +530,5 @@ driver does, so a mock session and a real one are comparable line for line (§18
 | requested_kpa | float | kPa | no | What was asked for before clamping |
 | clamped | bool | - | yes | `true` when the ceiling or rate limit altered the command (§13) |
 | pattern_name | str | - | no | Pattern involved, for pattern events |
-| self_start_latency_ms | float | ms | no | On a `pattern_start` the participant triggered: milliseconds from their confirm keypress to this command leaving for the device. Measured, never targeted — no delay is inserted (§12.3) |
+| self_start_latency_ms | float | ms | no | On a `pattern_start` the participant triggered: milliseconds from their confirm keypress to the pattern's first device command being issued. Measured, never targeted — no delay is inserted (§12.3). That `pattern_start` row follows the pattern's first `channel_on` rows, because it is written once the latency is known |
 | detail | str | - | no | Fault text or other free detail |

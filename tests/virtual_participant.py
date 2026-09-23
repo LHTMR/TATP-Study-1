@@ -128,10 +128,10 @@ class Virtual:
         if interruptions.active is not None or trial is not self.current():
             return
         if isinstance(trial, touchcal.Adjustment):
-            trial.state.pressure_kpa = self._setting(trial)
+            trial.state.value = self._setting(trial)
             press(window, "period")
         elif isinstance(trial, NoiseAdjustment):
-            trial.state.pressure_kpa = self.noise_levels[trial.screen_key]
+            trial.state.value = self.noise_levels[trial.screen_key]
             trial._apply()
             press(window, "period")
         elif isinstance(trial, touchcal.TouchRating):
@@ -148,7 +148,7 @@ class Virtual:
             press(window, "pagedown")
             press(window, "pagedown")
             press(window, "period")
-        elif isinstance(trial, (MessageConfirm, touchcal.SelfStart)) and (
+        elif isinstance(trial, (MessageConfirm, touchcal.DeliveryStart)) and (
             window.stack.currentWidget() is window.message and trial._connections
         ):
             press(window, "period")

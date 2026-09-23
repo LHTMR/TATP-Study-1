@@ -40,6 +40,10 @@ import numpy as np
 from tatp.clock import Clock
 from tatp.units import DB_PER_AMPLITUDE_DECADE, DECADE
 
+# The loudest a sine can be, RMS, without its peak passing full scale: peak = RMS * sqrt(2).
+# A property of a sine, not a sound-level choice.
+CUE_MAX_DBFS = -DB_PER_AMPLITUDE_DECADE * float(np.log10(np.sqrt(2)))
+
 
 class AudioError(Exception):
     """The configured audio output cannot do what was asked. Never worked around."""
@@ -273,10 +277,24 @@ class Audio:
     # -- tones -------------------------------------------------------------------------
 
     def participant_cue(self) -> None:
-        """The alert tone over the noise, `participant_cue_over_noise_db` above it."""
+        """The alert tone over the noise, `participant_cue_over_noise_db` above it.
+
+        Never louder than a sine whose peak is full scale (`CUE_MAX_DBFS`): a clipped tone is a
+        distorted one, with harmonics the configuration never asked for. When the margin has
+        to shrink to stay under that -- the noise near its own ceiling -- the shortfall is
+        logged, and the level actually played always is. Whether the noise ceiling should cap
+        the cue as well is a sound-level limit, and S's (open item L13).
+        """
         if not self.noise_running:
             return
-        level = self.noise_level_dbfs + float(self.config["participant_cue_over_noise_db"])
+        wanted = self.noise_level_dbfs + float(self.config["participant_cue_over_noise_db"])
+        level = min(wanted, CUE_MAX_DBFS)
+        if level < wanted:
+            self.log(
+                "participant_cue_margin_reduced", severity="warning",
+                detail=f"{wanted:.1f} dBFS asked, {level:.1f} played: "
+                f"{level - self.noise_level_dbfs:.1f} dB over the noise",
+            )
         self.output.participant_tone(
             tone(
                 float(self.config["participant_cue_hz"]),

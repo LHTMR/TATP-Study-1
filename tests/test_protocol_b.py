@@ -202,7 +202,9 @@ def test_a_failing_fit_is_put_to_the_experimenter_and_a_rerun_keeps_the_first(ri
     assert result.run_index == 2
     runs = {row["run_index"] for row in _rows(session, "touchcal_estimate")}
     assert runs == {"1", "2"}, "the discarded run's trials stay in the data"
-    assert session.fit_preview_reruns == 1
+    # The preview is off, so this is a stage-1 re-run: its own event, not a preview re-run.
+    assert session.fit_preview_reruns == 0
+    assert _events(session, "touchcal_stage1_rerun")
 
 
 def test_an_estimate_that_cannot_be_inverted_cannot_be_accepted(rig):
@@ -231,9 +233,12 @@ def test_the_fit_preview_puts_even_a_good_fit_to_the_experimenter(app, loaded, t
         decisions = []
         procedure = touchcal.TouchCalibration(rig)
         virtual = Virtual(rig, procedure)
-        virtual.decide = lambda trial: decisions.append(trial.instruction) or ("accept", ())
+        virtual.decide = lambda trial: decisions.append(trial.instruction) or (
+            ("rerun", ("look again",)) if len(decisions) == 1 else ("accept", ())
+        )
         virtual.run()
         assert decisions[0] == "touchcal_fit_review"
+        assert rig.session.fit_preview_reruns == 1, "a re-run chosen from the preview counts"
     finally:
         rig.session.close()
 
@@ -398,38 +403,259 @@ def test_timing_only_mode_runs_every_step_and_marks_nothing_valid(rig, monkeypat
     assert decisions == []
     assert not result.valid_for_analysis
     assert result.sham.pressure_kpa is None
-    assert _events(session, "timing_only_targets")
+    assert result.targets_source != touchcal.FROM_FIT
+    assert _events(session, "touchcal_fallback")
     for table in ("touchcal_adjust", "touchcal_estimate", "touchcal_fit",
-                  "touchcal_compare", "touchcal_evenness", "touchcal_preference"):
+                  "touchcal_compare", "touchcal_evenness", "touchcal_preference",
+                  "touchcal_channels"):
         rows = _rows(session, table)
         assert rows and all(row["valid_for_analysis"] == "false" for row in rows), table
 
 
-# -- the self-start trial, SPEC.md 12.3 -------------------------------------------------
+# -- the fallbacks, and the terminal path ------------------------------------------------
+
+
+def test_unusable_and_out_of_reruns_can_only_continue_on_a_recorded_fallback(app, loaded,
+                                                                            tmp_path):
+    """No deadlock: with the re-runs used up, Accept continues on a fallback marked invalid."""
+    preview = {**loaded.study1["fit_preview"], "max_reruns": 0}
+    rig = make_rig(make_config(loaded, tmp_path, fit_preview=preview))
+    try:
+        session = rig.session
+        instructions = []
+        procedure = touchcal.TouchCalibration(rig)
+        virtual = Virtual(rig, procedure)
+        virtual.decide = lambda trial: instructions.append(trial.instruction) or ("accept", ())
+        virtual.before_step = _flat(rig)
+        result = virtual.run()
+        assert instructions[0] == "touchcal_stage1_exhausted"
+        assert not result.valid_for_analysis
+        assert result.targets_source == touchcal.FROM_BRACKET_LINE
+        assert result.p30_kpa < result.p80_kpa
+        (fit,) = _rows(session, "touchcal_fit")
+        assert fit["superseded"] == "false" and fit["stage1_pass"] == "false"
+        channels = _rows(session, "touchcal_channels")
+        assert {row["targets_source"] for row in channels} == {"bracket_line"}
+        assert all(row["valid_for_analysis"] == "false" for row in channels)
+        assert _events(session, "touchcal_fallback")
+    finally:
+        rig.session.close()
+
+
+def test_a_rerun_refused_at_the_limit_on_an_unusable_estimate_asks_again_truthfully(
+    app, loaded, tmp_path
+):
+    preview = {**loaded.study1["fit_preview"], "max_reruns": 0}
+    rig = make_rig(make_config(loaded, tmp_path, fit_preview=preview))
+    try:
+        answers = iter([("rerun", ("again",)), ("accept", ())])
+        instructions = []
+        procedure = touchcal.TouchCalibration(rig)
+        virtual = Virtual(rig, procedure)
+        virtual.decide = lambda trial: instructions.append(trial.instruction) or next(answers)
+        virtual.before_step = _flat(rig)
+        virtual.run()
+        assert instructions == ["touchcal_stage1_exhausted"] * 2
+        assert _events(rig.session, "rerun_refused")
+    finally:
+        rig.session.close()
+
+
+def test_an_unusable_bracket_rerun_still_keeps_a_fit_row(rig):
+    """SPEC.md 11.1: every run keeps its fit row, even one with nothing to fit."""
+    session = rig.session
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    decisions = []
+    virtual.decide = lambda trial: (
+        decisions.append(trial.instruction)
+        or (("rerun", ("zero bracket",)) if len(decisions) == 1 else ("accept", ()))
+    )
+    real_setting = virtual._setting
+
+    def setting(trial):
+        # "Just noticeable" at 0 kPa on the first run: nothing can be sampled on a log axis.
+        if trial.plan.stage == touchcal.ANCHOR_STAGE and procedure.run_index == 1:
+            return 0.0
+        return real_setting(trial)
+
+    virtual._setting = setting
+    virtual.run()
+    fits = _rows(session, "touchcal_fit")
+    assert [row["run_index"] for row in fits] == ["1", "2"]
+    assert fits[0]["superseded"] == "true" and fits[0]["rerun_reason"] == "zero bracket"
+    assert fits[0]["stage1_failures"] == "bracket_unusable"
+    assert fits[0]["slope"] == "" and fits[0]["p20_kpa"] == ""
+    assert [r for r in _events(session, "experimenter_action") if "zero bracket" in r["detail"]]
+    assert _events(session, "touchcal_stage1_rerun"), "a stage-1 re-run with the preview off"
+    assert session.fit_preview_reruns == 0, "only preview re-runs count there"
+
+
+def test_a_zero_match_is_matched_again_then_put_to_the_experimenter(rig):
+    """Never a silent gain of 1 (CLAUDE.md): repeated, then an explicit, recorded fallback."""
+    session = rig.session
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    decisions = []
+
+    def decide(trial):
+        decisions.append(trial.instruction)
+        return "proceed", ()
+
+    virtual.decide = decide
+    virtual.gains = {2: 0.0}
+    result = virtual.run()
+    assert "touchcal_gain_undefined" in decisions
+    assert result.gain_sources[2] == touchcal.GAIN_FALLBACK
+    assert result.gain_sources[1] == touchcal.GAIN_MATCHED
+    assert not result.valid_for_analysis
+    matches = [
+        row for row in _rows(session, "touchcal_adjust")
+        if row["stage"] == "channel_match" and row["channel"] == "2"
+    ]
+    retries = session.config.study1["touch_calibration"]["channel_match_zero_retries"]
+    assert {row["pass_index"] for row in matches} >= {str(i + 1) for i in range(retries + 1)}
+    (row,) = [r for r in _rows(session, "touchcal_channels") if r["channel"] == "2"]
+    assert row["gain_source"] == "fallback_unit_gain" and row["valid_for_analysis"] == "false"
+    assert _events(session, "gain_fallback")
+
+
+def test_every_adjustment_carries_its_run_and_pass(rig):
+    _calibrate(rig)
+    rows = _rows(rig.session, "touchcal_adjust")
+    assert {row["run_index"] for row in rows} == {"1"}
+    assert {row["pass_index"] for row in rows} == {"1"}
+
+
+def test_the_channels_table_holds_what_every_condition_delivers(rig):
+    result, _ = _calibrate(rig, gains={1: 1.3, 2: 1.1, 4: 0.9, 5: 1.2})
+    rows = {int(row["channel"]): row for row in _rows(rig.session, "touchcal_channels")}
+    assert sorted(rows) == [1, 2, 3, 4, 5]
+    for channel, row in rows.items():
+        assert float(row["gain"]) == pytest.approx(result.gains[channel])
+        assert float(row["sham_kpa"]) == pytest.approx(result.sham.pressure_kpa[channel])
+        assert float(row["ct_targeted_kpa"]) == pytest.approx(
+            result.ct_targeted.pressure_kpa[channel]
+        )
+        assert row["participant_preferred_pattern"] == result.preferred_pattern
+    assert rows[3]["gain_source"] == "reference" and rows[1]["gain_source"] == "matched"
+
+
+def test_the_fit_preview_receives_the_points_and_the_verdict(app, loaded, tmp_path):
+    preview = {**loaded.study1["fit_preview"], "enabled": True}
+    rig = make_rig(make_config(loaded, tmp_path, fit_preview=preview))
+    try:
+        procedure = touchcal.TouchCalibration(rig)
+        ready = []
+        procedure.fit_ready.connect(ready.append)
+        Virtual(rig, procedure).run()
+        (shown,) = ready
+        assert len(shown.points) == 12
+        assert shown.stage1_pass and shown.fit is not None
+        assert shown.p20_kpa == pytest.approx(_true(20.0), rel=0.02)
+    finally:
+        rig.session.close()
+
+
+def test_without_the_preview_no_ratings_leave_the_procedure(rig):
+    procedure = touchcal.TouchCalibration(rig)
+    ready = []
+    procedure.fit_ready.connect(ready.append)
+    Virtual(rig, procedure).run()
+    assert ready == []
+
+
+def test_every_presentation_has_the_same_onset_to_scale_timing(rig):
+    """A ramp after onset would bring the scale up later for louder amplitudes (item 8)."""
+    session = rig.session
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    onsets = []
+
+    def watch(trial):
+        if isinstance(trial, touchcal.EstimationPresentation) and trial.onset_iso and (
+            trial.plan.presentation_order not in [o for o, _ in onsets]
+        ):
+            onsets.append((trial.plan.presentation_order, session.garment.pressure_kpa[3]))
+
+    virtual.before_step = watch
+    virtual.run()
+    # At onset every non-catch presentation already holds its pressure: nothing ramps after.
+    plans = {int(r["presentation_order"]): float(r["pressure_kpa"])
+             for r in _rows(session, "touchcal_estimate")}
+    assert onsets, "the settle interval was observed at least once"
+    for order, held in onsets:
+        assert held == pytest.approx(plans[order])
+
+
+# -- starting a touch delivery, SPEC.md 12.3 and 16 -------------------------------------
+
+
+def _start_delivery(rig, delivery, self_start):
+    trial = touchcal.DeliveryStart(
+        rig.session, rig.participant, rig.experimenter, delivery, self_start
+    )
+    done, seen = [], []
+    trial.finished.connect(done.append)
+    # Patched on the instance each call, from the class's own methods, so one call's record
+    # never collects another's.
+    window = rig.experimenter
+    window.set_status = lambda text: seen.append(("status", text))
+    window.set_instruction = lambda text: (
+        seen.append(("instruction", text)),
+        type(window).set_instruction(window, text),
+    )
+    cues = []
+    rig.participant.warning_cue_shown.connect(lambda: cues.append(True))
+    trial.start()
+    spins = 200000
+    while not done and spins:
+        QApplication.processEvents()
+        window = rig.participant
+        if trial._connections and window.stack.currentWidget() is window.message:
+            press(rig.participant, "period")
+        spins -= 1
+    return done, seen, cues
+
+
+def test_the_experimenter_sees_the_same_at_every_touch_start(rig):
+    """SPEC.md 16: only one condition self-starts, so the lab screen must not differ."""
+    result, _ = _calibrate(rig)
+    seen_by_condition = {}
+    for condition in rig.session.config.study1["design"]["conditions"]:
+        rig.session.garment.stop()
+        _, seen, cues = _start_delivery(
+            rig, result.for_condition(condition), condition == "participant_preferred"
+        )
+        seen_by_condition[condition] = seen
+        assert cues, "every delivery starts with the warning cue (SPEC.md 10.5)"
+    views = list(seen_by_condition.values())
+    assert all(view == views[0] for view in views)
+    text = rig.session.config.experimenter_text["instructions"]
+    assert views[0] == [("instruction", text["touch_start"])]
+    assert "self_start" not in text
 
 
 def test_the_self_start_press_starts_the_pattern_and_records_its_latency(rig):
     session = rig.session
     result, _ = _calibrate(rig)
     delivery = result.participant_preferred
-    trial = touchcal.SelfStart(session, rig.participant, rig.experimenter, delivery)
-    done = []
-    trial.finished.connect(done.append)
-    trial.start()
-    deadline_spins = 20000
-    while not trial._connections and deadline_spins:
-        QApplication.processEvents()
-        deadline_spins -= 1
-    assert rig.participant.message.text == session.config.participant_text["screens"][
-        "self_start"
-    ]
-    for channel, kpa in delivery.pressure_kpa.items():
-        assert session.garment.pressure_kpa[channel] == pytest.approx(kpa)
-    press(rig.participant, "period")
+    done, _, cues = _start_delivery(rig, delivery, self_start=True)
 
+    assert cues, "the cue came before the prompt, so it adds nothing after the press"
     assert len(done) == 1 and done[0] >= 0
     assert session.garment.status()["pattern_name"] == delivery.pattern_name
-    starts = [row for row in _rows(session, "garment") if row["event"] == "pattern_start"]
-    assert float(starts[-1]["self_start_latency_ms"]) == pytest.approx(done[0])
-    assert starts[-1]["pattern_name"] == delivery.pattern_name
-    assert session.garment.status()["channels_on"], "the first row is out at once"
+    rows = _rows(session, "garment")
+    start = max(i for i, row in enumerate(rows) if row["event"] == "pattern_start")
+    assert float(rows[start]["self_start_latency_ms"]) == pytest.approx(done[0])
+    assert rows[start]["pattern_name"] == delivery.pattern_name
+    assert rows[start - 1]["event"] == "channel_on", "measured to the first device command"
+    for channel, kpa in delivery.pressure_kpa.items():
+        assert session.garment.pressure_kpa[channel] == pytest.approx(kpa)
+
+
+def test_a_touch_not_self_started_starts_after_the_cue_with_no_latency(rig):
+    result, _ = _calibrate(rig)
+    done, _, cues = _start_delivery(rig, result.sham, self_start=False)
+    assert done == [None] and cues
+    assert rig.session.garment.status()["pattern_name"] == result.sham.pattern_name

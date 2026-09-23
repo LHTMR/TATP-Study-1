@@ -149,6 +149,9 @@ touch_calibration:
                                      # the reference's FITTED P50 -- inside the range every
                                      # condition is delivered in
   channel_match_adjustments: 2       # step 3, one from each of start_directions
+  channel_match_zero_retries: 1      # a match that produced 0 kPa has no gain: match the
+                                     # channel again this many times, then ask the
+                                     # experimenter (repeat, or a recorded fallback)
   equalisation_pairs_to_flag: 2      # [R] R33. A pair is both orders. A second pair runs only
                                      # when the first favoured one channel in both orders, and a
                                      # channel is re-adjusted only when it wins all of them --

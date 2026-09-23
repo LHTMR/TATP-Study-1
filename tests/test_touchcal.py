@@ -47,7 +47,8 @@ def loaded():
 @pytest.fixture
 def state(loaded):
     return touchcal.AdjustmentState(
-        loaded.hardware["adjustment"], RANGE_MIN_KPA, RANGE_MAX_KPA, START_KPA
+        touchcal.pressure_control(loaded.hardware["adjustment"]),
+        RANGE_MIN_KPA, RANGE_MAX_KPA, START_KPA,
     )
 
 
@@ -95,73 +96,75 @@ def test_a_tap_moves_one_step(state):
     state.press(Action.INCREASE, 0.0)
     state.tick(state.tap_max_duration_s / 2)
     state.release(Action.INCREASE, state.tap_max_duration_s / 2)
-    assert state.pressure_kpa == START_KPA + state.tap_step_kpa
+    assert state.value == START_KPA + state.tap_step
     assert state.button_events == 2
 
 
 def test_a_tap_on_the_other_button_moves_the_other_way(state):
     state.press(Action.DECREASE, 0.0)
     state.release(Action.DECREASE, state.tap_max_duration_s)
-    assert state.pressure_kpa == START_KPA - state.tap_step_kpa
+    assert state.value == START_KPA - state.tap_step
 
 
 def test_nothing_moves_during_the_hold_delay(state):
     state.press(Action.INCREASE, 0.0)
     state.tick(state.hold_delay_s)
-    assert state.pressure_kpa == START_KPA
+    assert state.value == START_KPA
 
 
 def test_a_hold_starts_at_the_initial_rate_and_reaches_the_final_one(state):
     """The rate ramps linearly from the initial to the final over the ramp duration."""
-    assert state.rate_kpa_s(0.0) == 0.0
+    assert state.rate_per_s(0.0) == 0.0
     half = state.ramp_duration_s / 2
-    expected = (state.rate_initial_kpa_s + state.rate_final_kpa_s) / 2
-    assert state.rate_kpa_s(half) == pytest.approx(expected)
-    assert state.rate_kpa_s(state.ramp_duration_s) == state.rate_final_kpa_s
-    assert state.rate_kpa_s(state.ramp_duration_s * 10) == state.rate_final_kpa_s
+    expected = (state.rate_initial_per_s + state.rate_final_per_s) / 2
+    assert state.rate_per_s(half) == pytest.approx(expected)
+    assert state.rate_per_s(state.ramp_duration_s) == state.rate_final_per_s
+    assert state.rate_per_s(state.ramp_duration_s * 10) == state.rate_final_per_s
 
 
 def test_the_distance_held_does_not_depend_on_how_often_the_timer_fires(loaded):
     """The travel is the integral of the ramp, not a per-tick accumulation."""
     held_s = 1.0
     coarse = touchcal.AdjustmentState(
-        loaded.hardware["adjustment"], RANGE_MIN_KPA, RANGE_MAX_KPA, START_KPA
+        touchcal.pressure_control(loaded.hardware["adjustment"]),
+        RANGE_MIN_KPA, RANGE_MAX_KPA, START_KPA,
     )
     fine = touchcal.AdjustmentState(
-        loaded.hardware["adjustment"], RANGE_MIN_KPA, RANGE_MAX_KPA, START_KPA
+        touchcal.pressure_control(loaded.hardware["adjustment"]),
+        RANGE_MIN_KPA, RANGE_MAX_KPA, START_KPA,
     )
     for each, ticks in ((coarse, 2), (fine, 50)):
         each.press(Action.INCREASE, 0.0)
         for step in range(1, ticks + 1):
             each.tick(each.hold_delay_s + held_s * step / ticks)
-    assert coarse.pressure_kpa == pytest.approx(fine.pressure_kpa)
-    assert coarse.pressure_kpa > START_KPA
+    assert coarse.value == pytest.approx(fine.value)
+    assert coarse.value > START_KPA
 
 
 def test_a_long_hold_is_not_also_counted_as_a_tap(state):
     state.press(Action.INCREASE, 0.0)
     state.tick(state.hold_delay_s + state.ramp_duration_s)
-    moved = state.pressure_kpa
+    moved = state.value
     state.release(Action.INCREASE, state.hold_delay_s + state.ramp_duration_s)
-    assert state.pressure_kpa == moved
+    assert state.value == moved
 
 
 def test_the_pressure_stays_inside_the_adjustable_range(state):
     state.press(Action.INCREASE, 0.0)
     state.tick(state.hold_delay_s + state.ramp_duration_s * 100)
-    assert state.pressure_kpa == RANGE_MAX_KPA
+    assert state.value == RANGE_MAX_KPA
     state.release(Action.INCREASE, state.hold_delay_s + state.ramp_duration_s * 100)
     state.press(Action.DECREASE, 0.0)
     state.tick(state.hold_delay_s + state.ramp_duration_s * 100)
-    assert state.pressure_kpa == RANGE_MIN_KPA
+    assert state.value == RANGE_MIN_KPA
 
 
 def test_travel_the_range_refused_is_not_exploration(state):
     """Pressing against an end stop teaches the participant nothing (comparison doc 7.3)."""
-    state.pressure_kpa = RANGE_MAX_KPA
+    state.value = RANGE_MAX_KPA
     state.press(Action.INCREASE, 0.0)
     state.release(Action.INCREASE, state.tap_max_duration_s)
-    assert state.exploration_kpa == 0.0
+    assert state.exploration == 0.0
 
 
 # -- where an adjustment starts -----------------------------------------------------------
@@ -251,7 +254,7 @@ def test_the_adjustment_commands_the_garment_it_is_adjusting(running):
     session, participant, _ = running
     adjustment, _ = _run_adjustment(running)
     _press(participant, "period")
-    assert session.garment.pressure_kpa[3] == pytest.approx(adjustment.state.pressure_kpa)
+    assert session.garment.pressure_kpa[3] == pytest.approx(adjustment.state.value)
     commands = [
         row for row in _rows(session, "garment")
         if row["event"] == "set_pressure" and row["channel"] == "3"

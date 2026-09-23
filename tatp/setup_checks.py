@@ -45,18 +45,20 @@ STOP_REHEARSAL_DONE_SCREEN = "stop_rehearsal_done"
 PROCEED = "proceed"
 
 
-def noise_control_config(adjustment: dict, audio: dict) -> dict:
-    """The accelerating control of SPEC.md 10.3, in decibels instead of kilopascals.
+def noise_control(adjustment: dict, audio: dict) -> dict:
+    """The accelerating control of SPEC.md 10.3, in decibels.
 
-    `AdjustmentState` is unit-free arithmetic whose keys happen to say kPa. The tap and hold
-    timings describe the participant's hand and are the pressure control's own; the step and the
-    rates are the noise's (`audio.white_noise_step_db`, `audio.noise_hold_rate_*_db_s`).
+    The tap and hold timings describe the participant's hand and are the pressure control's
+    own; the step and the rates are the noise's (`audio.white_noise_step_db`,
+    `audio.noise_hold_rate_*_db_s`).
     """
     return {
-        **adjustment,
-        "tap_step_kpa": audio["white_noise_step_db"],
-        "hold_rate_initial_kpa_s": audio["noise_hold_rate_initial_db_s"],
-        "hold_rate_final_kpa_s": audio["noise_hold_rate_final_db_s"],
+        "tap_max_duration_s": adjustment["tap_max_duration_s"],
+        "tap_step": audio["white_noise_step_db"],
+        "hold_delay_s": adjustment["hold_delay_s"],
+        "hold_rate_initial_per_s": audio["noise_hold_rate_initial_db_s"],
+        "hold_rate_final_per_s": audio["noise_hold_rate_final_db_s"],
+        "hold_ramp_duration_s": adjustment["hold_ramp_duration_s"],
     }
 
 
@@ -73,7 +75,7 @@ class NoiseAdjustment(Trial):
         self.screen_key = screen_key
         audio = session.audio
         self.state = AdjustmentState(
-            noise_control_config(
+            noise_control(
                 session.config.hardware["adjustment"], session.config.hardware["audio"]
             ),
             audio.start_dbfs,
@@ -111,8 +113,8 @@ class NoiseAdjustment(Trial):
         self._apply()
 
     def _apply(self) -> None:
-        if self.state.pressure_kpa != self.session.audio.noise_level_dbfs:
-            self.session.audio.set_noise_level(self.state.pressure_kpa)
+        if self.state.value != self.session.audio.noise_level_dbfs:
+            self.session.audio.set_noise_level(self.state.value)
 
     def _confirmed(self) -> None:
         level = self.session.audio.noise_level_dbfs
@@ -125,7 +127,7 @@ class NoiseAdjustment(Trial):
     def _log(self, event: str, action_value: str) -> None:
         self.session.log(
             event, origin="participant",
-            detail=f"{action_value} at {self.state.pressure_kpa:.1f} dBFS",
+            detail=f"{action_value} at {self.state.value:.1f} dBFS",
         )
 
     def _teardown(self) -> None:

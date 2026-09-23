@@ -34,6 +34,8 @@ terms:
     non_monotonic: stiger inte med trycket
     poor_residuals: brusig
     bracket_unusable: inget intervall mellan de två inställningarna
+    unreachable: mål utanför vad plagget kan ge
+    empty_window: inget behaglighetsintervall kvar inom plaggets gränser
 
 phases:
   setup: Förberedelse
@@ -93,9 +95,18 @@ instructions:
   touchcal_stage1_unusable: >-
     Skattningen i beröringskalibreringen kan inte användas ({value}). Gör om proceduren, eller
     avbryt sessionen.
+  touchcal_stage1_exhausted: >-
+    Skattningen i beröringskalibreringen kan inte användas ({value}) och gränsen för antal
+    omkörningar är nådd. Godkänn för att fortsätta med en reservlösning som registreras som
+    inte giltig för analys, eller avbryt sessionen.
+  touchcal_gain_undefined: >-
+    Kanal {channel} matchades åter vid 0 kPa. Balansera om för att göra om matchningen, eller
+    gå vidare med kanalen på mittkanalens tryck, vilket registreras som inte giltigt för analys.
   touchcal_uneven: >-
     Deltagaren upplever rörelsen som ojämn längs armen. Balansera om kanalerna, eller gå vidare.
-  self_start: Väntar på att deltagaren startar beröringen.
+  # Visas i början av varje beröring i ALLA betingelser, och inget annat visas: bara en
+  # betingelse startas av deltagaren, så en rad om starten skulle avslöja den (SPEC.md 16).
+  touch_start: 'Beröring: plagget startas.'
 
 controls:
   start_block: Starta block
