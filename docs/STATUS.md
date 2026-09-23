@@ -1,8 +1,8 @@
 # STATUS
 
 **Last updated:** 23 September 2026.
-**Milestone:** 2 (the checks), in progress.
-**Branch:** `main`.
+**Milestone:** 2 (the checks), in progress. Acceleration push under way (`CLAUDE.md`).
+**Branch:** `accel/integration`.
 
 ---
 
@@ -14,8 +14,9 @@ pinprick application inside intervention block 1 against the mock garment. It wr
 `touchcal_adjust`, `touch_ratings`, `pinprick`, `garment`, `log` and `session`.
 
 **Milestone 2 is missing one thing, the end-to-end validator.** `make check` runs the 351 unit
-tests, the literals linter, the forbidden-terms test and the screenshot comparison. It passes
-on the lab PC. It prints `INCOMPLETE GATE` because `tools/validate_session.py` does not exist.
+tests, the literals linter, the forbidden-terms test and the screenshot comparison, in
+parallel. It passes on the lab PC in about 52 s, down from 251 s (`docs/LOG.md` N6.32). It
+prints `INCOMPLETE GATE` because `tools/validate_session.py` does not exist.
 
 **All 64 screens are approved and armed.** S approved them on 21 Sep 2026 and re-approved them
 in the committed Roboto font on 23 Sep.
@@ -23,6 +24,20 @@ in the committed Roboto font on 23 Sep.
 ---
 
 ## Next steps
+
+The push runs as streams (`CLAUDE.md`, "Acceleration push"). The integrator's order:
+
+1. **Fix the shared interfaces on `accel/integration` and commit** before any stream starts:
+   config keys, `docs/DATA_SCHEMA.md` tables, and the call shape of a protocol runner.
+2. **Launch three stream agents in parallel, each in its own worktree:** A is the validator
+   and the virtual participant (finishes Milestone 2, detail below). B is Protocol A
+   (Milestone 3). C is Protocol B plus `audio.py`, the masking check and the stop rehearsal
+   (Milestone 4).
+3. **As each stream finishes,** run `/code-review high`, then the spec-review agent. Fix what
+   they find, merge, and run `make check` on `accel/integration`.
+4. **Then Milestone 5 and the launcher, then the SOP and README.**
+
+Stream A's work, in detail:
 
 1. **Write `sim/responders.py`** (`SPEC.md` §17.5). Start with the normal responder, then add
    only those adversarial responders whose error path exists today. Candidates are:
