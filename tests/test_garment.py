@@ -262,6 +262,32 @@ def test_a_slow_tick_does_not_drop_a_whole_cycle(garment):
     assert garment.status()["channels_on"] == [1, 2], "resumes at the right point in the cycle"
 
 
+def test_a_looping_static_pattern_holds_its_channels_across_the_wrap(garment):
+    """The sham is static: switched on once, never off and on again at each cycle."""
+    sham = pat.load_pattern(EXAMPLES / "static_sham.csv")
+    garment.play_pattern(sham)
+    garment.advance()
+    for _ in range(10):
+        garment.clock.now += sham.duration_s
+        garment.advance()
+    assert garment.status()["channels_on"] == [1, 2, 3, 4, 5]
+    events = [c["event"] for c in garment.commands]
+    assert events.count("channel_on") == 5
+    assert events.count("channel_off") == 0
+
+
+def test_a_channel_on_at_both_ends_of_a_loop_is_held_and_the_rest_still_cycle(tmp_path):
+    (tmp_path / "p.csv").write_text("1,2\n1,0\n1,1\n", encoding="utf-8")
+    (tmp_path / "p.yaml").write_text(
+        "name: p\nrow_interval_ms: 100\nchannel_ids: [1, 2]\nloop: true\n", encoding="utf-8"
+    )
+    first, later = pat.loop_events(pat.load_pattern(tmp_path / "p.csv"))
+    assert [(e.t_s, e.channel_id, e.on) for e in first] == [
+        (0.0, 1, True), (0.1, 2, True), (0.2, 2, False)
+    ]
+    assert [(e.t_s, e.channel_id, e.on) for e in later] == [(0.1, 2, True), (0.2, 2, False)]
+
+
 def test_stopping_a_pattern_turns_off_what_it_left_on(garment):
     garment.play_pattern(pat.load_pattern(EXAMPLES / "static_sham.csv"))
     garment.advance()
