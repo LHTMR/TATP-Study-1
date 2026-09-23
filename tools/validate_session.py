@@ -30,6 +30,7 @@ from __future__ import annotations
 import csv
 import math
 import os
+import statistics
 import sys
 import tempfile
 import time
@@ -42,7 +43,11 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PySide6.QtCore import QTimer  # noqa: E402 -- the platform must be set before Qt loads
+from PySide6.QtCore import (  # noqa: E402 -- the platform must be set before Qt loads
+    QCoreApplication,
+    QEvent,
+    QTimer,
+)
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 import run_session  # noqa: E402
@@ -126,8 +131,12 @@ TRIAL_ORDER_COLUMNS = {
         "channel", "reference_channel", "comparison_index", "order", "catch_trial",
     ),
 }
-# A timer-driven interval may run this fraction long or short of its configured length.
-INTERVAL_TOLERANCE_FRACTION = 0.2
+# Real seconds the median timer-driven interval may be off its configured length. An interval
+# is three chained single-shot timers; each can be out by Windows' 15.6 ms timer resolution plus
+# Qt's 5 % coarse-timer slack, about 75 ms in all, and this doubles that. At CLOCK_SPEED 10 the
+# shortest configured step, the 0.5 s cue, is 50 ms real, so it is not tight enough to catch a
+# step mistimed by less than that -- but a misread `rating_cue_delay_s` moves it by 0.9 s.
+INTERVAL_TOLERANCE_S = 0.15
 # Float columns round-trip through text, so equal values compare within this.
 FLOAT_TOLERANCE = 1e-6
 
@@ -154,9 +163,6 @@ class Run:
     participant_seen: set[str]
     experimenter_seen: set[str]
     stats: dict
-    # The runner drives the Milestone 1 slice. Set when it drives the whole schedule
-    # (Milestone 5), which is what turns the full-grid checks live.
-    full_session: bool = False
 
     def events(self) -> list[dict[str, str]]:
         return self.rows.get("log", [])
@@ -219,6 +225,9 @@ def run_one(
         guard.stop()
         participant.stop()
         experimenter.stop()
+        # A run that raised or timed out left a trial and its timers live. Cancelled here, on
+        # every exit path, so nothing of this run fires inside the next one's event loop.
+        runner.cancel()
     if not session.closed:
         session.close(VALIDATOR_ABORT)
 
@@ -252,10 +261,16 @@ def run_one(
         experimenter_seen=set(experimenter.seen_text),
         stats={**participant.stats(), "resumes": experimenter.resumes},
     )
+    # Deleted now rather than whenever the collector gets to them: the rig owns the
+    # interruptions and their restore timer, the windows own the choice screen's timers, and a
+    # pending one must not reach the next run. `processEvents` does not run deferred deletes.
     for widget in (rig.participant, rig.experimenter):
         widget.close()
-        widget.deleteLater()
-    app.processEvents()
+    for made_object in (
+        participant, experimenter, runner, rig, rig.participant, rig.experimenter
+    ):
+        made_object.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
     return made
 
 
@@ -295,21 +310,29 @@ class Result:
 def evaluate(checks: list[Check], runs: dict[str, Run]) -> list[Result]:
     results = []
     for check in checks:
-        reason = check.needs(runs)
-        if reason is not None:
-            results.append(Result(check.name, SKIPPED, [reason]))
-        elif check.run is None:
-            results.append(
-                Result(
-                    check.name,
-                    FAILED,
-                    ["its precondition now holds, but the check has not been written"],
-                )
-            )
-        else:
-            failures = check.run(runs)
-            results.append(Result(check.name, FAILED if failures else PASSED, failures))
+        # The one broad catch in this file, and deliberate. This is a reporting tool, not task
+        # code: a check that raises on a malformed cell has found a defect, and the job is to
+        # report it as that check's failure and go on to report every other check (SPEC.md
+        # 17.1: the gate lists every failure), not to stop at the first.
+        try:
+            results.append(_evaluate_one(check, runs))
+        except Exception:  # deliberately broad, see above
+            results.append(Result(check.name, FAILED, [traceback.format_exc().strip()]))
     return results
+
+
+def _evaluate_one(check: Check, runs: dict[str, Run]) -> Result:
+    reason = check.needs(runs)
+    if reason is not None:
+        return Result(check.name, SKIPPED, [reason])
+    if check.run is None:
+        return Result(
+            check.name,
+            FAILED,
+            ["its precondition now holds, but the check has not been written"],
+        )
+    failures = check.run(runs)
+    return Result(check.name, FAILED if failures else PASSED, failures)
 
 
 def summary(results: list[Result]) -> str:
@@ -547,25 +570,45 @@ def needs_pinprick_rows(runs):
     return None
 
 
+def needs_rated_pinprick_rows(runs):
+    if not any(row["rating_cue_iso"] for row in runs[NORMAL].rows.get("pinprick", [])):
+        return "the normal run wrote no pinprick row with a rating cue"
+    return None
+
+
 def check_rating_cue_interval(runs):
-    """Warning cue to rating cue: the cue lead plus the 9 s delay (SPEC.md 10.5, 8)."""
-    failures = []
+    """Warning cue to rating cue: the cue lead plus the 9 s delay (SPEC.md 10.5, 8).
+
+    Judged on the median over every rated application in every run, against an absolute
+    tolerance. One interval is three chained single-shot timers, and on a loaded Windows
+    machine -- the gate runs this beside the whole test suite -- any one of them can be late by
+    far more than its resolution. A single late interval says the machine was busy; a median
+    off by a configured interval's worth says the software timed the wrong thing.
+    """
+    intervals, expected = [], set()
     for run in runs.values():
         study = run.config.study1
-        expected_s = (
-            float(study["cues"]["warning_lead_s"])
-            + float(study["pinprick"]["rating_cue_delay_s"])
-        ) / float(run.session["clock_speed"])
-        for row in run.rows.get("pinprick", []):
-            if not row["rating_cue_iso"]:
-                continue
-            took_s = (_iso(row["rating_cue_iso"]) - _iso(row["cue_onset_iso"])).total_seconds()
-            if abs(took_s - expected_s) > INTERVAL_TOLERANCE_FRACTION * expected_s:
-                failures.append(
-                    f"{run.name}: trial {row['trial_index']} rating cued {took_s:.3f} s after "
-                    f"its warning cue, expected {expected_s:.3f} s real"
-                )
-    return failures
+        expected.add(
+            (float(study["cues"]["warning_lead_s"])
+             + float(study["pinprick"]["rating_cue_delay_s"]))
+            / float(run.session["clock_speed"])
+        )
+        intervals += [
+            (_iso(row["rating_cue_iso"]) - _iso(row["cue_onset_iso"])).total_seconds()
+            for row in run.rows.get("pinprick", [])
+            if row["rating_cue_iso"]
+        ]
+    if len(expected) != 1:
+        return [f"the runs expect different intervals, {sorted(expected)} s"]
+    expected_s = expected.pop()
+    median_s = statistics.median(intervals)
+    if abs(median_s - expected_s) > INTERVAL_TOLERANCE_S:
+        return [
+            f"the median warning-cue-to-rating-cue interval over {len(intervals)} applications "
+            f"is {median_s:.3f} s real, expected {expected_s:.3f} s "
+            f"+/- {INTERVAL_TOLERANCE_S} s"
+        ]
+    return []
 
 
 def needs_two_applications_in_a_run(runs):
@@ -671,9 +714,29 @@ def needs_calibration_rows(runs):
 
 
 def needs_full_session(runs):
-    if not runs[NORMAL].full_session:
-        return ("the runner drives the Milestone 1 slice, one block, not the full schedule "
-                "(Milestone 5)")
+    """Read from the data: every block the schedule plans has a row in `blocks`.
+
+    So these checks go live by themselves the first time the runner drives the whole grid, and
+    fail then if they have no body -- nobody has to remember to switch them on.
+    """
+    run = runs[NORMAL]
+    ran = {int(row["block_index"]) for row in run.rows.get("blocks", [])}
+    planned = set(run.schedule_offsets_min)
+    if not planned or not planned <= ran:
+        return (f"the normal run ran {len(ran & planned)} of the {len(planned)} scheduled "
+                f"blocks; the full grid is Milestone 5")
+    return None
+
+
+def needs_block_rows(runs):
+    if not runs[NORMAL].rows.get("blocks"):
+        return "the normal run wrote no blocks rows"
+    return None
+
+
+def needs_trial_rows(runs):
+    if not any(runs[NORMAL].rows.get(table) for table in TRIAL_ORDER_COLUMNS):
+        return "the normal run wrote no trial rows to compare against"
     return None
 
 
@@ -739,7 +802,8 @@ def check_screens_showed_nothing_forbidden(runs):
     for run in runs.values():
         if not run.participant_seen or not run.experimenter_seen:
             failures.append(f"{run.name}: a virtual person read nothing off the screen")
-        patterns = run.session["pattern_names"].split(";")
+        # An empty name would be a substring of every text.
+        patterns = [name for name in run.session["pattern_names"].split(";") if name]
         both = [t.lower() for t in labels + patterns]
         for role, seen, terms in (
             ("participant", run.participant_seen, both + [t.lower() for t in forbidden]),
@@ -806,7 +870,8 @@ def check_adjustment_held_at_maximum_stops_at_ceiling(runs):
     run = runs["holds_adjustment_at_maximum"]
     ceiling = float(run.config.hardware["garment"]["pressure_ceiling_kpa"])
     failures = []
-    if run.stats["held_at_ceiling_s"] < HoldsAdjustmentAtMaximum.OVERHOLD_S:
+    holds = run.stats["ceiling_holds_s"]
+    if not holds or min(holds) < HoldsAdjustmentAtMaximum.OVERHOLD_S:
         failures.append("the participant never held the button at the ceiling")
     adjusted = run.rows.get("touchcal_adjust", [])
     if len(adjusted) != 1:
@@ -875,10 +940,11 @@ CHECKS: list[Check] = [
     Check("condition_and_limb_match_allocation", _always,
           check_condition_and_limb_match_allocation),
     Check("timestamps_monotonic", _always, check_timestamps_monotonic),
-    Check("rating_cue_interval_within_tolerance", needs_pinprick_rows,
+    Check("rating_cue_interval_within_tolerance", needs_rated_pinprick_rows,
           check_rating_cue_interval),
     Check("inter_stimulus_interval_within_tolerance", needs_two_applications_in_a_run, None),
-    Check("blocks_planned_against_actual", _always, check_blocks_planned_against_actual),
+    Check("blocks_planned_against_actual", needs_block_rows,
+          check_blocks_planned_against_actual),
     Check("same_seed_same_trial_order", needs_the_seed_to_matter,
           check_same_seed_same_trial_order),
     Check("forces_are_listed_filaments", needs_pinprick_rows,
@@ -894,7 +960,7 @@ CHECKS: list[Check] = [
     Check("restore_after_stop_is_rate_limited", _always,
           check_restore_after_stop_is_rate_limited),
     Check("silent_adjustment_times_out", _always, check_silent_adjustment_times_out),
-    Check("adversaries_lose_no_data", _always, check_adversaries_lose_no_data),
+    Check("adversaries_lose_no_data", needs_trial_rows, check_adversaries_lose_no_data),
 ]
 
 

@@ -37,15 +37,36 @@ def test_no_screen_text_names_a_condition(path):
     assert not hits, "SPEC.md 16:\n" + "\n".join(hits)
 
 
-def test_the_validator_entry_point_agrees_with_the_tests():
-    """`violations()` is what the validator calls; it must see what the tests above see."""
-    assert blinding.violations() == [
-        hit for path in PARTICIPANT_FILES for hit in blinding.hits(path, FORBIDDEN_TERMS)
-    ] + [
-        hit
-        for path in PARTICIPANT_FILES + EXPERIMENTER_FILES
-        for hit in blinding.hits(path, CONDITIONS)
-    ]
+def _plant(folder, participant: str, experimenter: str):
+    (folder / "participant_xx.yaml").write_text(participant, encoding="utf-8")
+    (folder / "experimenter_xx.yaml").write_text(experimenter, encoding="utf-8")
+    return folder
+
+
+def test_the_validator_entry_point_finds_every_planted_violation(tmp_path):
+    """`violations()` is what the validator calls, so it is tested against planted text."""
+    condition = CONDITIONS[0]
+    folder = _plant(
+        tmp_path,
+        f"screens:\n  welcome: 'Welcome to TATP'\n  end: 'That was {condition}'\n",
+        f"status:\n  line: 'Running {condition}'\n",
+    )
+    found = blinding.violations(folder)
+    assert len(found) == 3
+    assert any("participant_xx.yaml:screens.welcome" in hit for hit in found)
+    assert any("participant_xx.yaml:screens.end" in hit for hit in found)
+    assert any("experimenter_xx.yaml:status.line" in hit for hit in found)
+
+
+def test_the_experimenter_text_may_name_the_study(tmp_path):
+    """Only condition labels are forbidden to the experimenter, not the study name."""
+    folder = _plant(tmp_path, "screens:\n  welcome: 'Hello'\n", "title: 'TATP Study 1'\n")
+    assert blinding.violations(folder) == []
+
+
+def test_a_folder_with_no_text_files_is_refused(tmp_path):
+    with pytest.raises(AssertionError):
+        blinding.violations(tmp_path)
 
 
 def test_a_planted_forbidden_term_is_found(tmp_path):

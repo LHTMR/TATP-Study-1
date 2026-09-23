@@ -7,10 +7,11 @@ will create, and are not built before those exist (SPEC.md 17.3).
 
 Two jobs:
 
-- **It applies the filament the screen asks for.** It reads the instruction off the experimenter
-  window, parses it against the `apply_filament` wording it was formatted from, and touches the
-  virtual participant with that filament's force -- the weighed one where the set has been
-  weighed, since that is what the filament actually presses with, and the label force otherwise.
+- **It applies the filament the screen asks for, once per warning cue.** At each cue it reads
+  the instruction off the experimenter window, parses it against the `apply_filament` wording
+  it was formatted from, and touches the virtual participant with that filament's force -- the
+  weighed one where the set has been weighed, since that is what the filament actually presses
+  with, and the label force otherwise.
   Reading the screen rather than the protocol is the point: a prompt that named the wrong
   filament would be applied wrongly here, as it would be in the lab.
 - **It resumes after an interruption**, through `ExperimenterWindow.resume_requested`, the
@@ -71,9 +72,12 @@ class VirtualExperimenter(QObject):
         self.applied: list[str] = []
         self.resumes = 0
         self.seen_text: set[str] = set()
-        self._instruction = ""
+        self._on_cue = False
 
         rig.interruptions.interrupted.connect(self._on_interrupted)
+        self._resume_timer = QTimer(self)
+        self._resume_timer.setSingleShot(True)
+        self._resume_timer.timeout.connect(self._resume)
         self._timer = QTimer(self)
         self._timer.setInterval(int(round(TICK_S * MS_PER_S)))
         self._timer.timeout.connect(self._tick)
@@ -83,6 +87,7 @@ class VirtualExperimenter(QObject):
 
     def stop(self) -> None:
         self._timer.stop()
+        self._resume_timer.stop()
 
     def _tick(self) -> None:
         window = self.rig.experimenter
@@ -101,18 +106,24 @@ class VirtualExperimenter(QObject):
             if label.text():
                 self.seen_text.add(label.text())
 
-        instruction = window.instruction.text()
-        if instruction == self._instruction:
-            return
-        self._instruction = instruction
-        match = self._apply.fullmatch(instruction)
-        if match is not None:
-            label = match["filament"]
-            self.applied.append(label)
-            self.participant.feel_filament(self._forces[label])
+        # One application per warning cue, as in the lab: the cue says the stimulus is coming,
+        # and the experimenter applies whatever the screen names at that moment. Keyed on the
+        # cue rather than on the instruction changing, so a repeat of the same filament -- the
+        # same trial after a stop, or the same filament twice -- is applied again.
+        participant = self.rig.participant
+        on_cue = participant.stack.currentWidget() is participant.cue
+        if on_cue and not self._on_cue:
+            match = self._apply.fullmatch(window.instruction.text())
+            if match is not None:
+                label = match["filament"]
+                self.applied.append(label)
+                self.participant.feel_filament(self._forces[label])
+        self._on_cue = on_cue
 
     def _on_interrupted(self, kind: str) -> None:
-        QTimer.singleShot(self.rig.session.clock.scaled_ms(self.resume_after_s), self._resume)
+        # A child timer rather than `QTimer.singleShot`, so it dies with this object and a
+        # resume can never reach a later run.
+        self._resume_timer.start(self.rig.session.clock.scaled_ms(self.resume_after_s))
 
     def _resume(self) -> None:
         self.resumes += 1

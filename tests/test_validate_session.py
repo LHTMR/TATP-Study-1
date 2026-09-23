@@ -73,6 +73,20 @@ def test_a_check_whose_subject_has_arrived_but_is_not_written_fails():
     assert "not been written" in results[0].detail[0]
 
 
+def test_a_check_that_raises_fails_alone_and_the_rest_still_run():
+    def broken(runs):
+        return float("")  # what an empty cell does to a check
+
+    checks = [
+        vs.Check("broken", vs._always, broken),
+        vs.Check("after", vs._always, lambda runs: []),
+    ]
+    results = {r.name: r for r in vs.evaluate(checks, {})}
+    assert results["broken"].status == vs.FAILED
+    assert "ValueError" in results["broken"].detail[0]
+    assert results["after"].status == vs.PASSED
+
+
 def test_the_summary_counts_skips_with_their_reasons():
     results = [
         vs.Result("a", vs.PASSED),
@@ -130,6 +144,53 @@ def test_an_empty_provenance_key_needs_its_reason(loaded):
     assert failures == [f"{vs.NORMAL}: session git_sha is empty"], (
         "abort_reason may be empty in a completed run; git_sha may never be"
     )
+
+
+def _block_rows(*indices) -> list[dict]:
+    return [{"block_index": str(index)} for index in indices]
+
+
+def test_the_full_grid_checks_go_live_when_every_scheduled_block_has_run(loaded):
+    """Read from the data, so Milestone 5 turns them on without anyone flipping a flag."""
+    planned = {1: 0.0, 2: 10.0, 3: 20.0}
+    partial = _run(loaded, schedule_offsets_min=planned, rows={"blocks": _block_rows(1)})
+    assert "1 of the 3 scheduled blocks" in vs.needs_full_session({vs.NORMAL: partial})
+    whole = _run(loaded, schedule_offsets_min=planned, rows={"blocks": _block_rows(1, 2, 3)})
+    assert vs.needs_full_session({vs.NORMAL: whole}) is None
+    # ...and the unwritten ones then fail rather than pass.
+    unwritten = [c for c in vs.CHECKS if c.needs is vs.needs_full_session]
+    assert unwritten
+    assert all(r.status == vs.FAILED for r in vs.evaluate(unwritten, {vs.NORMAL: whole}))
+
+
+def test_checks_that_measure_rows_skip_when_there_are_none(loaded):
+    """A check that passes on zero rows has checked nothing (SPEC.md 17.3)."""
+    empty = {vs.NORMAL: _run(loaded)}
+    assert vs.needs_rated_pinprick_rows(empty)
+    assert vs.needs_block_rows(empty)
+    assert vs.needs_trial_rows(empty)
+    unrated = {vs.NORMAL: _run(loaded, rows={"pinprick": [_pinprick()]})}
+    assert vs.needs_rated_pinprick_rows(unrated), "a row with no rating cue has no interval"
+
+
+def test_an_empty_pattern_list_does_not_match_every_screen(loaded):
+    run = _run(
+        loaded,
+        session={"pattern_names": ""},
+        participant_seen={"Welcome"},
+        experimenter_seen={"Phase: setup"},
+    )
+    assert vs.check_screens_showed_nothing_forbidden({vs.NORMAL: run}) == []
+
+
+def test_a_rating_interval_off_by_the_configured_delay_fails(loaded):
+    speed = 10.0
+    rows = [
+        _pinprick(cue_onset_iso="2026-09-23T10:00:00.000",
+                  rating_cue_iso="2026-09-23T10:00:00.100", trial_index="1")
+    ]
+    run = _run(loaded, rows={"pinprick": rows}, session={"clock_speed": str(speed)})
+    assert vs.check_rating_cue_interval({vs.NORMAL: run})
 
 
 def _orders(loaded, *sites):

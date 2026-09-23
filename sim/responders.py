@@ -31,7 +31,10 @@ measures depends on them, which is why they live here and not in `config/` (SPEC
 from __future__ import annotations
 
 import ast
+import functools
 import time
+from pathlib import Path
+from types import CodeType
 
 import numpy as np
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer
@@ -69,13 +72,54 @@ TICK_S = 0.01
 ADJUST_START_DELAY_S = 0.3
 
 
-def load_calibration_sim() -> dict:
-    """The definitions of docs/calibration_sim.py, without running its simulation."""
-    source = CALIBRATION_SIM.read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(CALIBRATION_SIM))
-    tree.body = [node for node in tree.body if not isinstance(node, ast.Expr)]
+class CalibrationSimError(Exception):
+    """docs/calibration_sim.py has a top-level statement that could run the simulation."""
+
+
+@functools.cache
+def _calibration_sim_code(path: Path = CALIBRATION_SIM) -> CodeType:
+    """The file's definitions, compiled once. Everything that could run the simulation is out.
+
+    Kept: imports, function definitions, and assignments that call nothing the file itself
+    defines -- `LAD = np.array([...])` is a constant, `results = run(...)` is the simulation.
+    Dropped: bare expressions, which are the `print(...)` and `run(...)` calls. Anything else
+    at the top level (a loop, an `if`, a `results = run(...)`) is refused rather than run, so a
+    later edit to the file cannot quietly start a four-thousand-participant simulation inside
+    every validator run.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    defined = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
+    kept = []
+    for node in tree.body:
+        if isinstance(node, ast.Expr):
+            continue
+        if isinstance(node, (ast.Import, ast.ImportFrom, ast.FunctionDef)):
+            kept.append(node)
+            continue
+        if isinstance(node, ast.Assign):
+            calls = {
+                inner.func.id
+                for inner in ast.walk(node.value)
+                if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name)
+            }
+            if not calls & defined:
+                kept.append(node)
+                continue
+        raise CalibrationSimError(
+            f"{path.name} line {node.lineno}: a top-level {type(node).__name__} that is not a "
+            f"definition or a constant. It might run the simulation, so it is not loaded."
+        )
+    tree.body = kept
+    return compile(tree, str(path), "exec")
+
+
+def load_calibration_sim(path: Path = CALIBRATION_SIM) -> dict:
+    """The definitions of docs/calibration_sim.py, without running its simulation.
+
+    A fresh namespace on every call, because each caller replaces the module-level `rng`.
+    """
     namespace: dict = {"__name__": "calibration_sim"}
-    exec(compile(tree, str(CALIBRATION_SIM), "exec"), namespace)
+    exec(_calibration_sim_code(path), namespace)
     return namespace
 
 
@@ -249,6 +293,7 @@ class VirtualParticipant(QObject):
         self._shown_at_s = time.monotonic()
         self._choice_felt = dict.fromkeys(SIDES, MIN_PCT)
         self._adjust_goal = None
+        self.on_new_screen()
         window = self.window
         if screen is window.vas:
             vas = window.vas
@@ -273,6 +318,9 @@ class VirtualParticipant(QObject):
         return max(self.garment.pressure_kpa.values(), default=0.0)
 
     # -- the hooks an adversary overrides ---------------------------------------------
+
+    def on_new_screen(self) -> None:
+        """A different screen is up. Per-screen state an adversary keeps is reset here."""
 
     def on_vas(self) -> None:
         if self._handled:
@@ -308,9 +356,12 @@ class VirtualParticipant(QObject):
 
     def rating_for(self, scale: str) -> float:
         if scale == PAIN_SCALE:
-            if self.stimulus_mn is None:
+            # Each application is felt once: rated, then gone. A second rating with no new
+            # application in between is the guard firing, not a stale stimulus reused.
+            force_mn, self.stimulus_mn = self.stimulus_mn, None
+            if force_mn is None:
                 raise RuntimeError("asked to rate pain, but no filament has been applied")
-            return self.model.pain_pct(self.stimulus_mn)
+            return self.model.pain_pct(force_mn)
         if scale == INTENSITY_SCALE:
             return self.model.touch_pct(self._felt_kpa())
         raise KeyError(f"the virtual participant has no model for the {scale!r} scale")
@@ -431,6 +482,13 @@ class HoldsAdjustmentAtMaximum(VirtualParticipant):
         super().__init__(*args, **kwargs)
         self.held_at_ceiling_s = 0.0
         self._ceiling_since_s: float | None = None
+        self.ceiling_holds_s: list[float] = []
+
+    def on_new_screen(self) -> None:
+        # Each adjustment is held to the ceiling afresh; a second one must not inherit the
+        # first one's time there and let go early.
+        self.held_at_ceiling_s = 0.0
+        self._ceiling_since_s = None
 
     def adjust(self, goal_pct: float) -> None:
         if self._held is None:
@@ -443,10 +501,12 @@ class HoldsAdjustmentAtMaximum(VirtualParticipant):
             self._ceiling_since_s = now
         self.held_at_ceiling_s = now - self._ceiling_since_s
         if self.held_at_ceiling_s >= self.OVERHOLD_S:
+            self.ceiling_holds_s.append(self.held_at_ceiling_s)
             self.confirm_adjustment()
 
     def stats(self) -> dict:
-        return {**super().stats(), "held_at_ceiling_s": self.held_at_ceiling_s}
+        # Every adjustment's hold, since the per-screen figure resets on the next screen.
+        return {**super().stats(), "ceiling_holds_s": list(self.ceiling_holds_s)}
 
 
 class StopsAtMaximum(VirtualParticipant):

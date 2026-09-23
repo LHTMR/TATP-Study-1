@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QApplication
 
 from sim.experimenters import VirtualExperimenter, template_pattern
 from sim.responders import (
+    CalibrationSimError,
     ConfirmsWithoutMarker,
     HoldsAdjustmentAtMaximum,
     ObserverModel,
@@ -119,13 +120,36 @@ def test_a_noiseless_observer_rates_its_own_f40_at_40():
     assert model.touch_pct(0.0) == 0.0, "nothing delivered is nothing felt"
 
 
-def test_the_same_seed_reports_the_same_ratings():
-    first, second = ObserverModel(SEED), ObserverModel(SEED)
-    for model in (first, second):
-        model.touch_felt_pct(30.0)  # steering must not disturb the reported stream
-    assert [first.pain_pct(200.0) for _ in range(5)] == [
-        second.pain_pct(200.0) for _ in range(5)
+def test_steering_does_not_disturb_the_reported_ratings():
+    """Steering reads once per tick, and the tick count varies between identical runs."""
+    steered, unsteered = ObserverModel(SEED), ObserverModel(SEED)
+    for _ in range(7):
+        steered.touch_felt_pct(30.0)
+    assert [steered.pain_pct(200.0) for _ in range(5)] == [
+        unsteered.pain_pct(200.0) for _ in range(5)
     ]
+
+
+def test_the_loader_refuses_a_statement_that_could_run_the_simulation(tmp_path):
+    script = tmp_path / "sim.py"
+    script.write_text(
+        "import numpy as np\nK = np.sqrt(2)\ndef run():\n    return 1\nprint(K)\nrun()\n"
+        "results = run()\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(CalibrationSimError, match="line 7"):
+        load_calibration_sim(script)
+
+
+def test_the_loader_keeps_definitions_and_constants_and_drops_the_calls(tmp_path, capsys):
+    script = tmp_path / "sim.py"
+    script.write_text(
+        "import numpy as np\nK = np.sqrt(4)\ndef run():\n    print('ran')\nrun()\n",
+        encoding="utf-8",
+    )
+    namespace = load_calibration_sim(script)
+    assert namespace["K"] == 2.0 and callable(namespace["run"])
+    assert capsys.readouterr().out == ""
 
 
 # -- answering the screens ----------------------------------------------------------------
@@ -145,6 +169,15 @@ def test_the_vas_is_answered_through_its_keys(rig):
 
 def test_rating_pain_with_no_filament_applied_is_an_error(rig):
     virtual = VirtualParticipant(rig.participant, rig.session.garment, rig.session.config, SEED)
+    with pytest.raises(RuntimeError, match="no filament"):
+        virtual.rating_for(PAIN_SCALE)
+
+
+def test_an_application_is_rated_once_and_not_reused(rig):
+    """The guard must be able to fire on a second rating with no new application."""
+    virtual = VirtualParticipant(rig.participant, rig.session.garment, rig.session.config, SEED)
+    virtual.feel_filament(255.0)
+    virtual.rating_for(PAIN_SCALE)
     with pytest.raises(RuntimeError, match="no filament"):
         virtual.rating_for(PAIN_SCALE)
 
@@ -222,7 +255,19 @@ def test_holding_at_maximum_ends_at_the_ceiling(rig):
     trial.start()
     _spin(lambda: produced)
     assert produced[0] == rig.session.garment.limits.pressure_ceiling_kpa
-    assert virtual.held_at_ceiling_s >= HoldsAdjustmentAtMaximum.OVERHOLD_S
+    holds = virtual.stats()["ceiling_holds_s"]
+    assert len(holds) == 1 and holds[0] >= HoldsAdjustmentAtMaximum.OVERHOLD_S
+
+
+def test_each_adjustment_is_held_at_the_ceiling_afresh(rig):
+    """A second adjustment must not inherit the first one's time at the ceiling."""
+    virtual = _virtual(rig, HoldsAdjustmentAtMaximum)
+    virtual.held_at_ceiling_s = HoldsAdjustmentAtMaximum.OVERHOLD_S
+    virtual._ceiling_since_s = 0.0
+    rig.participant.show_adjustment(touchcal.anchor_plans(rig.session.config)[0].target_key)
+    _spin(lambda: virtual._token is not None and virtual._token[0] is rig.participant.control)
+    assert virtual.held_at_ceiling_s == 0.0
+    assert virtual._ceiling_since_s is None
 
 
 # -- the experimenter -----------------------------------------------------------------------
@@ -236,8 +281,9 @@ def test_the_instruction_template_parses_back_into_its_fields(loaded):
     assert match["site"] == "2"
 
 
-def test_the_experimenter_applies_the_filament_the_screen_names(rig):
-    virtual = _virtual(rig)
+def test_the_experimenter_applies_the_named_filament_at_every_cue(rig):
+    """Once per cue, so the same filament asked for twice is applied twice."""
+    virtual = VirtualParticipant(rig.participant, rig.session.garment, rig.session.config, SEED)
     experimenter = VirtualExperimenter(rig, virtual)
     experimenter.start()
     text = rig.experimenter.text
@@ -246,9 +292,29 @@ def test_the_experimenter_applies_the_filament_the_screen_names(rig):
             filament="26", force_mn=255.0, site=1, region=text["terms"]["regions"]["primary"]
         )
     )
-    _spin(lambda: virtual.stimulus_mn is not None)
-    assert virtual.stimulus_mn == 255.0
-    assert experimenter.applied == ["26"]
+    for applications in (1, 2):
+        rig.participant.show_warning_cue()
+        _spin(lambda applications=applications: len(experimenter.applied) == applications)
+        assert virtual.stimulus_mn == 255.0
+        virtual.rating_for(PAIN_SCALE)
+        rig.participant.show_blank()
+        _spin(lambda: not experimenter._on_cue)
+    assert experimenter.applied == ["26", "26"]
+
+
+def test_nothing_is_applied_without_a_cue(rig):
+    virtual = VirtualParticipant(rig.participant, rig.session.garment, rig.session.config, SEED)
+    experimenter = VirtualExperimenter(rig, virtual)
+    experimenter.start()
+    text = rig.experimenter.text
+    rig.experimenter.set_instruction(
+        text["instructions"]["apply_filament"].format(
+            filament="26", force_mn=255.0, site=1, region=text["terms"]["regions"]["primary"]
+        )
+    )
+    deadline = time.monotonic() + 0.1
+    _spin(lambda: time.monotonic() > deadline)
+    assert experimenter.applied == [] and virtual.stimulus_mn is None
 
 
 def test_the_experimenter_resumes_after_an_interruption(rig):

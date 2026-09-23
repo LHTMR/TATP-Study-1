@@ -34,12 +34,12 @@ def _load(path: Path):
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-def participant_files() -> list[Path]:
-    return sorted(TEXT_DIR.glob("participant_*.yaml"))
+def participant_files(text_dir: Path = TEXT_DIR) -> list[Path]:
+    return sorted(text_dir.glob("participant_*.yaml"))
 
 
-def experimenter_files() -> list[Path]:
-    return sorted(TEXT_DIR.glob("experimenter_*.yaml"))
+def experimenter_files(text_dir: Path = TEXT_DIR) -> list[Path]:
+    return sorted(text_dir.glob("experimenter_*.yaml"))
 
 
 def forbidden_terms() -> list[str]:
@@ -73,15 +73,18 @@ def hits(path: Path, terms: list[str]) -> list[str]:
     ]
 
 
-def violations() -> list[str]:
+def violations(text_dir: Path = TEXT_DIR) -> list[str]:
     """Every SPEC.md 16 hit across the text files; empty when the configuration is clean."""
     terms, labels = forbidden_terms(), conditions()
     # Stage boundary (CLAUDE.md): a list that emptied by accident would make every check pass.
     assert terms, "config/blinding.yaml lists no forbidden terms"
     assert labels, "study1.yaml lists no conditions"
+    participant, experimenter = participant_files(text_dir), experimenter_files(text_dir)
+    # The same: a folder with no text files in it would pass with nothing checked.
+    assert participant and experimenter, f"{text_dir} has no participant or experimenter text"
     found = []
-    for path in participant_files():
+    for path in participant:
         found += hits(path, terms)
-    for path in participant_files() + experimenter_files():
+    for path in participant + experimenter:
         found += hits(path, labels)
     return found
