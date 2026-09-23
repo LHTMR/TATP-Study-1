@@ -96,8 +96,13 @@ mapping:
   max_steps: 40                      # bounds the cue train; 40 x 5 mm = 200 mm. The software
                                      # does not count steps -- the border is a pen mark and a
                                      # ruler, not a keypress (SPEC.md 8.4).
-  distance_plausible_min_mm: 1.0     # outside this range the entry is queried, not accepted
-  distance_plausible_max_mm: 200.0   # silently (SPEC.md 17.5 adversarial experimenter)
+  distance_plausible_min_mm: 12.5    # outside this range the entry is queried, not accepted
+  distance_plausible_max_mm: 200.0   # silently (SPEC.md 17.5 adversarial experimenter).
+                                     # Distances run from the CENTRE of the primary zone, so a
+                                     # border inside the zone itself is implausible: 12.5 mm is
+                                     # half the short side of the 2.5 x 5 cm thermode of the
+                                     # heat-capsaicin literature (docs/research/RB1). Set it to
+                                     # half this study's own thermode width once measured.
 
 touch_calibration:
   # Protocol B, scheme B of the comparison document (SPEC.md 9, comparison doc 7).

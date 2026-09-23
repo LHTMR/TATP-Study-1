@@ -147,12 +147,14 @@ def test_distances_write_the_mapping_and_area_rows(rig, ledger):
     areas = []
     ledger.area_recorded.connect(lambda phase, area: areas.append((phase, area)))
     rig.experimenter.distances_entered.emit(PHASE, (30.0, None, 50.0, None))
-    assert _rows(rig.session, "sh_area") == [], "partial entries are held, never block"
+    assert _rows(rig.session, "sh_area") == [], "no area until all four are in"
+    # Each accepted distance is on disk at once (SPEC.md 14.3), not held for the other three.
+    assert [r["path_id"] for r in _rows(rig.session, "mapping")] == ["proximal", "distal"]
     rig.experimenter.distances_entered.emit(PHASE, (None, 20.0, None, 40.0))
 
     rows = _rows(rig.session, "mapping")
-    assert [r["path_id"] for r in rows] == ["proximal", "lateral", "distal", "medial"]
-    assert [r["distance_mm"] for r in rows] == ["30.0", "20.0", "50.0", "40.0"]
+    assert [r["path_id"] for r in rows] == ["proximal", "distal", "lateral", "medial"]
+    assert [r["distance_mm"] for r in rows] == ["30.0", "50.0", "20.0", "40.0"]
     assert all(r["distance_missing"] == "false" and r["distance_entered_iso"] for r in rows)
     (area,) = _rows(rig.session, "sh_area")
     assert float(area["area_mm2"]) == (30.0 + 50.0) * (20.0 + 40.0)
@@ -182,12 +184,54 @@ def test_a_corrected_value_replaces_a_queried_one(rig, ledger):
     assert confirmed == []
 
 
-def test_entries_after_the_rows_are_written_are_refused_and_logged(rig, ledger):
+def test_a_correction_appends_superseding_rows_and_logs_both_values(rig, ledger):
     _run_paths(rig, ledger)
     rig.experimenter.distances_entered.emit(PHASE, (30.0, 20.0, 50.0, 40.0))
     rig.experimenter.distances_entered.emit(PHASE, (31.0, 20.0, 50.0, 40.0))
+    rows = _rows(rig.session, "mapping")
+    proximal = [r for r in rows if r["path_id"] == "proximal"]
+    assert [r["distance_mm"] for r in proximal] == ["30.0", "31.0"], "never rewritten"
+    assert proximal[-1]["distance_entered_iso"] >= proximal[0]["distance_entered_iso"]
+    assert len(rows) == 5, "only the corrected path gets a new row"
+    areas = _rows(rig.session, "sh_area")
+    assert [float(a["area_mm2"]) for a in areas] == [80.0 * 60.0, 81.0 * 60.0]
+    (logged,) = [r for r in _rows(rig.session, "log") if r["event"] == "distance_corrected"]
+    assert "30.0" in logged["detail"] and "31.0" in logged["detail"]
+    assert logged["severity"] == "warning"
+
+
+def test_the_same_value_again_changes_nothing(rig, ledger):
+    _run_paths(rig, ledger)
+    rig.experimenter.distances_entered.emit(PHASE, (30.0, 20.0, 50.0, 40.0))
+    rig.experimenter.distances_entered.emit(PHASE, (30.0, 20.0, 50.0, 40.0))
+    assert len(_rows(rig.session, "mapping")) == 4
     assert len(_rows(rig.session, "sh_area")) == 1
-    assert "distances_already_recorded" in _events(rig.session)
+
+
+def test_an_interruption_mid_path_runs_the_whole_path_again(rig, ledger):
+    mapping = AreaMapping(rig, ledger)
+    cues = []
+    mapping.pacing_cue.connect(lambda path, cue: cues.append((path, cue)))
+    mapping.start()
+    rig.experimenter.proceed_requested.emit()
+    _spin(lambda: (1, 3) in cues)
+    rig.participant.emergency_stop.emit()
+    cues.clear()
+    rig.experimenter.resume_requested.emit()
+    assert rig.participant.message.text == rig.participant.text["screens"]["standby"]
+    _spin(lambda: (1, 2) in cues)
+    assert cues[0] == (1, 1), "the cue train starts again from the first cue"
+    assert _events(rig.session).count("mapping_path_started") == 2, "path_started again"
+    mapping.cancel()
+
+
+def test_a_resume_while_waiting_for_a_path_restores_standby(rig, ledger):
+    mapping = AreaMapping(rig, ledger)
+    mapping.start()
+    rig.experimenter.pause_requested.emit()
+    rig.experimenter.resume_requested.emit()
+    assert rig.participant.message.text == rig.participant.text["screens"]["standby"]
+    mapping.cancel()
 
 
 def test_distances_for_a_phase_with_no_mapping_are_an_error(ledger):
@@ -208,7 +252,9 @@ def test_outstanding_distances_prompt_once_then_close_flagged_missing(rig, ledge
     )
     assert ledger.close() is True, "the second closes"
     rows = _rows(rig.session, "mapping")
-    assert [r["distance_missing"] for r in rows] == ["false", "true", "false", "true"]
+    assert [(r["path_id"], r["distance_missing"]) for r in rows] == [
+        ("proximal", "false"), ("distal", "false"), ("lateral", "true"), ("medial", "true")
+    ]
     (area,) = _rows(rig.session, "sh_area")
     assert area["area_missing"] == "true" and area["area_mm2"] == ""
     assert area["distance_1_mm"] == "30.0" and area["distance_2_mm"] == ""

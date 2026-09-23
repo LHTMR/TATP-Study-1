@@ -5,15 +5,19 @@ does not record where the border fell -- that is a pen mark and a ruler. `AreaMa
 the four paths: the experimenter starts each one, a cue fires every `step_interval_s` for up to
 `max_steps` cues, and the experimenter stops it at the border. Each cue is logged and emitted
 as `pacing_cue`, which is what Milestone 5 wires to the audible tick. The white noise is
-switched off around the mapping by whoever runs it, not here.
+switched off around the mapping by whoever runs it, not here. An interruption mid-path runs the
+whole path again from its start, because the filament was lifted.
 
 **The distances never block.** They are typed whenever convenient, often long after the path,
 so they are held by `MappingLedger`, which lives for the whole session and listens to the
-experimenter's `distances_entered`. Once all four distances of a time point are in, it writes
-the four `mapping` rows and the `sh_area` row. A distance outside the plausible range is
-queried rather than accepted: the experimenter confirms it by entering the same value again.
-At session end `MappingLedger.close()` prompts once for anything outstanding and, the next time
-it is called, writes what there is with the gaps flagged missing.
+experimenter's `distances_entered`. Each path's `mapping` row is written the moment its
+distance is accepted (SPEC.md 14.3), and the `sh_area` row once all four are in. A distance
+outside the plausible range is queried rather than accepted: the experimenter confirms it by
+entering the same value again. A different value for a path already recorded is a correction,
+and appends a superseding row -- analysis takes the last row per time point and path (see
+docs/DATA_SCHEMA.md). At session end `MappingLedger.close()` prompts once for anything
+outstanding and, the next time it is called, writes what there is with the gaps flagged
+missing. Until then a walked but unmeasured path is recoverable from its logged start.
 
 **The area** is the rectangle spanned by the two pairs of opposite paths,
 `(d1 + d3) x (d2 + d4)`, each distance measured from the centre of the primary zone. That is
@@ -62,7 +66,8 @@ class _TimePoint:
     starts: dict[int, tuple[str, float | None]] = field(default_factory=dict)
     distances: dict[int, tuple[float, str]] = field(default_factory=dict)  # (mm, entered iso)
     queried: dict[int, float] = field(default_factory=dict)  # path -> implausible value
-    written: bool = False
+    rows: set[int] = field(default_factory=set)  # paths with a `mapping` row written
+    area_written: bool = False
 
     @property
     def complete(self) -> bool:
@@ -72,8 +77,8 @@ class _TimePoint:
 class MappingLedger(QObject):
     """Every time point's mapping distances, for the whole session. One per session.
 
-    `area_recorded` carries `(phase, area_mm2)` when a time point's rows are written with a
-    computed area.
+    `area_recorded` carries `(phase, area_mm2)` each time an `sh_area` row with a computed
+    area is written, a correction's included.
     """
 
     area_recorded = Signal(str, float)
@@ -100,10 +105,12 @@ class MappingLedger(QObject):
     # -- written by the mapping procedure ------------------------------------------------
 
     def path_started(self, phase: str, path: int) -> None:
-        """A path's pacing began. A path run again replaces its start (SPEC.md 13 resume)."""
+        """A path's pacing began. A path run again replaces its start."""
         point = self.time_points.setdefault(phase, _TimePoint(self.n_paths))
         clock = self.session.clock
         point.starts[path] = (clock.wall_iso(), clock.t_session_s())
+        if path in point.distances and path not in point.rows:
+            self._write_path(phase, point, path)
 
     # -- the experimenter's entries ----------------------------------------------------
 
@@ -117,17 +124,15 @@ class MappingLedger(QObject):
                 f"{self.n_paths} paths"
             )
         point = self.time_points[phase]
-        if point.written:
-            self.session.log(
-                "distances_already_recorded", origin="experimenter", severity="warning",
-                detail=f"{phase}: {list(distances)}",
-            )
-            return
         warnings = []
+        corrected = False
         for path, value in enumerate(distances, start=1):
-            if value is None or path in point.distances:
+            if value is None:
                 continue
             value = float(value)
+            previous = point.distances.get(path)
+            if previous is not None and previous[0] == value:
+                continue  # the same value again changes nothing
             if not plausible(value, self.mapping) and point.queried.get(path) != value:
                 # Queried, never silently accepted (SPEC.md 17.5): the same value entered again
                 # is the confirmation.
@@ -144,22 +149,31 @@ class MappingLedger(QObject):
                 continue
             confirmed = point.queried.pop(path, None) == value
             point.distances[path] = (value, self.session.clock.wall_iso())
-            self.session.log(
-                "distance_entered", origin="experimenter",
-                severity="warning" if confirmed else "info",
-                detail=f"{phase}, path {path}: {value} mm"
-                + (" (confirmed outside the plausible range)" if confirmed else ""),
-            )
+            if previous is None:
+                self.session.log(
+                    "distance_entered", origin="experimenter",
+                    severity="warning" if confirmed else "info",
+                    detail=f"{phase}, path {path}: {value} mm"
+                    + (" (confirmed outside the plausible range)" if confirmed else ""),
+                )
+            else:
+                corrected = True
+                self.session.log(
+                    "distance_corrected", origin="experimenter", severity="warning",
+                    detail=f"{phase}, path {path}: {previous[0]} mm -> {value} mm",
+                )
+            if path in point.starts:
+                self._write_path(phase, point, path)
         if warnings:
             self.experimenter.set_status(" ".join(warnings))
             self.experimenter.refresh()
-        if point.complete:
-            self._write(phase, point)
+        if point.complete and (not point.area_written or corrected):
+            self._write_area(phase, point)
 
     # -- session end (SPEC.md 8.4) ------------------------------------------------------
 
     def outstanding(self) -> list[str]:
-        return [phase for phase, point in self.time_points.items() if not point.written]
+        return [phase for phase, point in self.time_points.items() if not point.area_written]
 
     def close(self) -> bool:
         """Call at session end. True when the session may close.
@@ -179,7 +193,18 @@ class MappingLedger(QObject):
             )
             return False
         for phase in outstanding:
-            self._write(phase, self.time_points[phase])
+            point = self.time_points[phase]
+            for path in range(1, self.n_paths + 1):
+                if path not in point.starts:
+                    # No start means no row: `timestamp_iso` is the path's start, and inventing
+                    # one would be inventing data. The distance, if any, is still in `sh_area`.
+                    self.session.log(
+                        "mapping_path_not_run", severity="warning",
+                        detail=f"{phase}, path {path}",
+                    )
+                elif path not in point.rows:
+                    self._write_path(phase, point, path)
+            self._write_area(phase, point)
         return True
 
     # -- plumbing ----------------------------------------------------------------------
@@ -187,30 +212,25 @@ class MappingLedger(QObject):
     def path_name(self, path: int) -> str:
         return self.experimenter.text["terms"]["mapping_paths"][self.path_ids[path - 1]]
 
-    def _write(self, phase: str, point: _TimePoint) -> None:
+    def _write_path(self, phase: str, point: _TimePoint, path: int) -> None:
+        start_iso, start_t = point.starts[path]
+        distance = point.distances.get(path)
+        self.session.files.write(
+            "mapping",
+            timestamp_iso=start_iso,
+            t_session_s=start_t,
+            phase=phase,
+            path_id=self.path_ids[path - 1],
+            step_interval_s=float(self.mapping["step_interval_s"]),
+            step_size_mm=float(self.mapping["step_size_mm"]),
+            distance_mm=None if distance is None else distance[0],
+            distance_entered_iso=None if distance is None else distance[1],
+            distance_missing=distance is None,
+        )
+        point.rows.add(path)
+
+    def _write_area(self, phase: str, point: _TimePoint) -> None:
         clock = self.session.clock
-        for path in range(1, self.n_paths + 1):
-            if path not in point.starts:
-                # No start means no row: `timestamp_iso` is the path's start, and inventing one
-                # would be inventing data. The distance, if any, is still in `sh_area`.
-                self.session.log(
-                    "mapping_path_not_run", severity="warning", detail=f"{phase}, path {path}"
-                )
-                continue
-            start_iso, start_t = point.starts[path]
-            distance = point.distances.get(path)
-            self.session.files.write(
-                "mapping",
-                timestamp_iso=start_iso,
-                t_session_s=start_t,
-                phase=phase,
-                path_id=self.path_ids[path - 1],
-                step_interval_s=float(self.mapping["step_interval_s"]),
-                step_size_mm=float(self.mapping["step_size_mm"]),
-                distance_mm=None if distance is None else distance[0],
-                distance_entered_iso=None if distance is None else distance[1],
-                distance_missing=distance is None,
-            )
         values = [point.distances.get(p, (None, None))[0] for p in range(1, self.n_paths + 1)]
         area = None if None in values else sh_area_mm2(values)
         self.session.files.write(
@@ -225,7 +245,7 @@ class MappingLedger(QObject):
             area_mm2=area,
             area_missing=area is None,
         )
-        point.written = True
+        point.area_written = True
         self.session.log(
             "sh_area_recorded", severity="info" if area is not None else "warning",
             detail=f"{phase}: " + ("missing" if area is None else f"{area:g} mm2"),
@@ -248,6 +268,9 @@ class AreaMapping(Procedure):
 
     `proceed_requested` starts each path and, pressed again, stops its cue train at the border.
     `pacing_cue` carries (path, cue) from 1 for every cue, and every cue is logged.
+
+    The path, not the cue, is the step: the cue train runs on the procedure's timer without
+    being a step of its own, so a resume repeats the whole path from its start.
     """
 
     pacing_cue = Signal(int, int)
@@ -261,22 +284,13 @@ class AreaMapping(Procedure):
         self.step_interval_s = float(self.mapping["step_interval_s"])
         self.path = 0
         self.cue = 0
-        self._on_go = None
-        self.experimenter.proceed_requested.connect(self._on_proceed)
-
-    def cancel(self) -> None:
-        if self.running:
-            self.experimenter.proceed_requested.disconnect(self._on_proceed)
-        super().cancel()
-
-    def finish(self, result: object) -> None:
-        self.experimenter.proceed_requested.disconnect(self._on_proceed)
-        super().finish(result)
 
     def begin(self) -> None:
-        self.participant.show_message(STANDBY_SCREEN)
         self.session.log("mapping_started", detail=self.session.phase)
         self._await_path()
+
+    def _standby(self) -> None:
+        self.participant.show_message(STANDBY_SCREEN)
 
     def _await_path(self) -> None:
         self.path += 1
@@ -290,15 +304,17 @@ class AreaMapping(Procedure):
         # Read aloud before the first path; there is no participant mapping screen.
         instruction = f"{text['mapping_script']}\n\n{ready}" if self.path == 1 else ready
 
-        def begin() -> None:
-            self._on_go = self._start_path
+        def prepare() -> None:
+            self._standby()
             self.experimenter.set_instruction(instruction)
             self.experimenter.set_status("")
             self.experimenter.refresh()
 
-        self.step(begin)
+        self.await_proceed(lambda: self.step(self._start_path), prepare)
 
     def _start_path(self) -> None:
+        """The step a resume repeats: the whole path, from its start."""
+        self._standby()
         self.ledger.path_started(self.session.phase, self.path)
         self.session.log("mapping_path_started", origin="experimenter", detail=self._detail())
         self.experimenter.set_instruction(
@@ -308,7 +324,7 @@ class AreaMapping(Procedure):
         )
         self.experimenter.refresh()
         self.cue = 0
-        self._on_go = self._stop_path
+        self.on_proceed(self._stop_path)
         self._pace()
 
     def _pace(self) -> None:
@@ -317,24 +333,18 @@ class AreaMapping(Procedure):
         self.session.log("pacing_cue", detail=f"{self._detail()}, cue {self.cue}")
         self.pacing_cue.emit(self.path, self.cue)
         if self.cue >= self.max_steps:
-            self.wait(self.step_interval_s, lambda: self._end_path("cue limit reached"))
+            self._after(self.step_interval_s, lambda: self._end_path("cue limit reached"))
         else:
-            self.wait(self.step_interval_s, self._pace)
+            self._after(self.step_interval_s, self._pace)
 
     def _stop_path(self) -> None:
         self._end_path("stopped by the experimenter")
 
     def _end_path(self, why: str) -> None:
         self._halt()
-        self._on_go = None
+        self.on_proceed(None)
         self.session.log("mapping_path_ended", detail=f"{self._detail()}: {why}")
         self._await_path()
-
-    def _on_proceed(self) -> None:
-        if self._on_go is None or self.rig.interruptions.active is not None:
-            return
-        then, self._on_go = self._on_go, None
-        then()
 
     def _detail(self) -> str:
         return f"{self.session.phase}, path {self.path}"

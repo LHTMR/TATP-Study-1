@@ -102,6 +102,8 @@ status:
   block_due: Block {block} ska starta nu.
   block_overdue: Block {block} är FÖRSENAT.
   discarded: Senaste trial kasserad. Den upprepas.
+  discarded_not_repeated: >-
+    Senaste trial kasserad. Gränsen för antal appliceringar är nådd, så den upprepas inte.
 
 warnings:
   experimenter_changed: >-
@@ -120,13 +122,6 @@ warnings:
   application_cap: >-
     Gränsen på {value} appliceringar är nådd. Bästa tillgängliga skattning används och
     flaggas.
-  # SPEC.md 8.2 säkerhetsregel. Säger vad som spärras, aldrig vad som skattades.
-  intolerable_cap: >-
-    Plats {site} är nu spärrad: inget filament på eller över {filament} g appliceras där under
-    resten av denna tidpunkt.
-  intolerable_global_cap: >-
-    Flera platser är spärrade. Inget filament på eller över {filament} g appliceras på någon
-    plats under resten av denna tidpunkt.
   substitution_unknown: Inget filament märkt {filament} g finns. Utbytet registrerades inte.
   substitution_not_lower: >-
     Filamentet {filament} g är inte lättare än det som efterfrågades. Det registreras som

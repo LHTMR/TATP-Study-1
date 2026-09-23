@@ -336,10 +336,22 @@ def test_enough_capped_sites_cap_every_site_at_the_lowest():
     assert not cap.record("primary", 1, 8)
     assert not cap.record("primary", 2, 6)
     assert cap.record("primary", 3, 7), "the third site switches the global cap on"
-    assert cap.global_cap == 6
+    assert cap.global_cap("primary") == 6
     assert not cap.allows("primary", 5, 6) and cap.allows("primary", 5, 5)
-    assert not cap.allows("secondary", 1, 6), "every site, in every region"
     assert not cap.record("primary", 4, 9), "already on"
+
+
+def test_escalation_is_per_region():
+    cap = IntolerableCap(sites_for_global_cap=2)
+    cap.record("primary", 1, 4)
+    cap.record("secondary", 2, 6)
+    assert cap.global_cap("primary") is None and cap.global_cap("secondary") is None, (
+        "one site in each region is not two sites in either"
+    )
+    assert cap.record("primary", 3, 5)
+    assert cap.global_cap("primary") == 4
+    assert cap.allows("secondary", 1, 9), "a primary-zone ceiling never caps the secondary"
+    assert cap.global_cap("secondary") is None
 
 
 def test_placing_skips_a_capped_site_and_lowers_only_when_every_site_is_capped():

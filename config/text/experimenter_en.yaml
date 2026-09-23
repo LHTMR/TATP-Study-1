@@ -102,6 +102,8 @@ status:
   block_due: Block {block} is due.
   block_overdue: Block {block} is OVERDUE.
   discarded: Last trial discarded. It will be repeated.
+  discarded_not_repeated: >-
+    Last trial discarded. The application limit has been reached, so it will not be repeated.
 
 warnings:
   # Warn-and-continue, never block (SPEC.md 7.3, 11, 14.1).
@@ -121,13 +123,6 @@ warnings:
   application_cap: >-
     The limit of {value} applications was reached. The best available estimate is used and
     flagged.
-  # SPEC.md 8.2 safety rule. Says what is barred, never what was rated.
-  intolerable_cap: >-
-    Site {site} is now capped: nothing at or above {filament} g is applied there for the rest
-    of this time point.
-  intolerable_global_cap: >-
-    Several sites are capped. Nothing at or above {filament} g is applied at any site for the
-    rest of this time point.
   substitution_unknown: No filament labelled {filament} g is held. The substitution was not recorded.
   substitution_not_lower: >-
     The {filament} g filament is not lighter than the one asked for. It is recorded as applied.

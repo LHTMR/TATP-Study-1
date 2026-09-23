@@ -349,6 +349,8 @@ class Session:
                 "sensitisation_start_iso": self.clock.sensitisation_start_iso or "",
                 "session_end_iso": self.clock.wall_iso(),
                 "abort_reason": abort_reason,
+                # Known only at the end: a re-run can happen at any of the three time points.
+                "fit_preview_reruns": self.fit_preview_reruns,
             }
         )
         self.files.close()
@@ -405,7 +407,6 @@ class Session:
             # A session run with the preview on is not blind in the sense Bilaga 1 3.3
             # describes, so analysis must be able to tell it apart (SPEC.md 11.1).
             "fit_preview_enabled": self.fit_preview_enabled,
-            "fit_preview_reruns": self.fit_preview_reruns,
             "filament_calibration_date": self.config.filaments.get("weighing_date") or "",
             "filaments_measured": all(f["force_measured_mn"] is not None for f in filaments),
             "slope_prior_vas_per_log10": self.config.study1["pinprick"][

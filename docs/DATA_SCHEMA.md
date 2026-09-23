@@ -81,7 +81,6 @@ written, with an empty value — an absent row and an empty value must not be co
 | `garment_capabilities` | - | `capabilities()` as `key=value` pairs, semicolon-separated (§12.1) |
 | `reduced_capability_device` | - | `true` when `per_channel_pressure` is false (§12.4) |
 | `fit_preview_enabled` | - | `true` if the experimenter could see fitted ratings and re-run a procedure (§11.1). A session run this way is **not blind in the sense Bilaga 1 §3.3 describes**, and must be identifiable in analysis |
-| `fit_preview_reruns` | - | Total re-runs the experimenter chose across the session; `0` when the preview was on but nothing was re-run |
 | `filament_calibration_date` | - | Latest weighing date in `filaments.yaml`; empty if unweighed |
 | `filaments_measured` | - | `true` when every listed filament has a measured force |
 | `slope_prior_vas_per_log10` | VAS·log₁₀⁻¹ | The fixed slope used by the estimator (§8.2) |
@@ -96,6 +95,7 @@ written, with an empty value — an absent row and an empty value must not be co
 | `unresolved_open_items` | - | Semicolon-separated §20 item numbers still on placeholders |
 | `resumed_from_session_file` | - | Filename resumed from, else empty (§15) |
 | `session_start_iso` | - | Process start, wall clock |
+| `fit_preview_reruns` | - | Total re-runs the experimenter chose across the session (§11.1); `0` when none. Written at close, with the keys below it, because a re-run can come at any time point |
 | `sensitisation_start_iso` | - | Session t=0; empty until sensitisation begins |
 | `session_end_iso` | - | Written at close |
 | `abort_reason` | - | Empty unless the session was aborted |
@@ -260,6 +260,14 @@ provides the pacing cue; the experimenter advances the filament, marks the borde
 measures it and types the distance. `distance_mm` is therefore the only measurement this table
 carries, and it comes from a ruler rather than from a keypress.
 
+A path's row is written as soon as its distance is accepted (§14.3), or at session close with
+`distance_missing` true. Each distance is measured from the centre of the primary zone, and
+`path_id` follows `mapping.path_ids`, in order round the zone (`docs/research/RB1`). **A
+correction appends a superseding row** with a later `distance_entered_iso`, and the log carries
+both values as `distance_corrected`; the table is append-only, so nothing is rewritten. To read
+it, take the last row per (`phase`, `path_id`). A path that was walked but never measured before
+a crash is recoverable from its `mapping_path_started` event in `log`.
+
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|
 | timestamp_iso | iso8601 | - | yes | Wall clock at path start |
@@ -276,7 +284,10 @@ carries, and it comes from a ruler rather than from a keypress.
 
 ### sh_area
 
-One row per time point (§8.4).
+One row per time point (§8.4), written once all four distances are in, or at session close
+with `area_missing` true. A correction to a distance appends a superseding row; take the last row
+per `phase`. The area is `(distance_1_mm + distance_3_mm) × (distance_2_mm + distance_4_mm)`,
+the rectangle of the two pairs of opposite paths (`docs/research/RB1`).
 
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|

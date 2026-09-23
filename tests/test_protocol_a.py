@@ -144,9 +144,14 @@ def _start(procedure) -> list:
     return done
 
 
-def _long(rig, **kwargs):
+def _cap(rig) -> IntolerableCap:
+    pinprick = rig.session.config.study1["pinprick"]
+    return IntolerableCap(pinprick["intolerable_sites_for_global_cap"])
+
+
+def _long(rig, cap=None):
     prior = prior_for(rig.session.config, "pre_sensitisation", 1, None)
-    return LongProtocol(rig, "secondary", prior, **kwargs)
+    return LongProtocol(rig, "secondary", prior, cap or _cap(rig))
 
 
 # -- the long protocol ---------------------------------------------------------------------
@@ -210,7 +215,7 @@ def test_the_run_waits_for_the_experimenter(rig):
     protocol.cancel()
 
 
-def test_an_emergency_stop_mid_protocol_loses_only_the_trial_in_progress(rig):
+def test_a_stop_after_delivery_counts_it_and_repeats_at_the_next_site(rig):
     session, participant, experimenter = rig.session, rig.participant, rig.experimenter
     protocol = _long(rig)
     done = _start(protocol)
@@ -218,7 +223,8 @@ def test_an_emergency_stop_mid_protocol_loses_only_the_trial_in_progress(rig):
 
     def stop_once(answered, trial):
         if answered == 3 and not stopped:
-            stopped.append(trial.trial_index)
+            assert trial.stimulus_delivered, "the rating is cued after the stimulus"
+            stopped.append((trial.trial_index, trial.application.site_index))
             participant.emergency_stop.emit()
             assert participant.message.text == participant.text["screens"]["emergency_stop"]
             experimenter.resume_requested.emit()
@@ -227,11 +233,81 @@ def test_an_emergency_stop_mid_protocol_loses_only_the_trial_in_progress(rig):
     _drive(protocol, done, before_answer=stop_once)
     rows = _rows(session, "pinprick")
     events = _events(session)
-    assert stopped and "trial_cancelled" in events and "step_repeated" in events
-    # The abandoned application wrote no row, and the repeat is a new application.
-    assert len(rows) == done[0].applications_total
-    assert [int(r["trial_index"]) for r in rows] == list(range(1, len(rows) + 1))
+    assert stopped and "trial_cancelled" in events and "trial_lost_after_delivery" in events
+    lost_index, lost_site = stopped[0]
+    # No row for the lost application, but it counts as delivered.
+    assert lost_index not in [int(r["trial_index"]) for r in rows]
+    assert done[0].applications_total == len(rows) + 1
+    repeat = next(r for r in rows if int(r["trial_index"]) == lost_index + 1)
+    assert int(repeat["site_index"]) != lost_site, "the lost site was touched; rotate on"
     assert [r["purpose"] for r in rows].count("measure") == 9
+
+
+def test_a_stop_before_delivery_repeats_the_same_application(rig):
+    session, participant, experimenter = rig.session, rig.participant, rig.experimenter
+    protocol = _long(rig)
+    done = _start(protocol)
+    _spin(lambda: participant.stack.currentWidget() is participant.cue)
+    first = protocol._trial
+    assert not first.stimulus_delivered
+    participant.emergency_stop.emit()
+    experimenter.resume_requested.emit()
+    _drive(protocol, done)
+    rows = _rows(session, "pinprick")
+    assert "trial_lost_before_delivery" in _events(session)
+    assert rows[0]["trial_index"] == "1"
+    assert rows[0]["site_index"] == str(first.application.site_index)
+    assert done[0].applications_total == len(rows)
+
+
+def test_a_resume_in_the_interval_restores_the_blank_screen(rig):
+    participant, experimenter = rig.participant, rig.experimenter
+    protocol = _long(rig)
+    done = _start(protocol)
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    _answer(participant, 0)  # now in the interval
+    participant.emergency_stop.emit()
+    experimenter.resume_requested.emit()
+    assert participant.message.text == "", "blank, not the stop screen"
+    _drive(protocol, done)
+
+
+def test_a_resume_while_waiting_to_start_restores_the_blank_screen(rig):
+    participant, experimenter = rig.participant, rig.experimenter
+    protocol = _long(rig)
+    protocol.start()
+    experimenter.pause_requested.emit()
+    assert participant.message.text == participant.text["screens"]["paused"]
+    experimenter.proceed_requested.emit()
+    assert participant.stack.currentWidget() is not participant.cue, "no start while paused"
+    experimenter.resume_requested.emit()
+    assert participant.message.text == ""
+    protocol.cancel()
+
+
+def test_a_cap_is_required(rig):
+    prior = prior_for(rig.session.config, "pre_sensitisation", 1, None)
+    with pytest.raises(AssertionError, match="IntolerableCap"):
+        LongProtocol(rig, "secondary", prior, None)
+    with pytest.raises(AssertionError, match="IntolerableCap"):
+        ShortProtocol(rig, "primary", "26", None)
+
+
+def test_a_discard_at_the_application_cap_says_it_will_not_be_repeated(app, loaded, tmp_path):
+    study1 = {**loaded.study1, "pinprick": {**loaded.study1["pinprick"], "max_applications": 2}}
+    rig = _make_rig(loaded, tmp_path, study1=study1)
+    protocol = _long(rig)
+    done = _start(protocol)
+    for _ in range(2):
+        _spin(lambda: rig.participant.stack.currentWidget() is rig.participant.vas)
+        _answer(rig.participant, 0)
+    rig.experimenter.discard_requested.emit()
+    status = rig.experimenter.status.text()
+    assert status == rig.experimenter.text["status"]["discarded_not_repeated"]
+    _spin(lambda: done)
+    assert len(_rows(rig.session, "pinprick")) == 2 and done[0].capped
+    assert len(_rows(rig.session, "discards")) == 1
+    rig.session.close()
 
 
 def test_a_discard_writes_a_discards_row_and_repeats(rig):
@@ -311,6 +387,9 @@ def test_a_ceiling_rating_caps_the_site(rig):
     site = int(rows[0]["site_index"])
     assert cap.cap_for("secondary", site) == 15, "the 26 g is index 15 of the held ladder"
     assert "intolerable_site_cap" in _events(session)
+    # Logged, never shown: at a ceiling of 100, naming the capped site names the rating.
+    warnings = rig.experimenter.text["warnings"]
+    assert "intolerable_cap" not in warnings and "intolerable_global_cap" not in warnings
     held = session.config.filaments["filaments"]
     forces = {f["label_g"]: f["force_nominal_mn"] for f in held}
     for row in rows[1:]:
@@ -376,7 +455,7 @@ def test_the_fit_preview_rerun_is_bounded(app, loaded, tmp_path):
 
 def test_the_short_protocol_takes_the_median_at_a_fixed_filament(rig):
     session = rig.session
-    protocol = ShortProtocol(rig, "primary", "60")
+    protocol = ShortProtocol(rig, "primary", "60", _cap(rig))
     done = _start(protocol)
     presses = iter([1, 0, 1, 1, 0])
     _drive(protocol, done, respond=lambda trial: next(presses))
@@ -393,7 +472,7 @@ def test_the_short_protocol_takes_the_median_at_a_fixed_filament(rig):
 
 def test_the_short_protocol_intervals_are_jittered_within_range(rig):
     session = rig.session
-    protocol = ShortProtocol(rig, "primary", "26")
+    protocol = ShortProtocol(rig, "primary", "26", _cap(rig))
     done = _start(protocol)
     _drive(protocol, done)
     pinprick = session.config.study1["pinprick"]
@@ -434,7 +513,7 @@ def test_a_brush_discard_points_at_the_brush_table(rig):
 
 
 def test_the_experimenter_never_sees_a_rating(rig):
-    protocol = ShortProtocol(rig, "primary", "26")
+    protocol = ShortProtocol(rig, "primary", "26", _cap(rig))
     done = _start(protocol)
     seen = []
 

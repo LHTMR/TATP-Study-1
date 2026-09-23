@@ -373,6 +373,11 @@ class LongProtocolState:
             if adjacent and straddle:
                 self._bracket(max(previous.applied_index, outcome.applied_index))
 
+    def count_lost_delivery(self) -> None:
+        """An application reached the skin but was never rated (an interruption). It counts
+        toward `max_applications`, which bounds what the participant is given."""
+        self.delivered += 1
+
     def bar_everything(self) -> None:
         """Not even the lightest filament may be given anywhere: the run ends below range."""
         self.out_of_range = BELOW
@@ -458,29 +463,31 @@ class IntolerableCap:
     Per site, keyed by region and site, for one time point: whoever runs a time point creates
     one and passes it to every protocol in it, and the next time point gets a fresh one.
     Prospective -- a rating caps what follows it, never itself. Once
-    `intolerable_sites_for_global_cap` distinct sites are capped, every site is capped at the
-    lowest filament that reached the ceiling anywhere.
+    `intolerable_sites_for_global_cap` distinct sites of one region are capped, every site of
+    that region is capped at the lowest filament that reached the ceiling in it. Regions are
+    kept apart: the primary zone's sensitivity says nothing about the secondary's, and the
+    sites of each are a rotation of their own.
     """
 
     def __init__(self, sites_for_global_cap: int):
         self.sites_for_global_cap = sites_for_global_cap
         self.site_caps: dict[tuple[str, int], int] = {}
 
-    @property
-    def global_cap(self) -> int | None:
-        if len(self.site_caps) < self.sites_for_global_cap:
+    def global_cap(self, region: str) -> int | None:
+        caps = [cap for (r, _), cap in self.site_caps.items() if r == region]
+        if len(caps) < self.sites_for_global_cap:
             return None
-        return min(self.site_caps.values())
+        return min(caps)
 
     def record(self, region: str, site: int, applied_index: int) -> bool:
-        """A ceiling rating at this site. Returns whether it switched the global cap on."""
-        was_global = self.global_cap is not None
+        """A ceiling rating at this site. Returns whether it switched the region's cap on."""
+        was_global = self.global_cap(region) is not None
         key = (region, site)
         self.site_caps[key] = min(self.site_caps.get(key, applied_index), applied_index)
-        return not was_global and self.global_cap is not None
+        return not was_global and self.global_cap(region) is not None
 
     def cap_for(self, region: str, site: int) -> int | None:
-        candidates = (self.site_caps.get((region, site)), self.global_cap)
+        candidates = (self.site_caps.get((region, site)), self.global_cap(region))
         caps = [c for c in candidates if c is not None]
         return min(caps) if caps else None
 
@@ -591,6 +598,9 @@ class _RatedTrial(QObject):
 
         self.cue_onset_iso = ""
         self.rating_cue_iso = ""
+        # From `stimulus_due` on, the experimenter has applied the stimulus: an interruption
+        # after it has cost the participant a delivery even though no row is written.
+        self.stimulus_delivered = False
         self._cue_onset_t_session_s: float | None = None
         self._pending = None
 
@@ -644,6 +654,7 @@ class _RatedTrial(QObject):
         self._after(self.warning_lead_s - self.warning_duration_s, self._stimulus_due)
 
     def _stimulus_due(self) -> None:
+        self.stimulus_delivered = True
         self.session.log("stimulus_due", detail=self._stimulus_detail())
         self._after(self.rating_cue_delay_s, self._cue_rating)
 
@@ -723,15 +734,19 @@ class PinprickTrial(_RatedTrial):
         )
         self.application = application
         self.intolerable_vas_pct = float(pinprick["intolerable_vas_pct"])
+        self.filaments = ladder(session.config)
         # Changed by the experimenter's substitution while the trial runs (SPEC.md 8.2).
         self.applied_label_g = application.applied_label_g
+
+    def _filament(self, label_g: str) -> Filament:
+        return self.filaments[ladder_index(self.filaments, label_g)]
 
     def _instruction(self) -> str:
         text = self.experimenter.text
         self._filament(self.application.applied_label_g)  # refuses one not held, before the cue
         return text["instructions"]["apply_filament"].format(
             filament=self.application.filament_label_g,
-            force_mn=self._filament(self.application.filament_label_g)["force_nominal_mn"],
+            force_mn=self._filament(self.application.filament_label_g).force_nominal_mn,
             site=self.application.site_index,
             region=text["terms"]["regions"][self.application.region],
         )
@@ -754,7 +769,7 @@ class PinprickTrial(_RatedTrial):
         the spec's substitution is a lowering, and anything else is probably a slip.
         """
         warnings = self.experimenter.text["warnings"]
-        if not any(f["label_g"] == label_g for f in self.session.config.filaments["filaments"]):
+        if label_g not in {f.label_g for f in self.filaments}:
             self.session.log(
                 "substitution_unknown", origin="experimenter", severity="warning",
                 detail=f"{label_g} g",
@@ -763,8 +778,8 @@ class PinprickTrial(_RatedTrial):
             self.experimenter.refresh()
             return
         self.applied_label_g = label_g
-        asked = self._filament(self.application.filament_label_g)["force_nominal_mn"]
-        lower = self._filament(label_g)["force_nominal_mn"] < asked
+        asked = self._filament(self.application.filament_label_g).force_nominal_mn
+        lower = self._filament(label_g).force_nominal_mn < asked
         self.session.log(
             "substitution_entered",
             origin="experimenter",
@@ -795,8 +810,8 @@ class PinprickTrial(_RatedTrial):
         # of them stay consistent about one object. Which filament was asked for is in
         # `filament_label_g`, and its own forces are a lookup away in filaments.yaml.
         applied = self._filament(applied_label)
-        nominal_mn = applied["force_nominal_mn"]
-        measured_mn = applied["force_measured_mn"]
+        nominal_mn = applied.force_nominal_mn
+        measured_mn = applied.force_measured_mn
         self.session.files.write(
             PINPRICK_TABLE,
             timestamp_iso=self.cue_onset_iso,
@@ -812,7 +827,7 @@ class PinprickTrial(_RatedTrial):
             applied_filament_label_g=applied_label,
             force_nominal_mn=nominal_mn,
             force_measured_mn=measured_mn,
-            force_applied_mn=nominal_mn if measured_mn is None else measured_mn,
+            force_applied_mn=applied.force_mn,
             substituted=applied_label != application.filament_label_g,
             site_index=application.site_index,
             cue_onset_iso=self.cue_onset_iso,
@@ -825,12 +840,6 @@ class PinprickTrial(_RatedTrial):
             # flag is prospective -- it caps the applications after this one, not this one.
             intolerable=response.rating_percent >= self.intolerable_vas_pct,
         )
-
-    def _filament(self, label_g: str) -> dict:
-        for filament in self.session.config.filaments["filaments"]:
-            if filament["label_g"] == label_g:
-                return filament
-        raise KeyError(f"filaments.yaml lists no filament labelled {label_g!r} g")
 
 
 class BrushTrial(_RatedTrial):
@@ -891,8 +900,14 @@ class _Series(Procedure):
     """What the three rated protocols share: the experimenter's launch, the jittered interval
     and discard-and-repeat (SPEC.md 8.3, 11).
 
-    Subclasses implement `begin`, `_next` (the next application or the end) and `_rollback`
-    (undo the last application's rating).
+    Subclasses implement `begin`, `_next` (the next application or the end), `_rollback`
+    (undo the last application's rating, returning whether a repeat will follow) and
+    `_count_lost_delivery` (an application delivered but never rated).
+
+    **An interruption during an application** (SPEC.md 13) loses the trial and writes no row.
+    Before the stimulus was due, nothing reached the skin, and the same application is
+    repeated at the same site. From then on it had, so the delivery is counted and the repeat
+    goes to the next site in rotation, like any other application after one delivered there.
     """
 
     def __init__(self, rig: Rig, isi_min_s: float, isi_max_s: float):
@@ -901,47 +916,48 @@ class _Series(Procedure):
         self.isi_min_s = isi_min_s
         self.isi_max_s = isi_max_s
         self.applications = 0
-        self._on_go: Callable[[], None] | None = None
         # (table, the row's timestamp_iso, its trial_index) while a discard is accepted.
         self._discardable: tuple[str, str, int] | None = None
-        self.experimenter.proceed_requested.connect(self._on_proceed)
+
+    def connect_actions(self) -> None:
         self.experimenter.discard_requested.connect(self._on_discard)
 
-    # -- lifecycle ---------------------------------------------------------------------
-
-    def cancel(self) -> None:
-        if self.running:
-            self._disconnect_actions()
-        super().cancel()
-
-    def finish(self, result: object) -> None:
-        self._disconnect_actions()
-        super().finish(result)
-
-    def _disconnect_actions(self) -> None:
-        self.experimenter.proceed_requested.disconnect(self._on_proceed)
+    def disconnect_actions(self) -> None:
         self.experimenter.discard_requested.disconnect(self._on_discard)
 
-    # -- the experimenter's launch ------------------------------------------------------
+    def wait_to_start(self, then: Callable[[], None]) -> None:
+        """The experimenter confirms the start of the block (SPEC.md 8.3)."""
 
-    def await_proceed(self, instruction: str, then: Callable[[], None]) -> None:
-        """A step that waits for the experimenter to say go (SPEC.md 7.4, 8.3)."""
-
-        def begin() -> None:
-            self._on_go = then
-            self.experimenter.set_instruction(instruction)
+        def prepare() -> None:
+            self.participant.show_blank()
+            self.experimenter.set_instruction(self.experimenter.text["instructions"]["ready"])
             self.experimenter.refresh()
 
-        self.step(begin)
+        self.await_proceed(then, prepare)
 
-    def _on_proceed(self) -> None:
-        # A press while interrupted must not launch anything behind the stop screen; the
-        # resume re-runs the waiting step, and the next press is the one that counts.
-        if self._on_go is None or self.rig.interruptions.active is not None:
+    # -- interruptions ------------------------------------------------------------------
+
+    def on_interrupted(self, kind: str) -> None:
+        trial = self._trial
+        super().on_interrupted(kind)
+        if trial is None:
             return
-        then, self._on_go = self._on_go, None
-        self.session.log("proceed", origin="experimenter", detail=type(self).__name__)
-        then()
+        if trial.stimulus_delivered:
+            self._count_lost_delivery()
+            self.session.log(
+                "trial_lost_after_delivery", severity="warning",
+                detail=f"trial {trial.trial_index}; counted, repeated at the next site",
+            )
+            # The resume plans afresh: the rotation has already moved past this site.
+            self._step = self._advance
+        else:
+            self.session.log(
+                "trial_lost_before_delivery",
+                detail=f"trial {trial.trial_index}; repeated as planned",
+            )
+
+    def _count_lost_delivery(self) -> None:
+        raise NotImplementedError
 
     # -- applications and the interval between them --------------------------------------
 
@@ -965,7 +981,13 @@ class _Series(Procedure):
     def _wait_then_next(self) -> None:
         seconds = jittered_isi_s(self.session.rng, self.isi_min_s, self.isi_max_s)
         self.session.log("interval", detail=f"{seconds:.2f} s")
-        self.wait(seconds, self._advance)
+
+        def begin() -> None:
+            # Also what a resume lands on, so the stop screen does not outlast the stop.
+            self.participant.show_blank()
+            self._after(seconds, self._advance)
+
+        self.step(begin)
 
     def _advance(self) -> None:
         self._discardable = None
@@ -974,14 +996,12 @@ class _Series(Procedure):
     def _next(self) -> None:
         raise NotImplementedError
 
-    def _rollback(self) -> None:
+    def _rollback(self) -> bool:
         raise NotImplementedError
 
     # -- discard and repeat (SPEC.md 11) ------------------------------------------------
 
     def _on_discard(self) -> None:
-        if not self.running:
-            return  # built but not yet started: the discard is some other procedure's
         if self._discardable is None or self.rig.interruptions.active is not None:
             self.session.log(
                 "discard_ignored",
@@ -1006,8 +1026,11 @@ class _Series(Procedure):
         self.session.log(
             "trial_discarded", origin="experimenter", detail=f"{table} trial {trial_index}"
         )
-        self._rollback()
-        self.experimenter.set_status(self.experimenter.text["status"]["discarded"])
+        # The discard is recorded either way -- the trial was delivered badly whatever follows.
+        # At the application cap no repeat can follow, and the status says so.
+        repeats = self._rollback()
+        status = "discarded" if repeats else "discarded_not_repeated"
+        self.experimenter.set_status(self.experimenter.text["status"][status])
         self.experimenter.refresh()
         # The interval restarts in full, so the repeat is as far from the discarded
         # application as any application is from the one before it.
@@ -1048,8 +1071,8 @@ class LongProtocol(_Series):
     """The 40 % VAS force (SPEC.md 8.2). `finished` carries a `LongResult`.
 
     `prior` is where the search starts (`prior_for`). `cap` is the time point's
-    `IntolerableCap`, shared with any other protocol at the same time point; a fresh one is
-    used if none is given.
+    `IntolerableCap`, shared with every pinprick protocol at the same time point. It is
+    required: the cap's scope is the time point (SPEC.md 8.2), which only the caller knows.
 
     With the fit preview on (SPEC.md 11.1) the run ends by emitting `fit_ready` with an
     `F40Fit` and waiting for `fit_accepted` or `fit_rerun_requested`. A re-run keeps the
@@ -1064,8 +1087,9 @@ class LongProtocol(_Series):
         rig: Rig,
         region: str,
         prior: Prior,
-        cap: IntolerableCap | None = None,
+        cap: IntolerableCap,
     ):
+        assert isinstance(cap, IntolerableCap), "the time point's IntolerableCap is required"
         pinprick = rig.session.config.study1["pinprick"]
         super().__init__(rig, float(pinprick["isi_min_s"]), float(pinprick["isi_max_s"]))
         assert region in REGIONS, f"region {region!r} is not one of {REGIONS}"
@@ -1073,7 +1097,7 @@ class LongProtocol(_Series):
         self.region = region
         self.prior = prior
         self.pinprick = pinprick
-        self.cap = cap or IntolerableCap(int(pinprick["intolerable_sites_for_global_cap"]))
+        self.cap = cap
         self.filaments = ladder(self.session.config)
         self.forces_mn = [f.force_mn for f in self.filaments]
         self.start_index = ladder_index(self.filaments, prior.start_filament_label_g)
@@ -1092,11 +1116,14 @@ class LongProtocol(_Series):
         self._awaiting_fit: LongResult | None = None
         self._last: tuple[Planned, int] | None = None  # the planned application and its site
         self._logged_plan: list[int] | None = None
+
+    def connect_actions(self) -> None:
+        super().connect_actions()
         self.experimenter.fit_accepted.connect(self._on_fit_accepted)
         self.experimenter.fit_rerun_requested.connect(self._on_fit_rerun)
 
-    def _disconnect_actions(self) -> None:
-        super()._disconnect_actions()
+    def disconnect_actions(self) -> None:
+        super().disconnect_actions()
         self.experimenter.fit_accepted.disconnect(self._on_fit_accepted)
         self.experimenter.fit_rerun_requested.disconnect(self._on_fit_rerun)
 
@@ -1120,7 +1147,7 @@ class LongProtocol(_Series):
             detail=f"{self.region}, run {self.run_index}, start "
             f"{self.prior.start_filament_label_g} g ({self.prior.source})",
         )
-        self.await_proceed(self.experimenter.text["instructions"]["ready"], self._next)
+        self.wait_to_start(self._next)
 
     def _next(self) -> None:
         state = self.state
@@ -1178,8 +1205,12 @@ class LongProtocol(_Series):
         _record_ceiling(self, trial, response, applied, site)
         self.interval(PINPRICK_TABLE, trial)
 
-    def _rollback(self) -> None:
+    def _rollback(self) -> bool:
         self.state.discard_last()
+        return not self.state.finished
+
+    def _count_lost_delivery(self) -> None:
+        self.state.count_lost_delivery()
 
     # -- the end of a run ---------------------------------------------------------------
 
@@ -1216,6 +1247,7 @@ class LongProtocol(_Series):
         fit = F40Fit(result, self.slope, self.target, points)
 
         def begin() -> None:
+            self.participant.show_blank()
             self._awaiting_fit = result
             self.fit_ready.emit(fit)
 
@@ -1241,9 +1273,12 @@ class LongProtocol(_Series):
                 detail=f"{result.applications_total} applications; best available estimate",
             )
         rho_min = float(self.pinprick["ordinal_rho_min"])
-        if result.ordinal_rho is None or result.ordinal_rho < rho_min:
-            # A consistency check only, never a gate (comparison doc 6.7). Logged, not shown:
-            # the correlation is computed from ratings, which the lab screen never carries.
+        # A consistency check only, never a gate (comparison doc 6.7). Logged, not shown: the
+        # correlation is computed from ratings, which the lab screen never carries.
+        if result.ordinal_rho is None:
+            # No variation in force or in rating -- not a low correlation, no correlation.
+            self.session.log("ordinal_consistency_undefined", detail="rho has no value")
+        elif result.ordinal_rho < rho_min:
             self.session.log(
                 "ordinal_consistency_low", severity="warning",
                 detail=f"rho {result.ordinal_rho}, threshold {rho_min}",
@@ -1319,25 +1354,25 @@ class LongProtocol(_Series):
 
 
 def _record_ceiling(protocol, trial: PinprickTrial, response, applied: int, site: int) -> None:
-    """Feed a ceiling rating to the cap and tell the experimenter what it now bars."""
+    """Feed a ceiling rating to the cap, and log what it now bars.
+
+    Logged only, never shown. With the ceiling at the top of the scale, "site N is capped"
+    would tell the experimenter the participant rated 100 there, and the lab screen never
+    carries a rating (SPEC.md 11). The software enforces the cap itself (docs/LOG.md N7.B11).
+    """
     if response.rating_percent < protocol.intolerable_vas_pct:
         return
     went_global = protocol.cap.record(protocol.region, site, applied)
-    text = protocol.experimenter.text["warnings"]
-    cap = protocol.cap.cap_for(protocol.region, site)
-    label = protocol.filaments[cap].label_g
+    label = protocol.filaments[protocol.cap.cap_for(protocol.region, site)].label_g
+    protocol.session.log(
+        "intolerable_site_cap", severity="warning", detail=f"site {site}, {label} g"
+    )
     if went_global:
-        message = text["intolerable_global_cap"].format(
-            filament=protocol.filaments[protocol.cap.global_cap].label_g
-        )
-        protocol.session.log("intolerable_global_cap", severity="warning", detail=f"{label} g")
-    else:
-        message = text["intolerable_cap"].format(site=site, filament=label)
+        lowest = protocol.filaments[protocol.cap.global_cap(protocol.region)].label_g
         protocol.session.log(
-            "intolerable_site_cap", severity="warning", detail=f"site {site}, {label} g"
+            "intolerable_global_cap", severity="warning",
+            detail=f"{protocol.region}, every site at {lowest} g",
         )
-    protocol.experimenter.set_status(message)
-    protocol.experimenter.refresh()
 
 
 @dataclass(frozen=True)
@@ -1371,7 +1406,7 @@ class _RatingSeries(_Series):
 
     def begin(self) -> None:
         self.session.log("series_started", detail=f"{type(self).__name__}, {self.region}")
-        self.await_proceed(self.experimenter.text["instructions"]["ready"], self._next)
+        self.wait_to_start(self._next)
 
     def _next(self) -> None:
         if len(self.ratings) == self.n_trials:
@@ -1392,8 +1427,12 @@ class _RatingSeries(_Series):
         self.ratings.append(response.rating_percent)
         self.interval(self.TABLE, trial)
 
-    def _rollback(self) -> None:
+    def _rollback(self) -> bool:
         self.ratings.pop()
+        return True  # a fixed number of ratings, and no application cap
+
+    def _count_lost_delivery(self) -> None:
+        pass  # the series counts ratings, not deliveries; the log records the loss
 
     def _stimulus(self) -> str:
         raise NotImplementedError
@@ -1413,8 +1452,9 @@ class ShortProtocol(_RatingSeries):
         rig: Rig,
         region: str,
         filament_label_g: str,
-        cap: IntolerableCap | None = None,
+        cap: IntolerableCap,
     ):
+        assert isinstance(cap, IntolerableCap), "the time point's IntolerableCap is required"
         pinprick = rig.session.config.study1["pinprick"]
         super().__init__(
             rig,
@@ -1426,7 +1466,7 @@ class ShortProtocol(_RatingSeries):
         self.filaments = ladder(self.session.config)
         self.index = ladder_index(self.filaments, filament_label_g)
         self.filament_label_g = filament_label_g
-        self.cap = cap or IntolerableCap(int(pinprick["intolerable_sites_for_global_cap"]))
+        self.cap = cap
         self.intolerable_vas_pct = float(pinprick["intolerable_vas_pct"])
         self._site = 0
 
