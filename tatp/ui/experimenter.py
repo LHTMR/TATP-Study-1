@@ -732,7 +732,9 @@ class ExperimenterWindow(QWidget):
             # differ by condition (SPEC.md 16). The log has the detail.
             faults = words["fault_withheld"].format(value=len(hardware["faults"]))
         else:
-            faults = LINE_SEPARATOR.join(words["fault"].format(value=f) for f in hardware["faults"])
+            faults = LINE_SEPARATOR.join(
+                words["fault"].format(value=fault) for fault in hardware["faults"]
+            )
         self.faults.setText(
             self.faults.fontMetrics().elidedText(faults, Qt.ElideRight, SIDE_COLUMN_PX)
         )
