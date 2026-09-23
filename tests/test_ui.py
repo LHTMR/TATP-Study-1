@@ -803,6 +803,18 @@ def test_no_pressure_is_drawn_during_the_intervention_even_if_the_view_leaks_it(
         assert window.pressures.text() == ""
 
 
+def test_a_fault_in_the_intervention_is_shown_without_its_channel(drawn):
+    """Which channel faulted could say which pattern is running (SPEC.md 16)."""
+    window, held = drawn
+    held["view"] = _all_keys(phase="intervention",
+                             hardware=_hardware(faults=["channel 4: valve stuck"]))
+    window.refresh()
+    assert window.faults.isVisibleTo(window)
+    assert "channel 4" not in window.faults.text()
+    assert "channel 4" not in window.faults.toolTip()
+    assert "1" in window.faults.text()
+
+
 def test_the_zone_diagram_marks_the_target_and_a_new_step_clears_it(drawn):
     window, _ = drawn
     window.set_instruction("apply")

@@ -253,6 +253,9 @@ hardware:
   # och återuppvärmningen, eftersom det skulle skilja sig mellan betingelserna (SPEC.md 16).
   title: Plagget
   fault: 'Fel: {value}'
+  # Under interventionen och återuppvärmningen nämner felets detalj en kanal, och vilka kanaler
+  # ett mönster använder skiljer sig mellan betingelserna (SPEC.md 16). Själva felet visas.
+  fault_withheld: 'Fel i plagget: {value} (detalj i data)'
 
 fit_preview:
   # SPEC.md 11.1. Visas bara när fit_preview.enabled är på. Det enda stället där deltagarens

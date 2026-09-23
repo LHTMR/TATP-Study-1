@@ -724,9 +724,15 @@ class ExperimenterWindow(QWidget):
             )
             self.pressures.setText(status["channel_pressures"].format(value=readings))
             self.pressures.setVisible(bool(pressures))
-        faults = LINE_SEPARATOR.join(
-            self.text["hardware"]["fault"].format(value=f) for f in hardware["faults"]
-        )
+        words = self.text["hardware"]
+        if not hardware["faults"]:
+            faults = ""
+        elif phase in BLINDED_PHASES:
+            # That there is a fault is shown; which channel is not, because the channels in use
+            # differ by condition (SPEC.md 16). The log has the detail.
+            faults = words["fault_withheld"].format(value=len(hardware["faults"]))
+        else:
+            faults = LINE_SEPARATOR.join(words["fault"].format(value=f) for f in hardware["faults"])
         self.faults.setText(
             self.faults.fontMetrics().elidedText(faults, Qt.ElideRight, SIDE_COLUMN_PX)
         )

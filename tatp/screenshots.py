@@ -438,6 +438,13 @@ def _experimenter_states(text: dict) -> dict:
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: window.set_instruction(instructions["touch_start"]),
         ),
+        "intervention_fault": (
+            "A garment fault during the intervention: shown in red, counted, and without the "
+            "channel, which could say which pattern is running (SPEC.md 16).",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
+             "hardware": {**SAMPLE_HARDWARE, "faults": [SAMPLE_FAULT]}},
+            lambda window: window.set_instruction(instructions["touch_start"]),
+        ),
         "countdown": (
             "Waiting for the next block: 'Next: block 3 (touch) in 04:05', grey.",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S, "next_event": upcoming},

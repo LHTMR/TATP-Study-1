@@ -53,6 +53,9 @@ screens:
     else moved. (en)'
   experimenter_en_interrupted_pause: 'The experimenter''s pause: the same line in
     amber, Resume enabled. (en)'
+  experimenter_en_intervention_fault: 'A garment fault during the intervention: shown
+    in red, counted, and without the channel, which could say which pattern is running
+    (SPEC.md 16). (en)'
   experimenter_en_launcher: The launcher's four entries (SPEC.md 4.1), Design a pattern
     disabled with its reason (en).
   experimenter_en_launcher_instruments: 'Instruments and environment (SPEC.md 8.1):
@@ -137,6 +140,9 @@ screens:
     else moved. (sv)'
   experimenter_sv_interrupted_pause: 'The experimenter''s pause: the same line in
     amber, Resume enabled. (sv)'
+  experimenter_sv_intervention_fault: 'A garment fault during the intervention: shown
+    in red, counted, and without the channel, which could say which pattern is running
+    (SPEC.md 16). (sv)'
   experimenter_sv_launcher: The launcher's four entries (SPEC.md 4.1), Design a pattern
     disabled with its reason (sv).
   experimenter_sv_launcher_instruments: 'Instruments and environment (SPEC.md 8.1):
