@@ -147,6 +147,40 @@ touch_calibration:
   sham_target_intensity_pct: 20.0    # low-intensity static sham touch, not absence of touch
   evenness_check: true               # end-of-calibration "does it feel even?" with a
                                      # rebalance path (SPEC.md 9, comparison doc 7.4)
+  # ---- Added for Milestone 4. [R] marks a value a docs/research report recommended. ----
+  estimation_settle_s: 3.0           # [R] R32. Stimulus on this long before the intensity VAS
+                                     # appears, and it stays on until confirm: the question is
+                                     # in the present tense. The comparison hold's 3 s.
+  estimation_iti_min_s: 8.0          # [R] R32. Stimulus off to the next cue, jittered uniformly
+  estimation_iti_max_s: 12.0         # between these, drawn from the session RNG
+  catch_felt_min_pct: 10.0           # [R] R32. A catch trial counts as felt when rated at or
+                                     # above the scale's own "just noticeable" anchor
+  stage1:
+    # [R] R30. The SPEC.md 9 stage-1 gate; a fit failing any one fails stage 1. Low confidence
+    # in the numbers -- the precedents are heat pain -- so check their failure rates first in
+    # the pilot. R^2 is stored and deliberately NOT gated on (Amir et al. 2022).
+    min_span_vas: 40.0               # "flat": fitted rise across the participant's own bracket,
+                                     # b * (x_max - x_min). A slope floor alone is meaningless
+                                     # because bracket widths differ.
+    min_spearman_rho: 0.56           # "non-monotonic": rank correlation of rating on pressure,
+                                     # catch trials excluded; the one-sided 5 % cut at n = 10.
+                                     # A slope <= 0 fails as well, whatever rho is.
+    max_residual_sd_vas: 25.0        # "poor residuals", in VAS points
+  channel_match_pct: 50.0            # [R] R31. Channels are matched, and checked in step 4, at
+                                     # the reference's FITTED P50 -- inside the range every
+                                     # condition is delivered in
+  channel_match_adjustments: 2       # step 3, one from each of start_directions
+  channel_match_zero_retries: 1      # a match that produced 0 kPa has no gain: match the
+                                     # channel again this many times, then ask the
+                                     # experimenter (repeat, or a recorded fallback)
+  equalisation_pairs_to_flag: 2      # [R] R33. A pair is both orders. A second pair runs only
+                                     # when the first favoured one channel in both orders, and a
+                                     # channel is re-adjusted only when it wins all of them --
+                                     # 12.5 % false alarms for a truly equal channel
+  equalisation_readjust_max_passes: 1   # [R] R33. Re-adjust (both start points) and re-check
+                                     # this many times, then continue with a logged warning
+  evenness_max_rebalances: 1         # how often "uneven" offers the experimenter a rebalance
+                                     # (steps 3 and 4 again) before the answer is just recorded
 
 patterns:
   # Which pattern each condition uses, by pattern name within the selected pattern folder.
@@ -156,6 +190,21 @@ patterns:
     ct_targeted: sweep_03cms
     sham: static_sham
   preference_candidates: [sweep_01cms, sweep_03cms, sweep_20cms]
+  # The fixed CT-targeted pattern every session uses where the condition must not show: the
+  # masking check (SPEC.md 10.7), the stop rehearsal (10.9), the pleasantness adjustment and the
+  # evenness check (9). Identical in every session, so it carries no information about the
+  # condition. It is the ct_targeted condition's own pattern, which S may want to review
+  # (docs/research/R31: it slightly favours ct_targeted in the pleasantness step).
+  fixed_ct_pattern: sweep_03cms
+
+training:
+  # SPEC.md 10.9. The pressure the stop rehearsal runs the fixed pattern at -- its own value,
+  # free to diverge from audio.masking_check_pressure_kpa, because a pressure chosen to be
+  # audible is not necessarily one that is clearly felt. A HARDWARE/SAFETY value, so it is S's
+  # (CLAUDE.md): null until S sets it, local item L11. While null the rehearsal still runs, but
+  # commands NO pressure -- the pattern switches channels at whatever they hold, which on the
+  # valve garment is nothing -- and logs a warning every session.
+  stop_rehearsal_pressure_kpa: null
 
 cues:
   # A visual warning cue precedes every stimulus (SPEC.md 10.5).

@@ -95,6 +95,18 @@ screens:
   # en del av den betingelsens manipulation, inte en tillfällig ordvändning: den säger att
   # beröringen börjar FÖR ATT deltagaren tryckte. Mildra den inte till "tryck för att fortsätta".
   self_start: Tryck på ▶ när du är redo att beröringen ska börja.
+  # SPEC.md 10.9, övningen med nödstoppet. Godkänd av S 10 sep 2026 och ordagrant kopierad från
+  # specifikationen. Den första ritas med stoppknappen under sig -- "den här knappen" pekar på
+  # den; skärmen mellan de två är den riktiga `emergency_stop`, oförändrad.
+  stop_rehearsal: |-
+    Beröringen är igång nu.
+    Tryck på den här knappen för att stänga av den.
+    Ingenting går förlorat — vi fortsätter direkt efteråt.
+  stop_rehearsal_done: |-
+    Det där är stoppknappen.
+    Den fungerar när som helst, under alla delar av besöket.
+
+    Tryck på ▶ för att fortsätta.
 
 participant_controls:
   # Namnet syftar på deltagarens egna knappar: `controls:` i försöksledarfilerna är redan den
@@ -126,9 +138,7 @@ choices:
   # UI_PRINCIPLES.md 5.8-5.12). Var och en har en fråga och de två alternativens etiketter, som
   # skrivs på de utritade knapparna -- en etikett är alltså en fras, inte en mening.
   #
-  # Det jakande eller först nämnda alternativet ligger alltid till VÄNSTER, samma konvention som
-  # `audio_setup.still_audible`, som har samma form och bör flyttas hit när audio.py byggs
-  # (docs/LOG.md N5.12).
+  # Det jakande eller först nämnda alternativet ligger alltid till VÄNSTER (SPEC.md 10.7).
   comparison:
     # SPEC.md 9 steg 4. Godkänd 23 aug 2026 som textskärm; det som utgått sedan dess är bara de
     # två rader som de utritade knapparna ersätter -- "Vänster knapp: den första. Höger knapp:
@@ -138,6 +148,18 @@ choices:
       Vilken kändes starkast?
     left: Den första
     right: Den andra
+  still_audible:
+    # SPEC.md 10.7, maskeringskontrollen. Godkänd av S 23 aug 2026 under `audio_setup` och
+    # flyttad hit oförändrad när audio.py byggdes (docs/LOG.md N5.12): det är en valskärm.
+    question: Hör du fortfarande plagget?
+    left: Ja, jag hör det
+    right: Nej, bruset döljer det
+  # DRAFT (LOG N7.C1): written by the build, not ethics-sourced
+  evenness:
+    # SPEC.md 9, jämnhetskontrollen i slutet av kalibreringen, medan mönstret spelas.
+    question: Känns rörelsen jämn längs armen?
+    left: Ja, den känns jämn
+    right: Nej, den känns ojämn
 
 audio_setup:
   # SPEC.md 10.7, maskeringskontrollen. Utkast 23 aug 2026 på S:s instruktion, godkänt av S
@@ -156,12 +178,7 @@ audio_setup:
     Höj bruset tills det döljer det ljudet.
     Sluta innan bruset i sig blir obehagligt.
     Tryck på ▶ när det är lagom.
-  still_audible:
-    # Två alternativ till vänster och höger, valda med motsvarande stor knapp (SPEC.md 10.7).
-    # Ja-alternativet ligger till vänster överallt, så det blir en konvention att lära sig.
-    question: Hör du fortfarande plagget?
-    left: Ja, jag hör det
-    right: Nej, bruset döljer det
+  # `still_audible` ligger under `choices` (docs/LOG.md N5.12).
   settled: |-
     Då är ljudnivån inställd för idag.
     Den är densamma resten av besöket.

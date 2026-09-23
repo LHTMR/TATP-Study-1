@@ -37,6 +37,15 @@ terms:
   out_of_range:
     below: det lättaste filamentet skattades redan på eller över målet
     above: det tyngsta filamentet skattades fortfarande under målet
+  stage1:
+    # Varför en skattning i beröringskalibreringen underkändes (SPEC.md 9). Anger vilken sorts
+    # fel, aldrig en skattning.
+    flat: platt
+    non_monotonic: stiger inte med trycket
+    poor_residuals: brusig
+    bracket_unusable: inget intervall mellan de två inställningarna
+    unreachable: mål utanför vad plagget kan ge
+    empty_window: inget behaglighetsintervall kvar inom plaggets gränser
 
 phases:
   setup: Förberedelse
@@ -78,6 +87,40 @@ instructions:
   mapping_ready: Bana {path} av {value}. Tryck på Starta block för att starta taktsignalen, och igen för att stoppa den vid gränsen.
   await_participant: Väntar på deltagarens svar.
   response_received: Svar mottaget.
+  # Förberedelser och beröringskalibrering (SPEC.md 9, 10.7, 10.9). Ingen nämner ett mönster
+  # eller en betingelse.
+  masking_check: 'Ljudinställning: deltagaren ställer in brusnivån mot plagget.'
+  earplugs: Sätt öronpropparna under hörlurarna och tryck sedan på Gå vidare.
+  stop_rehearsal: >-
+    Övning med stoppknappen: deltagaren trycker nu på stoppknappen. När stoppskärmen visas,
+    tryck på Återuppta. Tryck på Gå vidare bara om deltagaren inte kan trycka.
+  stop_rehearsal_resume: Stoppet registrerades. Tryck på Återuppta för att fortsätta inför deltagaren.
+  touchcal_bracket: 'Beröringskalibrering, steg 1: deltagaren ställer in beröringen på mittkanalen.'
+  touchcal_estimation: 'Beröringskalibrering, steg 2: deltagaren skattar en serie beröringar.'
+  touchcal_match: 'Beröringskalibrering, steg 3: deltagaren matchar kanal {channel} mot mittkanalen.'
+  touchcal_equalise: 'Beröringskalibrering, steg 4: deltagaren jämför kanal {channel} med mittkanalen.'
+  touchcal_pleasantness: 'Beröringskalibrering, steg 5: deltagaren ställer in den behagligaste nivån.'
+  touchcal_evenness: 'Beröringskalibrering: deltagaren får frågan om rörelsen känns jämn.'
+  touchcal_preference: 'Beröringskalibrering, steg 6: deltagaren väljer en sorts beröring.'
+  touchcal_fit_review: Skattningen i beröringskalibreringen är klar. Godkänn den, eller gör om proceduren.
+  touchcal_stage1_failed: >-
+    Skattningen i beröringskalibreringen klarade inte kvalitetskontrollen ({value}). Gör om
+    proceduren, eller godkänn den för att fortsätta med skattningen flaggad.
+  touchcal_stage1_unusable: >-
+    Skattningen i beröringskalibreringen kan inte användas ({value}). Gör om proceduren, eller
+    avbryt sessionen.
+  touchcal_stage1_exhausted: >-
+    Skattningen i beröringskalibreringen kan inte användas ({value}) och gränsen för antal
+    omkörningar är nådd. Godkänn för att fortsätta med en reservlösning som registreras som
+    inte giltig för analys, eller avbryt sessionen.
+  touchcal_gain_undefined: >-
+    Kanal {channel} matchades åter vid 0 kPa. Balansera om för att göra om matchningen, eller
+    gå vidare med kanalen på mittkanalens tryck, vilket registreras som inte giltigt för analys.
+  touchcal_uneven: >-
+    Deltagaren upplever rörelsen som ojämn längs armen. Balansera om kanalerna, eller gå vidare.
+  # Visas i början av varje beröring i ALLA betingelser, och inget annat visas: bara en
+  # betingelse startas av deltagaren, så en rad om starten skulle avslöja den (SPEC.md 16).
+  touch_start: 'Beröring: plagget startas.'
 
 controls:
   start_block: Starta block
@@ -142,6 +185,9 @@ warnings:
   masking_failed_after_earplugs: >-
     Fortfarande hörbart med öronproppar. Sessionen fortsätter och registreras som inte helt
     maskerad.
+  equalisation_mismatch: >-
+    Kanal {channel} matchar fortfarande inte mittkanalen efter omjustering. Sessionen fortsätter
+    och detta registreras.
 
 banners:
   reduced_capability: >-

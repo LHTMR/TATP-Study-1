@@ -58,6 +58,11 @@ responder:
     decrease: "‹"
     increase: "›"
     confirm: "▶"
+    # Drawn on ONE screen only, `screens.stop_rehearsal`, whose purpose is pointing at it
+    # (SPEC.md 10.9). Never drawn as an option on a response screen. What is physically on the
+    # R400's blank-screen button is not known to the build, and S may relabel it (docs/LOG.md
+    # N5.11), so this is a marked placeholder until S confirms it. Local item L12.
+    emergency_stop: "PLACEHOLDER"
 
 screens:
   # SPEC.md 20 item 9. Null means "primary screen, windowed", which is right for a
@@ -82,9 +87,23 @@ screens:
 audio:
   # Continuous white noise with an alert tone mixed over it as the cue (SPEC.md 10.5).
   # The white noise is generated, not a file (SPEC.md 3).
-  enabled: true
-  device: null                       # null = system default
+  backend: sounddevice               # sounddevice | recording. `recording` is the test double:
+                                     # it plays nothing and records what it was asked to play,
+                                     # as MockGarment does. Never a silent fallback -- a real
+                                     # session whose device fails raises (tatp/audio.py).
+  participant_device: null           # the participant's headphones; null = system default
+  experimenter_device: null          # lab-side alerts. Null = system default, which on the lab
+                                     # PC may BE the participant's headphones. Local item L10.
+  output_channels: 2                 # the same noise to both ears
   sample_rate_hz: 44100
+  tone_ramp_s: 0.01                  # raised-cosine onset/offset on every tone, so a cue does
+                                     # not start with a click -- a second, louder cue
+  # The two-button control of SPEC.md 10.3, applied to the noise level. The tap and hold
+  # timings are adjustment.* -- they describe the participant's hand, not the quantity. These
+  # two rates put the full start-to-ceiling range at about 6 s of continuous holding, matching
+  # the pressure control. Pilot-tunable; not a sound-level limit (white_noise_max_dbfs is).
+  noise_hold_rate_initial_db_s: 1.0
+  noise_hold_rate_final_db_s: 10.0
   # The participant sets their own noise level in the masking check (SPEC.md 10.7). These three
   # bound that adjustment; the level itself is not configured, it is measured per session.
   white_noise_start_dbfs: -60.0      # deliberately below audibility: the check starts quiet

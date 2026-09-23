@@ -170,10 +170,15 @@ def test_the_drawn_buttons_carry_the_devices_own_symbols(participant, session):
     assert responder.symbol_for(Action.INCREASE) == symbols["increase"]
 
 
-def test_no_symbol_is_drawn_for_the_emergency_stop(participant):
-    """A screen that drew the stop button would be inviting the press."""
-    with pytest.raises(ResponderError, match="button_symbols"):
-        participant.choice.responder.symbol_for(Action.EMERGENCY_STOP)
+def test_no_response_screen_draws_the_emergency_stop(participant):
+    """A response screen that drew the stop button would be inviting the press (SPEC.md 10.9).
+
+    Only the rehearsal points at it, and says so at the call.
+    """
+    responder = participant.choice.responder
+    with pytest.raises(ResponderError, match="never drawn as an option"):
+        responder.symbol_for(Action.EMERGENCY_STOP)
+    assert responder.symbol_for(Action.EMERGENCY_STOP, pointing_at_stop=True)
 
 
 def test_the_press_is_the_response_and_there_is_no_confirm(participant):
@@ -323,11 +328,57 @@ def test_a_held_button_is_drawn_pressed_until_it_is_released(participant):
     assert participant.grab().toImage() != unheld, "the pressed state was not drawn"
 
 
-def test_the_preference_screen_does_not_read_the_buttons(participant):
-    """Nothing moves between patterns yet, so a pressed state would be a false report."""
+def test_the_preference_screen_reads_the_buttons_as_the_adjustment_does(participant):
+    """Something now moves between patterns (SPEC.md 9 step 6), so a press is drawn and sent."""
+    pressed, confirmed = [], []
+    participant.adjust_pressed.connect(pressed.append)
+    participant.adjust_confirmed.connect(lambda: confirmed.append(True))
     participant.show_preference()
     participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, QT_KEYS["pagedown"], Qt.NoModifier))
-    assert participant.control.held == set()
+    assert participant.control.held == {"right"}
+    assert pressed == [Action.INCREASE.value]
+    _press(participant, "period")
+    assert confirmed == [True]
+
+
+def test_a_message_screen_reports_the_play_button(participant):
+    """"Press ▶ to continue" needs the press to reach whoever is waiting for it."""
+    seen = []
+    participant.message_confirmed.connect(lambda: seen.append(True))
+    participant.show_message("stop_rehearsal_done")
+    _press(participant, "period")
+    assert seen == [True]
+    participant.show_vas("pain")
+    _press(participant.vas, "period")
+    assert seen == [True], "a confirm on the VAS is the VAS's, not a message's"
+
+
+def test_the_stop_rehearsal_draws_the_stop_button_and_nothing_else_does(participant, session):
+    symbols = session.config.hardware["responder"]["button_symbols"]
+    participant.show_message("stop_rehearsal")
+    assert participant.message.stop_symbol == symbols["emergency_stop"]
+    participant.show_message("emergency_stop")
+    assert participant.message.stop_symbol is None
+    participant.show_blank()
+    assert participant.message.stop_symbol is None
+
+
+def test_the_warning_cue_announces_itself_for_the_audible_cue(participant):
+    seen = []
+    participant.warning_cue_shown.connect(lambda: seen.append(True))
+    participant.show_warning_cue()
+    assert seen == [True]
+
+
+def test_the_level_adjustment_reads_the_buttons_on_a_text_screen(participant, session):
+    pressed = []
+    participant.adjust_pressed.connect(pressed.append)
+    participant.show_level_adjustment("find_level")
+    assert participant.message.text == session.config.participant_text["audio_setup"][
+        "find_level"
+    ]
+    participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, QT_KEYS["pageup"], Qt.NoModifier))
+    assert pressed == [Action.DECREASE.value]
 
 
 # -- the experimenter window -------------------------------------------------------------

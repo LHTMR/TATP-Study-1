@@ -740,6 +740,10 @@ def needs_trial_rows(runs):
     return None
 
 
+def _logged(run: Run, event: str) -> bool:
+    return any(row["event"] == event for row in run.events())
+
+
 # A session key may be empty only when its reason holds for the run. Every other key must have
 # a value. The reasons are the validator's, and each is checked rather than assumed.
 MAY_BE_EMPTY: dict[str, tuple[str, Callable[[Run], bool]]] = {
@@ -751,12 +755,20 @@ MAY_BE_EMPTY: dict[str, tuple[str, Callable[[Run], bool]]] = {
     ),
     "room_temperature_c": ("optional, and the runner enters none", lambda run: True),
     "relative_humidity_pct": ("optional, and the runner enters none", lambda run: True),
-    "white_noise_level_dbfs": (
-        "the masking check has not run", lambda run: run.session["masking_attempts"] == "0"
-    ),
-    "masking_confirmed": (
-        "the masking check has not run", lambda run: run.session["masking_attempts"] == "0"
-    ),
+    # The setup procedures write their keys when they end; a session that never ran one writes
+    # them empty at close (tatp/session.py). "Never ran" is read from the log, so a procedure
+    # that ran and then lost its values still fails.
+    **{
+        key: ("the masking check has not run", lambda run: not _logged(run, "masking_result"))
+        for key in (
+            "white_noise_level_dbfs", "masking_confirmed", "masking_attempts", "earplugs_used"
+        )
+    },
+    **{
+        key: ("the stop rehearsal has not run",
+              lambda run: not _logged(run, "stop_rehearsal_started"))
+        for key in ("stop_rehearsal_ran", "stop_rehearsal_press_detected")
+    },
     "cloud_sync_warning": (
         "the data folder is not synced",
         lambda run: not provenance.cloud_sync_warning(

@@ -17,6 +17,7 @@ from pathlib import Path
 from tatp import allocation as alloc
 from tatp import provenance
 from tatp import schedule as sched
+from tatp.audio import Audio
 from tatp.clock import Clock
 from tatp.config import REPO_ROOT, Config, hash_files
 from tatp.datafiles import DataFileCollection
@@ -115,13 +116,17 @@ class Session:
         self.fit_preview_enabled = config.study1["fit_preview"]["enabled"]
         self.fit_preview_reruns = 0
 
-        # SPEC.md 10.7. Set by the masking check, which is Milestone 4 -- the participant picks
-        # their own noise level, so there is no configured value to default these to. None
-        # means the check has not run, which is distinguishable from it having run and failed.
+        # SPEC.md 10.7, 10.9. Set by the masking check and the stop rehearsal and written to the
+        # session file when each ends (`record_masking`, `record_stop_rehearsal`) -- the
+        # participant picks their own noise level, so there is no configured value to default
+        # these to. None means the procedure has not run, which is distinguishable from it
+        # having run and failed.
         self.white_noise_level_dbfs: float | None = None
         self.masking_confirmed: bool | None = None
         self.masking_attempts = 0
         self.earplugs_used = False
+        self.stop_rehearsal_ran: bool | None = None
+        self.stop_rehearsal_press_detected: bool | None = None
 
         self.data_folder = Path(config.hardware["data"]["folder"])
         if not self.data_folder.is_absolute():
@@ -145,6 +150,9 @@ class Session:
         self.garment = DRIVERS[driver_name](
             Limits.from_config(config.hardware), self.clock, on_command=self._record_garment
         )
+        # SPEC.md 10.5, 10.7. Owned here beside the garment for the same reason: every phase
+        # needs it and none of them does it.
+        self.audio = Audio(config.hardware["audio"], self.clock, self.log)
 
     # -- blinding ----------------------------------------------------------------------
 
@@ -340,10 +348,26 @@ class Session:
         if self.garment.connected:
             self.garment.stop()
             self.garment.disconnect()
+        self.audio.close()
         self.set_phase("session_end")
         if abort_reason:
             self.log("session_aborted", severity="warning", detail=abort_reason)
         self.log("session_ended")
+        # A session that ended before a setup procedure recorded its keys still writes them,
+        # empty and ahead of the closing keys, so the file keeps DATA_SCHEMA.md's key order.
+        if self.masking_confirmed is None:
+            self.files.write_session(
+                {
+                    "white_noise_level_dbfs": "",
+                    "masking_confirmed": "",
+                    "masking_attempts": "",
+                    "earplugs_used": "",
+                }
+            )
+        if self.stop_rehearsal_ran is None:
+            self.files.write_session(
+                {"stop_rehearsal_ran": "", "stop_rehearsal_press_detected": ""}
+            )
         self.files.write_session(
             {
                 "sensitisation_start_iso": self.clock.sensitisation_start_iso or "",
@@ -355,6 +379,33 @@ class Session:
         )
         self.files.close()
         self.closed = True
+
+    # -- setup results -----------------------------------------------------------------
+
+    def record_masking(
+        self, level_dbfs: float, confirmed: bool, attempts: int, earplugs_used: bool
+    ) -> None:
+        """The masking check's outcome (SPEC.md 10.7), written once, when the check ends."""
+        self.white_noise_level_dbfs = level_dbfs
+        self.masking_confirmed = confirmed
+        self.masking_attempts = attempts
+        self.earplugs_used = earplugs_used
+        self.files.write_session(
+            {
+                "white_noise_level_dbfs": level_dbfs,
+                "masking_confirmed": confirmed,
+                "masking_attempts": attempts,
+                "earplugs_used": earplugs_used,
+            }
+        )
+
+    def record_stop_rehearsal(self, press_detected: bool) -> None:
+        """That the rehearsal ran and whether the press was detected (SPEC.md 10.9)."""
+        self.stop_rehearsal_ran = True
+        self.stop_rehearsal_press_detected = press_detected
+        self.files.write_session(
+            {"stop_rehearsal_ran": True, "stop_rehearsal_press_detected": press_detected}
+        )
 
     # -- provenance --------------------------------------------------------------------
 
@@ -414,13 +465,9 @@ class Session:
             ],
             "room_temperature_c": room_temperature_c,
             "relative_humidity_pct": relative_humidity_pct,
-            # SPEC.md 10.7. The masking check fills these in setup and rewrites the row; they
-            # are declared here so the column exists from the first session rather than
-            # appearing when the procedure lands. Empty means the check has not run.
-            "white_noise_level_dbfs": self.white_noise_level_dbfs,
-            "masking_confirmed": self.masking_confirmed,
-            "masking_attempts": self.masking_attempts,
-            "earplugs_used": self.earplugs_used,
+            # The masking and stop-rehearsal keys are not here: they are measured in setup and
+            # written when each procedure ends (`record_masking`, `record_stop_rehearsal`). A
+            # session closed before then gets them empty from `DataFileCollection.close`.
             "data_folder": str(self.data_folder.resolve()),
             "cloud_sync_warning": self.cloud_sync_warning,
             "unresolved_open_items": ";".join(

@@ -69,6 +69,9 @@ class Rig(QObject):
         self.participant = participant
         self.experimenter = experimenter
         self.interruptions = Interruptions(session, participant, experimenter, self)
+        # SPEC.md 10.5: the audible cue sounds with the visual one, from one signal, so no
+        # protocol can show the one and forget the other.
+        participant.warning_cue_shown.connect(session.audio.participant_cue)
 
         # Patterns are delivered by `GarmentController.advance()`, which has to be called; this
         # is the one caller. Real milliseconds, like the adjustment tick: it samples the clock,
