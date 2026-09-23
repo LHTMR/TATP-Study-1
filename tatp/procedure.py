@@ -20,6 +20,8 @@ that must be identical everywhere -- what an interruption does to a sequence:
   restarted on resume would throw away everything its child had already done.
 - `wait(seconds, then)` is session-paced time, scaled by the clock. A wait is a step too, so an
   interruption during an inter-stimulus interval restarts the interval.
+- `await_proceed(then, prepare)` is a step that waits for the experimenter's
+  `proceed_requested`, the one way every procedure is launched (SPEC.md 7.4).
 - `finish(result)` ends the procedure and emits `finished(result)`.
 
 On `Interruptions.interrupted` the innermost procedure cancels its trial and its timer. On
@@ -117,6 +119,7 @@ class Procedure(QObject):
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._fire)
         self._pending: Callable[[], None] | None = None
+        self._on_go: Callable[[], None] | None = None
 
     # -- lifecycle ---------------------------------------------------------------------
 
@@ -126,11 +129,23 @@ class Procedure(QObject):
         self.running = True
         self.rig.interruptions.interrupted.connect(self._on_interrupted)
         self.rig.interruptions.resumed.connect(self._on_resumed)
+        self.experimenter.proceed_requested.connect(self._on_proceed)
+        self.connect_actions()
         self.begin()
 
     def begin(self) -> None:
         """The first step. Every subclass implements it."""
         raise NotImplementedError
+
+    def connect_actions(self) -> None:
+        """Connect the experimenter signals this procedure answers. Undone when it ends.
+
+        Connected on start rather than on construction, so a procedure that is built but not
+        running never answers a button meant for another.
+        """
+
+    def disconnect_actions(self) -> None:
+        """Undo `connect_actions`."""
 
     def cancel(self) -> None:
         """Stop everything, write nothing more, emit nothing. The abort path."""
@@ -182,6 +197,41 @@ class Procedure(QObject):
     def wait(self, seconds: float, then: Callable[[], None]) -> None:
         """Session-paced time: scaled by the clock, and restarted if interrupted."""
         self.step(lambda: self._after(seconds, then))
+
+    def await_proceed(
+        self, then: Callable[[], None], prepare: Callable[[], None] | None = None
+    ) -> None:
+        """A step that waits for the experimenter to say go (SPEC.md 7.4, 8.3).
+
+        `prepare` puts the screens into the state the wait needs -- the instruction, the
+        participant's standby -- and runs again when an interrupted wait is resumed, so a
+        resume never leaves the participant looking at the stop screen.
+        """
+
+        def begin() -> None:
+            if prepare is not None:
+                prepare()
+            self._on_go = then
+
+        self.step(begin)
+
+    def on_proceed(self, then: Callable[[], None] | None) -> None:
+        """What the experimenter's next go does, outside a waiting step; None for nothing."""
+        self._on_go = then
+
+    def _on_proceed(self) -> None:
+        # A press while interrupted must not launch anything behind the stop screen, and one
+        # while a child runs is the child's. The resume re-runs the waiting step, and the next
+        # press is the one that counts.
+        if (
+            self._on_go is None
+            or self._child is not None
+            or self.rig.interruptions.active is not None
+        ):
+            return
+        then, self._on_go = self._on_go, None
+        self.session.log("proceed", origin="experimenter", detail=type(self).__name__)
+        then()
 
     # -- interruptions ------------------------------------------------------------------
 
@@ -235,5 +285,8 @@ class Procedure(QObject):
 
     def _leave(self) -> None:
         self.running = False
+        self._on_go = None
         self.rig.interruptions.interrupted.disconnect(self._on_interrupted)
         self.rig.interruptions.resumed.disconnect(self._on_resumed)
+        self.experimenter.proceed_requested.disconnect(self._on_proceed)
+        self.disconnect_actions()

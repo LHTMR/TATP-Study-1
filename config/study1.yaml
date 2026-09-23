@@ -60,6 +60,13 @@ pinprick:
                                      # time point, the cap applies to every site, at the lowest
                                      # force that reached the ceiling in that run (SPEC.md 8.2)
   expected_offset_steps_pre_to_post_s: -2.7    # Scheuren et al.; SPEC.md 20 item 7
+  expected_offset_steps_post_s_to_post_i: 0.0  # post-I starts where post-S ended. No shift is
+                                     # the only value that builds no expectation about the
+                                     # intervention into the prior, and the search runs both
+                                     # ways regardless (docs/LOG.md N7.B2, open item LB1)
+  expected_offset_steps_between_sessions: 0.0  # pre-S of sessions 2 and 3 starts where the
+                                     # previous session's pre-S ended: baseline, both times
+                                     # (docs/LOG.md N7.B2, open item LB1)
   isi_min_s: 13.0                    # Scheuren et al. 2023
   isi_max_s: 17.0
   rating_cue_delay_s: 9.0            # rating cued 9 s after the stimulus (comparison doc 8)
@@ -71,17 +78,31 @@ pinprick:
 brush:
   n_trials: 5                        # same structure as the short protocol (SPEC.md 8.3)
   n_sites: 8
+  isi_min_s: 13.0                    # the short protocol's timing, which SPEC.md 8.3 says the
+  isi_max_s: 17.0                    # brush shares; kept separate so either can be tuned
+  rating_cue_delay_s: 9.0            # in piloting without moving the other
+  rating_scale: pain                 # the `vas` block each stroke is rated on (docs/LOG.md
+                                     # N7.B6)
 
 mapping:
   # Secondary-hyperalgesia area, four linear paths inward (SPEC.md 8.4, Bilaga 1 3.6.2).
   n_paths: 4
+  path_ids: [proximal, lateral, distal, medial]   # in order round the zone, so paths 1 and 3
+                                     # are opposite, as are 2 and 4. The area is the rectangle
+                                     # (d1 + d3) x (d2 + d4), each distance measured from the
+                                     # centre of the primary zone (docs/research/RB1, LOG N7.B7)
   step_size_mm: 5.0
   step_interval_s: 1.0               # the 1 Hz pacing cue; the experimenter advances on each
   max_steps: 40                      # bounds the cue train; 40 x 5 mm = 200 mm. The software
                                      # does not count steps -- the border is a pen mark and a
                                      # ruler, not a keypress (SPEC.md 8.4).
-  distance_plausible_min_mm: 1.0     # outside this range the entry is queried, not accepted
-  distance_plausible_max_mm: 200.0   # silently (SPEC.md 17.5 adversarial experimenter)
+  distance_plausible_min_mm: 12.5    # outside this range the entry is queried, not accepted
+  distance_plausible_max_mm: 200.0   # silently (SPEC.md 17.5 adversarial experimenter).
+                                     # Distances run from the CENTRE of the primary zone, so a
+                                     # border inside the zone itself is implausible: 12.5 mm is
+                                     # half the short side of the 2.5 x 5 cm thermode of the
+                                     # heat-capsaicin literature (docs/research/RB1). Set it to
+                                     # half this study's own thermode width once measured.
 
 touch_calibration:
   # Protocol B, scheme B of the comparison document (SPEC.md 9, comparison doc 7).

@@ -115,6 +115,19 @@ items:
 
   # ---- Raised during the build. The spec requires the value to exist but does not fix it. --
 
+  - item: "LB1"
+    summary: Informed-prior offsets for post-I and for later sessions' pre-S
+    resolved_when: {file: study1.yaml, path: "pinprick.expected_offset_post_s_to_post_i_confirmed"}
+    also: {file: study1.yaml, path: "pinprick.expected_offset_between_sessions_confirmed"}
+    fix: "Piloting (SPEC.md 8.2). SPEC.md gives only the pre-S to post-S offset (item 7). The
+         build set both others to 0.0 ladder steps -- start where the previous time point
+         ended -- because any other value writes an expectation about the intervention into
+         the prior, and the search runs both ways anyway (docs/LOG.md N7.B2). Check against
+         pilot data how far each run's crossing lands from its start, then add
+         `expected_offset_post_s_to_post_i_confirmed: true` and
+         `expected_offset_between_sessions_confirmed: true` under `pinprick:`."
+    blocks_use: false
+
   - item: "L1"
     summary: Software pressure ceiling
     resolved_when: {file: hardware.yaml, path: "garment.pressure_ceiling_kpa_confirmed"}
