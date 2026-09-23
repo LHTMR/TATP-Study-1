@@ -426,5 +426,8 @@ class Session:
                 item.number for item in self.config.unresolved
             ),
             "resumed_from_session_file": self.resumed_from,
+            # `run_session.py --clock-speed` promises this is recorded: an accelerated run's
+            # files look like a session's, and this is what tells them apart.
+            "clock_speed": self.clock.speed,
             "session_start_iso": self.session_start_iso,
         }

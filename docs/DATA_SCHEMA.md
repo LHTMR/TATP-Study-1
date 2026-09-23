@@ -95,6 +95,7 @@ written, with an empty value — an absent row and an empty value must not be co
 | `cloud_sync_warning` | - | The warning text if the data folder is inside a synced tree, else empty (§14.1) |
 | `unresolved_open_items` | - | Semicolon-separated §20 item numbers still on placeholders |
 | `resumed_from_session_file` | - | Filename resumed from, else empty (§15) |
+| `clock_speed` | - | `Clock.speed`. `1.0` in every real session; anything else is a development run with every session-paced interval accelerated (§17.3), and must never be analysed as data |
 | `session_start_iso` | - | Process start, wall clock |
 | `sensitisation_start_iso` | - | Session t=0; empty until sensitisation begins |
 | `session_end_iso` | - | Written at close |
