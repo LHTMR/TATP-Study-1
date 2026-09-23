@@ -9,6 +9,9 @@ name: tatp-study-1
 
 channels:
   - conda-forge
+  # Without this, an install whose .condarc lists Anaconda's defaults channel (the lab PC's
+  # managed Miniconda does) mixes them in, so the lab env could differ from the dev env.
+  - nodefaults
 
 dependencies:
   - python=3.11

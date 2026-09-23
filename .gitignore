@@ -28,6 +28,9 @@ __pycache__/
 # Machine-local build overrides: where conda lives on this machine, and nothing else.
 # The committed Makefile defaults to plain `conda` so the lab PC is unaffected.
 Makefile.local
+# Setup notes for one particular machine (paths, missing tools, workarounds). Kept out of the
+# repository because they describe that machine, not the software.
+LOCAL_SETUP.md
 
 # Claude Code local overrides
 .claude/settings.local.json

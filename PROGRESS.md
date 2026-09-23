@@ -203,6 +203,15 @@ spec's summary. `github.com` is on the `WebFetch` allow list, so no permission p
 Note the base conda is **osx-64**, so the env is Intel/Rosetta on this Mac. Harmless here;
 irrelevant to the Windows lab PC.
 
+**Lab PC (Windows), set up 23 Sep 2026.** `tatp-study-1` is created there too. The steps are in
+`docs/SETUP.md`. `environment.yml` now lists `nodefaults`. The managed Miniconda's `.condarc`
+names Anaconda's `defaults` channel, which demands a terms-of-service acceptance, so creating the
+env there needs `CONDA_DEFAULT_CHANNELS` pointed at conda-forge (see SETUP.md). With that,
+every package came from conda-forge, as on the Mac. `make check` on the lab PC fails only on the
+font problem (next steps, first item) and on `test_check_bash_hook.py`'s Windows-path case
+(the hook's `os.path.commonpath` raises on mixed absolute/relative Windows paths, which only
+matters to Claude Code on that machine).
+
 **The `conda` shell function was broken in session 5's shell** — `CONDA_EXE` was unset, so
 `conda run …` exited 126 with "permission denied". The binary on `PATH` is fine, so
 `command conda run …` worked and was used until the Makefile existed. **Use `make` and the
@@ -697,6 +706,36 @@ Two things the schedule work fixed that were not on anyone's list: `start_sensit
 never called, so **every row the slice wrote had an empty `t_session_s`**; and the generated grid
 put block 7 exactly on the rekindle, which nothing would have found until someone read a
 timeline. `make preview` is what found it.
+
+**Do this first: bundle and pin one font.** Found 23 Sep 2026, when the repository was first set
+up on the Windows lab PC. Until it is done, `make check` cannot pass on the lab PC, and nothing
+verifies what participants will actually see there.
+
+- **What happens.** Neither `config/` nor `tatp/ui/` names a font family, so every screen uses
+  the platform's default font. The 64 approved references in `screenshots/reference/` and the
+  pixel-level layout tests in `tests/test_vas.py` (clearance above the scale, end-label
+  overhang) were produced on the dev Mac in the macOS system font. On the lab PC:
+  - **Headless** (`QT_QPA_PLATFORM=offscreen`, i.e. every test and `make shots`): the offscreen
+    platform on Windows does not use the Windows font system. It reads font files from a
+    folder under the Qt install, which is empty, so **every character renders as an empty
+    box**. 17 VAS tests fail (they measure boxes) and 60 of 64 screens fail the comparison.
+  - **In a real session**: Qt would use Windows' default font (Segoe UI), whose metrics
+    differ. So the layout tests, even if they passed on the Mac, describe a screen that the
+    lab PC will not draw.
+- **The fix.** Commit one font file (regular and whatever weights are used) under the
+  repository, load it at startup with `QFontDatabase.addApplicationFont` in both the app and the
+  test/screenshot setup, and set it as the application font. Assert at startup that it loaded
+  and that it is the family actually in use (fail fast, since a silent fallback is exactly this
+  bug). Requirements: an open licence that allows redistribution (e.g. SIL OFL), and full
+  Swedish coverage (å ä ö Å Ä Ö), since the participant text is Swedish.
+- **The family is S's choice** because it changes what participants see. The family name and
+  file path belong in `config/`. If S has not chosen when this is built, apply the three-places
+  rule (placeholder, `open_items.yaml`, `FOR_S.md`). Do not pick one quietly.
+- **Then** re-render and re-approve every screen, since all 64 will change. S must review those
+  renders before re-approval. It is a wording/layout review like the 21 Sep one. Re-check the
+  `test_vas.py` clearance and overhang limits against the new font. If they fail, the fix is
+  wording or size, never moving the line (UI_PRINCIPLES.md 1.6).
+- **Done when** `make check` gives identical results on the Mac and on the lab PC.
 
 1. Run the **spec-review** agent, then commit Milestone 1
    ("Use the spec-review agent to review this diff against docs/SPEC.md").
