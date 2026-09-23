@@ -360,7 +360,7 @@ stronger — and the equalisation design is a **forced choice between two** thro
 comparison document sizes the check as a 2AFC, where a tie is not a response category but a
 missing one. `judgement` stays optional rather than becoming required, because the equalisation
 procedure does not exist yet and Milestone 3 may need a row for a trial that was abandoned; that
-is a different thing from a tie and should not be settled in advance (`docs/NOTES.md` N5.13).
+is a different thing from a tie and should not be settled in advance (`docs/LOG.md` N5.13).
 
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|

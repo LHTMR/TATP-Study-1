@@ -1,7 +1,7 @@
 # UI principles
 
 Normative. These are the rules a screen is reviewed against, in priority order. Where two rules
-conflict, the lower-numbered section wins. Rationale is not recorded here — `docs/NOTES.md` logs
+conflict, the lower-numbered section wins. Rationale is not recorded here — `docs/LOG.md` logs
 the review that produced a change.
 
 The participant screen and the experimenter screen are different kinds of object and do not
@@ -35,7 +35,7 @@ Research Methods 2023: marking a VAS cut mean absolute error from 3.02 to 0.82 u
 respondents place marks near the ticks). Here the attractors are the anchors Bilaga 1 fixes —
 "just painful", "just noticeable", "just uncomfortable" — which are categorical landmarks
 participants are meant to use, so the pull is wanted. It is still a property of the primary
-outcome's distribution, logged in `docs/NOTES.md`, and it is the reason no tick is ever added
+outcome's distribution, logged in `docs/LOG.md`, and it is the reason no tick is ever added
 anywhere else on the line.
 
 1.4b **The end labels sit together on the row nearest the line; interior anchors sit above
@@ -93,7 +93,7 @@ consent document — "tunna plastfilament", "en mjuk pensel", never "nålstick".
 nothing, that is not a blocker.** They describe the study, not every screen the software shows,
 and most operational wording has no counterpart in them. Write it, and it is approved by S in
 the normal way. S can also approve a deviation from them where one is practical; a deviation
-that has been approved is recorded in `docs/NOTES.md` and is then simply the design.
+that has been approved is recorded in `docs/LOG.md` and is then simply the design.
 
 2.5 Ratings are not casually visible to the experimenter, and the experimenter screen shows no
 running rating and no participant response as it happens. **Deliberate, approved exceptions

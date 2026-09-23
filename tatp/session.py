@@ -25,7 +25,7 @@ from tatp.garment.mock import MockGarment
 from tatp.garment.patterns import load_folder
 from tatp.units import S_PER_MIN
 
-# A drawn seed is recorded and reused (PROGRESS.md decision 18), so it only has to be large
+# A drawn seed is recorded and reused (docs/LOG.md N6.13), so it only has to be large
 # enough that two sessions do not collide and small enough to survive a round trip through the
 # data file as text. 2**31 is the conventional choice for both.
 SEED_RANGE = 2**31

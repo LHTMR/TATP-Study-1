@@ -227,7 +227,7 @@ def test_a_block_records_its_plan_and_what_actually_happened(session):
     assert "against plan" in rows["block_started"]["detail"]
     assert "took" in rows["block_ended"]["detail"]
     # Driven by the block rather than by what schedule.yaml holds today, so this survives the
-    # durations changing from estimates to measurements (PROGRESS.md decision 21).
+    # durations changing from estimates to measurements (docs/LOG.md N6.16).
     duration = block.expected_duration_min
     shown = "unset" if duration is None else f"{duration:g} min"
     assert f"expected {shown}" in rows["block_ended"]["detail"]
@@ -286,7 +286,7 @@ def test_schedule_warnings_are_logged_at_startup(loaded, tmp_path):
 
     Driven by a crafted grid with a known fault rather than by whatever the live `schedule.yaml`
     happens to warn about today. Asserting against the live count would quietly become `0 == 0`
-    the day open item 4 is resolved, and stop testing anything (PROGRESS.md decision 21).
+    the day open item 4 is resolved, and stop testing anything (docs/LOG.md N6.16).
     """
     on_the_rekindle = loaded.schedule["generate"]["rekindle_offset_min"]
     schedule = {**loaded.schedule, "overrides": [{"index": 1, "offset_min": on_the_rekindle}]}

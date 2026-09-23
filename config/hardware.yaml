@@ -50,7 +50,7 @@ responder:
   #
   # NOT propagated into the approved wording: `screens.welcome`, `screens.self_start` and
   # others spell "▶" inside their sentences, and those are S's strings to change. If the play
-  # button is relabelled, those need editing by hand (docs/NOTES.md N5.11).
+  # button is relabelled, those need editing by hand (docs/LOG.md N5.11).
   button_symbols:
     decrease: "‹"
     increase: "›"

@@ -249,7 +249,7 @@ class _ControlScreen(QWidget):
     something -- a pressure, a position in a list -- that the participant then commits to
     (UI_PRINCIPLES.md 5.12). The confirm stays a sentence rather than a third drawn button,
     because the play button is one of the remote's two small buttons and no screen draws those
-    yet; their labels may change (docs/NOTES.md N5.11).
+    yet; their labels may change (docs/LOG.md N5.11).
 
     A held button is drawn pressed for exactly as long as it is held (UI_PRINCIPLES.md 5.10).
     On the adjustment that also shows the participant that a hold is registering while the

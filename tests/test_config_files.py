@@ -46,7 +46,7 @@ def test_fit_preview_is_off_in_the_committed_config():
     assert study1["fit_preview"]["enabled"] is False, (
         "fit_preview.enabled is true in the committed config. If that is deliberate, the "
         "'the experimenter does not see your answers' sentence must come out of "
-        "screens.welcome in both languages first. See NOTES.md N2.4, then update this test."
+        "screens.welcome in both languages first. See LOG.md N2.4, then update this test."
     )
 
 

@@ -128,7 +128,7 @@ choices:
   #
   # The affirmative or first-mentioned option is on the LEFT throughout, the same convention as
   # `audio_setup.still_audible`, which has this shape and should move here when audio.py is
-  # built (docs/NOTES.md N5.12).
+  # built (docs/LOG.md N5.12).
   comparison:
     # SPEC.md 9 step 4. Approved 23 Aug 2026 as a text screen; what has gone since is only the
     # two lines the drawn buttons replace -- "Left button: the first. Right button: the second."

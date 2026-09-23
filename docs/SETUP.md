@@ -198,3 +198,36 @@ When you're told the software has been updated:
    ```
    conda env update -f environment.yml --prune
    ```
+
+---
+
+## Developer notes
+
+Nothing above needs these. They are environment quirks met while building the software, kept so
+that nobody has to rediscover them.
+
+**On S's Mac:**
+
+- **If every `make` target says `conda: No such file or directory`, write `Makefile.local`.**
+  The Claude Code app's shell runs with a minimal `PATH` that has no conda directory in it.
+  Restarting the app or the machine leaves that `PATH` unchanged, so do not spend time
+  restarting things. The remedy is one gitignored line. `which -a conda` in a normal terminal
+  gives the path:
+
+  ```
+  echo 'CONDA := /Users/sarmc72/miniconda3/bin/conda' > Makefile.local
+  ```
+
+- **The `conda` shell function can be broken** (`CONDA_EXE` unset, so `conda run …` exits 126
+  with "permission denied"). The binary on `PATH` is fine. Use `make`: its recipes run through
+  `/bin/sh`, which never defines the function. Do not "fix" anything in the repository for this.
+- The base conda is **osx-64**, so the env runs under Intel/Rosetta. Harmless.
+
+**On the lab PC:**
+
+- In Claude Code's Bash shell, bare `conda` is not on `PATH`, though `make` finds it.
+  `conda.bat` works for a one-off, and the env's own `python.exe` is under
+  `C:\Users\sarmc72\.conda\envs\tatp-study-1\`.
+- `fonts/` may also hold untracked candidate font downloads from the font choice (`docs/LOG.md`
+  N5.19). Only the files named in `config/hardware.yaml` and their licences are committed, and
+  the rest can be deleted.

@@ -174,7 +174,7 @@ def test_the_example_patterns_load(garment):
 
 
 def test_the_sham_holds_every_channel_on(garment):
-    """The sham differs from the moving patterns in motion only, not extent (PROGRESS.md)."""
+    """The sham differs from the moving patterns in motion only, not extent (LOG.md N6.3)."""
     sham = pat.load_pattern(EXAMPLES / "static_sham.csv")
     assert sham.rows == ((1, 1, 1, 1, 1),)
     events = pat.expand(sham)

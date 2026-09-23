@@ -6,7 +6,7 @@ code cannot be changed by S, does not appear in the data file's provenance, and 
 anyone reviewing `config/`.
 
 The rules themselves are tested against crafted source, not against the live package, so they
-keep working whatever `tatp/` grows into. Decision 21 in PROGRESS.md: a test that asserts
+keep working whatever `tatp/` grows into. docs/LOG.md N6.16: a test that asserts
 today's state fails as a reward for progress.
 """
 

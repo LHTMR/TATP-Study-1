@@ -180,7 +180,7 @@ TATP-Study-1/
 │   └── experimenters.py        virtual experimenters (§17.5)
 ├── assets/
 │   └── hyperalgesia_zones.svg   experimenter zone diagram (§11)
-├── docs/                       SPEC.md, DATA_SCHEMA.md, the calibration documents
+├── docs/                       SPEC.md, STATUS.md, LOG.md, DATA_SCHEMA.md, the calibration documents
 ├── screenshots/
 │   ├── reference/              approved images, committed
 │   └── manifest.yaml
@@ -189,8 +189,7 @@ TATP-Study-1/
 ├── CLAUDE.md
 ├── README.md  SOP.md  HARDWARE_BRINGUP.md
 ├── Makefile
-├── environment.yml
-└── PROGRESS.md
+└── environment.yml
 ```
 
 ### 4.1 Launcher
@@ -912,7 +911,7 @@ unaffected — both estimation runs are identical across conditions.
 - The session file records `fit_preview_enabled`, so an affected session is identifiable in
   analysis rather than indistinguishable from a blind one.
 - Enabling it warns at startup, in the same register as the reduced-capability banner.
-- Whether it stays on for real data collection is S's call (`docs/NOTES.md` N2.4).
+- Whether it stays on for real data collection is S's call (`docs/LOG.md` N2.4).
 
 Controls: start block, pause, **discard and repeat the last trial**, abort session, timestamped
 free-text note. All logged.
@@ -1222,6 +1221,23 @@ participant, virtual experimenter, accelerated clock — then opens the data fil
 - All provenance fields populated.
 - No text violating §16 appears anywhere in the participant-facing configuration.
 
+**Building it incrementally** (agreed with S, 24 Aug 2026). The list above describes the
+finished software. Taken as a checklist during the build, it produces a validator that passes
+because it has nothing to check. So **an assertion is written only when the thing it checks
+exists**:
+
+- The validator has two halves. A **runner** drives `run_session.py`'s path, with
+  `sim/responders.py` supplying the key presses, into a temporary data folder. A **checker**
+  is a list of named assertions, and each one declares what it needs.
+- An assertion whose precondition is absent is **reported as `skipped: <reason>` and counted**,
+  never passed silently. "5 passed, 4 skipped (no schedule yet)" is honest. "9 passed" when four
+  checked nothing is worse than having no validator, because people trust it.
+- The §16 check calls the same code as `tests/test_blinding_text.py`, rather than
+  reimplementing it.
+- `sim/responders.py` imports the observer model from `docs/calibration_sim.py` and does not
+  reformat that file. Adversarial responders are built only for error paths that exist to
+  fire. They are not stubbed in advance.
+
 ### 17.4 Screenshots, manifest and per-screen approval
 
 `tatp/screenshots.py` walks every screen state and writes a numbered PNG with `QWidget.grab()`:
@@ -1334,7 +1350,7 @@ no MCP servers, and removing them removes a class of uncertainty rather than man
 There is no `PreToolUse` hook. An earlier one refused shell operators and outside-repository
 paths; Claude Code now checks each part of a compound command against the rules itself, and the
 hook's false positives and Windows failures cost more than the path check was worth (see
-`docs/NOTES.md`).
+`docs/LOG.md`).
 
 ---
 

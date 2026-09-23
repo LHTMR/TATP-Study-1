@@ -29,7 +29,12 @@ make test-one ARGS="tests/test_touchcal.py -x"   # a targeted run, same environm
 make validate       # end-to-end validator only
 make shots          # regenerate screenshots and compare against approved references
 make preview        # print the session schedule and any warnings
+make shots ARGS="--approve-matching 'experimenter_*'"   # re-approve one role's screens
+conda run -n tatp-study-1 python run_session.py --participant 01 --session 1 --experimenter SM --patterns config/patterns/examples
 ```
+
+Every screen is armed, so a deliberate change to one must be re-approved in the same commit or
+`make check` fails.
 
 `make check` must pass headless, with no hardware attached. Nothing is done until it does.
 
@@ -150,7 +155,7 @@ the right default — downgrade deliberately, not by habit.
 - **Commit at every milestone in `docs/SPEC.md` §18 with `make check` passing**, and commit
   smaller working increments in between.
 - **Never end a session with the repository broken.** If something is half-finished, either
-  finish it, or revert it and note it in `PROGRESS.md`.
+  finish it, or revert it and note it in `docs/STATUS.md`.
 - Message says what changed and why, and names the milestone.
 - Do not push. `git push` is denied; S pushes.
 
@@ -162,12 +167,14 @@ state on disk rather than in the conversation, so that any fresh session can pic
 Three documents, and each has one job — **spec, status, log**:
 
 - **`docs/SPEC.md` is the spec** — what the software must do.
-- **`PROGRESS.md` is the status**, and the handover file. Keep it current: what is done, what
-  is in flight, what is next, and any decision taken that is not already in `docs/SPEC.md`.
+- **`docs/STATUS.md` is the status**, and the handover file. It is short and covers only the
+  current state, the immediate next steps in detail, and later milestones in outline.
+  **Rewrite it, do not append to it.** Session history belongs in the git log, not here.
   Update it at every milestone and before stopping for any reason.
-- **`docs/NOTES.md` is the log** of everything else worth keeping. See below — update it in
-  the same breath as `PROGRESS.md`.
-- Between `docs/SPEC.md`, `PROGRESS.md` and the git log, a new session should need nothing
+- **`docs/LOG.md` is the log** of everything else worth keeping, including any implementation
+  decision the spec does not fix. See below — update it in the same breath as
+  `docs/STATUS.md`.
+- Between `docs/SPEC.md`, `docs/STATUS.md` and the git log, a new session should need nothing
   from the previous conversation.
 - `/clear` between unrelated tasks. A long session carrying failed approaches performs worse
   than a fresh one with a better prompt.
@@ -175,10 +182,10 @@ Three documents, and each has one job — **spec, status, log**:
   session, and do not paste file contents into a message to summarise them.
 - Delegate file-heavy exploration to a subagent so the reading happens in its context.
 - **Approaching a limit: stop cleanly rather than getting cut off.** Finish the current unit of
-  work, run `make check`, commit, update `PROGRESS.md`, and say where you stopped. Do not start
+  work, run `make check`, commit, update `docs/STATUS.md`, and say where you stopped. Do not start
   a milestone you cannot finish, and do not delegate to a subagent to stretch the session —
   that spends the same budget faster.
-- After a compaction, re-read `PROGRESS.md` and `docs/SPEC.md` §18 before continuing — the
+- After a compaction, re-read `docs/STATUS.md` and `docs/SPEC.md` §18 before continuing — the
   summary will not have kept the detail.
 
 ## What is waiting on S — `config/open_items.yaml`
@@ -191,7 +198,7 @@ unresolved item is printed at startup. There is no separate queue document: an e
 Refer to an item by its number (`open item 4`, `L2`), which is never reused or renumbered.
 
 Deviations from Bilaga 1, checks the pilot protocol needs, analysis-plan questions and process
-go in **`docs/NOTES.md`**, which is a log, not a queue. It exists so that when S reviews
+go in **`docs/LOG.md`**, which is a log, not a queue. It exists so that when S reviews
 something, the thing they are looking at has a written history to ask about. Do not ask S to
 review what I wrote: S has their own review process, and anything worth their eye is flagged in
 the chat when it happens.

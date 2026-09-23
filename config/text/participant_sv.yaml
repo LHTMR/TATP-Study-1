@@ -128,7 +128,7 @@ choices:
   #
   # Det jakande eller först nämnda alternativet ligger alltid till VÄNSTER, samma konvention som
   # `audio_setup.still_audible`, som har samma form och bör flyttas hit när audio.py byggs
-  # (docs/NOTES.md N5.12).
+  # (docs/LOG.md N5.12).
   comparison:
     # SPEC.md 9 steg 4. Godkänd 23 aug 2026 som textskärm; det som utgått sedan dess är bara de
     # två rader som de utritade knapparna ersätter -- "Vänster knapp: den första. Höger knapp:
