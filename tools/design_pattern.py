@@ -25,6 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+import yaml  # noqa: E402  -- after the path insert, with the rest
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer  # noqa: E402  -- after the path insert
 from PySide6.QtGui import QColor, QPainter, QPen  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
@@ -94,6 +95,8 @@ GRID_CELL_PX = 44
 ON_MARK = "1"
 OFF_MARK = "0"
 ID_SEPARATORS = re.compile(r"[,;\s]+")
+# What a user-chosen pattern file can raise on the way in (`DesignerWindow.open_file`).
+FILE_ERRORS = (PatternError, yaml.YAMLError, ValueError, TypeError, KeyError, OSError)
 
 
 def designer_stylesheet() -> str:
@@ -116,34 +119,15 @@ def designer_stylesheet() -> str:
     )
 
 
-def number(text: str, field: str) -> int | float:
-    """A typed number, with either decimal mark, as the lab's other fields accept.
-
-    A whole number typed without a decimal mark stays an int, so `overlap_rows: 1` is saved
-    back as it was written rather than as 1.0.
-    """
-    typed = text.strip().replace(",", ".")
-    if not typed:
-        raise DesignError("required", field=field)
-    try:
-        return int(typed)
-    except ValueError:
-        pass
-    try:
-        return float(typed)
-    except ValueError:
-        raise DesignError("number", field=field, value=text) from None
-
-
-def _shown(value: object) -> str:
-    return f"{value:g}" if isinstance(value, float) else str(value)
-
-
 def channel_ids(text: str) -> tuple[int, ...]:
     parts = [part for part in ID_SEPARATORS.split(text.strip()) if part]
     if not all(part.lstrip("-").isdigit() for part in parts):
         raise DesignError("channel_ids", value=text)
-    return tuple(int(part) for part in parts)
+    try:
+        return tuple(int(part) for part in parts)
+    except ValueError:
+        # Python refuses to convert an integer string of thousands of digits.
+        raise DesignError("channel_ids", value=text) from None
 
 
 # -- the timeline ---------------------------------------------------------------------------
@@ -277,13 +261,16 @@ class DesignerWindow(QWidget):
         super().__init__(parent)
         self.words = text["designer"]
         self.errors = self.words["errors"]
-        command = hardware["prototype_command_file"]
-        self.max_steps, self.max_step_ms = command["max_steps"], command["max_step_ms"]
+        self.command_limits = hardware["prototype_command_file"]
         self.folder = folder
         self.channel_ids: tuple[int, ...] = ()
         self.rows: list[list[int]] = []
-        self.extras: dict = {}
+        # The file the design was opened from or last saved to, and its sidecar's text, so
+        # Save writes back there and keeps what the author wrote (`pattern_design`).
+        self.path: Path | None = None
+        self.sidecar_source: str | None = None
         self.pattern: Pattern | None = None
+        self.convert_buttons = []
 
         # The real playback path, against the mock (SPEC.md 12.1): `play_pattern`, then
         # `advance` from a timer at the session's own tick interval.
@@ -314,17 +301,20 @@ class DesignerWindow(QWidget):
         self.open_button = button(words["open"])
         self.import_button = button(words["import_reference"])
         self.save_button = button(words["save"])
+        self.save_as_button = button(words["save_as"])
         self.export_button = button(words["export"])
         self.new_button.clicked.connect(self.clear)
         self.open_button.clicked.connect(self._choose_and_open)
         self.import_button.clicked.connect(self._choose_and_import)
-        self.save_button.clicked.connect(self._choose_and_save)
+        self.save_button.clicked.connect(self._save)
+        self.save_as_button.clicked.connect(self._choose_and_save_as)
         self.export_button.clicked.connect(self._choose_and_export)
         actions = QHBoxLayout()
         for widget in (self.new_button, self.open_button, self.import_button):
             actions.addWidget(widget)
         actions.addStretch(1)
         actions.addWidget(self.save_button)
+        actions.addWidget(self.save_as_button)
         actions.addWidget(self.export_button)
 
         body = QHBoxLayout()
@@ -397,7 +387,11 @@ class DesignerWindow(QWidget):
             self.extra_fields[key].textChanged.connect(self.revalidate)
         self.name_field.textChanged.connect(self.revalidate)
         self.interval_field.textChanged.connect(self._interval_changed)
+        # Applied on Enter or leaving the field, not per keystroke: "1, 2, 3" passes through
+        # "1, 2" on the way to "1, 2, 4", and applying that would drop channel 3's column. In
+        # between, the typed ids and the grid disagree, so revalidation refuses everything.
         self.ids_field.editingFinished.connect(self.apply_channel_ids)
+        self.ids_field.textChanged.connect(self.revalidate)
         self.loop_box.toggled.connect(self.revalidate)
         return holder
 
@@ -477,7 +471,13 @@ class DesignerWindow(QWidget):
         side = QVBoxLayout()
         side.addLayout(controls)
         side.addStretch(1)
-        side.addLayout(self._row_buttons(("to_grid", convert)))
+        convert_button = button(self.words["to_grid"])
+        convert_button.clicked.connect(convert)
+        self.convert_buttons.append(convert_button)
+        convert_row = QHBoxLayout()
+        convert_row.addWidget(convert_button)
+        convert_row.addStretch(1)
+        side.addLayout(convert_row)
         holder = QWidget()
         holder.setFixedWidth(CHANNEL_CONTROLS_PX)
         holder.setLayout(side)
@@ -490,18 +490,19 @@ class DesignerWindow(QWidget):
         self.stop()
         self.channel_ids = tuple(design.channel_ids)
         self.rows = [list(row) for row in design.rows]
-        self.extras = dict(design.extras)
+        self.path, self.sidecar_source = design.path, design.sidecar_source
         # Blocked while filled in, so the half-filled form is never validated.
         for field in (self.name_field, self.interval_field, self.ids_field, self.loop_box,
                       *self.extra_fields.values()):
             field.blockSignals(True)
         self.name_field.setText(design.name)
-        self.interval_field.setText(f"{design.row_interval_ms:g}")
+        # Lossless, so a re-save writes back the interval that was loaded (`pd.shown`).
+        self.interval_field.setText(pd.shown(design.row_interval_ms))
         self.ids_field.setText(", ".join(str(cid) for cid in design.channel_ids))
         self.loop_box.setChecked(design.loop)
         for key, field in self.extra_fields.items():
             value = design.extras.get(key)
-            field.setText("" if value is None else _shown(value))
+            field.setText("" if value is None else pd.shown(value))
         for field in (self.name_field, self.interval_field, self.ids_field, self.loop_box,
                       *self.extra_fields.values()):
             field.blockSignals(False)
@@ -511,7 +512,8 @@ class DesignerWindow(QWidget):
     def clear(self) -> None:
         """A new pattern: nothing filled in, so nothing is assumed (SPEC.md 12.2)."""
         self.stop()
-        self.channel_ids, self.rows, self.extras = (), [], {}
+        self.channel_ids, self.rows = (), []
+        self.path, self.sidecar_source = None, None
         for field in (self.name_field, self.interval_field, self.ids_field,
                       *self.extra_fields.values()):
             field.blockSignals(True)
@@ -524,15 +526,26 @@ class DesignerWindow(QWidget):
         self._rebuild_grid()
         self.revalidate()
 
-    def interval_ms(self) -> float:
-        return number(self.interval_field.text(), self.words["row_interval_ms"])
+    def interval_ms(self) -> int | float:
+        return pd.parse_number(self.interval_field.text(), self.words["row_interval_ms"])
+
+    def ids_problem(self) -> DesignError | None:
+        """Why the typed channel ids are not the grid's, or None when they are."""
+        try:
+            typed = channel_ids(self.ids_field.text())
+        except DesignError as error:
+            return error
+        return None if typed == self.channel_ids else DesignError("ids_pending")
 
     def design(self) -> Design:
-        """What the widgets hold. Refuses a field that is not a number."""
-        extras = dict(self.extras)
+        """What the widgets hold. Refuses a field that is not a number, and stale ids."""
+        problem = self.ids_problem()
+        if problem is not None:
+            raise problem
+        extras = {}
         for key, field in self.extra_fields.items():
             typed = field.text().strip()
-            extras[key] = number(typed, self.words[key]) if typed else None
+            extras[key] = pd.parse_number(typed, self.words[key]) if typed else None
         return Design(
             name=self.name_field.text().strip(),
             row_interval_ms=self.interval_ms(),
@@ -540,13 +553,22 @@ class DesignerWindow(QWidget):
             loop=self.loop_box.isChecked(),
             rows=[list(row) for row in self.rows],
             extras=extras,
+            path=self.path,
+            sidecar_source=self.sidecar_source,
         )
 
     def revalidate(self, *_) -> Pattern | None:
-        """The design through the loader's rules. Save, Export and Play follow the answer."""
+        """The design through the loader's rules. Save, Export and Play follow the answer.
+
+        Convert follows the channel ids alone: it is how an empty grid gets its rows, so it
+        must work while the design is otherwise incomplete, but never against stale ids.
+        """
         self.stop()
+        for control in self.convert_buttons:
+            control.setEnabled(self.ids_problem() is None)
         try:
-            self.pattern = pd.validate(self.design(), self.folder or REPO_ROOT)
+            design = self.design()
+            self.pattern = pd.validate(design, pd.target_of(design, self.folder or REPO_ROOT))
         except DesignError as error:
             self.pattern = None
             self.validity.setText(self.explain(error))
@@ -558,7 +580,8 @@ class DesignerWindow(QWidget):
             ))
             self.validity.setStyleSheet(f"color: {SECONDARY};")
         self.timeline.set_pattern(self.pattern)
-        for control in (self.save_button, self.export_button, self.play_button):
+        for control in (self.save_button, self.save_as_button, self.export_button,
+                        self.play_button):
             control.setEnabled(self.pattern is not None)
         return self.pattern
 
@@ -576,13 +599,18 @@ class DesignerWindow(QWidget):
     # -- the grid -----------------------------------------------------------------------
 
     def apply_channel_ids(self) -> None:
-        """The channel list typed, applied: a kept channel keeps its column."""
+        """The channel list typed, applied: a kept channel keeps its column.
+
+        Ids that do not parse change nothing, and `revalidate` shows why and keeps Save,
+        Export, Play and Convert disabled until they do.
+        """
         try:
             ids = channel_ids(self.ids_field.text())
-        except DesignError as error:
-            self.tell(self.explain(error), problem=True)
+        except DesignError:
+            self.revalidate()
             return
         if ids == self.channel_ids:
+            self.revalidate()
             return
         self.rows = pd.resized(self.rows, self.channel_ids, ids)
         self.channel_ids = ids
@@ -665,7 +693,7 @@ class DesignerWindow(QWidget):
             row = table.rowCount()
             table.insertRow(row)
             for column, value in enumerate(entry):
-                table.setItem(row, column, QTableWidgetItem(f"{value:g}"))
+                table.setItem(row, column, QTableWidgetItem(pd.shown(value)))
 
     def _entries(self, table: QTableWidget) -> list[tuple]:
         """Each row of a channel table: the channel id, then numbers. Blank rows are skipped."""
@@ -679,15 +707,15 @@ class DesignerWindow(QWidget):
             if len(ids) != 1:
                 raise DesignError("channel_ids", value=typed[0])
             headers = [table.horizontalHeaderItem(c).text() for c in range(table.columnCount())]
-            values = [number(text, headers[column]) for column, text in enumerate(typed)
-                      if column]
+            values = [pd.parse_number(text, headers[column])
+                      for column, text in enumerate(typed) if column]
             entries.append((ids[0], *values))
         return entries
 
     def convert_ordered(self) -> None:
         self._convert(lambda: pd.ordered_rows(
             self._entries(self.ordered),
-            number(self.delay_field.text(), self.words["delay_ms"]),
+            pd.parse_number(self.delay_field.text(), self.words["delay_ms"]),
             self.mode.currentData(), self.interval_ms(), self.channel_ids,
         ))
 
@@ -699,6 +727,11 @@ class DesignerWindow(QWidget):
     def _convert(self, rows_from) -> None:
         """Replace the grid with a conversion, or say why it was refused and change nothing."""
         self.apply_channel_ids()
+        # Never against stale ids: the conversion would build columns the grid does not have.
+        problem = self.ids_problem()
+        if problem is not None:
+            self.tell(self.explain(problem), problem=True)
+            return
         try:
             rows = rows_from()
         except DesignError as error:
@@ -711,11 +744,22 @@ class DesignerWindow(QWidget):
 
     # -- files --------------------------------------------------------------------------
 
+    def _open_failed(self, path: Path, error: Exception) -> None:
+        self.tell(self.explain(DesignError(
+            "open_failed", file=path.name, value=str(error) or type(error).__name__
+        )), problem=True)
+
     def open_file(self, path: Path) -> bool:
+        """Open one of our patterns. On any failure the design shown stays as it was."""
         try:
             design = pd.open_pattern(path)
-        except PatternError as error:
-            self.tell(self.explain(DesignError("open_failed", value=str(error))), problem=True)
+        # The one place a file the user chose enters the designer, so every way such a file
+        # can fail to load is caught here, narrowly, and reported rather than raised: the
+        # loader's refusals, malformed YAML, a value of the wrong type, bytes that are not
+        # UTF-8 (a ValueError), a missing key, a file that cannot be read. Nothing past this
+        # point sees an unchecked file, so fail-fast still holds everywhere else.
+        except FILE_ERRORS as error:
+            self._open_failed(path, error)
             return False
         self.folder = path.parent
         self.set_design(design)
@@ -723,29 +767,51 @@ class DesignerWindow(QWidget):
         return True
 
     def import_reference(self, path: Path, column_ms: float) -> bool:
+        """Import the prototype's horizontal CSV. On failure the design shown is kept."""
         try:
             design = pd.from_reference_csv(path, column_ms, loop=False)
         except DesignError as error:
             self.tell(self.explain(error), problem=True)
             return False
+        # The same file boundary as `open_file`.
+        except (ValueError, OSError) as error:
+            self._open_failed(path, error)
+            return False
         self.set_design(design)
         self.message.clear()
         return True
 
-    def save_to(self, folder: Path) -> Pattern | None:
-        """Save into `folder`, asking before anything already there is replaced."""
+    def save(self) -> Pattern | None:
+        """Save back to the file the pattern came from, whatever its file is called."""
+        assert self.path is not None, "Save needs a file; a new pattern is saved with Save As"
+        return self._save_at(self.path)
+
+    def save_as(self, folder: Path) -> Pattern | None:
+        """Save into `folder` as a new file named after the pattern."""
+        if self.pattern is None:
+            return None
+        return self._save_at(pd.csv_path(self.design(), folder))
+
+    def _save_at(self, target: Path) -> Pattern | None:
+        """Write to `target`, asking before anything already there is replaced.
+
+        The design is validated once, by `pd.save`. `self.pattern` being set says the widgets
+        held a valid design at the last change, which is what enables Save at all.
+        """
+        if self.pattern is None:
+            return None
         try:
             design = self.design()
-            pd.validate(design, folder)
-            target = pd.csv_path(design, folder)
             exists = target.exists() or target.with_suffix(".yaml").exists()
             if exists and not self.confirm_overwrite(target):
                 return None
-            saved = pd.save(design, folder, overwrite=exists)
+            saved = pd.save(design, target, overwrite=exists)
         except DesignError as error:
             self.tell(self.explain(error), problem=True)
             return None
-        self.folder = folder
+        self.path, self.sidecar_source = design.path, design.sidecar_source
+        self.folder = target.parent
+        self.pattern = saved
         self.tell(self.words["saved"].format(value=target.name))
         return saved
 
@@ -758,15 +824,14 @@ class DesignerWindow(QWidget):
 
     def export_to(self, path: Path) -> bool:
         """The prototype rig's command file (SPEC.md 12.4), written to `path`."""
-        if self.revalidate() is None:
+        if self.pattern is None:
             return False
         try:
-            steps = pd.command_steps(self.pattern, self.max_steps, self.max_step_ms)
-            text = pd.command_file(self.pattern, self.max_steps, self.max_step_ms)
+            steps = pd.command_steps(self.pattern, self.command_limits)
         except DesignError as error:
             self.tell(self.explain(error), problem=True)
             return False
-        path.write_text(text, encoding="utf-8", newline="")
+        path.write_text(pd.command_file(steps), encoding="utf-8", newline="")
         self.tell(self.words["exported"].format(steps=len(steps), value=path.name))
         return True
 
@@ -785,17 +850,23 @@ class DesignerWindow(QWidget):
         if dialog.exec() != QDialog.DialogCode.Accepted.value:
             return
         try:
-            column_ms = number(dialog.field.text(), self.words["column_ms_title"])
+            column_ms = pd.parse_number(dialog.field.text(), self.words["column_ms_title"])
         except DesignError as error:
             self.tell(self.explain(error), problem=True)
             return
         self.import_reference(Path(chosen), column_ms)
 
-    def _choose_and_save(self) -> None:
-        chosen = QFileDialog.getExistingDirectory(self, self.words["save"],
+    def _save(self) -> None:
+        if self.path is None:
+            self._choose_and_save_as()
+        else:
+            self.save()
+
+    def _choose_and_save_as(self) -> None:
+        chosen = QFileDialog.getExistingDirectory(self, self.words["save_as"],
                                                   str(self.folder or ""))
         if chosen:
-            self.save_to(Path(chosen))
+            self.save_as(Path(chosen))
 
     def _choose_and_export(self) -> None:
         if self.pattern is None:

@@ -29,6 +29,8 @@ prototype_command_file:
   # a step past the store is dropped with a serial message, and a longer delay wraps.
   max_steps: 199                     # `6 * (len_code + 1) < 6 * seq_size`, seq_size 200
   max_step_ms: 65535                 # each step's delay is stored as a uint16_t
+  mask_bits: 32                      # `write32bits`: four shift-register bytes, so channel
+                                     # ids 0-31
 
 adjustment:
   # Accelerating two-button control (SPEC.md 10.3, comparison doc 7.5). All pilot-tunable.

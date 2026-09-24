@@ -385,7 +385,8 @@ designer:
   new: Nytt
   open: Öppna mönster…
   import_reference: Importera prototyp-CSV…
-  save: Spara…
+  save: Spara
+  save_as: Spara som…
   export: Exportera kommandofil…
   parameters: Mönster
   name: Namn (även filnamnet)
@@ -444,6 +445,10 @@ designer:
   errors:
     required: '{field}: inget ifyllt än.'
     number: '{field}: {value} är inte ett tal.'
+    not_finite: '{field}: {value} är inte ett ändligt tal.'
+    not_finite_value: '{value} är inte ett ändligt tal.'
+    ids_pending: 'Kanal-id: tryck Enter för att använda det som skrivits. Till dess sparas, exporteras, spelas och görs ingenting om.'
+    sidecar_layout: '{value}: sidofilen är uppställd på ett sätt som verktyget inte kan skriva om utan att ändra den. Spara den som ett nytt mönster i stället.'
     channel_ids: 'Kanal-id: {value} är inte en lista av heltal åtskilda med kommatecken.'
     name: 'Namnet är också filnamnet: använd bara bokstäver, siffror, _ och -.'
     interval: Radintervallet måste vara större än noll.
@@ -455,12 +460,12 @@ designer:
     overlap: 'Kanal {channel}: två perioder möts eller överlappar, och rutnätet skulle slå ihop dem till en.'
     nothing: Det finns inga kanaler att göra om.
     not_loadable: 'Det skulle inte gå att ladda, så det kan inte sparas: {value}'
-    open_failed: 'Det går inte att ladda: {value}'
+    open_failed: 'Kunde inte öppna {file}, som inte går att ladda: {value}. Mönstret som visas är oförändrat.'
     exists: '{value} finns redan.'
     name_taken: 'Ett annat mönster i mappen, {value}, har redan det här namnet.'
     folder_unreadable: 'Ett mönster som redan finns i mappen går inte att ladda: {value}'
     ragged: 'Rad {line} har {value} celler, och första raden har {expected}.'
-    bit_range: 'Kanal {channel} är ingen bit i prototypens 32-bitarsmask, 0 till 31.'
+    bit_range: 'Kanal {channel} är ingen bit i prototypens mask på {bits} bitar.'
     not_whole_ms: 'Ett steg på {value} ms är inte ett helt antal millisekunder, vilket prototypen kräver.'
     too_many_steps: '{value} steg, och prototypen lagrar högst {limit}.'
     mock_channels: 'Det simulerade plagget har kanalerna {have}, och det här mönstret använder {value}.'

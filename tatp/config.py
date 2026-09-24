@@ -137,6 +137,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "garment.pattern_tick_interval_s", NUMBER, 0, None),
     ("hardware.yaml", "prototype_command_file.max_steps", int, 1, None),
     ("hardware.yaml", "prototype_command_file.max_step_ms", int, 1, None),
+    ("hardware.yaml", "prototype_command_file.mask_bits", int, 1, None),
     ("hardware.yaml", "adjustment.tap_max_duration_s", NUMBER, 0, None),
     ("hardware.yaml", "adjustment.tap_step_kpa", NUMBER, 0, None),
     ("hardware.yaml", "adjustment.hold_delay_s", NUMBER, 0, None),

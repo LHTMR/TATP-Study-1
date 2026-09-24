@@ -15,6 +15,16 @@ text goes through `patterns.from_text` -- the code `load_pattern` runs -- and `p
 So a pattern that would fail to load cannot be saved, and the prototype's silent-skip defect
 (SPEC.md 12.4) is refused here by the same comparison that refuses it on loading.
 
+**A re-saved sidecar keeps what its author wrote.** The fields the designer owns are rewritten
+in place, line by line, and every other line -- comments, null fields, keys the designer does
+not know -- is kept exactly, as `tatp/instruments.py` does for `filaments.yaml`. A pattern with
+no sidecar yet gets a fresh one. An opened pattern is saved back to its own file, so a neutral
+file name that differs from the pattern's `name` survives a re-save.
+
+**Numbers are shown losslessly** (`shown`): a float as its `repr`, an int as an int. A number
+shown to six significant figures and read back would silently change a row interval of
+1000/12 ms on the next save.
+
 **The prototype rig's command file.** `clearcode`, then `addcode:0x<mask>/<ms>` per run of
 identical rows, with bit `channel_id` set for each channel on -- the format of the prototype
 repository's `stim_files/` and of `Controller.Stimulus.to_file4arduino_timed`. Two differences
@@ -32,6 +42,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -53,16 +64,29 @@ MODES = (SEQUENTIAL, JOIN_HOLD, JOIN_STAY)
 # The descriptive sidecar fields the example patterns carry. Read by nobody but a person: the
 # CSV and `row_interval_ms` are authoritative (config/patterns/examples/README.md).
 OPTIONAL_FIELDS = ("nominal_velocity_cm_s", "assumed_channel_spacing_cm", "overlap_rows")
+# Everything in a sidecar the designer writes. Any other key is the author's and is kept.
+OWNED_FIELDS = (*patterns.SIDECAR_KEYS, *OPTIONAL_FIELDS)
 
-# The name is also the file stem, so it is kept to what every file system takes unchanged.
+# The name is also the file stem of a new pattern, so it is kept to what every file system
+# takes unchanged.
 NAME_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
 
-# The prototype's shift register is 32 bits wide (`write32bits` in the sketch).
-MASK_BITS = 32
+# A top-level `key: value  # comment` line, the one sidecar shape rewritten in place. The value
+# is a flow list, a quoted string or a plain scalar; the comment is kept.
+SIDECAR_LINE = (
+    r"^(?P<head>{key}:[ \t]*)"
+    r"(?P<value>\[[^\]]*\]|\"[^\"]*\"|'[^']*'|[^#\s](?:[^#]*[^#\s])?)?"
+    r"(?P<tail>[ \t]*(?:#.*)?)$"
+)
 
 COMMAND_CLEAR = "clearcode"
 REFERENCE_TAB = "\t"
 REFERENCE_COMMA = ","
+DECIMAL_COMMA = ","
+DECIMAL_POINT = "."
+BOM = "﻿"
+# Wide enough that PyYAML never folds a rewritten value onto a second line.
+YAML_LINE_WIDTH = 1_000_000
 
 
 class DesignError(Exception):
@@ -87,16 +111,68 @@ class Design:
     channel_ids: tuple[int, ...]
     loop: bool
     rows: list[list[int]]
-    # The optional descriptive fields and anything else a loaded sidecar carried, kept so that
-    # re-saving a pattern does not drop what its author wrote.
+    # The optional descriptive fields, None where not given.
     extras: dict = field(default_factory=dict)
+    # Where it was opened from, so Save writes back there, and the sidecar text it had, so a
+    # re-save keeps the author's comments and fields. None for a pattern not yet saved.
+    path: Path | None = None
+    sidecar_source: str | None = None
+
+
+# -- numbers --------------------------------------------------------------------------------
+
+
+def shown(value: object) -> str:
+    """A number as text that reads back as exactly the same number.
+
+    `repr` for a float, because `:g` keeps six significant figures and 1000/12 would come back
+    as 83.3333. An exact fraction that is whole is shown as an int.
+    """
+    if isinstance(value, Fraction):
+        return str(value.numerator) if value.denominator == 1 else repr(float(value))
+    if isinstance(value, float):
+        return repr(value)
+    return str(value)
+
+
+def parse_number(text: str, field_name: str) -> int | float:
+    """A typed number, with either decimal mark. Refuses blank, non-numbers and non-finite.
+
+    A whole number typed without a decimal mark stays an int, so `overlap_rows: 1` is saved
+    back as it was written rather than as 1.0.
+    """
+    typed = text.strip().replace(DECIMAL_COMMA, DECIMAL_POINT)
+    if not typed:
+        raise DesignError("required", field=field_name)
+    try:
+        value: int | float = int(typed)
+    except ValueError:
+        try:
+            value = float(typed)
+        except ValueError:
+            raise DesignError("number", field=field_name, value=text) from None
+    if not _finite(value):
+        raise DesignError("not_finite", field=field_name, value=text)
+    return value
+
+
+def _finite(value: object) -> bool:
+    # An int too large for a float overflows rather than reporting itself infinite.
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 # -- composing ------------------------------------------------------------------------------
 
 
-def _exact(value: float | int | str) -> Fraction:
-    """A typed number as an exact fraction: 0.3 is three tenths, not a binary neighbour."""
+def _exact(value: float | int | Fraction) -> Fraction:
+    """A number as an exact fraction: 0.3 is three tenths, not a binary neighbour."""
+    if isinstance(value, Fraction):
+        return value
+    if not _finite(value):
+        raise DesignError("not_finite_value", value=shown(value))
     return Fraction(str(value))
 
 
@@ -106,10 +182,10 @@ def row_index(value_ms: float, interval_ms: float) -> int:
     if interval <= 0:
         raise DesignError("interval")
     if value < 0:
-        raise DesignError("negative", value=_shown(value_ms))
+        raise DesignError("negative", value=shown(value_ms))
     rows = value / interval
     if rows.denominator != 1:
-        raise DesignError("off_grid", value=_shown(value_ms), interval=_shown(interval_ms))
+        raise DesignError("off_grid", value=shown(value_ms), interval=shown(interval_ms))
     return rows.numerator
 
 
@@ -132,7 +208,7 @@ def ordered_spans(
         raise ValueError(f"mode {mode!r} is not one of {MODES}")
     delay = _exact(delay_ms)
     if delay < 0:
-        raise DesignError("negative", value=_shown(delay_ms))
+        raise DesignError("negative", value=shown(delay_ms))
     if not entries:
         raise DesignError("nothing")
     spans = []
@@ -140,7 +216,7 @@ def ordered_spans(
     for channel, hold_ms in entries:
         hold = _exact(hold_ms)
         if hold <= 0:
-            raise DesignError("hold", channel=channel, value=_shown(hold_ms))
+            raise DesignError("hold", channel=channel, value=shown(hold_ms))
         spans.append((channel, onset, onset + hold))
         onset = onset + hold + delay if mode == SEQUENTIAL else onset + delay
     if mode == JOIN_STAY:
@@ -167,8 +243,8 @@ def timed_rows(
         if channel not in channel_ids:
             raise DesignError("unknown_channel", channel=channel)
         if _exact(offset_ms) <= _exact(onset_ms):
-            raise DesignError("empty_span", channel=channel, onset=_shown(onset_ms),
-                              offset=_shown(offset_ms))
+            raise DesignError("empty_span", channel=channel, onset=shown(onset_ms),
+                              offset=shown(offset_ms))
         indexed.append((channel, row_index(onset_ms, interval_ms),
                         row_index(offset_ms, interval_ms)))
 
@@ -207,7 +283,7 @@ def resized(
     ]
 
 
-# -- validating, saving and loading ---------------------------------------------------------
+# -- the files ------------------------------------------------------------------------------
 
 
 def csv_text(design: Design) -> str:
@@ -218,49 +294,105 @@ def csv_text(design: Design) -> str:
     return buffer.getvalue()
 
 
-def sidecar_text(design: Design) -> str:
-    meta = {
+def _owned(design: Design) -> dict:
+    """The sidecar fields the designer writes, in order. None where an optional one is blank."""
+    return {
         "name": design.name,
         "row_interval_ms": float(design.row_interval_ms),
         "channel_ids": list(design.channel_ids),
         "loop": design.loop,
-        **{key: value for key, value in design.extras.items() if value is not None},
+        **{key: design.extras.get(key) for key in OPTIONAL_FIELDS},
     }
-    return yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)
+
+
+def _flow(value: object) -> str:
+    """`value` as a one-line YAML scalar or flow list, in YAML's own spelling of it."""
+    return yaml.safe_dump([value], default_flow_style=True, allow_unicode=True,
+                          width=YAML_LINE_WIDTH).strip()[1:-1]
+
+
+def sidecar_text(design: Design) -> str:
+    """The sidecar a save writes: a fresh one, or the loaded one, its owned fields rewritten.
+
+    An owned field on a line of its own is rewritten in place with its comment kept. One the
+    file does not have is appended, unless it is a blank optional field. Anything else the
+    file holds is kept as written, and the result is parsed and compared with what was meant:
+    a sidecar laid out some other way is refused rather than rewritten wrongly.
+    """
+    owned = _owned(design)
+    if design.sidecar_source is None:
+        # One `key: value` line each, in the examples' style, so a later re-save can rewrite
+        # every field in place.
+        return "".join(f"{k}: {_flow(v)}\n" for k, v in owned.items() if v is not None)
+
+    old = yaml.safe_load(design.sidecar_source)
+    if not isinstance(old, dict):
+        raise DesignError("sidecar_layout", value=design.path.name if design.path else "")
+    written = set()
+    lines = []
+    for line in design.sidecar_source.splitlines(keepends=True):
+        ending = line[len(line.rstrip("\r\n")):]
+        body = line[: len(line) - len(ending)]
+        for key, value in owned.items():
+            match = re.match(SIDECAR_LINE.format(key=re.escape(key)), body)
+            if match is not None:
+                body = f"{match['head']}{_flow(value)}{match['tail']}"
+                written.add(key)
+        lines.append(body + ending)
+    text = "".join(lines)
+    missing = [k for k, v in owned.items() if k not in written and v is not None]
+    if missing:
+        if text and not text.endswith("\n"):
+            text += "\n"
+        text += "".join(f"{key}: {_flow(owned[key])}\n" for key in missing)
+
+    # Stage boundary (CLAUDE.md): the rewrite holds exactly what was meant, or is not written.
+    expected = {**old, **{k: v for k, v in owned.items() if k in old or v is not None}}
+    try:
+        rewritten = yaml.safe_load(text)
+    except yaml.YAMLError:
+        rewritten = None
+    if rewritten != expected:
+        raise DesignError("sidecar_layout", value=design.path.name if design.path else "")
+    return text
 
 
 def csv_path(design: Design, folder: Path) -> Path:
+    """Where Save As writes a pattern: its name is its file stem."""
     return folder / f"{design.name}.csv"
 
 
-def validate(design: Design, folder: Path) -> Pattern:
-    """The pattern this design would load as, from `folder`. Refuses what would not load.
+def target_of(design: Design, folder: Path | None) -> Path:
+    """Where the design validates from: its own file once it has one."""
+    return design.path if design.path is not None else csv_path(design, folder or Path())
 
-    The name and the row interval are checked here because the loader takes both on trust: a
-    name is also a file name, and an interval of zero loads but has no duration to play.
+
+def validate(design: Design, target: Path) -> Pattern:
+    """The pattern this design would load as, from `target`. Refuses what would not load.
+
+    The name and the row interval are checked here because a name is also a new pattern's
+    file name, and the interval must be a real duration before it can be put on a grid.
     """
     if not NAME_PATTERN.fullmatch(design.name):
         raise DesignError("name")
-    if not design.row_interval_ms > 0:
+    if not (_finite(design.row_interval_ms) and design.row_interval_ms > 0):
         raise DesignError("interval")
-    path = csv_path(design, folder)
     try:
-        pattern = patterns.from_text(csv_text(design), sidecar_text(design), path)
+        pattern = patterns.from_text(csv_text(design), sidecar_text(design), target)
     except PatternError as error:
         raise DesignError("not_loadable", value=str(error)) from error
     patterns.expand(pattern)
     return pattern
 
 
-def save(design: Design, folder: Path, overwrite: bool = False) -> Pattern:
-    """Write the CSV and its sidecar into `folder`, and prove they load back unchanged."""
-    pattern = validate(design, folder)
-    target = csv_path(design, folder)
+def save(design: Design, target: Path, overwrite: bool = False) -> Pattern:
+    """Write the CSV at `target` and its sidecar beside it; prove they load back unchanged."""
+    pattern = validate(design, target)
     sidecar = target.with_suffix(".yaml")
     if not overwrite and (target.exists() or sidecar.exists()):
         raise DesignError("exists", value=target.name)
     # `load_folder` refuses two patterns of one name, so a clash would break the whole folder.
-    for other in sorted(folder.glob("*.csv")):
+    for other in sorted(target.parent.glob("*.csv")):
         if other == target:
             continue
         try:
@@ -269,24 +401,29 @@ def save(design: Design, folder: Path, overwrite: bool = False) -> Pattern:
             raise DesignError("folder_unreadable", value=str(error)) from error
         if name == design.name:
             raise DesignError("name_taken", value=other.name)
+    sidecar_body = sidecar_text(design)
     target.write_text(csv_text(design), encoding="utf-8", newline="")
-    sidecar.write_text(sidecar_text(design), encoding="utf-8")
+    sidecar.write_bytes(sidecar_body.encode("utf-8"))
     loaded = patterns.load_pattern(target)
     # Stage boundary (CLAUDE.md): what is on disk is what was validated, or nothing is trusted.
     assert loaded == pattern, f"{target.name} did not load back as it was saved"
+    design.path, design.sidecar_source = target, sidecar_body
     return loaded
 
 
 def from_pattern(pattern: Pattern) -> Design:
-    """A loaded pattern as a design, with its sidecar's other fields kept."""
-    meta = yaml.safe_load(pattern.source.with_suffix(".yaml").read_text(encoding="utf-8"))
+    """A loaded pattern as a design, remembering its file and its sidecar's text."""
+    source = pattern.source.with_suffix(".yaml").read_bytes().decode("utf-8")
+    meta = yaml.safe_load(source)
     return Design(
         name=pattern.name,
         row_interval_ms=pattern.row_interval_ms,
         channel_ids=pattern.channel_ids,
         loop=pattern.loop,
         rows=[list(row) for row in pattern.rows],
-        extras={k: v for k, v in meta.items() if k not in patterns.SIDECAR_KEYS},
+        extras={key: meta.get(key) for key in OPTIONAL_FIELDS},
+        path=pattern.source,
+        sidecar_source=source,
     )
 
 
@@ -300,15 +437,16 @@ def from_reference_csv(path: Path, column_ms: float, loop: bool) -> Design:
     `Controller.Stimulus.from_csv_matrix` reads it with a column duration given at upload, so
     the file carries none and the designer asks for one. The cells are transposed as text and
     go through `patterns.from_text`, so a `2` or a `0.5` is refused here as it is on loading --
-    the prototype parses both with `int()`. The delimiter rule is the prototype's own: a tab if
-    the first line has one, else a comma.
+    the prototype parses both with `int()`. The delimiter rule is the prototype's own, a tab if
+    the line has one and else a comma, applied to the first non-blank line.
     """
-    if not _exact(column_ms) > 0:
+    if not (_finite(column_ms) and column_ms > 0):
         raise DesignError("interval")
-    text = path.read_bytes().decode("utf-8")
-    if not text.strip():
+    text = path.read_bytes().decode("utf-8").removeprefix(BOM)
+    first = next((line for line in text.splitlines() if line.strip()), None)
+    if first is None:
         raise DesignError("nothing")
-    delimiter = REFERENCE_TAB if REFERENCE_TAB in text.splitlines()[0] else REFERENCE_COMMA
+    delimiter = REFERENCE_TAB if REFERENCE_TAB in first else REFERENCE_COMMA
     lines = []
     for row in csv.reader(io.StringIO(text, newline=""), delimiter=delimiter):
         cells = [cell.strip() for cell in row]
@@ -319,6 +457,8 @@ def from_reference_csv(path: Path, column_ms: float, loop: bool) -> Design:
             cells.pop()
         if cells:
             lines.append(cells)
+    if not lines:
+        raise DesignError("nothing")
     width = len(lines[0])
     for number, line in enumerate(lines, start=1):
         if len(line) != width:
@@ -362,15 +502,17 @@ def on_periods(pattern: Pattern) -> dict[int, list[tuple[float, float]]]:
 # -- the prototype rig's command file -------------------------------------------------------
 
 
-def command_steps(pattern: Pattern, max_steps: int, max_step_ms: int) -> list[tuple[int, int]]:
+def command_steps(pattern: Pattern, limits: dict) -> list[tuple[int, int]]:
     """(mask, ms) per step: runs of identical rows merged, over one whole cycle.
 
-    A run longer than the sketch's uint16 delay is split into steps of the same mask, which
-    re-latches the same state and changes nothing the participant feels.
+    `limits` is `hardware.yaml`'s `prototype_command_file`: what the sketch can store. A run
+    longer than its uint16 delay is split into steps of the same mask, which re-latches the
+    same state and changes nothing the participant feels.
     """
+    max_steps, max_step_ms = limits["max_steps"], limits["max_step_ms"]
     for channel in pattern.channel_ids:
-        if not 0 <= channel < MASK_BITS:
-            raise DesignError("bit_range", channel=channel)
+        if not 0 <= channel < limits["mask_bits"]:
+            raise DesignError("bit_range", channel=channel, bits=limits["mask_bits"])
     interval = _exact(pattern.row_interval_ms)
     runs: list[list[int]] = []
     for row in pattern.rows:
@@ -383,7 +525,7 @@ def command_steps(pattern: Pattern, max_steps: int, max_step_ms: int) -> list[tu
     for mask, n_rows in runs:
         duration = interval * n_rows
         if duration.denominator != 1:
-            raise DesignError("not_whole_ms", value=_shown(float(duration)))
+            raise DesignError("not_whole_ms", value=shown(float(duration)))
         remaining = duration.numerator
         while remaining > 0:
             steps.append((mask, min(remaining, max_step_ms)))
@@ -393,14 +535,6 @@ def command_steps(pattern: Pattern, max_steps: int, max_step_ms: int) -> list[tu
     return steps
 
 
-def command_file(pattern: Pattern, max_steps: int, max_step_ms: int) -> str:
+def command_file(steps: Sequence[tuple[int, int]]) -> str:
     """The file the prototype's own scripts send line by line before `exec`."""
-    lines = [COMMAND_CLEAR]
-    lines += [f"addcode:0x{mask:x}/{ms}" for mask, ms in command_steps(
-        pattern, max_steps, max_step_ms)]
-    return "\n".join(lines)
-
-
-def _shown(value: float | int | Fraction | str) -> str:
-    number = float(value)
-    return f"{number:g}"
+    return "\n".join([COMMAND_CLEAR, *(f"addcode:0x{mask:x}/{ms}" for mask, ms in steps)])

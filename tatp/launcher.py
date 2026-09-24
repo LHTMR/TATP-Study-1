@@ -503,9 +503,15 @@ class LauncherWindow(QWidget):
 
         Imported when opened, as the preview's tool is. Held on the launcher, because a
         top-level window nothing references is collected and vanishes (docs/LOG.md N6.30).
+        One that is already open is raised rather than replaced, since replacing it would
+        discard whatever is unsaved in it.
         """
         from tools.design_pattern import DesignerWindow
 
+        if self.designer is not None and self.designer.isVisible():
+            self.designer.raise_()
+            self.designer.activateWindow()
+            return self.designer
         self.designer = DesignerWindow(self.text, self.config.hardware)
         self.designer.show()
         return self.designer

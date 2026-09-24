@@ -387,7 +387,8 @@ designer:
   new: New
   open: Open pattern…
   import_reference: Import prototype CSV…
-  save: Save…
+  save: Save
+  save_as: Save as…
   export: Export command file…
   parameters: Pattern
   name: Name (also the file name)
@@ -446,6 +447,10 @@ designer:
   errors:
     required: '{field}: nothing entered yet.'
     number: '{field}: {value} is not a number.'
+    not_finite: '{field}: {value} is not a finite number.'
+    not_finite_value: '{value} is not a finite number.'
+    ids_pending: 'Channel ids: press Enter to apply what was typed. Until then nothing is saved, exported, played or converted.'
+    sidecar_layout: '{value}: its sidecar is laid out in a way the designer cannot rewrite without changing it. Save it as a new pattern instead.'
     channel_ids: 'Channel ids: {value} is not a list of whole numbers separated by commas.'
     name: 'The name is also the file name: use only letters, digits, _ and -.'
     interval: The row interval must be above zero.
@@ -457,12 +462,12 @@ designer:
     overlap: 'Channel {channel}: two on-periods touch or overlap, and the grid would join them into one.'
     nothing: There are no channels to convert.
     not_loadable: 'It would not load, so it cannot be saved: {value}'
-    open_failed: 'It does not load: {value}'
+    open_failed: 'Could not open {file}, which does not load: {value}. The pattern shown is unchanged.'
     exists: '{value} already exists.'
     name_taken: 'Another pattern in this folder, {value}, already has this name.'
     folder_unreadable: 'A pattern already in this folder does not load: {value}'
     ragged: 'Line {line} has {value} cells, and the first line has {expected}.'
-    bit_range: 'Channel {channel} is not a bit of the prototype''s 32-bit mask, 0 to 31.'
+    bit_range: 'Channel {channel} is not a bit of the prototype''s {bits}-bit mask.'
     not_whole_ms: 'A step of {value} ms is not a whole number of milliseconds, which the prototype needs.'
     too_many_steps: '{value} steps, and the prototype stores at most {limit}.'
     mock_channels: 'The mock garment has channels {have}, and this pattern uses {value}.'

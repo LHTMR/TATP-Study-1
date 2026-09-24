@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,11 +124,20 @@ def from_text(csv_text: str, sidecar_text: str, csv_path: Path) -> Pattern:
                 )
         rows.append(tuple(int(cell) for cell in cells))
 
+    # YAML reads `.inf` and `.nan` as floats, and a pattern whose rows last forever, no time
+    # at all or less than none cannot be played (docs/LOG.md N7.P10).
+    row_interval_ms = float(meta["row_interval_ms"])
+    if not (math.isfinite(row_interval_ms) and row_interval_ms > 0):
+        raise PatternError(
+            f"{sidecar.name}: row_interval_ms {meta['row_interval_ms']!r} is not a finite "
+            f"duration above zero"
+        )
+
     return Pattern(
         name=str(meta["name"]),
         channel_ids=channel_ids,
         rows=tuple(rows),
-        row_interval_ms=float(meta["row_interval_ms"]),
+        row_interval_ms=row_interval_ms,
         loop=bool(meta["loop"]),
         source=csv_path,
     )
