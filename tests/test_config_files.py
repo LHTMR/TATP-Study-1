@@ -13,11 +13,11 @@ import yaml
 
 from tatp.config import CONFIG_DIR
 
-YAML_FILES = sorted(CONFIG_DIR.rglob("*.yaml"))
+# The conversion factor the Aesthesio data chart states it used, which is also the one the
+# instruments dialog converts a weighing by.
+from tatp.units import MN_PER_G
 
-# The conversion factor the Aesthesio data chart states it used. A unit conversion, which
-# SPEC.md 4.2 allows as a literal.
-MN_PER_G = 9.80665
+YAML_FILES = sorted(CONFIG_DIR.rglob("*.yaml"))
 
 # The chart's milliNewton column is rounded to two significant figures, so at the bottom of the
 # ladder -- 0.008 g, 0.08 mN -- the rounding alone is about 2 %. A mistyped label moves a row by

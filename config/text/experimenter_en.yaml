@@ -366,21 +366,28 @@ instruments:
   # SPEC.md 8.1. Writes the measured forces and the weighing date into config/filaments.yaml.
   title: Instruments and environment
   filaments: Filament forces
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced
+  filaments_hint: Enter what the balance reads, in grams. The force in mN that will be saved is shown beside it.
   label: Label (g)
   size: Size
   nominal: Nominal (mN)
-  measured: Measured (mN)
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced
+  measured: Weighed (g)
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced
+  measured_mn: Force (mN)
   weighing_date: 'Weighing date (YYYY-MM-DD):'
-  weighing_balance: 'Balance used:'
   save_forces: Save forces
   saved: 'Saved {value} measured forces to filaments.yaml.'
-  invalid_force: 'Filament {filament} g: {value} is not a force in mN above zero.'
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced
+  invalid_force: 'Filament {filament} g: {value} is not a weight in grams above zero.'
   invalid_date: '{value} is not a date in the form YYYY-MM-DD.'
   date_required: Enter the weighing date before saving measured forces.
   nothing_to_save: No measured forces entered.
   environment: Room environment (optional)
-  room_temperature: 'Room temperature (°C):'
-  relative_humidity: 'Relative humidity (%):'
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced. Short, to share one line.
+  room_temperature: 'Temperature (°C):'
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced
+  relative_humidity: 'Humidity (% RH):'
   use_environment: Use for the next session
   invalid_number: '{value} is not a number.'
 
@@ -396,14 +403,19 @@ designer:
   save: Save
   save_as: Save as…
   export: Export command file…
-  parameters: Pattern
-  name: Name (also the file name)
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  name: Name (= file name)
   row_interval_ms: Row interval (ms)
-  channel_ids: Channel ids (bit indices)
-  loop: Repeats while active
-  descriptive: Descriptive only, optional
-  nominal_velocity_cm_s: Nominal velocity (cm/s)
-  assumed_channel_spacing_cm: Channel spacing (cm)
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  channel_ids: Channels (1 = distal)
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  loop: Repeats
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  descriptive: 'Descriptive, optional:'
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  nominal_velocity_cm_s: Velocity (cm/s)
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  assumed_channel_spacing_cm: Spacing (cm)
   overlap_rows: Overlap (rows)
   tab_grid: Grid
   tab_ordered: Ordered channels
@@ -419,7 +431,6 @@ designer:
   offset_ms: Offset (ms)
   add_channel: Add channel
   remove_channel: Remove channel
-  mode: Mode
   # The prototype repository's three modes (modular_approach/README.txt), and what each does.
   modes:
     sequential: Sequential
@@ -432,11 +443,16 @@ designer:
   delay_ms: Delay (ms)
   to_grid: Convert to grid
   converted: 'Converted to {value} rows. The grid was replaced.'
-  preview: Preview
   seconds: '{value} s'
-  play: Play on the mock garment
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  play_on: 'Play on:'
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  play: Play
   stop: Stop
-  playing: 'Playing on the mock garment. Channels on: {value}'
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  connecting: 'Connecting: {garment}…'
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  playing: 'Playing on: {garment}. Channels on: {value}'
   none_on: none
   stopped: Stopped. Every channel is off.
   loads: 'Loads: {rows} rows, one cycle {cycle} s, played once.'
@@ -444,7 +460,8 @@ designer:
   saved: 'Saved {value} and its sidecar.'
   exported: 'Exported {steps} steps to {value}. The prototype plays it once per exec, then switches every channel off.'
   column_ms_title: Import prototype CSV
-  column_ms: 'Column duration (ms). The prototype CSV does not carry one:'
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  column_ms: 'Column duration (ms), which the prototype CSV does not carry. Its bits become the sleeve''s channels 1-5 by the wiring in hardware.yaml:'
   import: Import
   cancel: Cancel
   overwrite_title: Replace the pattern?
@@ -473,7 +490,15 @@ designer:
     name_taken: 'Another pattern in this folder, {value}, already has this name.'
     folder_unreadable: 'A pattern already in this folder does not load: {value}'
     ragged: 'Line {line} has {value} cells, and the first line has {expected}.'
-    bit_range: 'Channel {channel} is not a bit of the prototype''s {bits}-bit mask.'
+    # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+    bit_range: 'Channel {channel} is wired to bit {bit}, which is not a bit of the prototype''s {bits}-bit mask.'
     not_whole_ms: 'A step of {value} ms is not a whole number of milliseconds, which the prototype needs.'
     too_many_steps: '{value} steps, and the prototype stores at most {limit}.'
-    mock_channels: 'The mock garment has channels {have}, and this pattern uses {value}.'
+    # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+    garment_channels: '{garment}: it has channels {have}, and this pattern uses {value}.'
+    # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+    connect_failed: '{garment}: could not connect ({value}). Nothing was played.'
+    # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+    unwired_bit: 'Bit {value} is not wired to a channel of the sleeve. The wired bits are {wired} (hardware.yaml).'
+    # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+    unwired_channel: 'Channel {channel} is not a channel of the sleeve, which has channels {wired}.'

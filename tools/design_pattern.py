@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """The pattern designer. SPEC.md 4.1 entry 3, 12.2, 12.4.
 
-Compose a garment pattern, preview its activation timeline, play it on the mock garment, and
-save it into a pattern folder as the tick-grid CSV and its sidecar. Opened from the launcher,
-or on its own:
+Compose a garment pattern, preview its activation timeline, play it on the mock garment or the
+prototype sleeve, and save it into a pattern folder as the tick-grid CSV and its sidecar.
+Opened from the launcher, or on its own:
 
     conda run -n tatp-study-1 python tools/design_pattern.py [--open <pattern.csv>]
 
@@ -25,19 +25,23 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-import yaml  # noqa: E402  -- after the path insert, with the rest
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer  # noqa: E402  -- after the path insert
+import serial  # noqa: E402  -- after the path insert, with the rest
+import yaml  # noqa: E402
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QColor, QPainter, QPen  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QAbstractItemView,
     QApplication,
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
-    QFormLayout,
     QHBoxLayout,
+    QHeaderView,
+    QLabel,
     QLineEdit,
+    QRadioButton,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -48,10 +52,10 @@ from PySide6.QtWidgets import (  # noqa: E402
 from tatp import config as cfg  # noqa: E402
 from tatp import pattern_design as pd  # noqa: E402
 from tatp.clock import Clock  # noqa: E402
-from tatp.garment.base import Limits  # noqa: E402
-from tatp.garment.mock import MockGarment  # noqa: E402
+from tatp.garment.base import GarmentController, GarmentError, Limits  # noqa: E402
 from tatp.garment.patterns import Pattern, PatternError  # noqa: E402
 from tatp.pattern_design import Design, DesignError  # noqa: E402
+from tatp.session import DRIVERS  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
 from tatp.ui.widgets import (  # noqa: E402
     BACKGROUND,
@@ -61,10 +65,10 @@ from tatp.ui.widgets import (  # noqa: E402
     FOREGROUND,
     GROUP_GAP_PX,
     ITEM_GAP_PX,
+    LABEL_GAP_PX,
     MARGIN_PX,
     SECONDARY,
     SIZE_BODY,
-    SIZE_LARGE,
     SIZE_SMALL,
     TARGET_COLOUR,
     WARNING_COLOUR,
@@ -78,32 +82,42 @@ from tatp.ui.widgets import (  # noqa: E402
 
 LANGUAGES = ("sv", "en")
 DEFAULT_LANGUAGE = "en"
+# Where Open, Save as and Import start: the folder the pattern folders live in.
+PATTERNS_DIR = cfg.CONFIG_DIR / "patterns"
+# The garment Play uses until another is chosen: the one with nothing to wake.
+DEFAULT_GARMENT = "mock"
 
 # Presentation only (SPEC.md 4.2).
-PARAMETER_COLUMN_PX = 430
-CHANNEL_CONTROLS_PX = 380
-MODE_HINT_LINES = 3
+NAME_FIELD_PX = 180
+IDS_FIELD_PX = 140
+NUMBER_FIELD_PX = 80
+CHANNEL_TABLE_PX = 320
 CHECK_INDICATOR_PX = 14
-TIMELINE_HEIGHT_PX = 140
+TIMELINE_HEIGHT_PX = 120
 TIMELINE_LABEL_PX = 48
 TIMELINE_AXIS_PX = 26
 TIMELINE_LANE_GAP_PX = 3
 TIMELINE_CURSOR_PX = 2
 # A looped pattern's second cycle is drawn fainter, so it reads as the repeat, not as more.
 REPEAT_ALPHA = 110
-GRID_CELL_PX = 44
-ON_MARK = "1"
-OFF_MARK = "0"
+# Compact rows, so a long pattern is mostly in view, and columns that share the width. The
+# cells carry no digits: on or off is the fill, which reads at a glance where a 1 among 0s
+# did not (S, 24 Sep 2026).
+GRID_ROW_PX = 22
+GRID_SELECTION = "rgba(224, 161, 42, 70)"
 ID_SEPARATORS = re.compile(r"[,;\s]+")
 # What a user-chosen pattern file can raise on the way in (`DesignerWindow.open_file`).
 FILE_ERRORS = (PatternError, yaml.YAMLError, ValueError, TypeError, KeyError, OSError)
+# What waking a real garment can raise: no such port, a port in use, a device that does not
+# answer. Reported in the window; nothing is played.
+CONNECT_ERRORS = (GarmentError, serial.SerialException)
 
 
 def designer_stylesheet() -> str:
     """The lab-side look, plus the controls only this window has."""
     return stylesheet() + (
         f"QTableWidget {{ background-color: {BACKGROUND}; color: {FOREGROUND}; "
-        f"gridline-color: {CONTROL_BORDER}; }}"
+        f"gridline-color: {SECONDARY}; selection-background-color: {GRID_SELECTION}; }}"
         f"QHeaderView::section {{ background-color: {CONTROL_BACKGROUND}; color: {SECONDARY}; "
         f"border: 1px solid {CONTROL_BORDER}; }}"
         f"QTableCornerButton::section {{ background-color: {CONTROL_BACKGROUND}; }}"
@@ -116,6 +130,11 @@ def designer_stylesheet() -> str:
         f"height: {CHECK_INDICATOR_PX}px; border: 1px solid {SECONDARY}; "
         f"background-color: {CONTROL_BACKGROUND}; }}"
         f"QCheckBox::indicator:checked {{ background-color: {TARGET_COLOUR}; }}"
+        f"QRadioButton::indicator {{ width: {CHECK_INDICATOR_PX}px; "
+        f"height: {CHECK_INDICATOR_PX}px; border: 1px solid {SECONDARY}; "
+        f"border-radius: {CHECK_INDICATOR_PX // 2}px; "
+        f"background-color: {CONTROL_BACKGROUND}; }}"
+        f"QRadioButton::indicator:checked {{ background-color: {TARGET_COLOUR}; }}"
     )
 
 
@@ -261,7 +280,11 @@ class DesignerWindow(QWidget):
         super().__init__(parent)
         self.words = text["designer"]
         self.errors = self.words["errors"]
+        self.garment_names = text["terms"]["garments"]
+        self.hardware = hardware
         self.command_limits = hardware["prototype_command_file"]
+        # The sleeve's channel-to-bit wiring, which import and export translate through.
+        self.bit_for = pd.wiring(hardware["garment"]["prototype"]["channel_bits"])
         self.folder = folder
         self.channel_ids: tuple[int, ...] = ()
         self.rows: list[list[int]] = []
@@ -272,11 +295,12 @@ class DesignerWindow(QWidget):
         self.pattern: Pattern | None = None
         self.convert_buttons = []
 
-        # The real playback path, against the mock (SPEC.md 12.1): `play_pattern`, then
-        # `advance` from a timer at the session's own tick interval.
+        # The real playback path (SPEC.md 12.1): `play_pattern`, then `advance` from a timer at
+        # the session's own tick interval, through whichever driver is chosen. A real garment
+        # is woken on the first Play, not on opening, and let go on closing, so the window
+        # never holds the serial port a session is about to open.
         self.clock = Clock()
-        self.garment = MockGarment(Limits.from_config(hardware), self.clock)
-        self.garment.connect()
+        self.garment: GarmentController = self._make_garment(DEFAULT_GARMENT)
         self.timer = QTimer(self)
         tick_s = hardware["garment"]["pattern_tick_interval_s"]
         self.timer.setInterval(self.clock.scaled_ms(tick_s))
@@ -288,12 +312,16 @@ class DesignerWindow(QWidget):
         self._build()
         self.revalidate()
 
+    def _make_garment(self, driver: str) -> GarmentController:
+        return DRIVERS[driver](Limits.from_config(self.hardware), self.clock,
+                               hardware=self.hardware)
+
     # -- layout -------------------------------------------------------------------------
 
     def _build(self) -> None:
         words = self.words
-        title = label(SIZE_LARGE)
-        title.setText(words["title"])
+        # No title line: the window's own title bar names it, and every line of height is
+        # needed on a laptop screen.
         for_s = label(SIZE_SMALL, wrap=True, colour=WARNING_COLOUR)
         for_s.setText(words["for_s_only"])
 
@@ -317,74 +345,82 @@ class DesignerWindow(QWidget):
         actions.addWidget(self.save_as_button)
         actions.addWidget(self.export_button)
 
-        body = QHBoxLayout()
-        body.addWidget(self._parameters())
+        # The pattern's fields in two strips above the tabs, so the tabs -- the grid above all
+        # -- have the whole width, and the window fits a laptop screen (S, 24 Sep 2026).
         self.tabs = QTabWidget()
         sized(self.tabs, SIZE_SMALL)
         self.tabs.addTab(self._grid_tab(), words["tab_grid"])
         self.tabs.addTab(self._ordered_tab(), words["tab_ordered"])
         self.tabs.addTab(self._timed_tab(), words["tab_timed"])
-        body.addWidget(self.tabs, 1)
 
-        preview = label(SIZE_SMALL, colour=SECONDARY)
-        preview.setText(words["preview"])
         self.timeline = Timeline(words)
+        self.garment_choice = sized(QComboBox(), SIZE_SMALL)
+        for driver in sorted(DRIVERS):
+            self.garment_choice.addItem(self.garment_names[driver], driver)
+        self.garment_choice.setCurrentIndex(self.garment_choice.findData(DEFAULT_GARMENT))
+        # A method, not a lambda: PySide disconnects a dead window's methods, and a lambda
+        # left connected rebuilds a garment inside a window being destroyed.
+        self.garment_choice.currentIndexChanged.connect(self._garment_chosen)
         self.play_button = button(words["play"])
         self.stop_button = button(words["stop"])
         self.play_button.clicked.connect(self.play)
         self.stop_button.clicked.connect(self.stop)
         self.stop_button.setEnabled(False)
-        playback = QHBoxLayout()
-        playback.addWidget(preview)
-        playback.addStretch(1)
-        playback.addWidget(self.play_button)
-        playback.addWidget(self.stop_button)
+        # Where and whether it plays, on the tab bar's own line, which is otherwise empty.
+        playback = QWidget()
+        playback_row = QHBoxLayout(playback)
+        playback_row.setContentsMargins(0, 0, 0, LABEL_GAP_PX)
+        playback_row.setSpacing(ITEM_GAP_PX)
+        for control in (self._caption("play_on"), self.garment_choice, self.play_button,
+                        self.stop_button):
+            playback_row.addWidget(control)
+        self.tabs.setCornerWidget(playback, Qt.TopRightCorner)
         self.validity = label(SIZE_SMALL, wrap=True)
         self.message = label(SIZE_SMALL, wrap=True)
+        # Under the timeline: whether it loads, and what the last action did.
+        status = QVBoxLayout()
+        status.setSpacing(0)
+        status.addWidget(self.validity)
+        status.addWidget(self.message)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(MARGIN_PX, MARGIN_PX, MARGIN_PX, MARGIN_PX)
-        layout.addWidget(title)
+        layout.setContentsMargins(MARGIN_PX, ITEM_GAP_PX, MARGIN_PX, ITEM_GAP_PX)
+        layout.setSpacing(ITEM_GAP_PX)
         layout.addWidget(for_s)
-        layout.addSpacing(ITEM_GAP_PX)
         layout.addLayout(actions)
-        layout.addSpacing(ITEM_GAP_PX)
-        layout.addLayout(body, 1)
-        layout.addSpacing(ITEM_GAP_PX)
-        layout.addLayout(playback)
+        layout.addLayout(self._parameters())
+        layout.addWidget(self.tabs, 1)
         layout.addWidget(self.timeline)
-        layout.addWidget(self.validity)
-        layout.addWidget(self.message)
+        layout.addLayout(status)
 
     def _caption(self, key: str):
         caption = label(SIZE_SMALL, colour=SECONDARY)
         caption.setText(self.words[key])
         return caption
 
-    def _parameters(self) -> QWidget:
-        holder = QWidget()
-        holder.setFixedWidth(PARAMETER_COLUMN_PX)
-        form = QFormLayout(holder)
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form.setContentsMargins(0, 0, ITEM_GAP_PX, 0)
-        form.setVerticalSpacing(ITEM_GAP_PX)
-        heading = label(SIZE_BODY)
-        heading.setText(self.words["parameters"])
-        form.addRow(heading)
+    def _parameters(self) -> QVBoxLayout:
+        """The pattern's own fields in one strip, the descriptive ones in a second."""
         self.name_field = line_edit()
+        self.name_field.setMinimumWidth(NAME_FIELD_PX)
         self.interval_field = line_edit()
+        self.interval_field.setFixedWidth(NUMBER_FIELD_PX)
         self.ids_field = line_edit()
+        self.ids_field.setMinimumWidth(IDS_FIELD_PX)
         self.loop_box = sized(QCheckBox(self.words["loop"]), SIZE_SMALL)
-        for key, widget in (("name", self.name_field), ("row_interval_ms", self.interval_field),
-                            ("channel_ids", self.ids_field)):
-            form.addRow(self._caption(key), widget)
-        form.addRow(self.loop_box)
-        form.addRow(self._caption("descriptive"))
+        essential = self._strip(self._caption("name"), self.name_field,
+                                self._caption("row_interval_ms"), self.interval_field,
+                                self._caption("channel_ids"), self.ids_field, self.loop_box)
         self.extra_fields: dict[str, QLineEdit] = {}
+        descriptive = [self._caption("descriptive")]
         for key in pd.OPTIONAL_FIELDS:
             self.extra_fields[key] = line_edit()
-            form.addRow(self._caption(key), self.extra_fields[key])
+            self.extra_fields[key].setFixedWidth(NUMBER_FIELD_PX)
+            descriptive += [self._caption(key), self.extra_fields[key]]
             self.extra_fields[key].textChanged.connect(self.revalidate)
+        strips = QVBoxLayout()
+        strips.setSpacing(ITEM_GAP_PX)
+        strips.addLayout(essential)
+        strips.addLayout(self._strip(*descriptive))
         self.name_field.textChanged.connect(self.revalidate)
         self.interval_field.textChanged.connect(self._interval_changed)
         # Applied on Enter or leaving the field, not per keystroke: "1, 2, 3" passes through
@@ -393,7 +429,19 @@ class DesignerWindow(QWidget):
         self.ids_field.editingFinished.connect(self.apply_channel_ids)
         self.ids_field.textChanged.connect(self.revalidate)
         self.loop_box.toggled.connect(self.revalidate)
-        return holder
+        return strips
+
+    @staticmethod
+    def _strip(*widgets: QWidget) -> QHBoxLayout:
+        """One row of fields, each caption close to its field and a wider gap between pairs."""
+        row = QHBoxLayout()
+        row.setSpacing(ITEM_GAP_PX)
+        for index, widget in enumerate(widgets):
+            if index and isinstance(widget, QLabel | QCheckBox):
+                row.addSpacing(GROUP_GAP_PX)
+            row.addWidget(widget)
+        row.addStretch(1)
+        return row
 
     def _table(self, headers: list[str]) -> QTableWidget:
         table = sized(QTableWidget(0, len(headers)), SIZE_SMALL)
@@ -414,12 +462,16 @@ class DesignerWindow(QWidget):
     def _grid_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
+        layout.setContentsMargins(ITEM_GAP_PX, ITEM_GAP_PX, ITEM_GAP_PX, ITEM_GAP_PX)
         hint = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
         hint.setText(self.words["grid_hint"])
         self.grid = sized(QTableWidget(0, 0), SIZE_SMALL)
         self.grid.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.grid.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.grid.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.grid.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.grid.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.grid.verticalHeader().setDefaultSectionSize(GRID_ROW_PX)
         self.grid.cellClicked.connect(self.toggle)
         layout.addWidget(hint)
         layout.addWidget(self.grid, 1)
@@ -431,57 +483,73 @@ class DesignerWindow(QWidget):
 
     def _ordered_tab(self) -> QWidget:
         self.ordered = self._table([self.words["channel"], self.words["hold_ms"]])
-        self.mode = sized(QComboBox(), SIZE_SMALL)
-        for mode in pd.MODES:
-            self.mode.addItem(self.words["modes"][mode], mode)
-        self.mode_hint = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
-        self.mode.currentIndexChanged.connect(
-            lambda _: self.mode_hint.setText(self.words["mode_hints"][self.mode.currentData()])
-        )
-        self.mode_hint.setText(self.words["mode_hints"][self.mode.currentData()])
-        # Reserved, because a wrapped label is otherwise squeezed to fewer lines than it needs.
-        self.mode_hint.setMinimumHeight(
-            self.mode_hint.fontMetrics().lineSpacing() * MODE_HINT_LINES
-        )
-        self.delay_field = line_edit()
+        # Every mode with what it does, all in view, so they can be compared before one is
+        # chosen. A drop-down showed only the chosen one's (S, 24 Sep 2026).
+        self.mode_group = QButtonGroup(self)
+        self.mode_buttons: dict[str, QRadioButton] = {}
         controls = QVBoxLayout()
-        controls.addWidget(self._caption("mode"))
-        controls.addWidget(self.mode)
-        controls.addWidget(self.mode_hint)
-        controls.addWidget(self._caption("delay_ms"))
-        controls.addWidget(self.delay_field)
-        return self._channel_tab(self.ordered, controls, self.convert_ordered)
+        controls.setSpacing(LABEL_GAP_PX)
+        for mode in pd.MODES:
+            choice = sized(QRadioButton(self.words["modes"][mode]), SIZE_SMALL)
+            hint = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
+            hint.setText(self.words["mode_hints"][mode])
+            hint.setContentsMargins(CHECK_INDICATOR_PX + ITEM_GAP_PX, 0, 0, 0)
+            self.mode_group.addButton(choice)
+            self.mode_buttons[mode] = choice
+            controls.addWidget(choice)
+            controls.addWidget(hint)
+        self.mode_buttons[pd.MODES[0]].setChecked(True)
+        self.delay_field = line_edit()
+        self.delay_field.setFixedWidth(NUMBER_FIELD_PX)
+        delay = QHBoxLayout()
+        delay.addWidget(self._caption("delay_ms"))
+        delay.addWidget(self.delay_field)
+        delay.addSpacing(GROUP_GAP_PX)
+        controls.addSpacing(ITEM_GAP_PX)
+        controls.addLayout(delay)
+        controls.addStretch(1)
+        return self._channel_tab(self.ordered, self.convert_ordered, controls, delay)
+
+    @property
+    def mode(self) -> str:
+        return next(mode for mode, choice in self.mode_buttons.items() if choice.isChecked())
+
+    def set_mode(self, mode: str) -> None:
+        self.mode_buttons[mode].setChecked(True)
 
     def _timed_tab(self) -> QWidget:
         self.timed = self._table([self.words[key] for key in ("channel", "onset_ms",
                                                                "offset_ms")])
-        return self._channel_tab(self.timed, QVBoxLayout(), self.convert_timed)
+        convert_row = QHBoxLayout()
+        side = QVBoxLayout()
+        side.addLayout(convert_row)
+        side.addStretch(1)
+        return self._channel_tab(self.timed, self.convert_timed, side, convert_row)
 
-    def _channel_tab(self, table: QTableWidget, controls: QVBoxLayout, convert) -> QWidget:
-        """A channel table and its buttons on the left; settings and Convert on the right."""
+    def _channel_tab(self, table: QTableWidget, convert, side: QVBoxLayout,
+                     convert_row: QHBoxLayout) -> QWidget:
+        """A channel table and its buttons; beside them, `side`, whose `convert_row` ends with
+        Convert."""
         tab = QWidget()
         layout = QHBoxLayout(tab)
+        layout.setContentsMargins(ITEM_GAP_PX, ITEM_GAP_PX, ITEM_GAP_PX, ITEM_GAP_PX)
+        layout.setSpacing(GROUP_GAP_PX)
         left = QVBoxLayout()
         left.addWidget(table, 1)
         left.addLayout(self._row_buttons(
             ("add_channel", lambda: self._add_entry(table)),
             ("remove_channel", lambda: self._remove_entry(table)),
         ))
-        layout.addLayout(left, 1)
-        side = QVBoxLayout()
-        side.addLayout(controls)
-        side.addStretch(1)
         convert_button = button(self.words["to_grid"])
         convert_button.clicked.connect(convert)
         self.convert_buttons.append(convert_button)
-        convert_row = QHBoxLayout()
         convert_row.addWidget(convert_button)
         convert_row.addStretch(1)
-        side.addLayout(convert_row)
         holder = QWidget()
-        holder.setFixedWidth(CHANNEL_CONTROLS_PX)
-        holder.setLayout(side)
+        holder.setFixedWidth(CHANNEL_TABLE_PX)
+        holder.setLayout(left)
         layout.addWidget(holder)
+        layout.addLayout(side, 1)
         return tab
 
     # -- the design in the widgets ------------------------------------------------------
@@ -622,8 +690,6 @@ class DesignerWindow(QWidget):
         self.grid.setColumnCount(len(self.channel_ids))
         self.grid.setRowCount(len(self.rows))
         self.grid.setHorizontalHeaderLabels([str(cid) for cid in self.channel_ids])
-        for column in range(len(self.channel_ids)):
-            self.grid.setColumnWidth(column, GRID_CELL_PX)
         for row_index, row in enumerate(self.rows):
             for column, value in enumerate(row):
                 self.grid.setItem(row_index, column, self._cell(value))
@@ -642,11 +708,9 @@ class DesignerWindow(QWidget):
         self.grid.setVerticalHeaderLabels(labels)
 
     def _cell(self, value: int) -> QTableWidgetItem:
-        item = QTableWidgetItem(ON_MARK if value else OFF_MARK)
-        item.setTextAlignment(Qt.AlignCenter)
+        item = QTableWidgetItem()
         item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-        item.setBackground(QColor(TARGET_COLOUR if value else BACKGROUND))
-        item.setForeground(QColor(BACKGROUND if value else SECONDARY))
+        item.setBackground(QColor(TARGET_COLOUR if value else CONTROL_BACKGROUND))
         return item
 
     def toggle(self, row: int, column: int) -> None:
@@ -716,7 +780,7 @@ class DesignerWindow(QWidget):
         self._convert(lambda: pd.ordered_rows(
             self._entries(self.ordered),
             pd.parse_number(self.delay_field.text(), self.words["delay_ms"]),
-            self.mode.currentData(), self.interval_ms(), self.channel_ids,
+            self.mode, self.interval_ms(), self.channel_ids,
         ))
 
     def convert_timed(self) -> None:
@@ -769,7 +833,7 @@ class DesignerWindow(QWidget):
     def import_reference(self, path: Path, column_ms: float) -> bool:
         """Import the prototype's horizontal CSV. On failure the design shown is kept."""
         try:
-            design = pd.from_reference_csv(path, column_ms, loop=False)
+            design = pd.from_reference_csv(path, column_ms, False, self.bit_for)
         except DesignError as error:
             self.tell(self.explain(error), problem=True)
             return False
@@ -827,7 +891,7 @@ class DesignerWindow(QWidget):
         if self.pattern is None:
             return False
         try:
-            steps = pd.command_steps(self.pattern, self.command_limits)
+            steps = pd.command_steps(self.pattern, self.command_limits, self.bit_for)
         except DesignError as error:
             self.tell(self.explain(error), problem=True)
             return False
@@ -835,15 +899,20 @@ class DesignerWindow(QWidget):
         self.tell(self.words["exported"].format(steps=len(steps), value=path.name))
         return True
 
+    @property
+    def start_folder(self) -> Path:
+        """Where a file dialog opens: the folder last used, else where patterns are kept."""
+        return self.folder or PATTERNS_DIR
+
     def _choose_and_open(self) -> None:
         chosen, _ = QFileDialog.getOpenFileName(self, self.words["open"],
-                                                str(self.folder or ""), "*.csv")
+                                                str(self.start_folder), "*.csv")
         if chosen:
             self.open_file(Path(chosen))
 
     def _choose_and_import(self) -> None:
         chosen, _ = QFileDialog.getOpenFileName(self, self.words["import_reference"],
-                                                str(self.folder or ""))
+                                                str(self.start_folder))
         if not chosen:
             return
         dialog = ColumnDialog(self.words, parent=self)
@@ -864,23 +933,41 @@ class DesignerWindow(QWidget):
 
     def _choose_and_save_as(self) -> None:
         chosen = QFileDialog.getExistingDirectory(self, self.words["save_as"],
-                                                  str(self.folder or ""))
+                                                  str(self.start_folder))
         if chosen:
             self.save_as(Path(chosen))
 
     def _choose_and_export(self) -> None:
         if self.pattern is None:
             return
-        start = (self.folder or REPO_ROOT) / f"{self.pattern.name}.txt"
+        start = self.start_folder / f"{self.pattern.name}.txt"
         chosen, _ = QFileDialog.getSaveFileName(self, self.words["export"], str(start), "*.txt")
         if chosen:
             self.export_to(Path(chosen))
 
-    # -- playback on the mock garment ---------------------------------------------------
+    # -- playback on the chosen garment ------------------------------------------------
 
     @property
     def playing(self) -> bool:
         return self._play_start_s is not None
+
+    @property
+    def garment_name(self) -> str:
+        return self.garment_names[self.garment_choice.currentData()]
+
+    def _garment_chosen(self, _index: int) -> None:
+        self.choose_garment(self.garment_choice.currentData())
+
+    def choose_garment(self, driver: str) -> None:
+        """Play on another garment from now on. The one in use is stopped and let go first."""
+        self.stop()
+        self.release_garment()
+        self.garment = self._make_garment(driver)
+        self.message.clear()
+
+    def release_garment(self) -> None:
+        if self.garment.connected:
+            self.garment.disconnect()
 
     def play(self) -> bool:
         if self.revalidate() is None:
@@ -888,10 +975,22 @@ class DesignerWindow(QWidget):
         unknown = sorted(set(self.pattern.channel_ids) - set(self.garment.channels()))
         if unknown:
             self.tell(self.explain(DesignError(
-                "mock_channels", have=", ".join(map(str, self.garment.channels())),
+                "garment_channels", garment=self.garment_name,
+                have=", ".join(map(str, self.garment.channels())),
                 value=", ".join(map(str, unknown)),
             )), problem=True)
             return False
+        if not self.garment.connected:
+            self.tell(self.words["connecting"].format(garment=self.garment_name))
+            # Shown before the wait: opening the prototype's port resets its board.
+            QApplication.processEvents()
+            try:
+                self.garment.connect()
+            except CONNECT_ERRORS as error:
+                self.tell(self.explain(DesignError(
+                    "connect_failed", garment=self.garment_name, value=str(error),
+                )), problem=True)
+                return False
         self.garment.play_pattern(self.pattern)
         self._play_start_s = self.clock.elapsed_s()
         self.stop_button.setEnabled(True)
@@ -912,7 +1011,7 @@ class DesignerWindow(QWidget):
     def show_playback(self, elapsed_s: float, channels_on: set[int]) -> None:
         self.timeline.set_cursor(elapsed_s, channels_on)
         shown = ", ".join(map(str, sorted(channels_on))) or self.words["none_on"]
-        self.tell(self.words["playing"].format(value=shown))
+        self.tell(self.words["playing"].format(garment=self.garment_name, value=shown))
 
     def stop(self) -> None:
         if not self.playing:
@@ -926,6 +1025,8 @@ class DesignerWindow(QWidget):
 
     def closeEvent(self, event) -> None:
         self.stop()
+        # The port is the session's the moment this window closes (launcher._start_session).
+        self.release_garment()
         super().closeEvent(event)
 
 
@@ -939,7 +1040,9 @@ def main(argv: list[str] | None = None) -> int:
     window = DesignerWindow(config.experimenter_text, config.hardware)
     if args.open is not None:
         window.open_file(args.open)
-    window.show()
+    # The whole screen, whatever it is: sized for a desktop, the window opened on the lab
+    # laptop with its lower half off the screen (S, 24 Sep 2026).
+    window.showMaximized()
     return app.exec()
 
 

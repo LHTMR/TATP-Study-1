@@ -527,7 +527,9 @@ class LauncherWindow(QWidget):
             self.designer.activateWindow()
             return self.designer
         self.designer = DesignerWindow(self.text, self.config.hardware)
-        self.designer.show()
+        # The whole screen: sized for a desktop, it opened on the lab laptop with its lower
+        # half off the screen (S, 24 Sep 2026).
+        self.designer.showMaximized()
         return self.designer
 
     def open_session_dialog(self) -> SessionDialog:

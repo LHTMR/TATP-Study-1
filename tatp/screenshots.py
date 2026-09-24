@@ -41,7 +41,7 @@ from fnmatch import fnmatch
 import numpy as np
 import yaml
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 
 from tatp import config as cfg
 from tatp import pattern_design as pd
@@ -68,6 +68,11 @@ DIFF_DIR = SCREENSHOT_DIR / "diff"
 # another machine from a screen that actually changed.
 WIDTH_PX = 1280
 HEIGHT_PX = 800
+# The lab laptop's usable screen, for the windows that open on it maximized or fitted to it
+# (the designer, the instruments dialog): a 1920 x 1080 panel at 150 % scaling, less the
+# taskbar and a title bar. Photographed there, S sees them as they will open.
+LAPTOP_WIDTH_PX = 1280
+LAPTOP_HEIGHT_PX = 640
 TOLERANCE_FRACTION = 0.002
 
 LANGUAGES = ("sv", "en")
@@ -676,12 +681,14 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         "filaments": [{**f, "force_measured_mn": None} for f in config.filaments["filaments"]],
     }
     instruments = InstrumentsDialog(config.experimenter_text, unweighed, lambda *_: None)
-    instruments.resize(DIALOG_WIDTH_PX, HEIGHT_PX)
+    instruments.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
     yield Shot(
         f"experimenter_{language}_launcher_instruments",
-        f"Instruments and environment (SPEC.md 8.1): every filament with its label, size, "
-        f"nominal force and a measured-force field; the weighing date and balance; the "
-        f"optional room temperature and humidity ({language}).",
+        f"Instruments and environment (SPEC.md 8.1), at the lab laptop's size: all twenty "
+        f"filaments in view at once, in two halves, each with its label, size and nominal "
+        f"force, a field for the weighing in grams and the force in mN it will save; the "
+        f"weighing date and Save on one line; the optional room temperature and humidity on "
+        f"another. No balance field ({language}).",
         instruments.grab(),
     )
     preview = launcher.preview_dialog(SAMPLE_T_ZERO)
@@ -702,7 +709,7 @@ def _designer_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     """
     def designer() -> DesignerWindow:
         window = DesignerWindow(config.experimenter_text, config.hardware)
-        window.resize(WIDTH_PX, HEIGHT_PX)
+        window.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
         return window
 
     states: list[tuple[str, str, DesignerWindow]] = []
@@ -711,9 +718,11 @@ def _designer_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     window.open_file(SAMPLE_DESIGN_PATTERN)
     states.append((
         "grid",
-        "An example pattern opened on the Grid tab: one row per row interval with its time, "
-        "one column per channel id, on cells filled. The timeline below draws two cycles "
-        "because it loops, the repeat fainter, and the line under it says it loads.",
+        "An example pattern opened on the Grid tab, at the lab laptop's size: the pattern's "
+        "fields in two strips across the top; the grid across the whole width, one compact "
+        "row per row interval with its time, one column per channel, on cells filled and no "
+        "digits. The timeline below draws two cycles because it loops, the repeat fainter; "
+        "the line under it says it loads, beside the garment chosen for Play.",
         window,
     ))
 
@@ -728,13 +737,14 @@ def _designer_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     window.set_entries(window.ordered, [(cid, SAMPLE_DESIGN_HOLD_MS) for cid in
                                         SAMPLE_DESIGN_IDS])
     window.delay_field.setText(f"{SAMPLE_DESIGN_INTERVAL_MS:g}")
-    window.mode.setCurrentIndex(window.mode.findData(pd.JOIN_HOLD))
+    window.set_mode(pd.JOIN_HOLD)
     window.convert_ordered()
     states.append((
         "ordered",
-        "Ordered channels: five channels with their hold times, the join-and-hold mode and "
-        "the delay, converted. The message says the grid was replaced, and the timeline "
-        "shows the overlapping sweep.",
+        "Ordered channels: five channels with their hold times; all three modes listed, "
+        "each with what it does, join-and-hold chosen; the delay beside Convert, converted. "
+        "The message says the grid was replaced, and the timeline shows the overlapping "
+        "sweep.",
         window,
     ))
 
@@ -782,19 +792,27 @@ def _designer_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
 
     window = designer()
     window.open_file(SAMPLE_DESIGN_PATTERN)
+    # Chosen, never connected: the picture opens no serial port.
+    window.garment_choice.setCurrentIndex(window.garment_choice.findData(SAMPLE_GARMENT))
     window.show_playback(SAMPLE_PLAYBACK_S, set(SAMPLE_PLAYBACK_ON))
     window.stop_button.setEnabled(True)
     states.append((
         "playing",
-        "Playback on the mock garment: the cursor in amber on the timeline and the channels "
-        "on now named, their labels amber. Set directly rather than played, because a "
-        "running pattern would never be photographed at the same moment twice.",
+        "Playback on the prototype sleeve, chosen beside Play: the cursor in amber on the "
+        "timeline and the channels on now named, their labels amber. Set directly rather "
+        "than played, because a running pattern would never be photographed at the same "
+        "moment twice, and the sleeve is never woken for a picture.",
         window,
     ))
 
     for name, description, window in states:
-        pixmap = _grab(window)
-        assert pixmap.height() == HEIGHT_PX, (
+        window.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+        # Shown before the grab: the tab bar places its corner widget, the playback
+        # controls, only once it has been shown. Offscreen, so nothing appears.
+        window.show()
+        QApplication.processEvents()
+        pixmap = window.grab()
+        assert pixmap.height() == LAPTOP_HEIGHT_PX, (
             f"experimenter_{language}_designer_{name} needs {pixmap.height()} px"
         )
         yield Shot(f"experimenter_{language}_designer_{name}", f"{description} ({language})",

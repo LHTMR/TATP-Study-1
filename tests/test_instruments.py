@@ -15,9 +15,14 @@ from PySide6.QtWidgets import QApplication
 from tatp import config as cfg
 from tatp import instruments
 from tatp.instruments import InstrumentsDialog, InstrumentsError, write_filament_forces
+from tatp.units import MN_PER_G
 
 WEIGHED = {"0.008": 0.081, "26": 251.3}
 DATE = "2026-09-24"
+# The smallest experimenter screen the windows are made for: a 1920 x 1080 laptop panel at
+# 150 % scaling, less the taskbar and a title bar.
+LAPTOP_WIDTH_PX = 1280
+LAPTOP_HEIGHT_PX = 640
 
 
 @pytest.fixture(scope="module")
@@ -42,20 +47,21 @@ def _load(path):
 
 
 def test_the_measured_forces_and_the_date_are_written(filaments):
-    write_filament_forces(WEIGHED, DATE, "Mettler XS205", filaments)
+    balance_before = _load(filaments)["weighing_balance"]
+    write_filament_forces(WEIGHED, DATE, filaments)
     written = _load(filaments)
     by_label = {row["label_g"]: row for row in written["filaments"]}
     assert by_label["26"]["force_measured_mn"] == pytest.approx(251.3)
     assert by_label["0.008"]["force_measured_mn"] == pytest.approx(0.081)
     assert by_label["60"]["force_measured_mn"] is None, "a label not given keeps what it had"
     assert written["weighing_date"] == DATE
-    assert written["weighing_balance"] == "Mettler XS205"
+    assert written["weighing_balance"] == balance_before, "the balance is not the dialog's"
 
 
 def test_everything_else_in_the_file_is_kept_exactly(filaments):
     """The file is mostly the chart's transcription record, in comments; none of it may go."""
     before = filaments.read_text(encoding="utf-8").splitlines()
-    write_filament_forces(WEIGHED, DATE, None, filaments)
+    write_filament_forces(WEIGHED, DATE, filaments)
     after = filaments.read_text(encoding="utf-8").splitlines()
     assert len(before) == len(after)
     changed = [(b, a) for b, a in zip(before, after, strict=True) if b != a]
@@ -72,7 +78,7 @@ def test_weighing_the_whole_set_resolves_open_item_1(config_dir, filaments):
         return {item.number: item.resolved for item in items}
 
     assert resolved()["1"] is False
-    write_filament_forces(every, DATE, None, filaments)
+    write_filament_forces(every, DATE, filaments)
     assert resolved()["1"] is True
 
 
@@ -93,15 +99,15 @@ def test_weighing_the_whole_set_resolves_open_item_1(config_dir, filaments):
 def test_a_bad_write_is_refused_and_nothing_changes(filaments, forces, date, error):
     before = filaments.read_bytes()
     with pytest.raises(error):
-        write_filament_forces(forces, date, None, filaments)
+        write_filament_forces(forces, date, filaments)
     assert filaments.read_bytes() == before
     assert sorted(p.name for p in filaments.parent.iterdir() if p.suffix == ".tmp") == []
 
 
 def test_only_a_reweighed_filament_is_redated(filaments):
     """One save used to re-date every filament; now only a changed force gets the date."""
-    assert write_filament_forces({"26": 251.3}, "2026-09-01", None, filaments) == 1
-    written = write_filament_forces({"26": 251.3, "60": 590.0}, DATE, None, filaments)
+    assert write_filament_forces({"26": 251.3}, "2026-09-01", filaments) == 1
+    written = write_filament_forces({"26": 251.3, "60": 590.0}, DATE, filaments)
     assert written == 1, "the unchanged 26 g is not written again"
     rows = {row["label_g"]: row for row in _load(filaments)["filaments"]}
     assert rows["26"]["weighed_date"] == "2026-09-01"
@@ -111,9 +117,9 @@ def test_only_a_reweighed_filament_is_redated(filaments):
 
 
 def test_saving_what_is_already_there_writes_nothing(filaments):
-    write_filament_forces({"26": 251.3}, DATE, None, filaments)
+    write_filament_forces({"26": 251.3}, DATE, filaments)
     before = filaments.read_bytes()
-    assert write_filament_forces({"26": 251.3}, "2026-10-01", None, filaments) == 0
+    assert write_filament_forces({"26": 251.3}, "2026-10-01", filaments) == 0
     assert filaments.read_bytes() == before
 
 
@@ -121,7 +127,7 @@ def test_a_small_force_is_written_as_a_number(filaments):
     """PyYAML reads `1e-05` as a string; the writer spells it out."""
     assert instruments.yaml_number(0.00001) == "0.00001"
     assert instruments.yaml_number(251.0) == "251.0"
-    write_filament_forces({"0.008": 0.00001}, DATE, None, filaments)
+    write_filament_forces({"0.008": 0.00001}, DATE, filaments)
     rows = {r["label_g"]: r for r in _load(filaments)["filaments"]}
     value = rows["0.008"]["force_measured_mn"]
     assert isinstance(value, float) and value == pytest.approx(0.00001)
@@ -139,7 +145,7 @@ def test_the_new_text_is_held_to_the_loaders_rules(filaments):
 def test_the_files_line_endings_are_kept(filaments):
     crlf = filaments.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
     filaments.write_bytes(crlf)
-    write_filament_forces(WEIGHED, DATE, None, filaments)
+    write_filament_forces(WEIGHED, DATE, filaments)
     assert b"\n" not in filaments.read_bytes().replace(b"\r\n", b"")
 
 
@@ -160,14 +166,46 @@ def dialog(app, filaments):
     return made, seen
 
 
-def test_the_dialog_saves_what_was_typed(dialog, filaments):
+def test_the_dialog_saves_a_weighing_in_grams_as_a_force(dialog, filaments):
     made, _ = dialog
-    made.measured["26"].setText("251,3")
+    made.measured["26"].setText("25,63")
+    assert made.as_force["26"].text() == f"{25.63 * MN_PER_G:g}", "the force is shown as typed"
     made.weighing_date.setText(DATE)
     assert made.save()
     assert {r["label_g"]: r for r in _load(filaments)["filaments"]}["26"][
         "force_measured_mn"
-    ] == pytest.approx(251.3)
+    ] == pytest.approx(25.63 * MN_PER_G)
+
+
+def test_reopening_and_saving_again_redates_nothing(app, filaments):
+    """A force shown back in grams need not convert to the stored float exactly, so only a
+    field the experimenter changed is saved."""
+    write_filament_forces({"26": 251.3, "60": 590.0}, "2026-09-01", filaments)
+    made = InstrumentsDialog(cfg.load("sv", "en").experimenter_text, _load(filaments),
+                             lambda *_: None, path=filaments)
+    assert made.measured["26"].text() == f"{251.3 / MN_PER_G:g}"
+    made.measured["60"].setText("61")
+    made.weighing_date.setText(DATE)
+    assert made.save()
+    rows = {r["label_g"]: r for r in _load(filaments)["filaments"]}
+    assert rows["26"]["force_measured_mn"] == 251.3
+    assert rows["26"]["weighed_date"] == "2026-09-01"
+    assert rows["60"]["weighed_date"] == DATE
+    before = filaments.read_bytes()
+    assert not made.save(), "saving again with nothing changed writes nothing"
+    assert filaments.read_bytes() == before
+
+
+def test_the_whole_ladder_is_in_view_at_the_lab_laptops_size(app, filaments):
+    """S, 24 Sep 2026: the dialog was too crowded and scrolled; the ladder sits in halves."""
+    made = InstrumentsDialog(cfg.load("sv", "en").experimenter_text, _load(filaments),
+                             lambda *_: None, path=filaments)
+    made.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+    made.show()
+    app.processEvents()
+    assert made.filament_scroll.verticalScrollBar().maximum() == 0, "nothing scrolled out"
+    assert made.filament_scroll.horizontalScrollBar().maximum() == 0
+    made.close()
 
 
 @pytest.mark.parametrize(

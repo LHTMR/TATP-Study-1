@@ -64,6 +64,7 @@ GROUP_GAP_PX = 22
 ITEM_GAP_PX = 8
 BANNER_PADDING_PX = 8
 CONTROL_PADDING_PX = 6
+SCREEN_FILL_FRACTION = 0.92
 
 ZONES_SVG = REPO_ROOT / "assets" / "hyperalgesia_zones.svg"
 # The ids the zone diagram carries for each region (assets/hyperalgesia_zones.svg).
@@ -122,6 +123,19 @@ def button(text: str, point_size: int = SIZE_SMALL) -> QPushButton:
 
 def line_edit(point_size: int = SIZE_SMALL) -> QLineEdit:
     return sized(QLineEdit(), point_size)
+
+
+def fit_to_screen(window: QWidget, width_px: int, height_px: int) -> None:
+    """Open `window` at this size, or at what its screen has room for if that is less.
+
+    A lab laptop at 150 % scaling has far fewer logical pixels than its panel, and a window
+    sized for a desktop then opens with its lower half off the screen (S, 24 Sep 2026). The
+    fraction leaves room for the title bar and the taskbar edge, which the available
+    geometry does not always exclude.
+    """
+    available = window.screen().availableGeometry()
+    window.resize(min(width_px, int(available.width() * SCREEN_FILL_FRACTION)),
+                  min(height_px, int(available.height() * SCREEN_FILL_FRACTION)))
 
 
 def banner_style(colour: str) -> str:

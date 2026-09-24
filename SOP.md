@@ -86,9 +86,10 @@ software uses the manufacturer's forces, and the open items line shows item 1.
 
 1. Weigh each filament on the precision balance.
 2. Open the launcher and choose **Instruments and environment**.
-3. In **Filament forces**, type each filament's measured force in mN in the **Measured (mN)**
-   column. Filaments are identified by the **Label (g)** printed on them.
-4. Type the **Weighing date (YYYY-MM-DD):** and the **Balance used:**.
+3. In **Filament forces**, type what the balance reads, in grams, in the filament's
+   **Weighed (g)** field. The force in mN that will be saved appears beside it, under
+   **Force (mN)**. Filaments are identified by the **Label (g)** printed on them.
+4. Type the **Weighing date (YYYY-MM-DD):**.
 5. Press **Save forces**. The message **Saved … measured forces to filaments.yaml.** confirms it.
 
 What the messages mean:
@@ -97,7 +98,7 @@ What the messages mean:
 |---|---|
 | **Enter the weighing date before saving measured forces.** | Type the date, then press **Save forces** again. |
 | **… is not a date in the form YYYY-MM-DD.** | Retype the date, for example `2026-09-24`. |
-| **Filament … g: … is not a force in mN above zero.** | Correct that filament's value. |
+| **Filament … g: … is not a weight in grams above zero.** | Correct that filament's value. |
 | **No measured forces entered.** | Nothing was typed in the Measured column. |
 
 Saving changes `config/filaments.yaml` on the lab PC.

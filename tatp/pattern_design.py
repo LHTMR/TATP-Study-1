@@ -25,10 +25,17 @@ file name that differs from the pattern's `name` survives a re-save.
 shown to six significant figures and read back would silently change a row interval of
 1000/12 ms on the next save.
 
+**Channels are not bits.** A pattern addresses the sleeve's channels 1-5, distal to proximal,
+as the session does. The prototype's files address shift-register bits. `wiring` is the map
+between them, `hardware.yaml`'s `garment.prototype.channel_bits`, the same one the
+`arduino_mosfet` driver plays through, so an imported prototype CSV arrives in channels and an
+exported command file fires the bits the sleeve is wired to. A bit or a channel outside the
+wiring is refused, never passed through: a pattern on an unwired bit plays nothing.
+
 **The prototype rig's command file.** `clearcode`, then `addcode:0x<mask>/<ms>` per run of
-identical rows, with bit `channel_id` set for each channel on -- the format of the prototype
-repository's `stim_files/` and of `Controller.Stimulus.to_file4arduino_timed`. Two differences
-from that code, both deliberate:
+identical rows, with each on channel's bit set -- the format of the prototype repository's
+`stim_files/` and of `Controller.Stimulus.to_file4arduino_timed`. Two differences from that
+code, both deliberate:
 
 - **The mask is written in lower-case hex.** The sketch's `parseUint32` accepts only `0-9` and
   `a-f`; the prototype's `modular_approach/stimulus.py` writes `{mask:X}`, and any mask with a
@@ -44,7 +51,7 @@ import csv
 import io
 import math
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
@@ -431,14 +438,29 @@ def open_pattern(path: Path) -> Design:
     return from_pattern(patterns.load_pattern(path))
 
 
-def from_reference_csv(path: Path, column_ms: float, loop: bool) -> Design:
-    """The prototype repository's horizontal CSV: one line per channel, its bit id first.
+def wiring(channel_bits: Sequence[int]) -> dict[int, int]:
+    """Channel to bit, from `garment.prototype.channel_bits` (channels 1, 2, ... in order)."""
+    bit_for = {channel: int(bit) for channel, bit in enumerate(channel_bits, start=1)}
+    # Stage boundary (CLAUDE.md): two channels on one bit would be one stimulus played as two.
+    assert len(set(bit_for.values())) == len(bit_for), (
+        f"channel_bits repeats a bit: {channel_bits}"
+    )
+    return bit_for
+
+
+def from_reference_csv(
+    path: Path, column_ms: float, loop: bool, bit_for: Mapping[int, int]
+) -> Design:
+    """The prototype repository's horizontal CSV: one line per bit, the bit first.
 
     `Controller.Stimulus.from_csv_matrix` reads it with a column duration given at upload, so
     the file carries none and the designer asks for one. The cells are transposed as text and
     go through `patterns.from_text`, so a `2` or a `0.5` is refused here as it is on loading --
     the prototype parses both with `int()`. The delimiter rule is the prototype's own, a tab if
     the line has one and else a comma, applied to the first non-blank line.
+
+    Each bit becomes the channel `bit_for` wires it to, and the columns are put in channel
+    order, distal first, as every pattern here is.
     """
     if not (_finite(column_ms) and column_ms > 0):
         raise DesignError("interval")
@@ -463,8 +485,22 @@ def from_reference_csv(path: Path, column_ms: float, loop: bool) -> Design:
     for number, line in enumerate(lines, start=1):
         if len(line) != width:
             raise DesignError("ragged", line=number, value=len(line), expected=width)
-    header = [line[0] for line in lines]
-    columns = [line[1:] for line in lines]
+    channel_for = {bit: channel for channel, bit in bit_for.items()}
+    header = []
+    for line in lines:
+        bit = line[0]
+        if not bit.lstrip("-").isdigit():
+            # Left as written, for `from_text` to refuse as any pattern with that header is.
+            header.append(bit)
+            continue
+        if int(bit) not in channel_for:
+            raise DesignError("unwired_bit", value=bit,
+                              wired=", ".join(str(b) for b in bit_for.values()))
+        header.append(str(channel_for[int(bit)]))
+    order = sorted(range(len(lines)),
+                   key=lambda i: int(header[i]) if header[i].isdigit() else math.inf)
+    header = [header[i] for i in order]
+    columns = [lines[i][1:] for i in order]
     grid = [header] + [list(step) for step in zip(*columns, strict=True)]
     buffer = io.StringIO(newline="")
     csv.writer(buffer, lineterminator="\n").writerows(grid)
@@ -502,21 +538,28 @@ def on_periods(pattern: Pattern) -> dict[int, list[tuple[float, float]]]:
 # -- the prototype rig's command file -------------------------------------------------------
 
 
-def command_steps(pattern: Pattern, limits: dict) -> list[tuple[int, int]]:
+def command_steps(
+    pattern: Pattern, limits: dict, bit_for: Mapping[int, int]
+) -> list[tuple[int, int]]:
     """(mask, ms) per step: runs of identical rows merged, over one whole cycle.
 
     `limits` is `hardware.yaml`'s `prototype_command_file`: what the sketch can store. A run
     longer than its uint16 delay is split into steps of the same mask, which re-latches the
-    same state and changes nothing the participant feels.
+    same state and changes nothing the participant feels. Each channel's bit is `bit_for`'s.
     """
     max_steps, max_step_ms = limits["max_steps"], limits["max_step_ms"]
     for channel in pattern.channel_ids:
-        if not 0 <= channel < limits["mask_bits"]:
-            raise DesignError("bit_range", channel=channel, bits=limits["mask_bits"])
+        if channel not in bit_for:
+            raise DesignError("unwired_channel", channel=channel,
+                              wired=", ".join(str(c) for c in bit_for))
+        if not 0 <= bit_for[channel] < limits["mask_bits"]:
+            raise DesignError("bit_range", channel=channel, bit=bit_for[channel],
+                              bits=limits["mask_bits"])
     interval = _exact(pattern.row_interval_ms)
     runs: list[list[int]] = []
     for row in pattern.rows:
-        mask = sum(1 << cid for cid, on in zip(pattern.channel_ids, row, strict=True) if on)
+        mask = sum(1 << bit_for[cid]
+                   for cid, on in zip(pattern.channel_ids, row, strict=True) if on)
         if runs and runs[-1][0] == mask:
             runs[-1][1] += 1
         else:

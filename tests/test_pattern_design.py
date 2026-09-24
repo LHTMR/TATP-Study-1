@@ -18,6 +18,10 @@ from tatp.pattern_design import DesignError
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 PROTOTYPE = Path(__file__).resolve().parent / "fixtures" / "prototype"
 IDS = (3, 4, 11)
+# Every bit wired to the channel of the same number. The prototype repository's own files
+# address bits, so its fixtures are compared through this; `SLEEVE` is the real wiring.
+RAW = {bit: bit for bit in range(32)}
+SLEEVE = pd.wiring(cfg.load("sv", "sv").hardware["garment"]["prototype"]["channel_bits"])
 
 
 @pytest.fixture(scope="module")
@@ -25,8 +29,16 @@ def limits():
     return cfg.load("sv", "sv").hardware["prototype_command_file"]
 
 
+def _steps(pattern, limits, bit_for=None):
+    return pd.command_steps(pattern, limits, RAW if bit_for is None else bit_for)
+
+
 def _commands(pattern, limits) -> str:
-    return pd.command_file(pd.command_steps(pattern, limits))
+    return pd.command_file(_steps(pattern, limits))
+
+
+def _import(path, column_ms, loop, bit_for=None) -> pd.Design:
+    return pd.from_reference_csv(path, column_ms, loop, RAW if bit_for is None else bit_for)
 
 
 def _design(rows, name="trial", interval=100.0, ids=IDS, loop=False, **extras) -> pd.Design:
@@ -286,7 +298,7 @@ def test_on_periods_come_from_expand():
 
 
 def test_the_prototype_csv_imports_transposed_with_the_column_duration_asked_for():
-    design = pd.from_reference_csv(PROTOTYPE / "motion_stim.csv", 1000, loop=False)
+    design = _import(PROTOTYPE / "motion_stim.csv", 1000, loop=False)
     assert design.channel_ids == (3, 28)
     assert design.row_interval_ms == 1000.0
     assert [tuple(r) for r in design.rows] == [(1, 0)] * 3 + [(0, 0)] * 3 + [(0, 1)] * 4
@@ -296,13 +308,13 @@ def test_the_prototype_csv_imports_transposed_with_the_column_duration_asked_for
 def test_a_tab_separated_prototype_csv_imports(tmp_path):
     path = tmp_path / "tabbed.csv"
     path.write_text("3\t1\t0\n4\t0\t1\n", encoding="utf-8")
-    assert pd.from_reference_csv(path, 100, loop=True).rows == [[1, 0], [0, 1]]
+    assert _import(path, 100, loop=True).rows == [[1, 0], [0, 1]]
 
 
 def test_a_trailing_delimiter_is_dropped_as_the_prototype_drops_it(tmp_path):
     path = tmp_path / "trailing.csv"
     path.write_text("3,1,0,\n4,0,1,\n", encoding="utf-8")
-    assert pd.from_reference_csv(path, 100, loop=False).rows == [[1, 0], [0, 1]]
+    assert _import(path, 100, loop=False).rows == [[1, 0], [0, 1]]
 
 
 @pytest.mark.parametrize("text, key", [
@@ -317,13 +329,13 @@ def test_a_prototype_csv_that_would_misplay_is_refused(tmp_path, text, key):
     path = tmp_path / "bad.csv"
     path.write_text(text, encoding="utf-8")
     with pytest.raises(DesignError) as raised:
-        pd.from_reference_csv(path, 100, loop=False)
+        _import(path, 100, loop=False)
     assert raised.value.key == key
 
 
 def test_a_column_duration_of_zero_is_refused():
     with pytest.raises(DesignError) as raised:
-        pd.from_reference_csv(PROTOTYPE / "motion_stim.csv", 0, loop=False)
+        _import(PROTOTYPE / "motion_stim.csv", 0, loop=False)
     assert raised.value.key == "interval"
 
 
@@ -336,13 +348,13 @@ def _pattern(design: pd.Design):
 
 def test_export_matches_what_the_prototype_writes_for_its_own_csv(limits):
     """motion_stim.csv at create_stimulus.py's 1000 ms, against the prototype code's output."""
-    design = pd.from_reference_csv(PROTOTYPE / "motion_stim.csv", 1000, loop=False)
+    design = _import(PROTOTYPE / "motion_stim.csv", 1000, loop=False)
     expected = (PROTOTYPE / "motion_stim_1000ms.txt").read_text(encoding="utf-8")
     assert _commands(_pattern(design), limits) == expected
 
 
 def test_export_matches_the_committed_stim_from_csv(limits):
-    design = pd.from_reference_csv(PROTOTYPE / "stim_from_csv_source.csv", 100, loop=False)
+    design = _import(PROTOTYPE / "stim_from_csv_source.csv", 100, loop=False)
     expected = (PROTOTYPE / "stim_from_csv.txt").read_text(encoding="utf-8")
     assert _commands(_pattern(design), limits) == expected
 
@@ -354,7 +366,7 @@ def test_the_mask_is_lower_case_hex_because_the_sketch_refuses_upper(limits):
 
 def test_trailing_off_rows_are_kept_so_one_exec_is_one_cycle(limits):
     pattern = _pattern(_design([[0, 0, 0], [1, 0, 0], [0, 0, 0], [0, 0, 0]]))
-    steps = pd.command_steps(pattern, limits)
+    steps = _steps(pattern, limits)
     assert steps == [(0, 100), (8, 100), (0, 200)]
     assert sum(ms for _, ms in steps) == pattern.duration_s * 1000
 
@@ -362,39 +374,72 @@ def test_trailing_off_rows_are_kept_so_one_exec_is_one_cycle(limits):
 def test_a_step_longer_than_the_sketch_holds_is_split(limits):
     max_step_ms = limits["max_step_ms"]
     pattern = _pattern(_design([[1, 0, 0]], interval=float(max_step_ms + 5)))
-    assert pd.command_steps(pattern, limits) == [(8, max_step_ms), (8, 5)]
+    assert _steps(pattern, limits) == [(8, max_step_ms), (8, 5)]
 
 
 def test_more_steps_than_the_sketch_stores_are_refused(limits):
     rows = [[1, 0, 0], [0, 1, 0]] * (limits["max_steps"] // 2 + 1)
     with pytest.raises(DesignError) as raised:
-        pd.command_steps(_pattern(_design(rows)), limits)
+        _steps(_pattern(_design(rows)), limits)
     assert raised.value.key == "too_many_steps"
 
 
-@pytest.mark.parametrize("ids", [(32,), (-1,)])
-def test_a_channel_that_is_not_a_mask_bit_is_refused(limits, ids):
+@pytest.mark.parametrize("bit", [32, -1])
+def test_a_channel_wired_to_no_mask_bit_is_refused(limits, bit):
     with pytest.raises(DesignError) as raised:
-        pd.command_steps(_pattern(_design([[1]], ids=ids)), limits)
+        _steps(_pattern(_design([[1]], ids=(1,))), limits, {1: bit})
     assert raised.value.key == "bit_range"
+
+
+def test_a_channel_outside_the_wiring_is_refused(limits):
+    with pytest.raises(DesignError) as raised:
+        _steps(_pattern(_design([[1]], ids=(6,))), limits, SLEEVE)
+    assert raised.value.key == "unwired_channel"
 
 
 def test_the_mask_width_comes_from_the_config(limits):
     narrow = {**limits, "mask_bits": 4}
     with pytest.raises(DesignError):
-        pd.command_steps(_pattern(_design([[1]], ids=(4,))), narrow)
-    assert pd.command_steps(_pattern(_design([[1]], ids=(3,))), narrow) == [(8, 100)]
+        _steps(_pattern(_design([[1]], ids=(4,))), narrow)
+    assert _steps(_pattern(_design([[1]], ids=(3,))), narrow) == [(8, 100)]
 
 
 def test_a_step_of_a_fraction_of_a_millisecond_is_refused(limits):
     with pytest.raises(DesignError) as raised:
-        pd.command_steps(_pattern(_design([[1, 0, 0]], interval=0.5)), limits)
+        _steps(_pattern(_design([[1, 0, 0]], interval=0.5)), limits)
     assert raised.value.key == "not_whole_ms"
 
 
-def test_the_sham_example_exports_as_one_step(limits):
+def test_the_sham_example_exports_as_one_step_on_the_sleeves_bits(limits):
+    """Channels 1-5 fire the bits they are wired to, not bits 1-5 (S, 24 Sep 2026)."""
     pattern = patterns.load_pattern(EXAMPLES / "static_sham.csv")
-    assert _commands(pattern, limits) == "clearcode\naddcode:0x3e/500"
+    mask = sum(1 << bit for bit in SLEEVE.values())
+    assert pd.command_file(_steps(pattern, limits, SLEEVE)) == (
+        f"clearcode\naddcode:0x{mask:x}/500"
+    )
+
+
+def test_a_prototype_csv_imports_in_channels_distal_first(tmp_path):
+    """One bit per step, in the order 14, 27, 31, 7, 3, which is channels 5 to 1 on the
+    sleeve's wiring (hardware.yaml): a proximal-to-distal sweep, written in bits."""
+    order = (14, 27, 31, 7, 3)
+    path = tmp_path / "vertical.csv"
+    path.write_text("".join(
+        f"{bit}," + ",".join("1" if step == line else "0" for step in range(len(order))) + "\n"
+        for line, bit in enumerate(order)
+    ), encoding="utf-8")
+    design = pd.from_reference_csv(path, 100, False, SLEEVE)
+    assert design.channel_ids == (1, 2, 3, 4, 5)
+    fired = [design.channel_ids[row.index(1)] for row in design.rows]
+    assert fired == [5, 4, 3, 2, 1]
+
+
+def test_a_prototype_bit_the_sleeve_is_not_wired_to_is_refused(tmp_path):
+    path = tmp_path / "stray.csv"
+    path.write_text("3,1,0\n4,0,1\n", encoding="utf-8")
+    with pytest.raises(DesignError) as raised:
+        pd.from_reference_csv(path, 100, False, SLEEVE)
+    assert raised.value.key == "unwired_bit"
 
 
 # -- numbers shown and read back ------------------------------------------------------------
@@ -573,25 +618,25 @@ def test_an_empty_prototype_csv_is_refused(tmp_path, text):
     path = tmp_path / "empty.csv"
     path.write_text(text, encoding="utf-8")
     with pytest.raises(DesignError) as raised:
-        pd.from_reference_csv(path, 100, loop=False)
+        _import(path, 100, loop=False)
     assert raised.value.key == "nothing"
 
 
 def test_the_delimiter_comes_from_the_first_non_blank_line(tmp_path):
     path = tmp_path / "late.csv"
     path.write_text("\n\n3\t1\t0\n4\t0\t1\n", encoding="utf-8")
-    assert pd.from_reference_csv(path, 100, loop=False).rows == [[1, 0], [0, 1]]
+    assert _import(path, 100, loop=False).rows == [[1, 0], [0, 1]]
 
 
 def test_a_utf8_bom_is_stripped(tmp_path):
     path = tmp_path / "bom.csv"
     path.write_bytes("﻿3,1,0\n4,0,1\n".encode())
-    design = pd.from_reference_csv(path, 100, loop=False)
+    design = _import(path, 100, loop=False)
     assert design.channel_ids == (3, 4)
 
 
 @pytest.mark.parametrize("column_ms", [math.inf, math.nan, -1])
 def test_a_non_finite_column_duration_is_refused(column_ms):
     with pytest.raises(DesignError) as raised:
-        pd.from_reference_csv(PROTOTYPE / "motion_stim.csv", column_ms, loop=False)
+        _import(PROTOTYPE / "motion_stim.csv", column_ms, loop=False)
     assert raised.value.key == "interval"
