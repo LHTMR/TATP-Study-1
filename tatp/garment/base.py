@@ -70,9 +70,12 @@ class GarmentController(ABC):
         limits: Limits,
         clock: Clock,
         on_command: Callable[[dict], None] | None = None,
+        hardware: dict | None = None,
     ):
         self.limits = limits
         self.clock = clock
+        # `hardware.yaml`, for a driver that needs its port and wiring. The mock needs neither.
+        self.hardware = hardware
         # The session supplies this to write the `garment` table. The driver does not know the
         # phase or the block, so it reports what it did and the session adds the context.
         self.on_command = on_command

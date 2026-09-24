@@ -282,6 +282,8 @@ class SessionRunner(Procedure):
         # starting it, until the garment is running (docs/LOG.md N7.D17).
         self._touch_on = False
         self._delivery: _QuietDeliveryStart | None = None
+        # What the experimenter side does once that delivery has started the touch.
+        self._settled_then: Callable[[], None] | None = None
         self._redeliver = False
         self._touch_after_block = False
         # Set for a session resumed after its rekindle heat was launched (LOG N7.D14).
@@ -601,9 +603,23 @@ class SessionRunner(Procedure):
             )
             self.experimenter.set_status("")
             self.experimenter.refresh()
-            self._after(self.touch_start_display_s, then)
+            self._after(self.touch_start_display_s, lambda: self._once_delivery_settles(then))
 
         self.step(show)
+
+    def _once_delivery_settles(self, then: Callable[[], None]) -> None:
+        """Go on once a delivery that is not waiting for the participant has started the touch.
+
+        So a block never begins before the touch it is measured under. Such a delivery ends
+        with its warning cue, well inside `touch_start_display_s`, so at real speed this never
+        waits and the experimenter-side timing is the same in every condition. On an
+        accelerated clock the two timers can fire in either order, and this fixes the order. A
+        self-start prompt is never waited for (docs/LOG.md N7.D17).
+        """
+        if self._delivery is not None and not self._delivery.prompting:
+            self._settled_then = then
+            return
+        then()
 
     def _start_delivery(self) -> None:
         """The two reads of the condition: which delivery, and whether it is self-started."""
@@ -625,8 +641,13 @@ class SessionRunner(Procedure):
         self.session.log("garment_activated")
         if self._child is None:
             self.participant.show_message(STANDBY_SCREEN)
+        if self._settled_then is not None:
+            then, self._settled_then = self._settled_then, None
+            then()
 
     def _cancel_delivery(self) -> None:
+        # A step waiting on the cancelled delivery is repeated from its start, not continued.
+        self._settled_then = None
         if self._delivery is not None:
             trial, self._delivery = self._delivery, None
             trial.cancel()

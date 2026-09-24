@@ -18,6 +18,20 @@ garment:
   pressure_rate_max_kpa_s: 60.0      # independent rate limit (SPEC.md 13). Local item L2.
   pressure_resolution_kpa: null      # SPEC.md 20 item 2
   inflation_rate_kpa_s: null         # per channel, from bring-up. SPEC.md 20 item 3
+  # The current prototype, driver `arduino_mosfet` (SPEC.md 12.4): on/off per channel over the
+  # MOSFET array, pressure set by hand at the regulator. Its protocol is the prototype
+  # sketch's: newline-terminated `setstate:0x<mask>`, lower-case hex, and `hello` answered by
+  # `hello`, which the flashed firmware does though the sketches in its repository do not.
+  prototype:
+    port: COM3                       # the lab laptop, 25 Sep 2026 (USB VID 2341, Arduino)
+    baud: 115200                     # the sketch's Serial.begin
+    boot_s: 2.5                      # opening the port resets the Arduino; wait for it to boot
+    # The shift-register bit driving each channel, for channels 1-5 in order from distal (1) to
+    # proximal (5). Found on 25 Sep 2026 with S watching the sleeve: tools/garment_bits.py
+    # pulsed every bit, which fired the channels in the order 1, 2, 5, 4, 3. The bits are those
+    # of the prototype's own motion_stim_vertical.csv (31, 27, 14, 7, 3), and a second run of 3,
+    # 7, 31, 27, 14 swept distal to proximal as expected.
+    channel_bits: [3, 7, 31, 27, 14]
   pattern_tick_interval_s: 0.005     # how often pattern events are delivered (SPEC.md 12.2).
                                      # Onset jitter is up to one tick, so this sits well under
                                      # the fastest pattern's 75 ms row interval.

@@ -432,8 +432,8 @@ class ExperimenterWindow(QWidget):
         available = QGuiApplication.screens()
         if not 0 <= index < len(available):
             raise IndexError(
-                f"hardware.yaml: screens.experimenter_screen_index is {index}, but this machine "
-                f"has {len(available)} screen(s)"
+                f"hardware.yaml: screens.experimenter_screen_index is {index}, but this "
+                f"machine has {len(available)} screen(s)"
             )
         self.setGeometry(available[index].availableGeometry())
         self.showMaximized()

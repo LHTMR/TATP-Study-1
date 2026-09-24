@@ -24,6 +24,7 @@ from tatp.audio import Audio
 from tatp.clock import ISO_FORMAT, Clock
 from tatp.config import REPO_ROOT, Config, hash_files
 from tatp.datafiles import DataFileCollection
+from tatp.garment.arduino_mosfet import ArduinoMosfetGarment
 from tatp.garment.base import GarmentController, Limits
 from tatp.garment.mock import MockGarment
 from tatp.garment.patterns import load_folder
@@ -62,7 +63,10 @@ UPCOMING_KINDS = ("block", "phase", "rekindle")
 ORIGINS = ("software", "experimenter", "participant")
 SEVERITIES = ("info", "warning", "error")
 
-DRIVERS: dict[str, type[GarmentController]] = {"mock": MockGarment}
+DRIVERS: dict[str, type[GarmentController]] = {
+    "mock": MockGarment,
+    "arduino_mosfet": ArduinoMosfetGarment,
+}
 
 
 class SessionError(Exception):
@@ -188,7 +192,10 @@ class Session:
                 f"garment.driver is {driver_name!r}. Available drivers: {sorted(DRIVERS)}."
             )
         self.garment = DRIVERS[driver_name](
-            Limits.from_config(config.hardware), self.clock, on_command=self._record_garment
+            Limits.from_config(config.hardware),
+            self.clock,
+            on_command=self._record_garment,
+            hardware=config.hardware,
         )
         # SPEC.md 10.5, 10.7. Owned here beside the garment for the same reason: every phase
         # needs it and none of them does it.
