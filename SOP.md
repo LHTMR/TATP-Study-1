@@ -221,8 +221,12 @@ Your window reads top to bottom:
 7. **The buttons** (section 11), then the note, substitution and mapping entries.
 
 **Start block** is the go button for everything, not only blocks. Press it whenever the
-instruction says to press Start block, and wherever an instruction says **Proceed**. (There is no
-button labelled Proceed: it is **Start block**.)
+instruction says to press Start block.
+
+**The remote always works, whichever window you last clicked.** Its presses go to the
+participant's screen even while your own window is active. The exception is while you are
+typing in a text field (a note, a substitution or a distance): then the participant's presses go
+into that field instead. Finish typing and press Enter before the participant needs to respond.
 
 ---
 
@@ -268,8 +272,8 @@ minutes.
 
    1. The noise and the garment have stopped. The participant's screen says the session is paused.
    2. Offer the earplugs. Fit them under the headphones.
-   3. The instruction says **Fit the earplugs under the headphones, then press Proceed.** Press
-      **Start block**.
+   3. The instruction says **Fit the earplugs under the headphones, then press Start block.**
+      Press **Start block**.
    4. The check starts again from the beginning.
 4. **If the status says Still audible with earplugs. The session will continue and is recorded as
    not fully masked.**: nothing to do. The session carries on and the data records it. Write a note
@@ -285,7 +289,7 @@ about a minute and a half.
 1. The screen shows:
 
    > Stop rehearsal: the participant will now press the stop button. When the stop screen shows,
-   > press Resume. Press Proceed only if they cannot press it.
+   > press Resume. Press Start block only if they cannot press it.
 
 2. The participant's screen asks them to press the stop button. It is the remote's blank-screen
    button.
@@ -300,7 +304,8 @@ about a minute and a half.
 
 **[TBC: open item L11. Until the rehearsal pressure is set, the garment is started with no
 pressure, so the participant sees the stop and the resume without feeling the touch stop. Open
-item L12: the stop button's symbol on the participant's screen still reads PLACEHOLDER.]**
+item L12: the stop button is drawn on the participant's screen as a red circle, a placeholder
+until the symbol printed on the remote's blank-screen button is confirmed.]**
 
 ---
 
@@ -776,7 +781,7 @@ deleted.]**
 
 | Problem | What to do |
 |---|---|
-| The participant presses buttons and nothing happens on their screen. | The remote's key presses go to whichever window is active. Clicking your window may take them away from the participant's window. **[TBC: not yet tested on the lab PC. Try clicking once on the participant's window, and report it to S.]** |
+| The participant presses buttons and nothing happens on their screen. | Check whether a text field on your screen has the cursor in it: while you type, the remote's presses go into that field. Press Enter or click a button. Otherwise the remote reaches the participant's screen whichever window is active. If it still does not respond, check the remote's receiver and battery. **[TBC: routing tested headless, not yet on the lab PC with the real remote.]** |
 | Both windows opened on the lab display. | Open item 9 is not set yet. Tell S. Do not run a real participant. |
 | **Start session** is greyed out. | Press **Check**. It greys out again whenever a field changes. |
 | **Another session is already running from this data folder** but no other copy is open. | Check the taskbar for a hidden window. If none, restart the PC and try again. |

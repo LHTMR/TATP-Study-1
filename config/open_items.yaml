@@ -197,8 +197,9 @@ items:
   - item: "L12"
     summary: The symbol physically on the emergency-stop button, drawn by the stop rehearsal
     resolved_when: {file: hardware.yaml, path: "responder.emergency_stop_symbol_confirmed"}
-    fix: "S, before piloting. responder.button_symbols.emergency_stop is the marked
-         placeholder PLACEHOLDER, drawn as it stands on screens.stop_rehearsal. Put the glyph
+    fix: "S, before piloting. responder.button_symbols.emergency_stop is a placeholder, a red
+         circle (S, 24 Sep 2026; colour in responder.button_symbol_colours), drawn on
+         screens.stop_rehearsal. Put the glyph
          printed on the R400's blank-screen button (or its new label, docs/LOG.md N5.11) there,
          check tests/test_application.py still finds a font for it, and add
          `emergency_stop_symbol_confirmed: <date>` under `responder:`."

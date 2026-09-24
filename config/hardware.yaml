@@ -61,8 +61,13 @@ responder:
     # Drawn on ONE screen only, `screens.stop_rehearsal`, whose purpose is pointing at it
     # (SPEC.md 10.9). Never drawn as an option on a response screen. What is physically on the
     # R400's blank-screen button is not known to the build, and S may relabel it (docs/LOG.md
-    # N5.11), so this is a marked placeholder until S confirms it. Local item L12.
-    emergency_stop: "PLACEHOLDER"
+    # N5.11), so this is a placeholder until S confirms it: a red circle, S's choice on 24 Sep
+    # 2026, in place of the word PLACEHOLDER. Local item L12 stays open.
+    emergency_stop: "⬤"
+  # The colour a symbol is drawn in, for a button whose printed symbol is coloured. Only the
+  # stop has one, and it belongs to the red-circle placeholder above (L12).
+  button_symbol_colours:
+    emergency_stop: "#d32f2f"
 
 screens:
   # SPEC.md 20 item 9. Null means "primary screen, windowed", which is right for a

@@ -98,10 +98,10 @@ instructions:
   response_received: Response received.
   # Setup and touch calibration (SPEC.md 9, 10.7, 10.9). None names a pattern or a condition.
   masking_check: 'Audio setup: the participant is setting the noise level against the garment.'
-  earplugs: Fit the earplugs under the headphones, then press Proceed.
+  earplugs: Fit the earplugs under the headphones, then press Start block.
   stop_rehearsal: >-
     Stop rehearsal: the participant will now press the stop button. When the stop screen shows,
-    press Resume. Press Proceed only if they cannot press it.
+    press Resume. Press Start block only if they cannot press it.
   stop_rehearsal_resume: The stop was detected. Press Resume to carry on in front of the participant.
   touchcal_bracket: 'Touch calibration, step 1: the participant sets the touch on the middle channel.'
   touchcal_estimation: 'Touch calibration, step 2: the participant rates a series of touches.'
@@ -256,7 +256,7 @@ dialogs:
   resume_blocks: blocks {value}
   resume_nothing_completed: nothing yet
   resume_since_sensitisation: '{value} (hours:minutes)'
-  resume_not_sensitised: '— it had not begun, so setup starts again —'
+  resume_not_sensitised: '— it had not begun yet —'
   distances_outstanding: Mapping distances are still outstanding. Enter them now, or close the session with them flagged missing.
   fit_rerun_reason: Why are you re-running? Recorded with the discarded estimate, which is kept.
   fit_rerun_exhausted: The re-run limit for this procedure has been reached. This estimate will be used.

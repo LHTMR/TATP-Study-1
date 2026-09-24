@@ -23,9 +23,26 @@ with no protocol in it.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRect, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QFontMetrics, QGuiApplication, QPainter, QPen
-from PySide6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QObject, QRect, Qt, QTimer, Signal
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetrics,
+    QGuiApplication,
+    QKeyEvent,
+    QPainter,
+    QPen,
+)
+from PySide6.QtWidgets import (
+    QAbstractSpinBox,
+    QApplication,
+    QLineEdit,
+    QPlainTextEdit,
+    QStackedWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from tatp.clock import Clock
 from tatp.config import Config
@@ -101,6 +118,9 @@ class _MessageScreen(QWidget):
         self.emphasised = False
         # The stop button's printed symbol, on the stop rehearsal only (SPEC.md 10.9).
         self.stop_symbol: str | None = None
+        # The colour printed on that button (`responder.button_symbol_colours`), set by the
+        # window from hardware.yaml.
+        self.stop_colour = FOREGROUND
 
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
@@ -116,7 +136,9 @@ class _MessageScreen(QWidget):
         painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.text)
         if self.stop_symbol is not None:
             painter.setRenderHint(QPainter.Antialiasing)
-            _draw_symbol_button(painter, self, _stop_button_rect(self), self.stop_symbol)
+            _draw_symbol_button(
+                painter, self, _stop_button_rect(self), self.stop_symbol, self.stop_colour
+            )
         painter.end()
 
 
@@ -360,7 +382,9 @@ def _stop_button_rect(widget: QWidget) -> QRect:
     )
 
 
-def _draw_symbol_button(painter: QPainter, widget: QWidget, rect: QRect, symbol: str) -> None:
+def _draw_symbol_button(
+    painter: QPainter, widget: QWidget, rect: QRect, symbol: str, colour: QColor
+) -> None:
     """A button outline carrying its printed symbol, with no label: the text above names it."""
     painter.setPen(QPen(FOREGROUND, BUTTON_LINE_WIDTH_PX))
     painter.setBrush(Qt.NoBrush)
@@ -374,6 +398,7 @@ def _draw_symbol_button(painter: QPainter, widget: QWidget, rect: QRect, symbol:
     if width > room:
         symbol_font.setPointSizeF(BUTTON_SYMBOL_POINT_SIZE * room / width)
     painter.setFont(symbol_font)
+    painter.setPen(colour)
     painter.drawText(rect, Qt.AlignCenter, symbol)
 
 
@@ -456,6 +481,9 @@ class ParticipantWindow(QWidget):
         self._names = {key: name for name, key in QT_KEYS.items()}
 
         self.message = _MessageScreen()
+        self.message.stop_colour = QColor(
+            config.hardware["responder"]["button_symbol_colours"]["emergency_stop"]
+        )
         self.cue = _CueScreen()
         self.vas = VasWidget(config.study1["vas"], responder, clock)
         self.vas.confirmed.connect(self.confirmed)
@@ -659,3 +687,67 @@ class ParticipantWindow(QWidget):
         if name is None or self.responder.is_ignored(name):
             return None
         return self.responder.action_for(name)
+
+    def is_remote_key(self, event) -> bool:
+        """A key the response device emits, bound or deliberately ignored (SPEC.md 10.1)."""
+        name = self._names.get(Qt.Key(event.key()))
+        if name is None:
+            return False
+        return name in self.responder.keys or self.responder.is_ignored(name)
+
+
+# Widgets the experimenter types into. A key reaching one of these is the experimenter typing,
+# not the participant pressing -- the remote's confirm is the full stop, which is also typed.
+TEXT_ENTRY_WIDGETS = (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
+
+
+class RemoteKeyRouter(QObject):
+    """Delivers the response device's keys to the participant window, whichever has focus.
+
+    The remote is a keyboard as far as the operating system is concerned, so its presses go to
+    the active window -- and the experimenter makes their own window active every time they
+    click Start block. Without this, the participant's next rating, and their emergency stop,
+    would land on the experimenter's screen and do nothing (SPEC.md 10.1, 13).
+
+    Installed on the application by the `Rig`. The one exception is a key typed into a text
+    field on the experimenter's side: that is the experimenter writing a note or a distance, and
+    the device's confirm key is a full stop. A participant press made while the experimenter is
+    typing therefore reaches the field, not the participant window (docs/LOG.md N7.I1).
+    """
+
+    def __init__(self, participant: ParticipantWindow, parent: QObject | None = None):
+        super().__init__(parent)
+        self.participant = participant
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802 -- Qt's name
+        if event.type() not in (QEvent.KeyPress, QEvent.KeyRelease):
+            return False
+        participant = self.participant
+        # A key already addressed to a participant window -- this one, or the one another
+        # router has just forwarded it to -- is left alone. Without that, two routers alive at
+        # once would forward each other's events back and forth without end.
+        if (
+            not isinstance(watched, QWidget)
+            or isinstance(watched.window(), ParticipantWindow)
+            or not participant.isVisible()
+            or isinstance(watched, TEXT_ENTRY_WIDGETS)
+            or not participant.is_remote_key(event)
+        ):
+            return False
+        target = (
+            participant.vas
+            if participant.stack.currentWidget() is participant.vas
+            else participant
+        )
+        QApplication.sendEvent(
+            target,
+            QKeyEvent(
+                event.type(),
+                event.key(),
+                event.modifiers(),
+                event.text(),
+                event.isAutoRepeat(),
+                event.count(),
+            ),
+        )
+        return True

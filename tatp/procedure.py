@@ -46,11 +46,12 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtWidgets import QApplication
 
 from tatp.interruption import Interruptions
 from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
-from tatp.ui.participant import ParticipantWindow
+from tatp.ui.participant import ParticipantWindow, RemoteKeyRouter
 from tatp.units import MS_PER_S
 
 
@@ -70,6 +71,10 @@ class Rig(QObject):
         self.experimenter = experimenter
         self.interruptions = Interruptions(session, participant, experimenter, self)
         session.attach_interruptions(lambda: self.interruptions.active)
+        # The remote's presses reach the participant window whichever window is active. The
+        # filter is a child of the rig, and Qt drops it from the application when it is deleted.
+        self._remote_keys = RemoteKeyRouter(participant, self)
+        QApplication.instance().installEventFilter(self._remote_keys)
         # SPEC.md 10.5: the audible cue sounds with the visual one, from one signal, so no
         # protocol can show the one and forget the other.
         participant.warning_cue_shown.connect(session.audio.participant_cue)

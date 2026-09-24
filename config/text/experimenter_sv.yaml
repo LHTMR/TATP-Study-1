@@ -99,10 +99,10 @@ instructions:
   # Förberedelser och beröringskalibrering (SPEC.md 9, 10.7, 10.9). Ingen nämner ett mönster
   # eller en betingelse.
   masking_check: 'Ljudinställning: deltagaren ställer in brusnivån mot plagget.'
-  earplugs: Sätt öronpropparna under hörlurarna och tryck sedan på Gå vidare.
+  earplugs: Sätt öronpropparna under hörlurarna och tryck sedan på Starta block.
   stop_rehearsal: >-
     Övning med stoppknappen: deltagaren trycker nu på stoppknappen. När stoppskärmen visas,
-    tryck på Återuppta. Tryck på Gå vidare bara om deltagaren inte kan trycka.
+    tryck på Återuppta. Tryck på Starta block bara om deltagaren inte kan trycka.
   stop_rehearsal_resume: Stoppet registrerades. Tryck på Återuppta för att fortsätta inför deltagaren.
   touchcal_bracket: 'Beröringskalibrering, steg 1: deltagaren ställer in beröringen på mittkanalen.'
   touchcal_estimation: 'Beröringskalibrering, steg 2: deltagaren skattar en serie beröringar.'
@@ -254,7 +254,7 @@ dialogs:
   resume_blocks: block {value}
   resume_nothing_completed: inget ännu
   resume_since_sensitisation: '{value} (timmar:minuter)'
-  resume_not_sensitised: '— den hade inte börjat, så förberedelserna börjar om —'
+  resume_not_sensitised: '— den hade inte börjat än —'
   distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem nu, eller avsluta sessionen med dem flaggade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.

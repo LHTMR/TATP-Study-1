@@ -11,8 +11,9 @@ import csv
 import time
 
 import pytest
-from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtGui import QKeyEvent
+from PySide6.QtWidgets import QApplication, QLineEdit, QPushButton
 
 from tatp import config as cfg
 from tatp.clock import Clock
@@ -21,6 +22,7 @@ from tatp.responder import Responder
 from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
+from tatp.ui.vas import QT_KEYS
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 CLOCK_SPEED = 100.0
@@ -237,6 +239,48 @@ def test_a_finished_procedure_no_longer_answers_interruptions(rig):
 
 
 # -- the rig ------------------------------------------------------------------------------
+
+
+def _key(widget, key, kind=None) -> None:
+    """A key event delivered the way the operating system delivers it: through the app."""
+    for event_type in ((kind,) if kind else (QEvent.KeyPress, QEvent.KeyRelease)):
+        QApplication.sendEvent(widget, QKeyEvent(event_type, key, Qt.NoModifier))
+
+
+def test_the_remote_reaches_the_participant_whichever_window_is_active(rig):
+    """The experimenter clicks their own window constantly; the remote must not follow it."""
+    rig.participant.show()
+    elsewhere = QPushButton()
+    elsewhere.show()
+    confirmed = []
+    rig.participant.message_confirmed.connect(lambda: confirmed.append(1))
+    rig.participant.show_message("welcome")
+
+    _key(elsewhere, QT_KEYS["period"])
+    assert confirmed == [1], "the confirm reached the participant window"
+    _key(elsewhere, QT_KEYS["f5"])
+    assert rig.interruptions.active == "emergency_stop", "and so does the emergency stop"
+
+
+def test_the_remote_drives_the_vas_from_another_window(rig):
+    rig.participant.show()
+    elsewhere = QPushButton()
+    elsewhere.show()
+    rig.participant.show_vas("pain")
+    _key(elsewhere, QT_KEYS["pagedown"])
+    assert rig.participant.vas.state.visible, "the first press showed the marker"
+
+
+def test_typing_in_an_experimenter_field_is_not_taken_for_the_remote(rig):
+    """The confirm key is a full stop, which the experimenter types in notes and distances."""
+    rig.participant.show()
+    field = QLineEdit()
+    field.show()
+    confirmed = []
+    rig.participant.message_confirmed.connect(lambda: confirmed.append(1))
+    rig.participant.show_message("welcome")
+    _key(field, QT_KEYS["period"], QEvent.KeyPress)
+    assert confirmed == []
 
 
 def test_the_rig_plays_patterns(rig):
