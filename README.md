@@ -33,7 +33,8 @@ python run_session.py
 ```
 
 It offers four entries: **Run a session**, **Instruments and environment** (filament weighing,
-room temperature and humidity), **Design a pattern** (not built yet) and **Preview schedule**.
+room temperature and humidity), **Design a pattern** (`tools/design_pattern.py`, for S only,
+because it shows pattern names and shapes) and **Preview schedule**.
 
 **The command line**, for scripted runs:
 

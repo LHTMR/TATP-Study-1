@@ -36,6 +36,16 @@ garment:
                                      # Onset jitter is up to one tick, so this sits well under
                                      # the fastest pattern's 75 ms row interval.
 
+prototype_command_file:
+  # What the current prototype's Arduino sketch accepts (SPEC.md 12.4), read from
+  # ttpa_touch_the_pain_away/Arduino/4_mosfet_array_controller*.ino. The pattern designer's
+  # export refuses a pattern that would exceed either, because the sketch does not refuse it:
+  # a step past the store is dropped with a serial message, and a longer delay wraps.
+  max_steps: 199                     # `6 * (len_code + 1) < 6 * seq_size`, seq_size 200
+  max_step_ms: 65535                 # each step's delay is stored as a uint16_t
+  mask_bits: 32                      # `write32bits`: four shift-register bytes, so channel
+                                     # ids 0-31
+
 adjustment:
   # Accelerating two-button control (SPEC.md 10.3, comparison doc 7.5). All pilot-tunable.
   # A tap gives fine positioning; a hold traverses the full range in about 6 s.

@@ -9,7 +9,9 @@ Four entries, so the auxiliary tools are reachable without the command line:
    refuses. An unfinished session found by the preflight is put to the experimenter as a
    question (SPEC.md 15).
 2. **Instruments and environment** (`tatp/instruments.py`).
-3. **Design a pattern.** Not built: shown, disabled, with the reason (Milestone 6).
+3. **Design a pattern.** `tools/design_pattern.py`, in its own window. For S only: it shows
+   pattern names and shapes, which a blinded experimenter must not see (SPEC.md 16), and its
+   entry says so.
 4. **Preview schedule.** `tools/preview_schedule.py`'s report, in a window.
 
 **The session is started by `run_session`'s `preflight` and `build`, not here.** Both are
@@ -437,6 +439,7 @@ class LauncherWindow(QWidget):
         self._build = build
         self.filaments_path = filaments_path
         self.runner = None
+        self.designer = None
         # Handed from the instruments entry to the next session start (SPEC.md 8.1).
         self.environment = {"room_temperature_c": None, "relative_humidity_pct": None}
         words = self.text["launcher"]
@@ -454,17 +457,13 @@ class LauncherWindow(QWidget):
         for key, action in (
             ("run_session", self.open_session_dialog),
             ("instruments", self.open_instruments),
-            ("design_pattern", None),
+            ("design_pattern", self.open_designer),
             ("preview_schedule", self.open_preview),
         ):
             entry = button(words[key], SIZE_LARGE)
             detail = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
             detail.setText(words[f"{key}_detail"])
-            if action is None:
-                # SPEC.md 4.1 lists it, so it is shown; it does nothing yet, so it says why.
-                entry.setEnabled(False)
-            else:
-                entry.clicked.connect(action)
+            entry.clicked.connect(action)
             self.entries[key] = entry
             layout.addWidget(entry)
             layout.addWidget(detail)
@@ -499,6 +498,24 @@ class LauncherWindow(QWidget):
     def preview_dialog(self, t_zero: datetime | None = None) -> PreviewDialog:
         return PreviewDialog(self.text, self.config, t_zero or datetime.now(), parent=self)
 
+    def open_designer(self):
+        """`tools/design_pattern.py`, in a window of its own (SPEC.md 12.2).
+
+        Imported when opened, as the preview's tool is. Held on the launcher, because a
+        top-level window nothing references is collected and vanishes (docs/LOG.md N6.30).
+        One that is already open is raised rather than replaced, since replacing it would
+        discard whatever is unsaved in it.
+        """
+        from tools.design_pattern import DesignerWindow
+
+        if self.designer is not None and self.designer.isVisible():
+            self.designer.raise_()
+            self.designer.activateWindow()
+            return self.designer
+        self.designer = DesignerWindow(self.text, self.config.hardware)
+        self.designer.show()
+        return self.designer
+
     def open_session_dialog(self) -> SessionDialog:
         dialog = self.session_dialog()
         dialog.open()
@@ -527,6 +544,9 @@ class LauncherWindow(QWidget):
 
     def _start_session(self, config: cfg.Config, args: argparse.Namespace) -> None:
         self.runner = self._build(config, args)
+        # A designer left open would show pattern names beside a running session (SPEC.md 16).
+        if self.designer is not None:
+            self.designer.close()
         self.hide()
         self.runner.start()
 

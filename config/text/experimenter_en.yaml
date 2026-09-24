@@ -330,7 +330,7 @@ launcher:
   instruments: Instruments and environment
   instruments_detail: Enter weighed filament forces, and today's room temperature and humidity.
   design_pattern: Design a pattern
-  design_pattern_detail: Not available yet. The pattern designer is built in Milestone 6; until then, edit the pattern CSV files by hand.
+  design_pattern_detail: Compose garment patterns, preview them, and save them to a pattern folder. For S only. It shows pattern names and shapes, so an experimenter running sessions never opens it.
   preview_schedule: Preview schedule
   preview_schedule_detail: The session timeline and its warnings. Nothing is started.
   environment_entered: 'Room {temperature} °C, {humidity} % RH, handed to the next session.'
@@ -377,3 +377,97 @@ instruments:
   relative_humidity: 'Relative humidity (%):'
   use_environment: Use for the next session
   invalid_number: '{value} is not a number.'
+
+designer:
+  # SPEC.md 12.2: launcher entry 3, tools/design_pattern.py. For S, not for a blinded
+  # experimenter (SPEC.md 16), so it may show pattern names, but no string here names a
+  # condition. Written by the build (docs/LOG.md N7.P1-N7.P9), not ethics-sourced.
+  title: Pattern designer
+  for_s_only: For S only. It shows pattern names and shapes, so an experimenter running sessions never opens it.
+  new: New
+  open: Open pattern…
+  import_reference: Import prototype CSV…
+  save: Save
+  save_as: Save as…
+  export: Export command file…
+  parameters: Pattern
+  name: Name (also the file name)
+  row_interval_ms: Row interval (ms)
+  channel_ids: Channel ids (bit indices)
+  loop: Repeats while active
+  descriptive: Descriptive only, optional
+  nominal_velocity_cm_s: Nominal velocity (cm/s)
+  assumed_channel_spacing_cm: Channel spacing (cm)
+  overlap_rows: Overlap (rows)
+  tab_grid: Grid
+  tab_ordered: Ordered channels
+  tab_timed: Timed channels
+  grid_hint: One row per row interval, one column per channel. Click a cell to switch it on or off.
+  row_time: '{value} ms'
+  add_row: Add row
+  duplicate_row: Duplicate row
+  remove_row: Remove row
+  channel: Channel
+  hold_ms: Hold (ms)
+  onset_ms: Onset (ms)
+  offset_ms: Offset (ms)
+  add_channel: Add channel
+  remove_channel: Remove channel
+  mode: Mode
+  # The prototype repository's three modes (modular_approach/README.txt), and what each does.
+  modes:
+    sequential: Sequential
+    join_hold: Join and hold
+    join_stay: Join and stay
+  mode_hints:
+    sequential: Each channel on and off in turn. The next starts the delay after the last one ends.
+    join_hold: Each channel starts the delay after the last one started, and holds for its own time.
+    join_stay: Each channel starts the delay after the last one started, and all go off together.
+  delay_ms: Delay (ms)
+  to_grid: Convert to grid
+  converted: 'Converted to {value} rows. The grid was replaced.'
+  preview: Preview
+  seconds: '{value} s'
+  play: Play on the mock garment
+  stop: Stop
+  playing: 'Playing on the mock garment. Channels on: {value}'
+  none_on: none
+  stopped: Stopped. Every channel is off.
+  loads: 'Loads: {rows} rows, one cycle {cycle} s, played once.'
+  loads_looped: 'Loads: {rows} rows, one cycle {cycle} s, repeated while active. Two cycles shown.'
+  saved: 'Saved {value} and its sidecar.'
+  exported: 'Exported {steps} steps to {value}. The prototype plays it once per exec, then switches every channel off.'
+  column_ms_title: Import prototype CSV
+  column_ms: 'Column duration (ms). The prototype CSV does not carry one:'
+  import: Import
+  cancel: Cancel
+  overwrite_title: Replace the pattern?
+  overwrite: '{value} is already in this folder. Replace it and its sidecar?'
+  replace: Replace
+  errors:
+    required: '{field}: nothing entered yet.'
+    number: '{field}: {value} is not a number.'
+    not_finite: '{field}: {value} is not a finite number.'
+    not_finite_value: '{value} is not a finite number.'
+    ids_pending: 'Channel ids: press Enter to apply what was typed. Until then nothing is saved, exported, played or converted.'
+    sidecar_layout: '{value}: its sidecar is laid out in a way the designer cannot rewrite without changing it. Save it as a new pattern instead.'
+    channel_ids: 'Channel ids: {value} is not a list of whole numbers separated by commas.'
+    name: 'The name is also the file name: use only letters, digits, _ and -.'
+    interval: The row interval must be above zero.
+    negative: '{value} ms is below zero.'
+    off_grid: '{value} ms is not a whole number of {interval} ms rows. Use timings on the grid, or another row interval.'
+    hold: 'Channel {channel}: a hold of {value} ms must be above zero.'
+    empty_span: 'Channel {channel}: the offset, {offset} ms, must come after the onset, {onset} ms.'
+    unknown_channel: 'Channel {channel} is not one of the channel ids.'
+    overlap: 'Channel {channel}: two on-periods touch or overlap, and the grid would join them into one.'
+    nothing: There are no channels to convert.
+    not_loadable: 'It would not load, so it cannot be saved: {value}'
+    open_failed: 'Could not open {file}, which does not load: {value}. The pattern shown is unchanged.'
+    exists: '{value} already exists.'
+    name_taken: 'Another pattern in this folder, {value}, already has this name.'
+    folder_unreadable: 'A pattern already in this folder does not load: {value}'
+    ragged: 'Line {line} has {value} cells, and the first line has {expected}.'
+    bit_range: 'Channel {channel} is not a bit of the prototype''s {bits}-bit mask.'
+    not_whole_ms: 'A step of {value} ms is not a whole number of milliseconds, which the prototype needs.'
+    too_many_steps: '{value} steps, and the prototype stores at most {limit}.'
+    mock_channels: 'The mock garment has channels {have}, and this pattern uses {value}.'
