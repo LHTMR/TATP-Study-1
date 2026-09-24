@@ -32,7 +32,7 @@ from tatp.ui.participant import ParticipantWindow
 # As fast as the moving patterns allow: each pattern event is a flushed `garment` row, so above
 # a few hundred times real speed the writes fall behind the pattern and never catch up.
 CLOCK_SPEED = 400.0
-RUN_TIMEOUT_S = 40.0
+RUN_TIMEOUT_S = 90.0  # generous: the gate runs this beside every other test
 PAIN_F40_MN = 130.0
 PAIN_SLOPE = 51.6
 BRUSH_PCT = 10.0

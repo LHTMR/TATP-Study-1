@@ -40,6 +40,7 @@ from __future__ import annotations
 import ast
 import functools
 import time
+import weakref
 from pathlib import Path
 from types import CodeType
 
@@ -219,9 +220,7 @@ class VirtualParticipant(QObject):
         model: ObserverModel | None = None,
         parent: QObject | None = None,
     ):
-        # A child of the window unless told otherwise, so its timer and its connections to the
-        # window end with the window rather than outliving it.
-        super().__init__(window if parent is None else parent)
+        super().__init__(parent)
         self.window = window
         self.garment = garment
         self.model = model or ObserverModel(seed)
@@ -275,8 +274,18 @@ class VirtualParticipant(QObject):
         # A person watches the comparison continuously. A timer's look at the screen can fall
         # between two short stimuli at the validator's speed, so the emphasis is observed as it
         # changes rather than sampled.
-        self._emphasise = window.emphasise_choice
-        window.emphasise_choice = self._watch_emphasis
+        # Weak references both ways, so the watcher left on the window makes no reference
+        # cycle: a cycle keeps a closed window alive until the collector runs, at an arbitrary
+        # moment in whatever runs next.
+        me, seen = weakref.ref(self), weakref.ref(window)
+
+        def watched(side: str | None) -> None:
+            type(seen()).emphasise_choice(seen(), side)
+            participant = me()
+            if participant is not None:
+                participant._watch_emphasis(side)
+
+        window.emphasise_choice = watched
         # The same goes for the warning cue, which is what separates two adjustments with the
         # same prompt: seen as it goes up, so the next screen is always a new one.
         window.warning_cue_shown.connect(self._saw_cue)
@@ -292,7 +301,7 @@ class VirtualParticipant(QObject):
 
     def stop(self) -> None:
         self._timer.stop()
-        self.window.emphasise_choice = self._emphasise
+        del self.window.emphasise_choice  # the class's own method again
         self.window.warning_cue_shown.disconnect(self._saw_cue)
 
     def feel_filament(self, force_mn: float) -> None:
@@ -382,7 +391,6 @@ class VirtualParticipant(QObject):
         self.on_cue()
 
     def _watch_emphasis(self, side: str | None) -> None:
-        self._emphasise(side)
         if side is not None:
             felt = self.model.touch_felt_pct(self._felt_on_kpa())
             self._choice_felt[side] = max(self._choice_felt[side], felt)
