@@ -27,6 +27,8 @@ from tatp.ui.vas import QT_KEYS
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 SPIN_TIMEOUT_S = 5.0
+LAPTOP_WIDTH_PX = screenshots.LAPTOP_WIDTH_PX
+LAPTOP_HEIGHT_PX = screenshots.LAPTOP_HEIGHT_PX
 
 
 @pytest.fixture(scope="module")
@@ -427,74 +429,60 @@ def test_it_shows_nothing_the_experimenter_may_not_see(experimenter, session):
         assert condition not in shown
 
 
-def test_the_placeholder_banner_follows_the_view_in_both_directions(experimenter, session):
-    """CLAUDE.md and SPEC.md 12.4: unmissable while `placeholder_text` is true, gone when not.
+@pytest.mark.parametrize("shown", [True, False])
+def test_the_placeholder_banner_follows_the_view(app, session, shown):
+    """CLAUDE.md and SPEC.md 12.4: unmissable while `placeholder_text` is true, absent when not.
 
     Driven from the flag rather than from whatever the config happens to hold today, so this
     keeps testing the banner as participant wording gets approved.
     """
-    window, held = experimenter
-    banner = session.config.experimenter_text["banners"]["placeholder_text"]
-
-    held["override"] = {"placeholder_text": True}
-    window.refresh()
-    assert banner in _visible_texts(window)
-
-    held["override"] = {"placeholder_text": False}
-    window.refresh()
-    assert banner not in _visible_texts(window)
+    text = session.config.experimenter_text
+    window = ExperimenterWindow(
+        text, lambda: {**session.experimenter_view(), "placeholder_text": shown}
+    )
+    assert (text["banners"]["placeholder_text"] in _visible_texts(window)) is shown
 
 
-def test_the_reduced_capability_banner_names_the_device(experimenter, session):
-    window, held = experimenter
-    assert not window.reduced_capability_banner.isVisibleTo(window), "the mock sets per-channel"
-    held["override"] = {"reduced_capability_device": True}
-    window.refresh()
+def test_the_reduced_capability_banner_names_the_garment_in_words(app, session):
+    text = session.config.experimenter_text
+    window = ExperimenterWindow(
+        text, lambda: {**session.experimenter_view(), "reduced_capability_device": True}
+    )
     assert window.reduced_capability_banner.isVisibleTo(window)
-    assert session.garment.driver_name in window.reduced_capability_banner.text()
+    name = text["terms"]["garments"][session.config.hardware["garment"]["driver"]]
+    assert name in window.reduced_capability_banner.text()
+    assert session.garment.driver_name not in window.reduced_capability_banner.text()
 
 
-def test_nothing_moves_when_the_banners_appear(experimenter):
-    """UI_PRINCIPLES.md 3.3. The banner region is reserved whether or not a banner is in it.
-
-    The experimenter learns where the phase and the instruction sit. If they slid down at the
-    moment a warning appeared, the warning would cost a re-read of the whole screen at exactly
-    the wrong time.
-    """
+def test_a_banner_that_comes_mid_session_is_refused(experimenter):
+    """UI_PRINCIPLES.md 3.3. Every banner is settled before the session starts, so the region
+    takes only the space of the banners present; one appearing later would move the phase and
+    the instruction at exactly the wrong moment, and is refused instead."""
     window, held = experimenter
-    held["override"] = {"placeholder_text": False, "reduced_capability_device": False}
-    window.refresh()
-    window.show()
-    quiet = (window.phase.pos().y(), window.instruction.pos().y())
-
-    held["override"] = {"placeholder_text": True, "reduced_capability_device": True}
-    window.refresh()
-    assert (window.phase.pos().y(), window.instruction.pos().y()) == quiet
+    held["override"] = {"placeholder_text": True}
+    with pytest.raises(AssertionError, match="banners changed"):
+        window.refresh()
 
 
 @pytest.mark.parametrize("language", ["sv", "en"])
-def test_every_banner_fits_the_reserved_region(app, language):
-    """The reserved height is only honest if the warnings actually fit inside it.
-
-    A longer wording, or a second language, would otherwise clip a SPEC.md 12.4 banner rather
-    than push the layout -- which is worse than the reflow it was reserved to prevent. All
-    three at once, in both languages, at the screenshot width.
-    """
+@pytest.mark.parametrize("banners", [{}, {"reduced_capability_device": True}])
+def test_the_window_fits_the_lab_laptop(app, language, banners):
+    """A 1920 x 1080 laptop at 150 % leaves about 1280 x 640 (S's lab review, 24 Sep 2026):
+    with no banner, and with the one a pilot on the prototype sleeve always has."""
     text = cfg.load(language, language).experimenter_text
-    view = _all_keys(placeholder_text=True, reduced_capability_device=True,
-                     fit_preview_enabled=True)
+    view = _all_keys(garment_driver="arduino_mosfet", **banners)
     window = ExperimenterWindow(text, lambda: view)
-    window.resize(1280, 800)
-    window.show()
-    banners = (window.placeholder_banner, window.reduced_capability_banner,
-               window.fit_preview_banner)
-    width = window.placeholder_banner.width()
-    spacing = window.banner_area.layout().spacing() * (len(banners) - 1)
-    needed = sum(banner.heightForWidth(width) for banner in banners) + spacing
-    assert needed <= experimenter_ui.BANNER_AREA_PX, (
-        f"the three banners need {needed} px but only {experimenter_ui.BANNER_AREA_PX} "
-        f"is reserved -- raise BANNER_AREA_PX"
-    )
+    hint = window.minimumSizeHint()
+    assert hint.width() <= LAPTOP_WIDTH_PX and hint.height() <= LAPTOP_HEIGHT_PX, hint
+
+
+def test_no_banner_leaves_no_empty_band(app, session):
+    """A laptop screen has no quarter to spare for banners that are not there (S's lab
+    review, 24 Sep 2026)."""
+    view = {**session.experimenter_view(), "placeholder_text": False,
+            "reduced_capability_device": False, "fit_preview_enabled": False}
+    window = ExperimenterWindow(session.config.experimenter_text, lambda: view)
+    assert not window.banner_area.isVisibleTo(window)
 
 
 def test_the_two_banners_do_not_look_alike():
@@ -835,7 +823,7 @@ def test_a_fault_from_the_intervention_stays_withheld_afterwards(drawn):
                              hardware=_hardware(faults=[first, later]))
     window.refresh()
     assert "channel 4" not in window.faults.text() + window.faults.toolTip()
-    assert "channel 2" in window.faults.toolTip(), "a fault raised afterwards is shown"
+    assert "channel 2" in window.faults.text(), "a fault raised afterwards is shown, in full"
 
 
 def test_refresh_does_not_refit_unchanged_text(drawn, monkeypatch):
@@ -878,12 +866,11 @@ def test_a_pinprick_trial_marks_its_zone(rig_trial):
     assert window.zone.region == "primary"
 
 
-def test_the_fit_preview_banner_follows_the_view(drawn):
-    window, held = drawn
-    assert not window.fit_preview_banner.isVisibleTo(window)
-    held["view"] = _all_keys(fit_preview_enabled=True)
-    window.refresh()
-    assert window.fit_preview_banner.isVisibleTo(window)
+@pytest.mark.parametrize("enabled", [True, False])
+def test_the_fit_preview_banner_follows_the_view(app, loaded, enabled):
+    view = _all_keys(fit_preview_enabled=enabled)
+    window = ExperimenterWindow(loaded.experimenter_text, lambda: view)
+    assert window.fit_preview_banner.isVisibleTo(window) is enabled
 
 
 # -- blinding: no rating and no condition on the lab screen, SPEC.md 11, 11.1, 16 ---------
@@ -982,10 +969,10 @@ def test_a_fit_is_refused_while_the_preview_is_off_and_nothing_is_drawn(drawn):
 
 
 @pytest.mark.parametrize("make_fit", [_f40_fit, _touch_fit])
-def test_the_enabled_preview_draws_the_fit_and_hides_it_again(drawn, make_fit):
-    window, held = drawn
-    held["view"] = _all_keys(fit_preview_enabled=True)
-    window.refresh()
+def test_the_enabled_preview_draws_the_fit_and_hides_it_again(app, loaded, make_fit):
+    view = _all_keys(fit_preview_enabled=True)
+    window = ExperimenterWindow(loaded.experimenter_text, lambda: view)
+    window.resize(1280, 800)
     window.show_fit_preview(make_fit())
     preview = window.fit_preview
     assert preview.isVisible() and not preview.isModal()

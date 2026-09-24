@@ -146,7 +146,7 @@ def resume_summary(config: cfg.Config, open_session: resumption.OpenSession) -> 
     else:
         ago_s = (datetime.now() - datetime.strptime(started, ISO_FORMAT)).total_seconds()
         hours, minutes = divmod(int(ago_s // S_PER_MIN), int(S_PER_MIN))
-        since = dialogs["resume_since_sensitisation"].format(value=f"{hours}:{minutes:02d}")
+        since = dialogs["resume_since_sensitisation"].format(hours=hours, minutes=minutes)
     return {
         "completed": ", ".join(parts) or dialogs["resume_nothing_completed"],
         "since_sensitisation": since,

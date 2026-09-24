@@ -260,7 +260,9 @@ class Session:
             "elapsed_s": self.clock.elapsed_s(),
             "t_session_s": self.clock.t_session_s(),
             "garment_connected": self.garment.connected,
-            "garment_driver": self.garment.driver_name,
+            # The hardware.yaml key, which the window names in words (`terms.garments`); the
+            # session file records the class, `driver_name`.
+            "garment_driver": self.config.hardware["garment"]["driver"],
             "unresolved_open_items": [str(item) for item in self.config.unresolved],
             "placeholder_text": self.config.has_placeholder_text(),
             "reduced_capability_device": not self.garment.per_channel_pressure,

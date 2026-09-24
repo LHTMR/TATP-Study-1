@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 import serial
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication, QLabel
 
 from tatp import config as cfg
@@ -44,6 +45,9 @@ def window(app, loaded):
     made.close()
     # A playback timer left running would tick for the rest of the worker's tests.
     assert not made.timer.isActive(), "closing the window stops playback"
+    # Deleted now, not at the garbage collector's timing inside some later test (LOG N7.I3).
+    made.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 def _parameters(window, name="drawn", interval="100", ids="1, 2, 3", loop=False):

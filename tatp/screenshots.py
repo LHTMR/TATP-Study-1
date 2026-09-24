@@ -40,6 +40,7 @@ from fnmatch import fnmatch
 
 import numpy as np
 import yaml
+from PySide6.QtCore import QEvent
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -119,8 +120,11 @@ SAMPLE_PARTICIPANT = "07"
 SAMPLE_INITIALS = "SM"
 SAMPLE_PATTERN_FOLDER = "config/patterns/examples"
 SAMPLE_DATA_FOLDER = "data"
-SAMPLE_RESUME = {"completed": "setup, touch calibration, blocks 1-4",
-                 "since_sensitisation": "1 h 12 min"}
+# The resume offer's completed phases, and how long ago sensitisation began, in (h, min):
+# filled from the text as `run_session.resume_summary` fills them.
+SAMPLE_RESUME_COMPLETED = ("setup", "touch_calibration", "pre_sensitisation", "sensitisation")
+SAMPLE_RESUME_BLOCKS = "1, 2, 3, 4"
+SAMPLE_RESUME_AGO = (1, 12)
 SAMPLE_SESSION_NUMBER = 1
 SAMPLE_LANGUAGES = ("sv", "en")
 # The garment the checked session dialog shows chosen: the prototype, which the lab pilots on.
@@ -178,7 +182,7 @@ def _experimenter_view(**overrides) -> dict:
         "phase": "setup",
         "elapsed_s": 0.0,
         "garment_connected": True,
-        "garment_driver": "MockGarment",
+        "garment_driver": "mock",
         "placeholder_text": False,
         "reduced_capability_device": False,
         "unresolved_open_items": [],
@@ -405,15 +409,17 @@ def _experimenter_states(text: dict) -> dict:
             {"placeholder_text": True}, None,
         ),
         "reduced_capability_banner": (
-            "The reduced-capability banner naming the driver in use (SPEC.md 12.4).",
-            {"reduced_capability_device": True}, None,
+            "The reduced-capability banner naming the garment in use in words, as the "
+            "launcher does (SPEC.md 12.4).",
+            {"reduced_capability_device": True, "garment_driver": SAMPLE_GARMENT}, None,
         ),
         "all_banners": (
-            "All three banners at once: nothing below the reserved region has moved "
-            "(UI_PRINCIPLES.md 3.3). The fit-preview banner is amber like the "
+            "All three banners at once, in the space they need, which is fixed from the "
+            "session's start: no banner comes or goes during a session, so nothing below "
+            "moves (UI_PRINCIPLES.md 3.3). The fit-preview banner is amber like the "
             "reduced-capability one (SPEC.md 11.1).",
             {"placeholder_text": True, "reduced_capability_device": True,
-             "fit_preview_enabled": True}, None,
+             "garment_driver": SAMPLE_GARMENT, "fit_preview_enabled": True}, None,
         ),
         "open_items": (
             "Unresolved open items listed for the experimenter (SPEC.md 20).",
@@ -539,11 +545,15 @@ def _experimenter_states(text: dict) -> dict:
         ),
         "fit_preview_f40": (
             "The main window while the F40 fit preview (SPEC.md 11.1) is open, only with "
-            "fit_preview.enabled: the banner saying what it costs, Accept and Re-run enabled, "
-            "and no rating anywhere on this window -- they are in the preview window.",
+            "fit_preview.enabled: the banner saying what it costs, the instruction saying the "
+            "decision is due, Re-run and Accept enabled, and no rating anywhere on this "
+            "window -- they are in the preview window.",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
              "fit_preview_enabled": True},
-            lambda window: window.show_fit_preview(_sample_f40_fit()),
+            lambda window: (
+                window.set_instruction(instructions["f40_fit_review"]),
+                window.show_fit_preview(_sample_f40_fit()),
+            ),
         ),
         "fit_preview_touch": (
             "The main window while the touch-calibration fit preview is open: its instruction "
@@ -616,9 +626,33 @@ def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     yield from _launcher_shots(config, language)
 
 
+def _dispose(window: QWidget) -> None:
+    """Close a shown window and delete it now, in Qt's own time. Left to the garbage
+    collector, a window in a reference cycle is destroyed whenever a later allocation
+    triggers a collection -- possibly inside another window's construction, where a signal
+    it emits while dying reaches a half-deleted object (docs/LOG.md N7.I3)."""
+    window.close()
+    window.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+
+
 def _grab_dialog(dialog: QWidget) -> QPixmap:
     dialog.resize(DIALOG_WIDTH_PX, dialog.sizeHint().height())
     return dialog.grab()
+
+
+def _sample_resume(text: dict) -> dict:
+    """The resume offer's values, worded as `run_session.resume_summary` words them."""
+    dialogs = text["dialogs"]
+    completed = [text["phases"][phase] for phase in SAMPLE_RESUME_COMPLETED]
+    completed.append(dialogs["resume_blocks"].format(value=SAMPLE_RESUME_BLOCKS))
+    hours, minutes = SAMPLE_RESUME_AGO
+    return {
+        "completed": ", ".join(completed),
+        "since_sensitisation": dialogs["resume_since_sensitisation"].format(
+            hours=hours, minutes=minutes
+        ),
+    }
 
 
 def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
@@ -669,7 +703,7 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"The resume question (SPEC.md 15): what was completed and how long ago "
         f"sensitisation began. Resume, or an explicit new session; closing it starts nothing "
         f"({language}).",
-        _grab_dialog(dialog.resume_dialog(SAMPLE_RESUME)),
+        _grab_dialog(dialog.resume_dialog(_sample_resume(config.experimenter_text))),
     )
 
     # The unweighed set, whatever filaments.yaml holds today, so weighing the kit does not
@@ -817,7 +851,7 @@ def _designer_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         )
         yield Shot(f"experimenter_{language}_designer_{name}", f"{description} ({language})",
                    pixmap)
-        window.close()
+        _dispose(window)
 
 
 def shots(languages: tuple[str, ...] = LANGUAGES) -> Iterator[Shot]:

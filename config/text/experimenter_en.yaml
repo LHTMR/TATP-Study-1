@@ -81,7 +81,8 @@ instructions:
   # Filaments are named by the gram label printed on them (SPEC.md 8.1), with the force after.
   apply_filament: Apply the {filament} g filament ({force_mn} mN) at site {site}, {region} zone.
   # One stroke of about 2 cm, never repeated: repetition raises pain (docs/research/RB2).
-  apply_brush: Brush the {region} zone at site {site} -- one single stroke of about 2 cm.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  apply_brush: 'Brush the {region} zone at site {site}: one single stroke of about 2 cm.'
   mapping_path: Map path {path}. Step inward 5 mm on each cue and stop when the participant signals.
   # Read aloud before the first path. The mapping is instructed verbally and the participant
   # answers verbally, so this is the only place the wording exists -- there is no participant
@@ -116,6 +117,8 @@ instructions:
   touchcal_evenness: 'Touch calibration: the participant is asked whether the movement feels even.'
   touchcal_preference: 'Touch calibration, step 6: the participant chooses a kind of touch.'
   touchcal_fit_review: The touch-calibration estimate is ready. Accept it, or re-run the procedure.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  f40_fit_review: The F40 estimate is ready. Accept it, or re-run the procedure.
   touchcal_stage1_failed: >-
     The touch-calibration estimate failed its quality check ({value}). Re-run the procedure, or
     accept it to continue with the estimate flagged.
@@ -240,9 +243,11 @@ warnings:
 banners:
   # SPEC.md 12.4: persistent and unmissable. A session run this way must be impossible to
   # mistake for a real one afterwards.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. {value} is the garment's
+  # name from terms.garments, which carries brackets of its own.
   reduced_capability: >-
-    THIS SESSION IS NOT COLLECTING VALID TOUCH-CALIBRATION DATA. The connected device
-    ({value}) cannot set pressure per channel. Timings are real; pressures are not.
+    THIS SESSION IS NOT COLLECTING VALID TOUCH-CALIBRATION DATA. The connected device cannot
+    set pressure per channel: {value}. Timings are real; pressures are not.
   placeholder_text: >-
     PARTICIPANT SCREENS STILL CONTAIN PLACEHOLDER TEXT. Do not run a real participant.
   # SPEC.md 11.1. Unmissable, because the experimenter must not switch this on without seeing
@@ -255,13 +260,17 @@ dialogs:
   abort_confirm: Abort this session? All data collected so far is kept.
   abort_reason: Reason for aborting
   # SPEC.md 15. Both values are formatted by the session from its own text.
-  resume_found: 'An unfinished session was found for this participant. Completed: {completed}. Sensitisation began {since_sensitisation} ago. Resume it, keeping the original timing?'
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  resume_found: 'An unfinished session was found for this participant. Completed: {completed}. {since_sensitisation} Resume it, keeping the original timing?'
   # The two values filled into resume_found: what was completed, and how long ago
   # sensitisation began (run_session.resume_summary). Phase names come from `phases:` above.
   resume_blocks: blocks {value}
   resume_nothing_completed: nothing yet
-  resume_since_sensitisation: '{value} (hours:minutes)'
-  resume_not_sensitised: '— it had not begun yet —'
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. Each a whole sentence, so
+  # neither case reads wrongly in resume_found.
+  resume_since_sensitisation: 'Sensitisation began {hours} h {minutes} min ago.'
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  resume_not_sensitised: Sensitisation had not begun.
   distances_outstanding: Mapping distances are still outstanding. Enter them now, or close the session with them flagged missing.
   fit_rerun_reason: Why are you re-running? Recorded with the discarded estimate, which is kept.
   fit_rerun_exhausted: The re-run limit for this procedure has been reached. This estimate will be used.

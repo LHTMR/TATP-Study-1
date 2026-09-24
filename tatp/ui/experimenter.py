@@ -71,6 +71,7 @@ from tatp.ui.widgets import (
     ZoneDiagram,
     banner_style,
     button,
+    emphasis_button_style,
     emphasis_style,
     label,
     line_edit,
@@ -86,12 +87,12 @@ MARGIN_PX = 20
 IDENTITY_SEPARATOR = "  ·  "
 LINE_SEPARATOR = "\n"
 PRESSURE_SEPARATOR = "   "
-# The banner region is always this tall, occupied or not, so that nothing below it moves when a
-# banner appears -- a layout that reflows at the moment something has gone wrong is a layout
-# that gets misread (UI_PRINCIPLES.md 3.3). `tests/test_ui.py` asserts all three banners fit in
-# both languages, so a wording change that would overflow fails the suite rather than silently
-# clipping a warning.
-BANNER_AREA_PX = 220
+# Nothing below the banners may move during a session, because a layout that reflows at the
+# moment something has gone wrong is a layout that gets misread (UI_PRINCIPLES.md 3.3). Every
+# banner is settled before the session starts -- the text files, the driver, the fit-preview
+# switch -- so the banner region takes the space of the banners present, fixed from the first
+# refresh, and `refresh` refuses a banner that comes or goes after it. It used to reserve room
+# for all three, which was a quarter of a laptop screen left empty in almost every session.
 # The interruption line is reserved at one line; a test holds both languages' wording to it.
 ALERT_LINES = 1
 # What to do now has three lines at the headline size. A longer instruction is set at the next
@@ -252,13 +253,13 @@ class ExperimenterWindow(QWidget):
         self.fit_preview_banner.setText(self.text["banners"]["fit_preview"])
 
         self.banner_area = QWidget()
-        self.banner_area.setFixedHeight(BANNER_AREA_PX)
         banners = QVBoxLayout(self.banner_area)
         banners.setContentsMargins(0, 0, 0, 0)
         banners.addWidget(self.placeholder_banner)
         banners.addWidget(self.reduced_capability_banner)
         banners.addWidget(self.fit_preview_banner)
-        banners.addStretch(1)
+        # Which banners are up, from the first refresh on (see the note at the top).
+        self._banners_shown: tuple[bool, bool, bool] | None = None
 
     def _build_header(self) -> None:
         # Who and where, in the smallest size on the screen: it is looked up once at the start
@@ -322,8 +323,10 @@ class ExperimenterWindow(QWidget):
         self.hardware_title.setText(self.text["hardware"]["title"])
         self.garment = label(SIZE_BODY)
         self.pressures = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
-        self.faults = label(SIZE_SMALL, colour=DISCONNECTED_COLOUR)
-        self.faults.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        # Wrapped, never cut short: a fault is read once, in full, when it happens, and a
+        # tooltip is not somewhere a safety message can live.
+        self.faults = label(SIZE_SMALL, wrap=True, colour=DISCONNECTED_COLOUR)
+        self.faults.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         # One disconnect/reconnect button (SPEC.md 11) that says what it will do now.
         self.garment_button = button("")
         self.garment_button.clicked.connect(self._garment_clicked)
@@ -361,7 +364,7 @@ class ExperimenterWindow(QWidget):
         self.abort_button = button(controls["abort"])
         # The one control that ends the session. Coloured so it is found without reading, and
         # never mistaken for a routine one (UI_PRINCIPLES.md 3.4).
-        self.abort_button.setStyleSheet(emphasis_style(DISCONNECTED_COLOUR))
+        self.abort_button.setStyleSheet(emphasis_button_style(DISCONNECTED_COLOUR))
 
         self.proceed_button.clicked.connect(self.proceed_requested.emit)
         self.pause_button.clicked.connect(self.pause_requested.emit)
@@ -381,8 +384,10 @@ class ExperimenterWindow(QWidget):
             self.resume_button,
             self.discard_button,
             self.rebalance_button,
-            self.fit_accept_button,
+            # Re-run before Accept, as in the fit window and every dialog: the choice that
+            # goes on sits on the right (UI_PRINCIPLES.md 5.5, same thing in the same place).
             self.fit_rerun_button,
+            self.fit_accept_button,
             self.abort_button,
         )
         for index, widget in enumerate(ordered):
@@ -608,12 +613,24 @@ class ExperimenterWindow(QWidget):
         text = self.text
 
         # SPEC.md 12.4: persistent and unmissable while they apply, absent when they do not.
-        self.placeholder_banner.setVisible(bool(view["placeholder_text"]))
-        self.reduced_capability_banner.setText(
-            text["banners"]["reduced_capability"].format(value=view["garment_driver"])
+        shown = (bool(view["placeholder_text"]), bool(view["reduced_capability_device"]),
+                 bool(view["fit_preview_enabled"]))
+        if self._banners_shown is None:
+            self._banners_shown = shown
+        # Stage boundary (CLAUDE.md): a banner arriving mid-session would move everything
+        # below it, which the banner region no longer reserves room for.
+        assert shown == self._banners_shown, (
+            f"the banners changed during the session: {self._banners_shown} to {shown}"
         )
-        self.reduced_capability_banner.setVisible(bool(view["reduced_capability_device"]))
-        self.fit_preview_banner.setVisible(bool(view["fit_preview_enabled"]))
+        self.reduced_capability_banner.setText(
+            text["banners"]["reduced_capability"].format(
+                value=text["terms"]["garments"][view["garment_driver"]]
+            )
+        )
+        for banner, visible in zip((self.placeholder_banner, self.reduced_capability_banner,
+                                    self.fit_preview_banner), shown, strict=True):
+            banner.setVisible(visible)
+        self.banner_area.setVisible(any(shown))
 
         session_text = text["session"]
         limb = text["terms"]["limbs"][view["limb"]]
@@ -773,12 +790,8 @@ class ExperimenterWindow(QWidget):
         ]
         if withheld:
             lines.append(words["fault_withheld"].format(value=len(withheld)))
-        faults = LINE_SEPARATOR.join(lines)
-        self.faults.setText(
-            self.faults.fontMetrics().elidedText(faults, Qt.ElideRight, SIDE_COLUMN_PX)
-        )
-        self.faults.setToolTip(faults)
-        self.faults.setVisible(bool(faults))
+        self.faults.setText(LINE_SEPARATOR.join(lines))
+        self.faults.setVisible(bool(lines))
 
     def _apply_enabled(self) -> None:
         """Which controls do something now. Read from the view where it says, else pushed in.

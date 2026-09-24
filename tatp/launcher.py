@@ -183,7 +183,10 @@ class SessionDialog(QDialog):
         # No default (docs/LOG.md N6.14): defaulting to config/patterns/examples/ would quietly
         # run the provisional mockups in place of the real patterns (open item 5).
         self.pattern_folder = line_edit(SIZE_BODY)
-        self.pattern_folder.setPlaceholderText(words["no_pattern_folder"])
+        self.pattern_folder.setPlaceholderText(words["choose"])
+        # Why it is empty, under the form: as a placeholder it was cut off by the field.
+        self.pattern_folder_hint = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
+        self.pattern_folder_hint.setText(words["no_pattern_folder"])
 
         form = QFormLayout()
         form.setVerticalSpacing(ITEM_GAP_PX)
@@ -200,6 +203,7 @@ class SessionDialog(QDialog):
             caption = label(SIZE_SMALL, colour=SECONDARY)
             caption.setText(words[key])
             form.addRow(caption, widget)
+        form.addRow("", self.pattern_folder_hint)
 
         self.report = label(SIZE_BODY, wrap=True)
         self.check_button = button(words["check"], SIZE_BODY)
@@ -225,6 +229,8 @@ class SessionDialog(QDialog):
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         buttons.addWidget(self.close_button)
+        # Apart from the two that go forward, so Close is not pressed for Check.
+        buttons.addSpacing(GROUP_GAP_PX)
         buttons.addWidget(self.check_button)
         buttons.addWidget(self.start_button)
 

@@ -81,7 +81,8 @@ instructions:
   # Filamenten benämns med gramsiffran som står tryckt på dem (SPEC.md 8.1), kraften efter.
   apply_filament: Applicera filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen.
   # Ett drag på cirka 2 cm, aldrig upprepat: upprepning höjer smärtan (docs/research/RB2).
-  apply_brush: Borsta {region} zonen på plats {site} -- ett enda drag på cirka 2 cm.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  apply_brush: 'Borsta den {region} zonen på plats {site}: ett enda drag på cirka 2 cm.'
   mapping_path: Kartlägg bana {path}. Flytta 5 mm inåt vid varje signal och stanna när deltagaren markerar.
   # Läses högt före första banan. Kartläggningen instrueras muntligt och deltagaren svarar
   # muntligt, så det här är enda stället formuleringen finns -- det finns ingen deltagarskärm
@@ -117,6 +118,8 @@ instructions:
   touchcal_evenness: 'Beröringskalibrering: deltagaren får frågan om rörelsen känns jämn.'
   touchcal_preference: 'Beröringskalibrering, steg 6: deltagaren väljer en sorts beröring.'
   touchcal_fit_review: Skattningen i beröringskalibreringen är klar. Godkänn den, eller gör om proceduren.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  f40_fit_review: F40-beräkningen är klar. Godkänn den, eller gör om proceduren.
   touchcal_stage1_failed: >-
     Skattningen i beröringskalibreringen klarade inte kvalitetskontrollen ({value}). Gör om
     proceduren, eller godkänn den för att fortsätta med skattningen flaggad.
@@ -154,7 +157,8 @@ controls:
   start_block: Starta block
   pause: Pausa
   resume: Återuppta
-  discard_repeat: Kassera och upprepa senaste trial
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  discard_repeat: Kassera och upprepa senaste försöket
   abort: Avbryt sessionen
   note: Tidsstämplad anteckning
   connect: Anslut plagget
@@ -170,7 +174,9 @@ controls:
   distances: 'Kartläggningsavstånd (mm), mätta från mitten av den primära zonen:'
   enter_distances: Registrera avstånd
   open_distances: Kartläggningsavstånd…
-  cancel: Avbryt
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. Inte "Avbryt": bredvid
+  # "Avbryt sessionen" skulle de två knapparna börja med samma ord.
+  cancel: Tillbaka
 
 status:
   connected: Ansluten
@@ -191,9 +197,11 @@ status:
   # Visas så länge sessionen är avbruten (SPEC.md 13).
   interrupted_emergency_stop: NÖDSTOPP. Plagget är på noll. Tryck på Återuppta när deltagaren är redo.
   interrupted_pause: Pausad. Plagget är på noll. Tryck på Återuppta för att fortsätta.
-  discarded: Senaste trial kasserad. Den upprepas.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  discarded: Senaste försöket kasserat. Det upprepas.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   discarded_not_repeated: >-
-    Senaste trial kasserad. Gränsen för antal appliceringar är nådd, så den upprepas inte.
+    Senaste försöket kasserat. Gränsen för antal appliceringar är nådd, så det upprepas inte.
 
 warnings:
   experimenter_changed: >-
@@ -219,8 +227,9 @@ warnings:
   distance_implausible: >-
     Bana {path}: {value} mm ligger utanför det rimliga intervallet. Skriv samma värde igen för
     att bekräfta det, eller skriv det rättade värdet.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   catch_trials_felt: >-
-    Fler än tillåten andel av kontrolltrials utan tryck rapporterades som kända ({value}).
+    Fler än tillåten andel av kontrollförsöken utan tryck rapporterades som kända ({value}).
   schedule: 'Schemavarning, block {block}: {value}'
   no_response: Inget svar på {value} s.
   # SPEC.md 10.7 steg 5. Att höja bruset hjälper inte längre, så åtgärden är fysisk. Hörbar
@@ -237,9 +246,11 @@ warnings:
     och detta registreras.
 
 banners:
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. {value} är plaggets namn från
+  # terms.garments, som har egna parenteser.
   reduced_capability: >-
-    DENNA SESSION SAMLAR INTE IN GILTIG BERÖRINGSKALIBRERINGSDATA. Den anslutna enheten
-    ({value}) kan inte ställa tryck per kanal. Tiderna är verkliga; trycken är det inte.
+    DENNA SESSION SAMLAR INTE IN GILTIG BERÖRINGSKALIBRERINGSDATA. Den anslutna enheten kan
+    inte ställa tryck per kanal: {value}. Tiderna är verkliga; trycken är det inte.
   placeholder_text: >-
     DELTAGARSKÄRMARNA INNEHÅLLER FORTFARANDE PLATSHÅLLARTEXT. Kör inte en riktig deltagare.
   # SPEC.md 11.1. Omöjlig att missa, eftersom försöksledaren inte ska kunna slå på detta utan
@@ -253,13 +264,16 @@ dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.
   abort_reason: Orsak till avbrott
   # SPEC.md 15. Båda värdena formateras av sessionen från dess egen text.
-  resume_found: 'En oavslutad session hittades för denna deltagare. Genomfört: {completed}. Sensitiseringen började för {since_sensitisation} sedan. Återuppta den med den ursprungliga tidsplanen?'
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  resume_found: 'En oavslutad session hittades för denna deltagare. Genomfört: {completed}. {since_sensitisation} Återuppta den med den ursprungliga tidsplanen?'
   # De två värdena som fylls i resume_found: vad som genomförts, och hur länge sedan
   # sensitiseringen började (run_session.resume_summary). Fasnamnen kommer från `phases:` ovan.
   resume_blocks: block {value}
   resume_nothing_completed: inget ännu
-  resume_since_sensitisation: '{value} (timmar:minuter)'
-  resume_not_sensitised: '— den hade inte börjat än —'
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. Var och en en hel mening.
+  resume_since_sensitisation: 'Sensitiseringen började för {hours} h {minutes} min sedan.'
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  resume_not_sensitised: Sensitiseringen hade inte börjat.
   distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem nu, eller avsluta sessionen med dem flaggade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.

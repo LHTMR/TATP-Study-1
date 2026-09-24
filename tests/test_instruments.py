@@ -10,6 +10,7 @@ import shutil
 
 import pytest
 import yaml
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
@@ -206,6 +207,9 @@ def test_the_whole_ladder_is_in_view_at_the_lab_laptops_size(app, filaments):
     assert made.filament_scroll.verticalScrollBar().maximum() == 0, "nothing scrolled out"
     assert made.filament_scroll.horizontalScrollBar().maximum() == 0
     made.close()
+    # Deleted now, not at the garbage collector's timing inside some later test (LOG N7.I3).
+    made.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 @pytest.mark.parametrize(
