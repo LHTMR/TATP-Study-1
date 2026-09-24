@@ -123,6 +123,14 @@ instructions:
   # one condition is self-started, so any line about starting it would name that condition
   # (SPEC.md 16). A test holds the experimenter screen identical across the three.
   touch_start: 'Touch: the garment is being started.'
+  # The session sequencer (SPEC.md 2, 7.4). The software times and the experimenter launches;
+  # none of these names a condition, a pattern or anything about the touch that differs.
+  waiting: Waiting for the next scheduled step. The countdown shows when it is due.
+  capsaicin_remove: Remove the capsaicin, then press Start block to begin the post-sensitisation measures.
+  intervention_start: The intervention starts now. Press Start block to start the touch.
+  touch_block: 'Touch-rating block: the participant rates the touch.'
+  baseline_ratings: 'Baseline: the participant rates how they feel right now.'
+  intervention_end: The intervention has ended and the garment has been switched off.
 
 controls:
   start_block: Start block
@@ -209,7 +217,27 @@ dialogs:
   abort_confirm: Abort this session? All data collected so far is kept.
   abort_reason: Reason for aborting
   resume_found: An unfinished session was found for this participant, started {time} ago. Resume it?
+  # The two values filled into resume_found (SPEC.md 15): what was completed, and how long
+  # ago sensitisation began. Phase names come from `phases:` above.
+  resume_blocks: blocks {value}
+  resume_nothing_completed: nothing yet
+  resume_since_sensitisation: '{value} (hours:minutes)'
+  resume_not_sensitised: sensitisation had not begun, so setup starts again
   distances_outstanding: Mapping distances are still outstanding. Enter them now, or close the session with them flagged missing.
   fit_rerun_reason: Why are you re-running? Recorded with the discarded estimate, which is kept.
   fit_rerun_exhausted: The re-run limit for this procedure has been reached. This estimate will be used.
   error: Error
+
+preflight:
+  # What the launcher checks before a session starts (SPEC.md 11, 15, 17.5). A refusal stops
+  # the session; a warning is shown and the session may continue. {value} is filled in.
+  session_completed: Session {value} for this participant has already been completed. It will not be run again.
+  code_not_allocated: Participant code {value} is not in the allocation file. Check the code.
+  previous_session_missing: >-
+    No data was found for session {value} of this participant. This session can run, but its
+    first calibration starts from the configured filament instead of the previous session's
+    estimate, and the log records it.
+  session_aborted_before: >-
+    Session {value} for this participant was started before and aborted. A new session will be
+    recorded alongside it.
+  another_instance: Another session is already running from this data folder ({value}). Close it first.

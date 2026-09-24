@@ -69,6 +69,7 @@ class Rig(QObject):
         self.participant = participant
         self.experimenter = experimenter
         self.interruptions = Interruptions(session, participant, experimenter, self)
+        session.attach_interruptions(lambda: self.interruptions.active)
         # SPEC.md 10.5: the audible cue sounds with the visual one, from one signal, so no
         # protocol can show the one and forget the other.
         participant.warning_cue_shown.connect(session.audio.participant_cue)

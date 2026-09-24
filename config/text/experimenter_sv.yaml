@@ -121,6 +121,14 @@ instructions:
   # Visas i början av varje beröring i ALLA betingelser, och inget annat visas: bara en
   # betingelse startas av deltagaren, så en rad om starten skulle avslöja den (SPEC.md 16).
   touch_start: 'Beröring: plagget startas.'
+  # Sessionsförloppet (SPEC.md 2, 7.4). Programmet tar tid och försöksledaren startar; ingen
+  # av dessa nämner en betingelse, ett mönster eller något med beröringen som skiljer sig.
+  waiting: Väntar på nästa schemalagda steg. Nedräkningen visar när det ska starta.
+  capsaicin_remove: Ta bort capsaicinet och tryck sedan på Starta block för att börja mätningarna efter sensitiseringen.
+  intervention_start: Interventionen börjar nu. Tryck på Starta block för att starta beröringen.
+  touch_block: 'Skattningsblock för beröring: deltagaren skattar beröringen.'
+  baseline_ratings: 'Utgångsläge: deltagaren skattar hur hen känner sig just nu.'
+  intervention_end: Interventionen är slut och plagget har stängts av.
 
 controls:
   start_block: Starta block
@@ -206,7 +214,27 @@ dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.
   abort_reason: Orsak till avbrott
   resume_found: En oavslutad session hittades för denna deltagare, startad för {time} sedan. Återuppta den?
+  # De två värdena som fylls i resume_found (SPEC.md 15): vad som genomförts, och hur länge
+  # sedan sensitiseringen började. Fasnamnen kommer från `phases:` ovan.
+  resume_blocks: block {value}
+  resume_nothing_completed: inget ännu
+  resume_since_sensitisation: '{value} (timmar:minuter)'
+  resume_not_sensitised: sensitiseringen hade inte börjat, så förberedelserna börjar om
   distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem nu, eller avsluta sessionen med dem flaggade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
   error: Fel
+
+preflight:
+  # Vad startprogrammet kontrollerar innan en session startar (SPEC.md 11, 15, 17.5). En vägran
+  # stoppar sessionen; en varning visas och sessionen får fortsätta. {value} fylls i.
+  session_completed: Session {value} för denna deltagare är redan genomförd. Den körs inte igen.
+  code_not_allocated: Deltagarkoden {value} finns inte i allokeringsfilen. Kontrollera koden.
+  previous_session_missing: >-
+    Inga data hittades för session {value} för denna deltagare. Sessionen kan köras, men dess
+    första kalibrering börjar från det konfigurerade filamentet i stället för föregående
+    sessions skattning, och loggen registrerar det.
+  session_aborted_before: >-
+    Session {value} för denna deltagare har startats tidigare och avbrutits. En ny session
+    registreras vid sidan av den.
+  another_instance: En annan session körs redan från den här datamappen ({value}). Stäng den först.

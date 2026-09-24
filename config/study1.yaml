@@ -74,6 +74,9 @@ pinprick:
   n_sites: 8                         # site rotates on every application (SPEC.md 8.2)
   ordinal_rho_min: 0.3               # consistency check only; never gates eligibility, and
                                      # R^2 is deliberately not used (comparison doc 6.7)
+  primary_filament_label_g: "26"     # primary hyperalgesia, short protocol at pre-S, post-S and
+                                     # post-I: "a fixed 260 mN monofilament" (Bilaga 1 3.6.1),
+                                     # which is the 26 g (SPEC.md 8.1)
 
 brush:
   n_trials: 5                        # same structure as the short protocol (SPEC.md 8.3)
@@ -196,6 +199,20 @@ patterns:
   # condition. It is the ct_targeted condition's own pattern, which S may want to review
   # (docs/research/R31: it slightly favours ct_targeted in the pleasantness step).
   fixed_ct_pattern: sweep_03cms
+
+touch_block:
+  # A touch-rating block of the intervention, and the touch-calibration baseline (Bilaga 1 3.9,
+  # Table 2; docs/LOG.md N7.D3). Scale names are `vas` keys in config/text/participant_*.yaml.
+  # "Pleasantness and intensity are calculated as the median of 5 successive ratings", so the
+  # repeated scales are asked this many times each, in turn; the relaxation state is "presented
+  # once per time point" (SPEC.md 10.6). No interval is configured between ratings because
+  # none is specified: the touch is continuous and each rating follows the last.
+  n_repetitions: 5
+  repeated_scales: [intensity, pleasantness]
+  once_scales: [relaxation, alertness]
+  # Table 2's baseline relaxation and alertness, asked once at the end of touch calibration
+  # with the garment off. Baseline intensity and pleasantness are the calibration itself.
+  baseline_scales: [relaxation, alertness]
 
 training:
   # SPEC.md 10.9. The pressure the stop rehearsal runs the fixed pattern at -- its own value,

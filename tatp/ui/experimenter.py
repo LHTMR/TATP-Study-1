@@ -122,6 +122,8 @@ class ExperimenterWindow(QWidget):
         experimenter_text: dict,
         read_view: Callable[[], dict],
         parent: QWidget | None = None,
+        # Accepted so the session can pass it; Stream E's window redraws on it.
+        refresh_interval_s: float | None = None,
     ):
         super().__init__(parent)
         self.text = experimenter_text
@@ -202,6 +204,14 @@ class ExperimenterWindow(QWidget):
 
     def hide_fit_preview(self) -> None:
         """Take the preview down once the experimenter has decided."""
+
+    # Stubs of Stream E's mapping and zone-diagram calls, for the same reason.
+
+    def set_mapping_phases(self, phases: list[str]) -> None:
+        """The time points whose mapping distances may now be entered."""
+
+    def set_target(self, region: str, site: int | None = None, filament: bool = False) -> None:
+        """Mark where on the zone diagram the current stimulus goes."""
 
     # -- read from the session ----------------------------------------------------------
 
