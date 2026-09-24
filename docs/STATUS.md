@@ -45,6 +45,22 @@ scenarios) and 146 screens. It now takes about 4–5 minutes (`docs/LOG.md` N7.D
 
 ---
 
+## Paused, 24 Sep 2026 — pick up here
+
+- **Pattern designer**, on branch `accel/pattern-designer` (reviewed at `777701e`). It is not merged. A
+  stream agent was fixing the code-review findings in its worktree
+  (`.claude/worktrees/agent-adc72f6d445f361a6`) when the session paused. Check that worktree for
+  uncommitted work first. If the fixes are not all committed, finish them: lossless number
+  display, finite intervals (also in `patterns.from_text`), one designer window, invalid ids
+  disable the actions, sidecar comments kept on re-save, re-save to the opened path,
+  reference-CSV edge cases, the file-open errors shown as messages, and `mask_bits` moved into
+  config. Then run `make check`, merge into `accel/integration`, add LOG rows N7.P1 and on
+  (from the stream's report), and correct N7.E6 (the designer entry is no longer disabled).
+- **Done since the last status:**
+  - SOP.md and README.md are merged, with gaps marked [TBC].
+  - The remote reaches the participant window whichever window is active (N7.I1).
+  - The stop symbol is a red circle (N7.I2).
+
 ## Next steps
 
 Milestone 6 (§18):
