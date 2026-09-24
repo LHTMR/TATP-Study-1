@@ -38,6 +38,8 @@ To keep the blind:
 - Do not open the data files during a session, or at any time before S says so. They record which
   kind of touch was given.
 - Do not open the pattern folder or look at the file names in it.
+- Do not open **Design a pattern** in the launcher. It is S's tool for making the patterns, and
+  it shows their names and shapes. If you find it open, close it without reading it.
 
 ---
 
@@ -111,8 +113,8 @@ Saving changes `config/filaments.yaml` on the lab PC.
    `docs/SETUP.md` step 8.
 2. Run `python run_session.py`.
 3. The launcher opens with four entries: **Run a session**, **Instruments and environment**,
-   **Design a pattern** and **Preview schedule**. **Design a pattern** is greyed out. It is not
-   built yet.
+   **Design a pattern** and **Preview schedule**. **Design a pattern** is for S only: do not
+   open it (see "To keep the blind" above). Starting a session closes it if it was left open.
 
 ### 2.2 Before you open the session dialog
 

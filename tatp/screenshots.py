@@ -44,6 +44,7 @@ from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from tatp import config as cfg
+from tatp import pattern_design as pd
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
 from tatp.instruments import InstrumentsDialog
@@ -54,6 +55,7 @@ from tatp.touchcal import FitReady
 from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
+from tools.design_pattern import DesignerWindow
 
 SCREENSHOT_DIR = cfg.REPO_ROOT / "screenshots"
 MANIFEST_PATH = SCREENSHOT_DIR / "manifest.yaml"
@@ -117,6 +119,17 @@ SAMPLE_RESUME = {"completed": "setup, touch calibration, blocks 1-4",
 SAMPLE_SESSION_NUMBER = 1
 SAMPLE_LANGUAGES = ("sv", "en")
 SAMPLE_T_ZERO = datetime(2026, 9, 24, 9, 30)
+# The pattern designer's sample content. A moving example, and a name that is no condition's.
+SAMPLE_DESIGN_PATTERN = cfg.CONFIG_DIR / "patterns" / "examples" / "sweep_03cms.csv"
+SAMPLE_DESIGN_NAME = "sweep_draft"
+SAMPLE_DESIGN_IDS = (1, 2, 3, 4, 5)
+SAMPLE_DESIGN_INTERVAL_MS = 75.0
+SAMPLE_DESIGN_HOLD_MS = 150.0
+SAMPLE_TIMED_INTERVAL_MS = 100.0
+SAMPLE_TIMED = ((1, 0, 500), (2, 400, 900), (3, 800, 1300), (4, 1200, 1700), (5, 1600, 2100))
+SAMPLE_OFF_GRID = ((1, 0, 500), (2, 450, 900))
+SAMPLE_PLAYBACK_S = 1.25
+SAMPLE_PLAYBACK_ON = (2, 3)
 
 
 @dataclass(frozen=True)
@@ -612,8 +625,8 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     launcher = LauncherWindow(config, preflight=findings, build=no_session)
     yield Shot(
         f"experimenter_{language}_launcher",
-        f"The launcher's four entries (SPEC.md 4.1), Design a pattern disabled with its reason "
-        f"({language}).",
+        f"The launcher's four entries (SPEC.md 4.1), all enabled. Design a pattern says it is "
+        f"for S only, because it shows pattern names and shapes ({language}).",
         _grab_dialog(launcher),
     )
 
@@ -675,6 +688,115 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"({language}).",
         preview.grab(),
     )
+    yield from _designer_shots(config, language)
+
+
+def _designer_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
+    """The pattern designer (SPEC.md 12.2), launcher entry 3. For S, not a blinded experimenter.
+
+    Each state gets a fresh window so none inherits another's. The example patterns are read
+    from `config/patterns/examples/`, so a change to them changes these pictures, as it should.
+    """
+    def designer() -> DesignerWindow:
+        window = DesignerWindow(config.experimenter_text, config.hardware)
+        window.resize(WIDTH_PX, HEIGHT_PX)
+        return window
+
+    states: list[tuple[str, str, DesignerWindow]] = []
+
+    window = designer()
+    window.open_file(SAMPLE_DESIGN_PATTERN)
+    states.append((
+        "grid",
+        "An example pattern opened on the Grid tab: one row per row interval with its time, "
+        "one column per channel id, on cells filled. The timeline below draws two cycles "
+        "because it loops, the repeat fainter, and the line under it says it loads.",
+        window,
+    ))
+
+    window = designer()
+    window.clear()
+    window.name_field.setText(SAMPLE_DESIGN_NAME)
+    window.interval_field.setText(f"{SAMPLE_DESIGN_INTERVAL_MS:g}")
+    window.ids_field.setText(", ".join(map(str, SAMPLE_DESIGN_IDS)))
+    window.apply_channel_ids()
+    window.loop_box.setChecked(True)
+    window.tabs.setCurrentIndex(1)
+    window.set_entries(window.ordered, [(cid, SAMPLE_DESIGN_HOLD_MS) for cid in
+                                        SAMPLE_DESIGN_IDS])
+    window.delay_field.setText(f"{SAMPLE_DESIGN_INTERVAL_MS:g}")
+    window.mode.setCurrentIndex(window.mode.findData(pd.JOIN_HOLD))
+    window.convert_ordered()
+    states.append((
+        "ordered",
+        "Ordered channels: five channels with their hold times, the join-and-hold mode and "
+        "the delay, converted. The message says the grid was replaced, and the timeline "
+        "shows the overlapping sweep.",
+        window,
+    ))
+
+    window = designer()
+    window.clear()
+    window.name_field.setText(SAMPLE_DESIGN_NAME)
+    window.interval_field.setText(f"{SAMPLE_TIMED_INTERVAL_MS:g}")
+    window.ids_field.setText(", ".join(map(str, SAMPLE_DESIGN_IDS)))
+    window.apply_channel_ids()
+    window.tabs.setCurrentIndex(2)
+    window.set_entries(window.timed, SAMPLE_TIMED)
+    window.convert_timed()
+    states.append((
+        "timed",
+        "Timed channels: onset and offset per channel in ms, converted. Played once, so "
+        "the timeline draws one cycle.",
+        window,
+    ))
+    window = designer()
+    window.clear()
+    window.name_field.setText(SAMPLE_DESIGN_NAME)
+    window.interval_field.setText(f"{SAMPLE_TIMED_INTERVAL_MS:g}")
+    window.ids_field.setText(", ".join(map(str, SAMPLE_DESIGN_IDS)))
+    window.apply_channel_ids()
+    window.tabs.setCurrentIndex(2)
+    window.set_entries(window.timed, SAMPLE_TIMED)
+    window.convert_timed()
+    window.set_entries(window.timed, SAMPLE_OFF_GRID)
+    window.convert_timed()
+    states.append((
+        "off_grid",
+        "A timing off the row grid, refused in red with the reason and never rounded. The "
+        "grid converted before it is kept, unchanged, and still previewed.",
+        window,
+    ))
+
+    window = designer()
+    window.clear()
+    states.append((
+        "new",
+        "A new pattern: nothing filled in and nothing assumed. The line in red says why it "
+        "does not load yet, and Save, Export and Play are disabled.",
+        window,
+    ))
+
+    window = designer()
+    window.open_file(SAMPLE_DESIGN_PATTERN)
+    window.show_playback(SAMPLE_PLAYBACK_S, set(SAMPLE_PLAYBACK_ON))
+    window.stop_button.setEnabled(True)
+    states.append((
+        "playing",
+        "Playback on the mock garment: the cursor in amber on the timeline and the channels "
+        "on now named, their labels amber. Set directly rather than played, because a "
+        "running pattern would never be photographed at the same moment twice.",
+        window,
+    ))
+
+    for name, description, window in states:
+        pixmap = _grab(window)
+        assert pixmap.height() == HEIGHT_PX, (
+            f"experimenter_{language}_designer_{name} needs {pixmap.height()} px"
+        )
+        yield Shot(f"experimenter_{language}_designer_{name}", f"{description} ({language})",
+                   pixmap)
+        window.close()
 
 
 def shots(languages: tuple[str, ...] = LANGUAGES) -> Iterator[Shot]:

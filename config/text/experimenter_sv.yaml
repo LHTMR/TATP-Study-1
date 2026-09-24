@@ -328,7 +328,7 @@ launcher:
   instruments: Instrument och miljö
   instruments_detail: Skriv in vägda filamentkrafter och dagens rumstemperatur och luftfuktighet.
   design_pattern: Skapa ett mönster
-  design_pattern_detail: Inte tillgängligt än. Mönsterverktyget byggs i milstolpe 6; redigera mönstrens CSV-filer för hand tills dess.
+  design_pattern_detail: Skapa mönster för plagget, förhandsgranska dem och spara dem i en mönstermapp. Endast för S. Verktyget visar mönstrens namn och form, så en försöksledare som kör sessioner öppnar det aldrig.
   preview_schedule: Förhandsgranska schemat
   preview_schedule_detail: Sessionens tidslinje och dess varningar. Ingenting startas.
   environment_entered: 'Rummet {temperature} °C, {humidity} % RF, lämnas till nästa session.'
@@ -375,3 +375,92 @@ instruments:
   relative_humidity: 'Relativ luftfuktighet (%):'
   use_environment: Använd för nästa session
   invalid_number: '{value} är inte ett tal.'
+
+designer:
+  # SPEC.md 12.2: startvalet 3, tools/design_pattern.py. För S, inte för en blindad
+  # försöksledare (SPEC.md 16), så det får visa mönstrens namn, men ingen sträng här namnger en
+  # betingelse. Skrivet av bygget (docs/LOG.md N7.P1-N7.P9), inte hämtat ur etikdokumenten.
+  title: Mönsterverktyg
+  for_s_only: Endast för S. Verktyget visar mönstrens namn och form, så en försöksledare som kör sessioner öppnar det aldrig.
+  new: Nytt
+  open: Öppna mönster…
+  import_reference: Importera prototyp-CSV…
+  save: Spara…
+  export: Exportera kommandofil…
+  parameters: Mönster
+  name: Namn (även filnamnet)
+  row_interval_ms: Radintervall (ms)
+  channel_ids: Kanal-id (bitindex)
+  loop: Upprepas medan det är aktivt
+  descriptive: Endast beskrivande, valfritt
+  nominal_velocity_cm_s: Nominell hastighet (cm/s)
+  assumed_channel_spacing_cm: Kanalavstånd (cm)
+  overlap_rows: Överlapp (rader)
+  tab_grid: Rutnät
+  tab_ordered: Kanaler i ordning
+  tab_timed: Tidsatta kanaler
+  grid_hint: En rad per radintervall, en kolumn per kanal. Klicka på en cell för att slå på eller av den.
+  row_time: '{value} ms'
+  add_row: Lägg till rad
+  duplicate_row: Duplicera rad
+  remove_row: Ta bort rad
+  channel: Kanal
+  hold_ms: Hålltid (ms)
+  onset_ms: Start (ms)
+  offset_ms: Slut (ms)
+  add_channel: Lägg till kanal
+  remove_channel: Ta bort kanal
+  mode: Läge
+  # Prototypförrådets tre lägen (modular_approach/README.txt), och vad vart och ett gör.
+  modes:
+    sequential: I tur och ordning
+    join_hold: Ansluter och håller
+    join_stay: Ansluter och stannar
+  mode_hints:
+    sequential: Varje kanal slås på och av i tur och ordning. Nästa startar fördröjningen efter att den förra slutat.
+    join_hold: Varje kanal startar fördröjningen efter att den förra startat, och håller sin egen tid.
+    join_stay: Varje kanal startar fördröjningen efter att den förra startat, och alla slås av samtidigt.
+  delay_ms: Fördröjning (ms)
+  to_grid: Gör om till rutnät
+  converted: 'Omgjort till {value} rader. Rutnätet ersattes.'
+  preview: Förhandsgranskning
+  seconds: '{value} s'
+  play: Spela på det simulerade plagget
+  stop: Stoppa
+  playing: 'Spelas på det simulerade plagget. Kanaler på: {value}'
+  none_on: inga
+  stopped: Stoppat. Alla kanaler är av.
+  loads: 'Laddas: {rows} rader, en cykel {cycle} s, spelas en gång.'
+  loads_looped: 'Laddas: {rows} rader, en cykel {cycle} s, upprepas medan det är aktivt. Två cykler visas.'
+  saved: 'Sparade {value} och dess sidofil.'
+  exported: 'Exporterade {steps} steg till {value}. Prototypen spelar det en gång per exec och slår sedan av alla kanaler.'
+  column_ms_title: Importera prototyp-CSV
+  column_ms: 'Kolumnlängd (ms). Prototypens CSV anger ingen:'
+  import: Importera
+  cancel: Avbryt
+  overwrite_title: Ersätta mönstret?
+  overwrite: '{value} finns redan i mappen. Ersätta den och dess sidofil?'
+  replace: Ersätt
+  errors:
+    required: '{field}: inget ifyllt än.'
+    number: '{field}: {value} är inte ett tal.'
+    channel_ids: 'Kanal-id: {value} är inte en lista av heltal åtskilda med kommatecken.'
+    name: 'Namnet är också filnamnet: använd bara bokstäver, siffror, _ och -.'
+    interval: Radintervallet måste vara större än noll.
+    negative: '{value} ms är mindre än noll.'
+    off_grid: '{value} ms är inte ett helt antal rader om {interval} ms. Använd tider som ligger på rutnätet, eller ett annat radintervall.'
+    hold: 'Kanal {channel}: en hålltid på {value} ms måste vara större än noll.'
+    empty_span: 'Kanal {channel}: slutet, {offset} ms, måste komma efter starten, {onset} ms.'
+    unknown_channel: 'Kanal {channel} finns inte bland kanal-id.'
+    overlap: 'Kanal {channel}: två perioder möts eller överlappar, och rutnätet skulle slå ihop dem till en.'
+    nothing: Det finns inga kanaler att göra om.
+    not_loadable: 'Det skulle inte gå att ladda, så det kan inte sparas: {value}'
+    open_failed: 'Det går inte att ladda: {value}'
+    exists: '{value} finns redan.'
+    name_taken: 'Ett annat mönster i mappen, {value}, har redan det här namnet.'
+    folder_unreadable: 'Ett mönster som redan finns i mappen går inte att ladda: {value}'
+    ragged: 'Rad {line} har {value} celler, och första raden har {expected}.'
+    bit_range: 'Kanal {channel} är ingen bit i prototypens 32-bitarsmask, 0 till 31.'
+    not_whole_ms: 'Ett steg på {value} ms är inte ett helt antal millisekunder, vilket prototypen kräver.'
+    too_many_steps: '{value} steg, och prototypen lagrar högst {limit}.'
+    mock_channels: 'Det simulerade plagget har kanalerna {have}, och det här mönstret använder {value}.'
