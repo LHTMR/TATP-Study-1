@@ -83,6 +83,8 @@ BUTTON_LINE_WIDTH_PX = 3
 # "this is what you are feeling now", and anything brighter starts to read as a recommendation.
 BUTTON_EMPHASIS_WIDTH_PX = 9
 BUTTON_SYMBOL_POINT_SIZE = 52
+# The stop button's sticker disc, as a fraction of the button's shorter side.
+STOP_DISC_FRACTION = 0.8
 BUTTON_LABEL_POINT_SIZE = 20
 BUTTON_LABEL_GAP_PX = 22
 # The label may be wider than its button -- it is a phrase, the button is a symbol -- but not so
@@ -121,6 +123,7 @@ class _MessageScreen(QWidget):
         # The colour printed on that button (`responder.button_symbol_colours`), set by the
         # window from hardware.yaml.
         self.stop_colour = FOREGROUND
+        self.stop_disc: QColor | None = None
 
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
@@ -137,7 +140,12 @@ class _MessageScreen(QWidget):
         if self.stop_symbol is not None:
             painter.setRenderHint(QPainter.Antialiasing)
             _draw_symbol_button(
-                painter, self, _stop_button_rect(self), self.stop_symbol, self.stop_colour
+                painter,
+                self,
+                _stop_button_rect(self),
+                self.stop_symbol,
+                self.stop_colour,
+                self.stop_disc,
             )
         painter.end()
 
@@ -383,16 +391,32 @@ def _stop_button_rect(widget: QWidget) -> QRect:
 
 
 def _draw_symbol_button(
-    painter: QPainter, widget: QWidget, rect: QRect, symbol: str, colour: QColor
+    painter: QPainter,
+    widget: QWidget,
+    rect: QRect,
+    symbol: str,
+    colour: QColor,
+    disc: QColor | None = None,
 ) -> None:
-    """A button outline carrying its printed symbol, with no label: the text above names it."""
+    """A button outline carrying its printed symbol, with no label: the text above names it.
+
+    `disc` is the filled circle the symbol sits on, where the physical button has one -- the
+    lab remote's stop is a black "!" on a yellow sticker, and it should look like that.
+    """
     painter.setPen(QPen(FOREGROUND, BUTTON_LINE_WIDTH_PX))
     painter.setBrush(Qt.NoBrush)
     painter.drawRoundedRect(rect, BUTTON_RADIUS_PX, BUTTON_RADIUS_PX)
+    if disc is not None:
+        diameter = int(min(rect.width(), rect.height()) * STOP_DISC_FRACTION)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(disc)
+        painter.drawEllipse(rect.center(), diameter // 2, diameter // 2)
+        painter.setBrush(Qt.NoBrush)
     symbol_font = QFont(widget.font())
     symbol_font.setPointSize(BUTTON_SYMBOL_POINT_SIZE)
+    symbol_font.setBold(disc is not None)
     # Shrunk to fit if it is wider than the button: a symbol cut off at both edges stops
-    # being the symbol, and while it is a placeholder (local item L12) it must read as one.
+    # being the symbol.
     room = rect.width() - 2 * BUTTON_RADIUS_PX
     width = QFontMetrics(symbol_font).horizontalAdvance(symbol)
     if width > room:
@@ -481,8 +505,12 @@ class ParticipantWindow(QWidget):
         self._names = {key: name for name, key in QT_KEYS.items()}
 
         self.message = _MessageScreen()
+        responder_config = config.hardware["responder"]
         self.message.stop_colour = QColor(
-            config.hardware["responder"]["button_symbol_colours"]["emergency_stop"]
+            responder_config["button_symbol_colours"]["emergency_stop"]
+        )
+        self.message.stop_disc = QColor(
+            responder_config["button_symbol_discs"]["emergency_stop"]
         )
         self.cue = _CueScreen()
         self.vas = VasWidget(config.study1["vas"], responder, clock)

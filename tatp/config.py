@@ -159,6 +159,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "responder.button_symbols.confirm", str, None, None),
     ("hardware.yaml", "responder.button_symbols.emergency_stop", str, None, None),
     ("hardware.yaml", "responder.button_symbol_colours.emergency_stop", str, None, None),
+    ("hardware.yaml", "responder.button_symbol_discs.emergency_stop", str, None, None),
     ("hardware.yaml", "screens.participant_fullscreen", bool, None, None),
     ("hardware.yaml", "screens.experimenter_refresh_interval_s", NUMBER, 0, None),
     ("hardware.yaml", "screens.font_families[*]", str, None, None),

@@ -83,15 +83,18 @@ responder:
     increase: "›"
     confirm: "▶"
     # Drawn on ONE screen only, `screens.stop_rehearsal`, whose purpose is pointing at it
-    # (SPEC.md 10.9). Never drawn as an option on a response screen. What is physically on the
-    # R400's blank-screen button is not known to the build, and S may relabel it (docs/LOG.md
-    # N5.11), so this is a placeholder until S confirms it: a red circle, S's choice on 24 Sep
-    # 2026, in place of the word PLACEHOLDER. Local item L12 stays open.
-    emergency_stop: "⬤"
-  # The colour a symbol is drawn in, for a button whose printed symbol is coloured. Only the
-  # stop has one, and it belongs to the red-circle placeholder above (L12).
+    # (SPEC.md 10.9). Never drawn as an option on a response screen. The lab's R400 carries a
+    # sticker on its blank-screen button: a black "!" on a yellow disc (S's photo, 25 Sep
+    # 2026), which closes local item L12. The play button's sticker is a blue disc with an
+    # outline triangle, which the wording's "▶" approximates (docs/LOG.md N5.11).
+    emergency_stop: "!"
+  # For a button whose printed symbol is coloured: the symbol's colour, and the filled disc it
+  # sits on. Only the stop is drawn with one. The yellow is matched by eye to the photo.
   button_symbol_colours:
-    emergency_stop: "#d32f2f"
+    emergency_stop: "#141414"
+  button_symbol_discs:
+    emergency_stop: "#f2b21b"
+  emergency_stop_symbol_confirmed: 2026-09-25   # closes local item L12
 
 screens:
   # SPEC.md 20 item 9. Null means "primary screen, windowed", which is right for a

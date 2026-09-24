@@ -1,86 +1,72 @@
 # STATUS
 
-**Last updated:** 24 September 2026.
-**Milestone:** 6 (pilotable), next. Milestones 2–5 are merged and in `main`. Acceleration push
-under way (`CLAUDE.md`).
+**Last updated:** 25 September 2026.
+**Milestone:** 6 (pilotable), in progress. Milestones 2–5 are merged and in `main`. Acceleration
+push under way (`CLAUDE.md`).
 **Branch:** `accel/integration`.
 
 ---
 
 ## Where things stand
 
-**The build is lab-testable with the mock garment.** `run_session.py` with no arguments opens
-the launcher (§4.1). There, Run a session takes the session details, runs the preflight, offers
-resume, and runs the whole session. Named on the command line, it runs the same session
-directly:
+**The build runs a whole session**, against the mock garment or now the prototype sleeve.
+`run_session.py` with no arguments opens the launcher (§4.1): Run a session, Instruments,
+Design a pattern, Preview schedule. The command line runs a session directly:
 
 ```
 conda run -n tatp-study-1 python run_session.py --participant 01 --session 1 --experimenter SM --patterns config/patterns/examples
 ```
 
-The session runs, in order:
-- **Setup:** masking check, stop rehearsal, touch calibration.
-- **The three pain time points:** long, short and brush, with mapping at post-S and post-I.
-- **Sensitisation and capsaicin**, timed.
-- **The intervention:** twelve experimenter-launched blocks around the rekindle, with the
-  garment delivering the allocated condition.
-- **Crash recovery** through all of it.
+**Set up on the lab laptop, 25 Sep 2026** (`docs/LOG.md` N7.H1–N7.H3):
+- **The prototype sleeve drives for real** through `arduino_mosfet` on COM3. The channel bits
+  are mapped with S watching (N7.H2), and a live sweep was checked on the sleeve.
+- **Screens:** participant on the HP (index 1), experimenter on the laptop (index 0).
+- **Audio:** WASAPI at 48 kHz, the Bose headphones for the participant, the laptop speakers for
+  alerts.
+- **`garment.driver` is still `mock` in `hardware.yaml`.** To pilot on the sleeve, set it to
+  `arduino_mosfet`. Protocol B then runs in timing-only mode with the amber banner (§12.4).
 
-**`make check` passes:** 760 tests, ruff, the validator (34 checks, 0 skipped, 18 whole-session
-scenarios) and 146 screens. It now takes about 4–5 minutes (`docs/LOG.md` N7.D20).
+**Milestone 6 progress:** SOP.md and README.md are written (gaps marked [TBC]). The pattern
+designer is merged (N7.P1). The stop rehearsal shows the remote's real "!" sticker (N7.I4, L12
+closed).
+
+**`make check` passes:** 930 tests, ruff, the validator (34 checks, 0 skipped, 18
+whole-session scenarios) and 158 screens, in about 4 minutes. It runs timing-sensitive
+sessions, so run it on a quiet machine: two gates at once made tests stall.
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
-- **Screens:** 22 new participant screens (N7.C24), and 140 experimenter and launcher screens
-  (N7.E9), 70 per language.
-- **Blinding choices:** N7.E4 hides channel detail during the intervention; N7.D17 makes the
-  touch-start timing identical in every condition.
-- **Low-confidence decisions:** N7.C2, the stage-1 gate numbers; N7.B2 and N7.D8, the prior
-  offsets.
+- **Screens to review:** 22 new participant screens (N7.C24), 140 experimenter and launcher
+  screens (N7.E9), and 12 designer screens.
+- **The participant screen is 1920×1200, but the approved participant screenshots are
+  1280×800** (N7.H3). Look when testing.
+- **Blinding choices:** N7.E4 and N7.D17.
+- **Low-confidence decisions:** N7.C2, N7.B2 and N7.D8.
 - **Drafted wording:** N7.C1.
-- **Open items for S:**
-  - L12: the stop-button symbol, which currently shows `PLACEHOLDER` on the rehearsal screen.
-  - L11: the rehearsal pressure.
-  - L13: whether the noise ceiling also caps the cue.
-  - L10: the audio devices.
+- **Open items still S's:**
+  - L11, the rehearsal pressure. On the prototype it has no effect, because pressure is set by
+    hand.
+  - L13, whether the noise ceiling caps the cue.
+  - L3, metering the alert against the noise.
 
 ---
 
-## Paused, 24 Sep 2026 — pick up here
-
-- **Pattern designer**, on branch `accel/pattern-designer` (reviewed at `777701e`). It is not merged. A
-  stream agent was fixing the code-review findings in its worktree
-  (`.claude/worktrees/agent-adc72f6d445f361a6`) when the session paused. Check that worktree for
-  uncommitted work first. If the fixes are not all committed, finish them: lossless number
-  display, finite intervals (also in `patterns.from_text`), one designer window, invalid ids
-  disable the actions, sidecar comments kept on re-save, re-save to the opened path,
-  reference-CSV edge cases, the file-open errors shown as messages, and `mask_bits` moved into
-  config. Then run `make check`, merge into `accel/integration`, add LOG rows N7.P1 and on
-  (from the stream's report), and correct N7.E6 (the designer entry is no longer disabled).
-- **Done since the last status:**
-  - SOP.md and README.md are merged, with gaps marked [TBC].
-  - The remote reaches the participant window whichever window is active (N7.I1).
-  - The stop symbol is a red circle (N7.I2).
-
 ## Next steps
 
-Milestone 6 (§18):
-
-1. **Run a real session on the lab PC.** Go through it by hand with the mock garment and fix
-   what a person finds that the validator cannot.
-2. **Write `SOP.md` and update `README.md`.** The SOP covers:
-   - the lab session step by step;
-   - the manual data transfer (N4.1);
-   - what each banner and alert means.
-3. **The pattern designer** (§12.2, launcher entry 3), which is still disabled. Also the VAS
-   training screens (§10.6, `training.*`), which nothing presents yet.
+1. **Pilot a session on the sleeve by hand**, with `garment.driver: arduino_mosfet`, and fix
+   what a person finds that the validator cannot. In particular, try the remote routing
+   (N7.I1) and check that the experimenter alerts are inaudible over the noise.
+2. **Decide how a session selects the prototype driver.** Today it is an edit to
+   `hardware.yaml`. A launcher field or a `--garment` option would avoid editing config on the
+   lab PC; the validator and tests always use the mock.
+3. **The VAS training screens** (§10.6, `training.*`), which nothing presents yet (SOP TBC 12).
 4. **Freeze the screenshots** (`make shots ARGS="--freeze"`), once S has reviewed them.
-5. **Run the adversarial review** (spec-review, §17.6) over the whole build.
+5. **Run the adversarial review** (spec-review, §17.6) over the whole build, then merge to `main`.
 
 ---
 
 ## Later
 
-- **Hardware bring-up (§18.2):**
-  - the real drivers (open item 14);
+- **Hardware bring-up for the valve garment (§18.2):**
+  - `arduino_valves.py` (open item 14);
   - the rate limit (L2) and the inflation rates (item 3);
-  - `HARDWARE_BRINGUP.md`.
+  - `HARDWARE_BRINGUP.md`, starting from `tools/garment_bits.py` and N7.H2.
