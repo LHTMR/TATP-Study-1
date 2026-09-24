@@ -19,6 +19,9 @@
 #                     fits until the set is weighed (SPEC.md 8.1).
 # `force_measured_mn` What the code uses where it exists. Filled in by the instruments module
 #                     (launcher entry 2) from a precision balance.
+# `weighed_date`      When THAT filament was weighed, ISO date. Written with its force, and
+#                     only when the force changes, so re-weighing one filament does not
+#                     re-date the rest.
 #
 # There is deliberately no third force column. An earlier version of this file carried a
 # `force_manual_mn` and a separately-rounded `force_nominal_mn`; the chart has one manufacturer
@@ -39,27 +42,27 @@
 # LIST WHATEVER IS ACTUALLY HELD. All twenty are listed because all twenty are held. Delete the
 # row for any that is later lost or damaged -- nothing downstream assumes a particular ladder.
 
-weighing_date: null   # ISO date, written by the instruments module
+weighing_date: null   # ISO date, the latest `weighed_date` below, written by the instruments module
 weighing_balance: null   # free text: which balance, so the measurement is traceable
 
 filaments:
-  - {label_g: "0.008", size: "1.65", force_nominal_mn:    0.08, force_measured_mn: null}
-  - {label_g:  "0.02", size: "2.36", force_nominal_mn:    0.20, force_measured_mn: null}
-  - {label_g:  "0.04", size: "2.44", force_nominal_mn:    0.40, force_measured_mn: null}
-  - {label_g:  "0.07", size: "2.83", force_nominal_mn:    0.70, force_measured_mn: null}
-  - {label_g:  "0.16", size: "3.22", force_nominal_mn:    1.6,  force_measured_mn: null}
-  - {label_g:  "0.40", size: "3.61", force_nominal_mn:    3.9,  force_measured_mn: null}
-  - {label_g:  "0.60", size: "3.84", force_nominal_mn:    5.9,  force_measured_mn: null}
-  - {label_g:   "1.0", size: "4.08", force_nominal_mn:    9.8,  force_measured_mn: null}
-  - {label_g:   "1.4", size: "4.17", force_nominal_mn:   13.7,  force_measured_mn: null}
-  - {label_g:   "2.0", size: "4.31", force_nominal_mn:   19.6,  force_measured_mn: null}
-  - {label_g:   "4.0", size: "4.56", force_nominal_mn:   39.2,  force_measured_mn: null}
-  - {label_g:   "6.0", size: "4.74", force_nominal_mn:   58.8,  force_measured_mn: null}
-  - {label_g:   "8.0", size: "4.93", force_nominal_mn:   78.4,  force_measured_mn: null}
-  - {label_g:    "10", size: "5.07", force_nominal_mn:   98.0,  force_measured_mn: null}
-  - {label_g:    "15", size: "5.18", force_nominal_mn:  147.0,  force_measured_mn: null}
-  - {label_g:    "26", size: "5.46", force_nominal_mn:  255.0,  force_measured_mn: null}
-  - {label_g:    "60", size: "5.88", force_nominal_mn:  588.0,  force_measured_mn: null}
-  - {label_g:   "100", size: "6.10", force_nominal_mn:  980.0,  force_measured_mn: null}
-  - {label_g:   "180", size: "6.45", force_nominal_mn: 1760.0,  force_measured_mn: null}
-  - {label_g:   "300", size: "6.65", force_nominal_mn: 2940.0,  force_measured_mn: null}
+  - {label_g: "0.008", size: "1.65", force_nominal_mn:    0.08, force_measured_mn: null, weighed_date: null}
+  - {label_g:  "0.02", size: "2.36", force_nominal_mn:    0.20, force_measured_mn: null, weighed_date: null}
+  - {label_g:  "0.04", size: "2.44", force_nominal_mn:    0.40, force_measured_mn: null, weighed_date: null}
+  - {label_g:  "0.07", size: "2.83", force_nominal_mn:    0.70, force_measured_mn: null, weighed_date: null}
+  - {label_g:  "0.16", size: "3.22", force_nominal_mn:    1.6,  force_measured_mn: null, weighed_date: null}
+  - {label_g:  "0.40", size: "3.61", force_nominal_mn:    3.9,  force_measured_mn: null, weighed_date: null}
+  - {label_g:  "0.60", size: "3.84", force_nominal_mn:    5.9,  force_measured_mn: null, weighed_date: null}
+  - {label_g:   "1.0", size: "4.08", force_nominal_mn:    9.8,  force_measured_mn: null, weighed_date: null}
+  - {label_g:   "1.4", size: "4.17", force_nominal_mn:   13.7,  force_measured_mn: null, weighed_date: null}
+  - {label_g:   "2.0", size: "4.31", force_nominal_mn:   19.6,  force_measured_mn: null, weighed_date: null}
+  - {label_g:   "4.0", size: "4.56", force_nominal_mn:   39.2,  force_measured_mn: null, weighed_date: null}
+  - {label_g:   "6.0", size: "4.74", force_nominal_mn:   58.8,  force_measured_mn: null, weighed_date: null}
+  - {label_g:   "8.0", size: "4.93", force_nominal_mn:   78.4,  force_measured_mn: null, weighed_date: null}
+  - {label_g:    "10", size: "5.07", force_nominal_mn:   98.0,  force_measured_mn: null, weighed_date: null}
+  - {label_g:    "15", size: "5.18", force_nominal_mn:  147.0,  force_measured_mn: null, weighed_date: null}
+  - {label_g:    "26", size: "5.46", force_nominal_mn:  255.0,  force_measured_mn: null, weighed_date: null}
+  - {label_g:    "60", size: "5.88", force_nominal_mn:  588.0,  force_measured_mn: null, weighed_date: null}
+  - {label_g:   "100", size: "6.10", force_nominal_mn:  980.0,  force_measured_mn: null, weighed_date: null}
+  - {label_g:   "180", size: "6.45", force_nominal_mn: 1760.0,  force_measured_mn: null, weighed_date: null}
+  - {label_g:   "300", size: "6.65", force_nominal_mn: 2940.0,  force_measured_mn: null, weighed_date: null}

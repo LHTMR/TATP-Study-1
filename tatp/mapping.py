@@ -112,6 +112,26 @@ class MappingLedger(QObject):
         if path in point.distances and path not in point.rows:
             self._write_path(phase, point, path)
 
+    def restore(
+        self,
+        phase: str,
+        starts: dict[int, tuple[str, float | None]],
+        distances: dict[int, tuple[float, str]],
+    ) -> None:
+        """A time point carried over from a crashed session (SPEC.md 15, `tatp/resume.py`).
+
+        Its paths were started, and some distances accepted, in the earlier files; those rows
+        are already written there, so they are marked written here. What is still missing can
+        be entered in this session, and the area is written when the last one arrives.
+        """
+        self.time_points[phase] = _TimePoint(
+            self.n_paths, starts=dict(starts), distances=dict(distances), rows=set(distances)
+        )
+        self.session.log(
+            "mapping_restored", severity="warning",
+            detail=f"{phase}: {len(distances)} of {self.n_paths} distances already recorded",
+        )
+
     # -- the experimenter's entries ----------------------------------------------------
 
     def enter(self, phase: str, distances: Sequence[float | None]) -> None:

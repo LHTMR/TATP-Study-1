@@ -23,9 +23,10 @@ not changed since someone said it was. The blinding check that matters is
 `tests/test_blinding_text.py`; the manifest description is what a reviewer reads to decide
 whether the picture matches the intent.
 
-Not every state SPEC.md 17.4 lists exists yet -- the zone diagram, the hardware panel and the
-abort and error dialogs are Milestone 5. The catalogue holds what the software can actually
-show, so a manifest entry always corresponds to a real screen.
+The catalogue holds what the software can actually show, so a manifest entry always
+corresponds to a real screen. The experimenter states are built from a hand-made view plus
+fixed sample content (the `SAMPLE_*` constants), because the states worth photographing -- a
+block overdue, a stop pressed, a fit on screen -- are the ones a real session reaches rarely.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ import argparse
 import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import datetime
 from fnmatch import fnmatch
 
 import numpy as np
@@ -42,8 +44,13 @@ from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from tatp import config as cfg
+from tatp import touchcal_maths as maths
 from tatp.clock import Clock
+from tatp.instruments import InstrumentsDialog
+from tatp.launcher import WARN, LauncherWindow
+from tatp.pinprick import F40Fit, LongResult
 from tatp.responder import Action, Responder
+from tatp.touchcal import FitReady
 from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -70,6 +77,46 @@ VARIANT_SCALE = "pain"
 MARKER_POSITIONS = (5.0, 50.0, 95.0)
 # The `choices` keys whose two options are two stimuli, so each button is emphasised in turn.
 PAIRED_CHOICES = ("comparison",)
+
+# -- sample content for the experimenter screens ---------------------------------------------
+# What a session would push into the window, fixed so each picture is the same every run. None
+# of it is a study parameter: it is the content of a photograph (SPEC.md 4.2).
+DIALOG_WIDTH_PX = 720
+SAMPLE_ELAPSED_S = 3725.0
+SAMPLE_SITE = 3
+SAMPLE_CHANNEL = 2
+SAMPLE_PATH = "lateral"
+SAMPLE_DISTANCES = ("42", "37,5")
+SAMPLE_BLOCK = {"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch"}
+SAMPLE_DUE_IN_S = 245.0
+SAMPLE_DUE_NOW_S = -5.0
+SAMPLE_OVERDUE_S = -420.0
+SAMPLE_HARDWARE = {"connected": True, "faults": [], "channel_pressure_kpa": None}
+SAMPLE_PRESSURES_KPA = {1: 38.5, 2: 41.0, 3: 40.0, 4: 39.5, 5: 42.0}
+SAMPLE_FAULT = "channel 4: valve did not report"
+SAMPLE_ERROR = "hardware.yaml: required key 'garment.driver' is missing"
+SAMPLE_F40 = {
+    "run_index": 1, "filament": "26", "filament_mn": 255.0, "f40_mn": 321.4, "total": 14,
+    "measure": 9, "rho": 0.71, "slope": 51.6, "target": 40.0,
+    "points": ((147.0, 23.5), (147.0, 28.0), (255.0, 36.5), (255.0, 41.0), (588.0, 58.5),
+               (588.0, 52.0), (98.0, 18.0), (98.0, 14.5), (255.0, 39.0)),
+}
+SAMPLE_TOUCH = {
+    "run_index": 2, "intercept": -41.5, "slope": 52.0, "r_squared": 0.87, "residual_sd": 6.4,
+    "span": 62.6, "rho": 0.91, "bracket": (9.0, 150.0), "p": (15.9, 24.6, 145.0),
+    "points": ((9.0, 8.5, False), (18.0, 22.0, False), (30.0, 35.5, False),
+               (0.0, 2.0, True), (55.0, 50.0, False), (90.0, 58.5, False),
+               (150.0, 71.0, False), (0.0, 0.0, True), (120.0, 69.0, False)),
+}
+SAMPLE_PARTICIPANT = "07"
+SAMPLE_INITIALS = "SM"
+SAMPLE_PATTERN_FOLDER = "config/patterns/examples"
+SAMPLE_DATA_FOLDER = "data"
+SAMPLE_RESUME = {"completed": "setup, touch calibration, blocks 1-4",
+                 "since_sensitisation": "1 h 12 min"}
+SAMPLE_SESSION_NUMBER = 1
+SAMPLE_LANGUAGES = ("sv", "en")
+SAMPLE_T_ZERO = datetime(2026, 9, 24, 9, 30)
 
 
 @dataclass(frozen=True)
@@ -115,6 +162,10 @@ def _experimenter_view(**overrides) -> dict:
         "placeholder_text": False,
         "reduced_capability_device": False,
         "unresolved_open_items": [],
+        "fit_preview_enabled": False,
+        "next_event": None,
+        "interruption": None,
+        "hardware": {"connected": True, "faults": [], "channel_pressure_kpa": None},
     }
     view.update(overrides)
     return view
@@ -265,41 +316,365 @@ def _vas_variant_shots(window: ParticipantWindow, language: str) -> Iterator[Sho
         )
 
 
-def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
-    view = _experimenter_view()
-    window = ExperimenterWindow(config.experimenter_text, lambda: view)
+def _sample_f40_fit() -> F40Fit:
+    sample = SAMPLE_F40
+    result = LongResult(
+        phase="pre_sensitisation", region="primary", run_index=sample["run_index"],
+        start_filament_label_g=sample["filament"], start_source="config_default",
+        f40_mn=sample["f40_mn"], chosen_filament_label_g=sample["filament"],
+        chosen_force_mn=sample["filament_mn"], out_of_range=False, out_of_range_direction="",
+        capped=False, applications_total=sample["total"],
+        applications_measure=sample["measure"], ordinal_rho=sample["rho"],
+    )
+    return F40Fit(result, sample["slope"], sample["target"], sample["points"])
 
-    states = {
+
+def _sample_touch_fit() -> FitReady:
+    sample = SAMPLE_TOUCH
+    fit = maths.RatingFit(
+        fit_form=maths.LOG_PRESSURE, intercept=sample["intercept"], slope=sample["slope"],
+        r_squared=sample["r_squared"], residual_sd=sample["residual_sd"],
+        span_vas=sample["span"], spearman_rho=sample["rho"],
+        bracket_min_kpa=sample["bracket"][0], bracket_max_kpa=sample["bracket"][-1],
+    )
+    return FitReady(
+        run_index=sample["run_index"], points=sample["points"], fit=fit,
+        r_squared=sample["r_squared"], residual_sd=sample["residual_sd"], monotonic=True,
+        stage1_pass=True, stage1_failures=(), p20_kpa=sample["p"][0], p30_kpa=sample["p"][1],
+        p80_kpa=sample["p"][-1],
+    )
+
+
+def _experimenter_states(text: dict) -> dict:
+    """Every state of the window: (description, view overrides, what the protocol pushes in).
+
+    What the protocol pushes -- the instruction, the status, the target, the awaited actions --
+    is a function of the window, applied after a fresh window is built for each state so no
+    state inherits another's.
+    """
+    instructions = text["instructions"]
+    filament = SAMPLE_F40["filament"]
+    apply_filament = instructions["apply_filament"].format(
+        filament=filament, force_mn=f"{SAMPLE_F40['filament_mn']:g}", site=SAMPLE_SITE,
+        region=text["terms"]["regions"]["primary"],
+    )
+    apply_brush = instructions["apply_brush"].format(
+        site=SAMPLE_SITE, region=text["terms"]["regions"]["secondary"]
+    )
+    path = text["terms"]["mapping_paths"][SAMPLE_PATH]
+    upcoming = {**SAMPLE_BLOCK, "due_in_s": SAMPLE_DUE_IN_S, "overdue": False}
+
+    def pinprick(window):
+        window.set_instruction(apply_filament)
+        window.set_target("primary", SAMPLE_SITE, filament=True)
+        window.set_status(instructions["await_participant"])
+
+    def ready(window):
+        window.set_instruction(instructions["ready"])
+
+    return {
         "plain": (
-            "No banners, no open items -- what a correctly configured session shows.",
-            {},
+            "No banners, no open items, nothing scheduled -- a correctly configured session "
+            "at setup. Controls along the bottom, Resume, Rebalance and the fit choice "
+            "disabled; the zone diagram with no zone marked; the hardware panel connected "
+            "with no pressures.",
+            {}, None,
         ),
         "placeholder_banner": (
             "The unapproved-wording banner (SPEC.md 12.4), red and unmissable.",
-            {"placeholder_text": True},
+            {"placeholder_text": True}, None,
         ),
         "reduced_capability_banner": (
             "The reduced-capability banner naming the driver in use (SPEC.md 12.4).",
-            {"reduced_capability_device": True},
+            {"reduced_capability_device": True}, None,
+        ),
+        "all_banners": (
+            "All three banners at once: nothing below the reserved region has moved "
+            "(UI_PRINCIPLES.md 3.3). The fit-preview banner is amber like the "
+            "reduced-capability one (SPEC.md 11.1).",
+            {"placeholder_text": True, "reduced_capability_device": True,
+             "fit_preview_enabled": True}, None,
         ),
         "open_items": (
             "Unresolved open items listed for the experimenter (SPEC.md 20).",
-            {"unresolved_open_items": ["L3 audio levels", "5 patterns"]},
+            {"unresolved_open_items": ["L3 audio levels", "5 patterns"]}, None,
         ),
         "disconnected": (
-            "The garment reported disconnected.",
-            {"garment_connected": False},
+            "The garment reported disconnected: red and bold in the hardware panel, Connect "
+            "enabled and Disconnect not.",
+            {"hardware": {**SAMPLE_HARDWARE, "connected": False}}, None,
+        ),
+        "pinprick_primary": (
+            "A pinprick application: the filament by its gram label, the primary zone "
+            "outlined on the diagram with its site beside it, the technique text below, and "
+            "the response pending -- never its value.",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S}, pinprick,
+        ),
+        "brush_secondary": (
+            "A brush stroke in the secondary zone: the dashed ellipse outlined.",
+            {"phase": "post_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: (
+                window.set_instruction(apply_brush),
+                window.set_target("secondary", SAMPLE_SITE),
+            ),
+        ),
+        "mapping": (
+            "A mapping path: the secondary zone outlined without a site, the technique text "
+            "shown because a filament is used, and Mapping distances enabled now that a "
+            "phase has been mapped.",
+            {"phase": "post_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: (
+                window.set_instruction(instructions["mapping_path"].format(path=path)),
+                window.set_target("secondary", filament=True),
+                window.set_mapping_phases(["post_sensitisation"]),
+            ),
+        ),
+        "block_pinprick": (
+            "A pinprick block in the intervention: the countdown to the next block in grey, "
+            "no pressures (hidden for blinding, SPEC.md 16) and no placeholder in their place.",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S, "next_event": upcoming},
+            pinprick,
+        ),
+        "block_touch": (
+            "A touch block in the intervention: the one line shown at every touch start in "
+            "every condition, and nothing else that could differ between them.",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: window.set_instruction(instructions["touch_start"]),
+        ),
+        "intervention_fault": (
+            "A garment fault during the intervention: shown in red, counted, and without the "
+            "channel, which could say which pattern is running (SPEC.md 16).",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
+             "hardware": {**SAMPLE_HARDWARE, "faults": [SAMPLE_FAULT]}},
+            lambda window: window.set_instruction(instructions["touch_start"]),
+        ),
+        "countdown": (
+            "Waiting for the next block: 'Next: block 3 (touch) in 04:05', grey.",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S, "next_event": upcoming},
+            ready,
+        ),
+        "block_due": (
+            "The block is due: amber and bold in the same place as the countdown.",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
+             "next_event": {**SAMPLE_BLOCK, "due_in_s": SAMPLE_DUE_NOW_S, "overdue": False}},
+            ready,
+        ),
+        "block_overdue": (
+            "The block is overdue: red and bold, OVERDUE in capitals.",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
+             "next_event": {**SAMPLE_BLOCK, "due_in_s": SAMPLE_OVERDUE_S, "overdue": True}},
+            ready,
+        ),
+        "rekindle_due": (
+            "The rekindle is due: a timed event that is not a block, named by its phase.",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
+             "next_event": {"kind": "rekindle", "label_key": "rekindle", "block_index": None,
+                            "block_type": None, "due_in_s": SAMPLE_DUE_NOW_S,
+                            "overdue": False}},
+            ready,
+        ),
+        "interrupted_emergency_stop": (
+            "The participant pressed the stop: the red line under the phase, Resume and "
+            "Abort the only controls enabled, and nothing else moved.",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
+             "interruption": "emergency_stop"},
+            pinprick,
+        ),
+        "interrupted_pause": (
+            "The experimenter's pause: the same line in amber, Resume enabled.",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
+             "interruption": "pause"},
+            ready,
+        ),
+        "hardware_pressures": (
+            "Touch calibration: the hardware panel with every channel's pressure and one "
+            "fault, in red.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
+             "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA,
+                          "faults": [SAMPLE_FAULT]}},
+            lambda window: window.set_instruction(
+                instructions["touchcal_match"].format(channel=SAMPLE_CHANNEL)
+            ),
+        ),
+        "long_instruction": (
+            "The longest instruction the session gives, set down the type scale so it fits "
+            "its region: nothing below it has moved, and the controls are where they always "
+            "are.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: window.set_instruction(
+                instructions["touchcal_stage1_exhausted"].format(
+                    value=text["terms"]["stage1"]["flat"]
+                )
+            ),
+        ),
+        "awaiting_rebalance": (
+            "The evenness question answered 'uneven': Rebalance and Start block both "
+            "enabled, because the procedure waits on either.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
+             "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA}},
+            lambda window: (
+                window.set_instruction(instructions["touchcal_uneven"]),
+                window.set_actions_enabled(rebalance=True),
+            ),
+        ),
+        "fit_preview_f40": (
+            "The main window while the F40 fit preview (SPEC.md 11.1) is open, only with "
+            "fit_preview.enabled: the banner saying what it costs, Accept and Re-run enabled, "
+            "and no rating anywhere on this window -- they are in the preview window.",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
+             "fit_preview_enabled": True},
+            lambda window: window.show_fit_preview(_sample_f40_fit()),
+        ),
+        "fit_preview_touch": (
+            "The main window while the touch-calibration fit preview is open: its instruction "
+            "at a smaller size because it is long, Accept and Re-run enabled.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
+             "fit_preview_enabled": True},
+            lambda window: (
+                window.set_instruction(instructions["touchcal_fit_review"]),
+                window.show_fit_preview(_sample_touch_fit()),
+            ),
         ),
     }
-    for name, (description, overrides) in states.items():
-        view.clear()
-        view.update(_experimenter_view(**overrides))
+
+
+def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
+    text = config.experimenter_text
+    for name, (description, overrides, push) in _experimenter_states(text).items():
+        view = _experimenter_view(**overrides)
+        window = ExperimenterWindow(text, lambda view=view: view)
+        # Sized first, so a long instruction is fitted to the width it will be drawn at.
+        window.resize(WIDTH_PX, HEIGHT_PX)
+        if push is not None:
+            push(window)
         window.refresh()
-        yield Shot(
-            f"experimenter_{language}_{name}",
-            f"{description} ({language})",
-            _grab(window),
+        pixmap = _grab(window)
+        # A layout whose minimum is taller than the screen grows the grab rather than failing,
+        # so a state that no longer fits would pass as a differently-sized picture.
+        assert pixmap.height() == HEIGHT_PX, (
+            f"experimenter_{language}_{name} needs {pixmap.height()} px of {HEIGHT_PX}"
         )
+        yield Shot(f"experimenter_{language}_{name}", f"{description} ({language})", pixmap)
+        if window.fit_preview.isVisible():
+            yield Shot(
+                f"experimenter_{language}_{name}_window",
+                f"The fit preview window itself for `{name}`: the plot, the quality, what the "
+                f"session will use, and Accept / Re-run ({language}).",
+                window.fit_preview.grab(),
+            )
+            window.hide_fit_preview()
+
+    window = ExperimenterWindow(text, _experimenter_view)
+    dialogs = {
+        "abort_dialog": (
+            "The abort confirmation: what happens to the data, a reason field, and Abort "
+            "disabled until a reason is typed.",
+            window.abort_dialog(),
+        ),
+        "rerun_dialog": (
+            "The re-run reason, asked before a fit is discarded (SPEC.md 11.1).",
+            window.rerun_dialog(),
+        ),
+        "error_dialog": (
+            "The error dialog: a red title and the message as raised.",
+            window.error_dialog(SAMPLE_ERROR),
+        ),
+    }
+    window.set_mapping_phases(["post_sensitisation", "post_intervention"])
+    for field, typed in zip(window.distances.fields, SAMPLE_DISTANCES, strict=False):
+        field.setText(typed)
+    dialogs["distances_dialog"] = (
+        "The mapping distances window (SPEC.md 8.4): the latest mapped phase selected, one "
+        "field per path in path order, two typed with either decimal mark. Non-modal: the "
+        "session runs on behind it.",
+        window.distances,
+    )
+    for name, (description, dialog) in dialogs.items():
+        yield Shot(f"experimenter_{language}_{name}", f"{description} ({language})",
+                   _grab_dialog(dialog))
+
+    yield from _launcher_shots(config, language)
+
+
+def _grab_dialog(dialog: QWidget) -> QPixmap:
+    dialog.resize(DIALOG_WIDTH_PX, dialog.sizeHint().height())
+    return dialog.grab()
+
+
+def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
+    """The launcher and its dialogs (SPEC.md 4.1). Nothing is started and nothing is written."""
+    def no_session(config, args):
+        raise AssertionError("the screenshot run never starts a session")
+
+    def findings(config, args):
+        return [(WARN, "warnings.experimenter_changed", "")]
+
+    launcher = LauncherWindow(config, preflight=findings, build=no_session)
+    yield Shot(
+        f"experimenter_{language}_launcher",
+        f"The launcher's four entries (SPEC.md 4.1), Design a pattern disabled with its reason "
+        f"({language}).",
+        _grab_dialog(launcher),
+    )
+
+    dialog = launcher.session_dialog()
+    # The configured folder resolves to an absolute path that differs between machines.
+    dialog.data_folder.setText(SAMPLE_DATA_FOLDER)
+    yield Shot(
+        f"experimenter_{language}_launcher_session",
+        f"The session dialog as it opens: the data folder filled in from config; the session "
+        f"number, both languages and the pattern folder unchosen, with no default; Start "
+        f"disabled until a check passes ({language}).",
+        _grab_dialog(dialog),
+    )
+    dialog.participant.setText(SAMPLE_PARTICIPANT)
+    dialog.experimenter.setText(SAMPLE_INITIALS)
+    dialog.pattern_folder.setText(SAMPLE_PATTERN_FOLDER)
+    for combo, value in (
+        (dialog.session_number, SAMPLE_SESSION_NUMBER),
+        (dialog.participant_language, SAMPLE_LANGUAGES[0]),
+        (dialog.experimenter_language, SAMPLE_LANGUAGES[-1]),
+    ):
+        combo.setCurrentIndex(combo.findData(value))
+    dialog.check()
+    yield Shot(
+        f"experimenter_{language}_launcher_session_checked",
+        f"The session dialog after Check: a preflight warning listed in amber, Start "
+        f"enabled because nothing refuses ({language}).",
+        _grab_dialog(dialog),
+    )
+    yield Shot(
+        f"experimenter_{language}_launcher_resume",
+        f"The resume question (SPEC.md 15): what was completed and how long ago "
+        f"sensitisation began. Resume, or an explicit new session; closing it starts nothing "
+        f"({language}).",
+        _grab_dialog(dialog.resume_dialog(SAMPLE_RESUME)),
+    )
+
+    # The unweighed set, whatever filaments.yaml holds today, so weighing the kit does not
+    # change the picture of the dialog.
+    unweighed = {
+        **config.filaments,
+        "weighing_date": None,
+        "weighing_balance": None,
+        "filaments": [{**f, "force_measured_mn": None} for f in config.filaments["filaments"]],
+    }
+    instruments = InstrumentsDialog(config.experimenter_text, unweighed, lambda *_: None)
+    instruments.resize(DIALOG_WIDTH_PX, HEIGHT_PX)
+    yield Shot(
+        f"experimenter_{language}_launcher_instruments",
+        f"Instruments and environment (SPEC.md 8.1): every filament with its label, size, "
+        f"nominal force and a measured-force field; the weighing date and balance; the "
+        f"optional room temperature and humidity ({language}).",
+        instruments.grab(),
+    )
+    preview = launcher.preview_dialog(SAMPLE_T_ZERO)
+    yield Shot(
+        f"experimenter_{language}_launcher_preview",
+        f"The schedule preview (SPEC.md 7.2): tools/preview_schedule.py's report, read-only "
+        f"({language}).",
+        preview.grab(),
+    )
 
 
 def shots(languages: tuple[str, ...] = LANGUAGES) -> Iterator[Shot]:

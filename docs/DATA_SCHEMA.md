@@ -7,6 +7,9 @@ both follow.
 
 Files are named `TATP1_{YYYY-MM-DD_HH-MM-SS}_P{code}_S{session}_{table}.csv`, one per
 observational unit (Wickham 2014). Every row is appended and flushed as it is produced (§14.3).
+The stamp is unique per participant and session: a session started within the same second as
+an earlier one of the same participant and session waits into the next second, so two sessions
+never share a file.
 
 ## Parsing contract
 
@@ -109,6 +112,15 @@ written, with an empty value — an absent row and an empty value must not be co
 
 One row per event: phase transitions, block boundaries, cue onsets, button events, experimenter
 actions, warnings, notes, errors (§14.2).
+
+Two events carry the session's structure, and a resume reads them back (§15,
+`tatp/resume.py`). `stage_started` and `stage_completed` have the stage's id in `detail` --
+`setup.masking_check`, `pre_sensitisation.long`, `block.3`, `rekindle`, `session_end` and so
+on, in the order `tatp/session_runner.py` plans them -- and a stage is completed exactly when
+its `stage_completed` row exists. `sensitisation_started` has the exact session t=0 in
+`detail`, because the session file receives `sensitisation_start_iso` only at close; a resumed
+session logs `sensitisation_resumed` with the same value instead, and `session_resumed` naming
+the file it resumed from.
 
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|

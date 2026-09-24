@@ -67,16 +67,28 @@ def _cell(row: dict, key: str) -> str:
     return str(value)
 
 
-def render(schedule: sched.Schedule, t_zero: datetime) -> list[str]:
-    """The whole report, as lines. Returned rather than printed so a test can read it."""
+def render(
+    schedule: sched.Schedule, t_zero: datetime, separator: str | None = None
+) -> list[str]:
+    """The whole report, as lines. Returned rather than printed so a test can read it.
+
+    By default the columns are padded with spaces for a terminal. A `separator` joins the
+    cells unpadded instead -- a tab, for a window whose font is not fixed-pitch.
+    """
+    padded = separator is None
+    joiner = "  " if padded else separator
+
+    def columns(cells) -> str:
+        if not padded:
+            return joiner.join(text for text, _ in cells)
+        return joiner.join(text.ljust(width) for text, width in cells).rstrip()
+
     lines = [f"Session t=0 (start of sensitisation) at {t_zero.strftime('%H:%M:%S')}", ""]
 
-    lines.append("  ".join(head.ljust(width) for _, head, width in COLUMNS).rstrip())
-    lines.append("  ".join("-" * width for _, _, width in COLUMNS))
+    lines.append(columns((head, width) for _, head, width in COLUMNS))
+    lines.append(joiner.join("-" * width for _, _, width in COLUMNS))
     for row in schedule.preview_rows(t_zero):
-        lines.append(
-            "  ".join(_cell(row, key).ljust(width) for key, _, width in COLUMNS).rstrip()
-        )
+        lines.append(columns((_cell(row, key), width) for key, _, width in COLUMNS))
 
     lines.append("")
     lines.append("Timed windows, minutes from t=0")

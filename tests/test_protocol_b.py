@@ -243,6 +243,28 @@ def test_the_fit_preview_puts_even_a_good_fit_to_the_experimenter(app, loaded, t
         rig.session.close()
 
 
+def test_the_touch_preview_is_open_for_the_choice_and_closed_after(app, loaded, tmp_path):
+    """SPEC.md 11.1: open with Accept and Re-run live while asked, closed once decided."""
+    preview = {**loaded.study1["fit_preview"], "enabled": True}
+    rig = make_rig(make_config(loaded, tmp_path, fit_preview=preview))
+    try:
+        window = rig.experimenter
+        procedure = touchcal.TouchCalibration(rig)
+        procedure.fit_ready.connect(window.show_fit_preview)
+        seen = []
+        virtual = Virtual(rig, procedure)
+        virtual.decide = lambda trial: seen.append(
+            (window.fit_preview.isVisible(), window.fit_accept_button.isEnabled())
+        ) or ("accept", ())
+        virtual.run()
+        assert seen and seen[0] == (True, True)
+        assert not window.fit_preview.isVisible()
+        assert window.fit_preview.plot.points == ()
+        assert not window.fit_accept_button.isEnabled()
+    finally:
+        rig.session.close()
+
+
 def test_felt_catch_trials_are_flagged(rig):
     session = rig.session
     procedure = touchcal.TouchCalibration(rig)

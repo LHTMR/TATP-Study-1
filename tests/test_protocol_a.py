@@ -430,6 +430,32 @@ def test_the_fit_preview_rerun_keeps_the_superseded_run(app, loaded, tmp_path):
     session.close()
 
 
+def test_the_f40_preview_enables_the_choice_and_closes_on_it(app, loaded, tmp_path):
+    """SPEC.md 11.1: Accept and Re-run are live while the run waits, and dead after."""
+    study1 = {**loaded.study1, "fit_preview": {**loaded.study1["fit_preview"], "enabled": True}}
+    rig = _make_rig(loaded, tmp_path, study1=study1)
+    experimenter = rig.experimenter
+    protocol = _long(rig)
+    fits = []
+    protocol.fit_ready.connect(fits.append)
+    protocol.fit_ready.connect(experimenter.show_fit_preview)
+    done = _start(protocol)
+    while not fits:
+        _spin(lambda: fits or (rig.participant.stack.currentWidget() is rig.participant.vas))
+        if not fits:
+            assert not experimenter.fit_accept_button.isEnabled()
+            _answer(rig.participant, _observer(protocol._trial))
+    assert experimenter.fit_accept_button.isEnabled()
+    assert experimenter.fit_preview.isVisible()
+    experimenter.fit_accept_button.click()
+    assert done
+    assert not experimenter.fit_preview.isVisible()
+    assert experimenter.fit_preview.plot.points == ()
+    assert not experimenter.fit_accept_button.isEnabled()
+    assert not experimenter.fit_rerun_button.isEnabled()
+    rig.session.close()
+
+
 def test_the_fit_preview_rerun_is_bounded(app, loaded, tmp_path):
     study1 = {**loaded.study1, "fit_preview": {**loaded.study1["fit_preview"], "enabled": True,
                                                 "max_reruns": 0}}

@@ -134,6 +134,17 @@ class Interruptions(QObject):
     def _restore(self) -> None:
         garment = self.session.garment
         snapshot = self._snapshot
+        # A garment disconnected during the interruption cannot be commanded, and commanding it
+        # would raise inside the resume. The step still repeats; bringing the touch back after a
+        # reconnect is the session runner's (it restarts the delivery on `garment_connect`).
+        if not garment.connected:
+            self.session.log(
+                "restore_skipped_disconnected",
+                severity="warning",
+                detail="the garment was disconnected during the interruption",
+            )
+            self._finish_resume()
+            return
         for channel, kpa in sorted(snapshot["pressure_kpa"].items()):
             if kpa > 0:
                 delivered = garment.set_pressure(channel, kpa)

@@ -207,9 +207,9 @@ def test_the_choice_goes_to_the_stronger_stimulus(rig):
     # One channel each, so neither command is the second to its channel and rate limited.
     for side, channel, kpa in (("left", 1, 20.0), ("right", 2, 60.0)):
         garment.set_pressure(channel, kpa)
+        garment.set_channel(channel, True)
         rig.participant.emphasise_choice(side)
-        deadline = time.monotonic() + 0.05
-        _spin(lambda deadline=deadline: time.monotonic() > deadline)
+        garment.set_channel(channel, False)
     rig.participant.emphasise_choice(None)
     rig.participant.accept_choice()
     _spin(lambda: chosen)
@@ -232,8 +232,18 @@ def test_confirming_without_a_marker_is_logged_and_records_nothing(rig):
     assert _log_events(rig.session).count("confirm_without_marker") == virtual.empty_confirms
 
 
+def test_no_stop_at_a_cue_with_the_garment_off(rig):
+    """Outside the intervention the garment starts after its cue: that cue is not mid-block."""
+    virtual = _virtual(rig, StopsMidBlock)
+    rig.participant.show_warning_cue()
+    deadline = time.monotonic() + 0.1
+    _spin(lambda: time.monotonic() > deadline)
+    assert virtual.stats()["stops"] == 0
+
+
 def test_the_stop_is_pressed_at_the_first_cue_only(rig):
     virtual = _virtual(rig, StopsMidBlock)
+    rig.session.garment.set_channel(1, True)  # the intervention's touch is running
     stops = []
     rig.participant.emergency_stop.connect(lambda: stops.append(1))
     rig.participant.show_warning_cue()
@@ -298,8 +308,39 @@ def test_the_experimenter_applies_the_named_filament_at_every_cue(rig):
         assert virtual.stimulus_mn == 255.0
         virtual.rating_for(PAIN_SCALE)
         rig.participant.show_blank()
-        _spin(lambda: not experimenter._on_cue)
     assert experimenter.applied == ["26", "26"]
+
+
+def test_the_experimenter_strokes_the_brush_when_asked(rig):
+    virtual = VirtualParticipant(rig.participant, rig.session.garment, rig.session.config, SEED)
+    experimenter = VirtualExperimenter(rig, virtual)
+    experimenter.start()
+    text = rig.experimenter.text
+    rig.experimenter.set_instruction(
+        text["instructions"]["apply_brush"].format(
+            site=1, region=text["terms"]["regions"]["primary"]
+        )
+    )
+    rig.participant.show_warning_cue()
+    _spin(lambda: experimenter.applied == ["brush"])
+    assert virtual.brush_felt
+    virtual.rating_for(PAIN_SCALE)
+    assert not virtual.brush_felt, "a stroke is rated once"
+
+
+def test_the_experimenter_presses_start_when_the_software_waits(rig):
+    virtual = VirtualParticipant(rig.participant, rig.session.garment, rig.session.config, SEED)
+    experimenter = VirtualExperimenter(rig, virtual)
+    presses = []
+    rig.experimenter.proceed_requested.connect(lambda: presses.append(1))
+    experimenter.start()
+    rig.experimenter.set_instruction(rig.experimenter.text["instructions"]["ready"])
+    _spin(lambda: presses)
+    rig.experimenter.set_instruction(rig.experimenter.text["instructions"]["stop_rehearsal"])
+    count = len(presses)
+    deadline = time.monotonic() + 0.05
+    _spin(lambda: time.monotonic() > deadline)
+    assert len(presses) == count, "the rehearsal is the participant's press, not Proceed"
 
 
 def test_nothing_is_applied_without_a_cue(rig):
