@@ -66,12 +66,35 @@ def _filled(window, tmp_path):
     _choose(dialog.session_number, 1)
     _choose(dialog.participant_language, "sv")
     _choose(dialog.experimenter_language, "en")
+    _choose(dialog.garment, "mock")
     dialog.data_folder.setText(str(tmp_path / "data"))
     dialog.pattern_folder.setText(str(cfg.CONFIG_DIR / "patterns" / "examples"))
     return dialog
 
 
-RESUME = {"completed": "blocks 1-4", "since_sensitisation": "1 h 12 min"}
+def test_the_garment_starts_unchosen_and_is_required(app, loaded, tmp_path):
+    """Chosen at launch, never defaulted: a pilot on the wrong rig is wrong data."""
+    fakes = Fakes()
+    dialog = _filled(LauncherWindow(loaded, fakes.preflight, fakes.build), tmp_path)
+    dialog.garment.setCurrentIndex(0)
+    assert dialog.garment.currentData() is None
+    words = loaded.experimenter_text["launcher"]
+    assert words["garment"] in dialog.missing()
+
+
+def test_the_chosen_garment_is_the_session_driver(app, loaded, tmp_path):
+    """hardware.yaml stays on the mock; the dialog's choice reaches the session's config."""
+    fakes = Fakes()
+    dialog = _filled(LauncherWindow(loaded, fakes.preflight, fakes.build), tmp_path)
+    configured = loaded.hardware["garment"]["driver"]
+    _choose(dialog.garment, "arduino_mosfet")
+    args = dialog.args()
+    assert args.garment == "arduino_mosfet"
+    assert dialog.config(args).hardware["garment"]["driver"] == "arduino_mosfet"
+    assert loaded.hardware["garment"]["driver"] == configured, "the loaded config is untouched"
+
+
+RESUME ={"completed": "blocks 1-4", "since_sensitisation": "1 h 12 min"}
 
 
 def test_the_four_entries_are_all_enabled(app, loaded):

@@ -278,6 +278,20 @@ class SessionRunner(Procedure):
         self._alarm_timer.timeout.connect(self._fire_alarm)
 
         self.touch_start_display_s = float(config.study1["delivery"]["touch_start_display_s"])
+        # Stage boundary (CLAUDE.md). A delivery ramps to its pressures under the rate limit,
+        # then cues; the ramp is longer for a higher pressure, and pressure differs by
+        # condition. If the experimenter's display ended before the slowest possible delivery
+        # had started the touch, when the session moved on would depend on the condition
+        # (SPEC.md 16), and a block could begin before its touch.
+        garment = config.hardware["garment"]
+        slowest_s = float(garment["pressure_ceiling_kpa"]) / float(
+            garment["pressure_rate_max_kpa_s"]
+        ) + float(config.study1["cues"]["warning_lead_s"])
+        assert self.touch_start_display_s >= slowest_s, (
+            f"study1.yaml: delivery.touch_start_display_s ({self.touch_start_display_s} s) is "
+            f"shorter than the slowest touch start, a full ramp to the ceiling plus the cue "
+            f"({slowest_s:.2f} s)"
+        )
         # The condition's touch: whether it should be running, and the delivery that is
         # starting it, until the garment is running (docs/LOG.md N7.D17).
         self._touch_on = False
@@ -610,13 +624,14 @@ class SessionRunner(Procedure):
     def _once_delivery_settles(self, then: Callable[[], None]) -> None:
         """Go on once a delivery that is not waiting for the participant has started the touch.
 
-        So a block never begins before the touch it is measured under. Such a delivery ends
-        with its warning cue, well inside `touch_start_display_s`, so at real speed this never
-        waits and the experimenter-side timing is the same in every condition. On an
+        So a block never begins before the touch it is measured under. Such a delivery ramps
+        to its pressures and plays its warning cue, and `touch_start_display_s` is asserted at
+        construction to cover the longest possible ramp plus the cue, so at real speed this
+        never waits and the experimenter-side timing is the same in every condition. On an
         accelerated clock the two timers can fire in either order, and this fixes the order. A
-        self-start prompt is never waited for (docs/LOG.md N7.D17).
+        self-start delivery is never waited for, since it waits on the participant (N7.D17).
         """
-        if self._delivery is not None and not self._delivery.prompting:
+        if self._delivery is not None and not self._delivery.self_start:
             self._settled_then = then
             return
         then()

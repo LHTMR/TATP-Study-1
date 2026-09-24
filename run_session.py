@@ -32,7 +32,7 @@ from tatp import schedule
 from tatp.clock import ISO_FORMAT, Clock
 from tatp.procedure import Rig
 from tatp.responder import Responder
-from tatp.session import DRIVERS, Session, SessionError
+from tatp.session import DRIVERS, Session, SessionError, with_session_choices
 from tatp.session_runner import SessionRunner, stage_layout, summary_phase
 from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
@@ -72,6 +72,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--participant-language", default="sv", choices=("sv", "en"))
     parser.add_argument("--experimenter-language", default="en", choices=("sv", "en"))
+    parser.add_argument(
+        "--garment",
+        choices=sorted(DRIVERS),
+        default=None,
+        help="the garment driver for this session, e.g. arduino_mosfet for the prototype "
+        "sleeve; hardware.yaml's garment.driver when not given",
+    )
     parser.add_argument(
         "--clock-speed",
         type=float,
@@ -263,7 +270,9 @@ def main(argv: list[str] | None = None) -> int:
 
         return run_launcher(argv)
     args = parse_args(argv)
-    config = cfg.load(args.participant_language, args.experimenter_language)
+    config = with_session_choices(
+        cfg.load(args.participant_language, args.experimenter_language), garment=args.garment
+    )
     for line in warnings_for(config):
         print(f"WARNING: {line}", file=sys.stderr)
     findings = preflight(config, args)

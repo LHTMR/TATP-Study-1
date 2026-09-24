@@ -45,6 +45,11 @@ terms:
   languages:
     sv: Svenska
     en: English
+  # The garment drivers the launcher offers (tatp/session.py DRIVERS). Names the rig, never a
+  # condition.
+  garments:
+    mock: Mock garment (no hardware)
+    arduino_mosfet: Prototype sleeve (on/off; pressure set by hand)
   stage1:
     # Why a touch-calibration estimate failed its quality check (SPEC.md 9). Says what kind of
     # failure, never a rating.
@@ -341,6 +346,7 @@ launcher:
   experimenter_initials: Experimenter initials
   participant_language: Participant language
   experimenter_language: Experimenter language
+  garment: Garment
   data_folder: Data folder
   pattern_folder: Pattern folder
   browse: Browse…

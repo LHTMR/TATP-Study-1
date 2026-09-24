@@ -118,6 +118,8 @@ SAMPLE_RESUME = {"completed": "setup, touch calibration, blocks 1-4",
                  "since_sensitisation": "1 h 12 min"}
 SAMPLE_SESSION_NUMBER = 1
 SAMPLE_LANGUAGES = ("sv", "en")
+# The garment the checked session dialog shows chosen: the prototype, which the lab pilots on.
+SAMPLE_GARMENT = "arduino_mosfet"
 SAMPLE_T_ZERO = datetime(2026, 9, 24, 9, 30)
 # The pattern designer's sample content. A moving example, and a name that is no condition's.
 SAMPLE_DESIGN_PATTERN = cfg.CONFIG_DIR / "patterns" / "examples" / "sweep_03cms.csv"
@@ -647,6 +649,7 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         (dialog.session_number, SAMPLE_SESSION_NUMBER),
         (dialog.participant_language, SAMPLE_LANGUAGES[0]),
         (dialog.experimenter_language, SAMPLE_LANGUAGES[-1]),
+        (dialog.garment, SAMPLE_GARMENT),
     ):
         combo.setCurrentIndex(combo.findData(value))
     dialog.check()

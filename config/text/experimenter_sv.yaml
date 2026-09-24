@@ -46,6 +46,11 @@ terms:
   languages:
     sv: Svenska
     en: English
+  # Plaggdrivrutinerna som startfönstret erbjuder (tatp/session.py DRIVERS). Namnger riggen,
+  # aldrig en betingelse.
+  garments:
+    mock: Simulerat plagg (ingen hårdvara)
+    arduino_mosfet: Prototypärmen (på/av; trycket ställs för hand)
   stage1:
     # Varför en skattning i beröringskalibreringen underkändes (SPEC.md 9). Anger vilken sorts
     # fel, aldrig en skattning.
@@ -339,6 +344,7 @@ launcher:
   experimenter_initials: Försöksledarens initialer
   participant_language: Deltagarens språk
   experimenter_language: Försöksledarens språk
+  garment: Plagg
   data_folder: Datamapp
   pattern_folder: Mönstermapp
   browse: Bläddra…

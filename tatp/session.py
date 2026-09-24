@@ -11,6 +11,7 @@ experimenter may see is decided, and a test asserts the condition is not in it.
 
 from __future__ import annotations
 
+import dataclasses
 import random
 import time
 from collections.abc import Callable
@@ -67,6 +68,26 @@ DRIVERS: dict[str, type[GarmentController]] = {
     "mock": MockGarment,
     "arduino_mosfet": ArduinoMosfetGarment,
 }
+
+
+def with_session_choices(
+    config: Config, data_folder: Path | None = None, garment: str | None = None
+) -> Config:
+    """`config` with the choices made at launch rather than in hardware.yaml.
+
+    The launcher and `run_session.py --garment` both come through here, so a session's garment
+    is chosen the same way from either. hardware.yaml keeps `driver: mock`, so the test gate
+    never opens a serial port. The driver actually used is written to the session file
+    (`garment_driver`) either way.
+    """
+    hardware = dict(config.hardware)
+    if data_folder is not None:
+        hardware["data"] = {**hardware["data"], "folder": str(data_folder)}
+    if garment is not None:
+        if garment not in DRIVERS:
+            raise SessionError(f"garment {garment!r} is not one of {sorted(DRIVERS)}")
+        hardware["garment"] = {**hardware["garment"], "driver": garment}
+    return dataclasses.replace(config, hardware=hardware)
 
 
 class SessionError(Exception):

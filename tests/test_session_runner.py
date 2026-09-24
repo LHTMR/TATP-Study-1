@@ -689,6 +689,19 @@ def _experimenter_sequence(app, loaded, tmp_path, condition) -> list[tuple[str, 
     return [*shown, ("moved on", moved_on[0])]
 
 
+def test_a_touch_start_display_shorter_than_the_slowest_delivery_is_refused(
+    app, loaded, tmp_path
+):
+    """A full ramp to the ceiling plus the cue must fit inside the display, or when the session
+    moves on depends on the condition's pressure (SPEC.md 16)."""
+    garment = loaded.hardware["garment"]
+    slowest_s = garment["pressure_ceiling_kpa"] / garment["pressure_rate_max_kpa_s"]
+    study1 = {**loaded.study1, "delivery": {"touch_start_display_s": slowest_s / 2}}
+    too_short = cfg.Config(**{**loaded.__dict__, "study1": study1})
+    with pytest.raises(AssertionError, match="slowest touch start"):
+        make_runner(too_short, tmp_path)
+
+
 def test_the_touch_start_looks_the_same_to_the_experimenter_in_every_condition(
     app, loaded, tmp_path
 ):

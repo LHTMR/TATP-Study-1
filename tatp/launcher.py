@@ -33,7 +33,6 @@ been picked (SPEC.md 6: nothing supplied by the experimenter is defaulted).
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import sys
 from collections.abc import Callable
 from datetime import datetime
@@ -57,6 +56,7 @@ from PySide6.QtWidgets import (
 from tatp import config as cfg
 from tatp import schedule as sched
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
+from tatp.session import DRIVERS, with_session_choices
 from tatp.ui.application import application
 from tatp.ui.widgets import (
     DISCONNECTED_COLOUR,
@@ -171,6 +171,13 @@ class SessionDialog(QDialog):
         languages = [(text["terms"]["languages"][code], code) for code in LANGUAGES]
         self.participant_language = self._choice(languages)
         self.experimenter_language = self._choice(languages)
+        # Which garment the session drives, chosen here rather than by editing hardware.yaml,
+        # which stays on the mock so the test gate never opens a serial port. Unchosen for the
+        # same reason as the languages: running a real participant on the mock, or a pilot on
+        # the wrong rig, is a whole session of the wrong data.
+        self.garment = self._choice(
+            [(text["terms"]["garments"][name], name) for name in sorted(DRIVERS)]
+        )
         self.data_folder = line_edit(SIZE_BODY)
         self.data_folder.setText(str(_resolve(hardware["data"]["folder"])))
         # No default (docs/LOG.md N6.14): defaulting to config/patterns/examples/ would quietly
@@ -186,6 +193,7 @@ class SessionDialog(QDialog):
             ("experimenter_initials", self.experimenter),
             ("participant_language", self.participant_language),
             ("experimenter_language", self.experimenter_language),
+            ("garment", self.garment),
             ("data_folder", self._with_browse(self.data_folder)),
             ("pattern_folder", self._with_browse(self.pattern_folder)),
         ):
@@ -205,7 +213,12 @@ class SessionDialog(QDialog):
         typed = (self.participant, self.experimenter, self.data_folder, self.pattern_folder)
         for field in typed:
             field.textChanged.connect(self._stale)
-        chosen = (self.session_number, self.participant_language, self.experimenter_language)
+        chosen = (
+            self.session_number,
+            self.participant_language,
+            self.experimenter_language,
+            self.garment,
+        )
         for combo in chosen:
             combo.currentIndexChanged.connect(self._stale)
 
@@ -274,6 +287,7 @@ class SessionDialog(QDialog):
                 ("session_number", self.session_number),
                 ("participant_language", self.participant_language),
                 ("experimenter_language", self.experimenter_language),
+                ("garment", self.garment),
             )
             if combo.currentData() is None
         ]
@@ -288,6 +302,7 @@ class SessionDialog(QDialog):
             patterns=Path(self.pattern_folder.text().strip()),
             participant_language=self.participant_language.currentData(),
             experimenter_language=self.experimenter_language.currentData(),
+            garment=self.garment.currentData(),
             data_folder=Path(self.data_folder.text().strip()),
             clock_speed=1.0,
             seed=None,
@@ -297,10 +312,9 @@ class SessionDialog(QDialog):
         )
 
     def config(self, args: argparse.Namespace) -> cfg.Config:
-        """The configuration for these languages, with the data folder the dialog chose."""
+        """The configuration for these languages, with the data folder and garment chosen."""
         loaded = self._load(args.participant_language, args.experimenter_language)
-        data = {**loaded.hardware["data"], "folder": str(args.data_folder)}
-        return dataclasses.replace(loaded, hardware={**loaded.hardware, "data": data})
+        return with_session_choices(loaded, args.data_folder, args.garment)
 
     # -- check, then start ------------------------------------------------------------
 
