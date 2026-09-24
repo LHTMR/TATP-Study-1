@@ -219,12 +219,19 @@ class _ChoiceScreen(QWidget):
         self.selected = side
         self.update()
         self.chosen.emit(side)
-        QTimer.singleShot(self._feedback_ms, self._begin_gap)
+        # With the screen as the timers' context, so a timer never fires into a screen that has
+        # been deleted ("Signal source has been deleted"), and holds its target alive until it
+        # fires -- a bare `signal.emit` handed to `singleShot` can be collected first, and then
+        # the gap never ends and the procedure waiting on it stalls.
+        QTimer.singleShot(self._feedback_ms, self, self._begin_gap)
 
     def _begin_gap(self) -> None:
         self.blank = True
         self.update()
-        QTimer.singleShot(self._gap_ms, self.gap_elapsed.emit)
+        QTimer.singleShot(self._gap_ms, self, self._end_gap)
+
+    def _end_gap(self) -> None:
+        self.gap_elapsed.emit()
 
     # -- drawing -----------------------------------------------------------------------
 

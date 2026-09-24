@@ -1,39 +1,24 @@
-"""The entry point. SPEC.md 4.1.
+"""The entry point. SPEC.md 4.1, 15, 17.5.
 
-`run_session.py` is what makes the Milestone 1 slice something that runs rather than something
-only the test suite reaches, so what is tested here is the wiring: the arguments, the terminal
-warnings, and that driving the runner to a confirmed rating leaves a closed session with one
-valid row in it.
-
-The `QApplication.exec()` loop itself is not entered -- the runner is driven by the same
-accelerated clock and synthetic key presses as `tests/test_pinprick.py`, so the test stays
-headless and finishes in milliseconds.
+What is tested here is the wiring: the arguments, the terminal warnings, `build` (the instance
+lock and the resume decision) and `shut_down`. The session itself is
+`tests/test_session_runner.py`'s; the `QApplication.exec()` loop is never entered.
 """
 
 from __future__ import annotations
 
 import csv
-import time
+from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
 
 import run_session
 from tatp import config as cfg
-from tatp.clock import Clock
-from tatp.procedure import Rig
-from tatp.responder import Responder
-from tatp.session import Session
-from tatp.ui.experimenter import ExperimenterWindow
-from tatp.ui.participant import ParticipantWindow
-from tatp.ui.vas import QT_KEYS
+from tatp import preflight as pre
+from tatp.session import SessionError
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
-
-CLOCK_SPEED = 100.0
-SPIN_TIMEOUT_S = 10.0
 
 ARGV = [
     "--participant", "01",
@@ -54,36 +39,13 @@ def loaded():
 
 
 @pytest.fixture
-def runner(app, loaded, tmp_path):
-    """A started session with both windows and a runner, ready to run the slice."""
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "data"),
-                                            "cloud_sync_markers": []}}
-    config = cfg.Config(**{**loaded.__dict__, "hardware": hardware})
-    session = Session(
-        config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=CLOCK_SPEED), rng_seed=7
-    )
-    session.start()
-    participant = ParticipantWindow(config, Responder(config.hardware), session.clock)
-    experimenter = ExperimenterWindow(config.experimenter_text, session.experimenter_view)
-    session.set_phase("pre_sensitisation")
-    made = run_session.SliceRunner(Rig(session, participant, experimenter))
-    yield made
-    session.close()
-
-
-def _spin(condition) -> None:
-    deadline = time.monotonic() + SPIN_TIMEOUT_S
-    while not condition():
-        if time.monotonic() > deadline:
-            raise AssertionError("the slice did not reach the expected state")
-        QApplication.processEvents()
-        time.sleep(0.001)
-
-
-def _press(widget, name) -> None:
-    key = QT_KEYS[name]
-    widget.keyPressEvent(QKeyEvent(QEvent.KeyPress, key, Qt.NoModifier))
-    widget.keyReleaseEvent(QKeyEvent(QEvent.KeyRelease, key, Qt.NoModifier))
+def config(loaded, tmp_path):
+    hardware = {
+        **loaded.hardware,
+        "data": {"folder": str(tmp_path / "data"), "cloud_sync_markers": []},
+        "audio": {**loaded.hardware["audio"], "backend": "recording"},
+    }
+    return cfg.Config(**{**loaded.__dict__, "hardware": hardware})
 
 
 def _rows(session, table):
@@ -91,23 +53,8 @@ def _rows(session, table):
         return list(csv.DictReader(handle))
 
 
-def _answer_vas(participant) -> None:
-    _press(participant.vas, "pagedown")
-    _press(participant.vas, "period")
-
-
-def _run_slice(runner) -> None:
-    """Adjust, rate the touch, then rate one pinprick application -- the whole slice."""
-    participant = runner.participant
-    runner.start()
-    _press(participant, "pagedown")
-    _press(participant, "period")
-
-    # The touch intensity rating follows the adjustment immediately; the pinprick rating waits
-    # out the warning cue and the configured delay, which the accelerated clock compresses.
-    _answer_vas(participant)
-    _spin(lambda: participant.stack.currentWidget() is participant.vas)
-    _answer_vas(participant)
+def _never(open_session):
+    raise AssertionError("no open session was expected")
 
 
 # -- arguments and warnings ---------------------------------------------------------------
@@ -129,6 +76,113 @@ def test_the_arguments_carry_the_identity_and_the_development_switches():
     # A real session is Swedish for the participant and English for the experimenter.
     assert args.participant_language == "sv"
     assert args.experimenter_language == "en"
+    assert args.resume is None, "no resume offer answered"
+    assert run_session.parse_args([*ARGV, "--resume"]).resume is True
+    assert run_session.parse_args([*ARGV, "--new"]).resume is False
+
+
+def test_resume_and_new_are_exclusive():
+    with pytest.raises(SystemExit):
+        run_session.parse_args([*ARGV, "--resume", "--new"])
+
+
+def test_preflight_offers_the_resume_of_an_open_session(app, config):
+    args = run_session.parse_args(ARGV)
+    assert run_session.preflight(config, args) == []
+    first = run_session.build(config, args)
+    first.start()
+    first.cancel()
+    first.lock.release()
+    findings = run_session.preflight(config, args)
+    assert [(severity, key) for severity, key, _ in findings] == [
+        ("warn", run_session.RESUME_OFFER)
+    ]
+    dialogs = config.experimenter_text["dialogs"]
+    assert findings[0][2] == {
+        "completed": dialogs["resume_nothing_completed"],
+        "since_sensitisation": dialogs["resume_not_sensitised"],
+    }
+    with pytest.raises(SessionError, match="open session"):
+        run_session.build(config, args)  # the offer must be answered
+    resumed = run_session.build(config, run_session.parse_args([*ARGV, "--resume"]))
+    assert resumed.resume is not None
+    run_session.shut_down(resumed)
+
+
+def test_the_resume_summary_names_finished_phases_and_blocks(config):
+    from datetime import datetime
+
+    from tatp import schedule
+    from tatp.clock import ISO_FORMAT
+    from tatp.resume import OpenSession
+    from tatp.session_runner import stage_layout
+
+    ids = [stage_id for stage_id, _, _ in stage_layout(schedule.generate(config.schedule))]
+    now = datetime.now().strftime(ISO_FORMAT)[:-3]
+    phases = config.experimenter_text["phases"]
+    dialogs = config.experimenter_text["dialogs"]
+
+    def summary(done):
+        return run_session.resume_summary(
+            config, OpenSession(Path("x_session.csv"), now, now, tuple(done))
+        )
+
+    # Everything up to block 2: the intervention itself is not completed, its blocks are.
+    upto = summary(ids[: ids.index("block.2") + 1])
+    assert upto["completed"] == ", ".join([
+        phases["setup"], phases["touch_calibration"], phases["pre_sensitisation"],
+        phases["sensitisation"], phases["capsaicin"], phases["post_sensitisation"],
+        dialogs["resume_blocks"].format(value="1, 2"),
+    ])
+    assert "0:00" in upto["since_sensitisation"]
+    # A phase is completed only when its last stage is: pre-S's long protocol alone is not.
+    partial = summary(ids[: ids.index("pre_sensitisation.long") + 1])
+    assert phases["pre_sensitisation"] not in partial["completed"]
+    assert phases["touch_calibration"] in partial["completed"]
+
+
+def test_a_failed_build_releases_the_lock(app, config, monkeypatch):
+    def broken(*args, **kwargs):
+        raise RuntimeError("the windows could not be made")
+
+    monkeypatch.setattr(run_session, "ParticipantWindow", broken)
+    with pytest.raises(RuntimeError, match="windows"):
+        run_session.build(config, run_session.parse_args(ARGV))
+    assert not pre.refusals(pre.preflight(config, "01", 2, "SM", pre.data_folder_for(config)))
+
+
+def test_a_resume_at_another_clock_speed_is_refused_before_anything_is_written(app, config):
+    first = run_session.build(config, run_session.parse_args(ARGV))
+    first.start()
+    first.cancel()
+    first.lock.release()
+    folder = pre.data_folder_for(config)
+    before = sorted(folder.glob("*.csv"))
+    args = run_session.parse_args([*ARGV, "--resume", "--clock-speed", "5"])
+    with pytest.raises(SessionError, match="clock speed"):
+        run_session.build(config, args)
+    assert sorted(folder.glob("*.csv")) == before, "nothing was written for the refused resume"
+    assert not pre.refusals(pre.preflight(config, "01", 2, "SM", folder)), "lock released"
+
+
+def test_two_sessions_started_in_one_second_never_share_files(app, config):
+    first = run_session.build(config, run_session.parse_args(ARGV))
+    first.start()
+    first.cancel()
+    first.lock.release()
+    second = run_session.build(config, run_session.parse_args([*ARGV, "--new"]))
+    assert second.session.files.stamp != first.session.files.stamp
+    run_session.shut_down(second)
+
+
+def test_temperature_and_humidity_are_recorded_when_given(app, config):
+    args = run_session.parse_args(ARGV)
+    args.room_temperature_c, args.relative_humidity_pct = 21.5, 28.0
+    runner = run_session.build(config, args)
+    run_session.shut_down(runner)
+    values = {r["key"]: r["value"] for r in _rows(runner.session, "session")}
+    assert values["room_temperature_c"] == "21.5"
+    assert values["relative_humidity_pct"] == "28.0"
 
 
 def test_unresolved_open_items_are_printed_before_the_windows_open(loaded):
@@ -139,103 +193,57 @@ def test_unresolved_open_items_are_printed_before_the_windows_open(loaded):
         assert any(line.startswith(f"[{item.number}]") for line in lines)
 
 
-# -- the slice ----------------------------------------------------------------------------
+# -- build and shut_down ------------------------------------------------------------------
 
 
-def test_the_slice_writes_every_table_it_touches_and_closes_the_session(runner):
-    _run_slice(runner)
-    assert runner.completed
-    assert runner.session.closed
-
-    adjust = _rows(runner.session, "touchcal_adjust")
-    assert len(adjust) == 1
-    assert adjust[0]["stage"] == "anchor"
-    touch = _rows(runner.session, "touch_ratings")
-    assert len(touch) == 1
-    assert touch[0]["scale"] == "intensity"
-    assert float(touch[0]["commanded_pressure_kpa"]) > 0.0, "the touch was being delivered"
-
-    rows = _rows(runner.session, "pinprick")
-    assert len(rows) == 1
-    assert rows[0]["filament_label_g"] == (
-        runner.session.config.study1["pinprick"]["start_filament_label_g_session1_pre_s"]
+def test_build_returns_an_unstarted_runner_holding_the_lock(app, config):
+    runner = run_session.build(config, run_session.parse_args(ARGV), _never)
+    assert not runner.running
+    data_folder = pre.data_folder_for(config)
+    assert pre.refusals(pre.preflight(config, "01", 1, "SM", data_folder)), (
+        "a second instance is refused while the first holds the folder"
     )
-    assert rows[0]["phase"] == "intervention"
+    with pytest.raises(SessionError, match="another session"):
+        run_session.build(config, run_session.parse_args(ARGV), _never)
+    run_session.shut_down(runner)
+    assert not pre.refusals(pre.preflight(config, "01", 2, "SM", data_folder))
 
 
-def test_the_application_is_placed_in_the_first_scheduled_block(runner):
-    """SPEC.md 7.4. The slice reaches the schedule, so `block_index` is a block, not empty."""
-    _run_slice(runner)
-    first = runner.session.schedule.blocks[0]
-    assert first.type == "pinprick", "the slice runs a pinprick block, so it must lead the grid"
-
-    rows = _rows(runner.session, "pinprick")
-    assert rows[0]["block_index"] == str(first.index)
-    # Session t=0 is set by the same step, so the row is placed in time as well as in the grid.
-    assert float(rows[0]["t_session_s"]) >= 0.0
-
-    events = [r["event"] for r in _rows(runner.session, "log")]
-    assert events.count("block_started") == 1
-    assert events.count("block_ended") == 1
-    assert events.index("block_started") < events.index("block_ended")
-
-
-def test_a_started_block_carries_its_planned_offset_and_the_drift_against_it(runner):
-    """The experimenter launches the block; the gap to the plan is recorded, not corrected."""
-    _run_slice(runner)
-    started = next(r for r in _rows(runner.session, "log") if r["event"] == "block_started")
-    planned = runner.session.schedule.blocks[0].planned_offset_min
-    assert f"planned {planned:g} min" in started["detail"]
-    assert "against plan" in started["detail"]
-    # The experimenter, not the software, decides when a block begins (SPEC.md 7.4).
-    assert started["origin"] == "experimenter"
-
-
-
-
-def test_the_participant_is_left_on_the_closing_screen(runner):
-    _run_slice(runner)
-    text = runner.session.config.participant_text["screens"][run_session.END_SCREEN]
-    assert runner.participant.message.text == text
-    assert runner.participant.stack.currentWidget() is runner.participant.message
-
-
-def test_an_emergency_stop_pauses_the_slice_and_the_resume_repeats_the_step(runner):
-    """SPEC.md 13: the stop pauses and offers resume, and resumption is genuinely clean."""
-    participant = runner.participant
+def test_closing_the_window_before_the_end_is_recorded_as_an_abort(app, config):
+    runner = run_session.build(config, run_session.parse_args(ARGV), _never)
     runner.start()
-    _press(participant, "pagedown")
-    _press(participant, "f5")
-
-    assert not runner.session.closed, "a stop pauses the session; it does not end it"
-    assert runner.session.garment.pressure_kpa[runner.channel] == 0.0
-    assert participant.message.text == (
-        runner.session.config.participant_text["screens"]["emergency_stop"]
-    )
-
-    runner.rig.interruptions.resume()
-    # The garment is restored after the warning cue, and then the adjustment starts again.
-    _spin(lambda: participant.stack.currentWidget() is participant.control)
-    _press(participant, "pagedown")
-    _press(participant, "period")
-    _answer_vas(participant)
-    _spin(lambda: participant.stack.currentWidget() is participant.vas)
-    _answer_vas(participant)
-
-    assert runner.completed
-    assert len(_rows(runner.session, "touchcal_adjust")) == 1, "the stopped trial wrote no row"
-    events = [r["event"] for r in _rows(runner.session, "log")]
-    assert events.index("emergency_stop") < events.index("resumed")
-    assert "step_repeated" in events
+    run_session.shut_down(runner)
+    assert runner.session.closed and not runner.completed
+    values = {r["key"]: r["value"] for r in _rows(runner.session, "session")}
+    assert values["abort_reason"] == run_session.WINDOW_CLOSED
 
 
-def test_the_experimenter_abort_closes_the_session_with_its_reason(runner):
-    runner.start()
-    runner.experimenter.abort_requested.emit("participant unwell")
+def test_an_open_session_is_offered_and_declining_starts_again(app, config):
+    first = run_session.build(config, run_session.parse_args(ARGV), _never)
+    first.start()
+    first.cancel()          # a crash: the session file never gets its end
+    first.lock.release()
+    asked = []
 
-    assert not runner.completed
-    assert runner.session.closed
-    assert runner.session.aborted_reason == "participant unwell"
-    aborts = [r for r in _rows(runner.session, "log") if r["event"] == "session_aborted"]
-    assert len(aborts) == 1
-    assert aborts[0]["severity"] == "warning"
+    def decline(open_session):
+        asked.append(open_session.session_file)
+        return False
+
+    second = run_session.build(config, run_session.parse_args(ARGV), decline)
+    assert asked == [first.session.files.path("session")]
+    events = [r["event"] for r in _rows(second.session, "log")]
+    assert "open_session_declined" in events
+    assert second.resume is None
+    run_session.shut_down(second)
+
+
+def test_accepting_resumes_with_the_recorded_seed(app, config):
+    first = run_session.build(config, run_session.parse_args([*ARGV, "--seed", "11"]), _never)
+    first.start()
+    first.cancel()
+    first.lock.release()
+    second = run_session.build(config, run_session.parse_args(ARGV), lambda _: True)
+    assert second.resume is not None
+    assert second.session.rng_seed == 11
+    assert second.session.resumed_from == first.session.files.path("session").name
+    run_session.shut_down(second)

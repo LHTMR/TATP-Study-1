@@ -131,6 +131,11 @@ audio:
   experimenter_alert_hz: 660.0       # lab-side; must NOT be audible to the participant
   experimenter_alert_duration_s: 0.50
   experimenter_alert_level_dbfs: -12.0
+  # The 1 Hz mapping pacing cue made audible (SPEC.md 8.4), on the experimenter's device at the
+  # experimenter alert's level, so it adds no new sound level. Short and higher than the alert,
+  # so a tick is not mistaken for "block due". Presentation choices, pilot-tunable (LOG N7.D6).
+  pacing_tick_hz: 1000.0
+  pacing_tick_duration_s: 0.05
 
 data:
   folder: data                       # relative to the repository root; gitignored (SPEC.md 14.1)

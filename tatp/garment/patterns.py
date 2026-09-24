@@ -141,16 +141,7 @@ def expand(pattern: Pattern) -> tuple[ChannelEvent, ...]:
     A channel still on in the final row is turned off at the end of that row, which is what
     makes one cycle `duration_s` long and what guarantees the on/off pairing below.
     """
-    interval_s = pattern.row_interval_ms / MS_PER_S
-    events: list[ChannelEvent] = []
-    previous = [0] * len(pattern.channel_ids)
-    for index, row in enumerate([*pattern.rows, (0,) * len(pattern.channel_ids)]):
-        for column, value in enumerate(row):
-            if value != previous[column]:
-                events.append(
-                    ChannelEvent(index * interval_s, pattern.channel_ids[column], value == 1)
-                )
-        previous = list(row)
+    events = [event for _, event in _indexed_events(pattern)]
 
     # Stage boundary (CLAUDE.md), and the direct answer to the defect in SPEC.md 12.4: a
     # channel that turns on and never turns off stays pressurised.
@@ -159,3 +150,44 @@ def expand(pattern: Pattern) -> tuple[ChannelEvent, ...]:
         offs = sum(1 for e in events if e.channel_id == channel_id and not e.on)
         assert ons == offs, f"{pattern.name}: channel {channel_id} has {ons} on, {offs} off"
     return tuple(events)
+
+
+def loop_events(pattern: Pattern) -> tuple[tuple[ChannelEvent, ...], tuple[ChannelEvent, ...]]:
+    """The events of the first cycle and of every later one, for a pattern that loops.
+
+    A channel that is on in both the last row and the first is held on across the wrap. Played
+    from `expand` alone it would be switched off at the end of each cycle and on again at the
+    start of the next, so a one-row static pattern -- the sham -- would be commanded off and on
+    every row interval: a pulsing stimulus rather than a static one, and a `garment` row per
+    channel per interval for the whole intervention. So the first cycle keeps its onsets and
+    drops those channels' final offsets, and later cycles drop both. The offsets are not lost:
+    `GarmentController.stop_pattern` and `stop` switch off every channel left on.
+    """
+    events = expand(pattern)
+    if not pattern.loop:
+        return events, events
+    first, last = pattern.rows[0], pattern.rows[-1]
+    held = {cid for cid, a, b in zip(pattern.channel_ids, first, last, strict=True) if a and b}
+    # By row index, not by time: `index * interval` is a float, and equality on it would drop
+    # or keep an event depending on rounding.
+    end_row = len(pattern.rows)
+    indexed = [(i, e) for i, e in _indexed_events(pattern)
+               if not (e.channel_id in held and i == end_row)]
+    first_cycle = tuple(e for _, e in indexed)
+    later = tuple(e for i, e in indexed if not (e.channel_id in held and i == 0))
+    return first_cycle, later
+
+
+def _indexed_events(pattern: Pattern) -> list[tuple[int, ChannelEvent]]:
+    """Each channel change with the row it happens at; the trailing all-off row included."""
+    interval_s = pattern.row_interval_ms / MS_PER_S
+    events: list[tuple[int, ChannelEvent]] = []
+    previous = [0] * len(pattern.channel_ids)
+    for index, row in enumerate([*pattern.rows, (0,) * len(pattern.channel_ids)]):
+        for column, value in enumerate(row):
+            if value != previous[column]:
+                events.append((index, ChannelEvent(
+                    index * interval_s, pattern.channel_ids[column], value == 1
+                )))
+        previous = list(row)
+    return events

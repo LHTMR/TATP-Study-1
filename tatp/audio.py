@@ -319,6 +319,24 @@ class Audio:
         )
         self.log("experimenter_alert", detail=reason)
 
+    def pacing_tick(self, detail: str) -> None:
+        """The mapping's 1 Hz pacing cue, audible (SPEC.md 8.4). Lab-side, like the alerts.
+
+        The noise is off for the mapping (SPEC.md 10.5), so the tick is on the experimenter's
+        device rather than mixed into the participant's headphones: it paces the experimenter's
+        hand, not the participant's attention.
+        """
+        self.output.experimenter_tone(
+            tone(
+                float(self.config["pacing_tick_hz"]),
+                float(self.config["pacing_tick_duration_s"]),
+                float(self.config["experimenter_alert_level_dbfs"]),
+                self.ramp_s,
+                self.sample_rate_hz,
+            )
+        )
+        self.log("pacing_tick", detail=detail)
+
     def close(self) -> None:
         if self.noise_running:
             self.stop_noise("session closed")

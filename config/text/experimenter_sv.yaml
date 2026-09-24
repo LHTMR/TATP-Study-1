@@ -130,6 +130,20 @@ instructions:
   # Visas i början av varje beröring i ALLA betingelser, och inget annat visas: bara en
   # betingelse startas av deltagaren, så en rad om starten skulle avslöja den (SPEC.md 16).
   touch_start: 'Beröring: plagget startas.'
+  # Sessionsförloppet (SPEC.md 2, 7.4). Programmet tar tid och försöksledaren startar; ingen
+  # av dessa nämner en betingelse, ett mönster eller något med beröringen som skiljer sig.
+  waiting: Väntar på nästa schemalagda steg. Nedräkningen visar när det ska starta.
+  capsaicin_remove: Ta bort capsaicinet och tryck sedan på Starta block för att börja mätningarna efter sensitiseringen.
+  intervention_start: Interventionen börjar nu. Tryck på Starta block för att starta beröringen.
+  touch_block: 'Skattningsblock för beröring: deltagaren skattar beröringen.'
+  baseline_ratings: 'Utgångsläge: deltagaren skattar hur hen känner sig just nu.'
+  intervention_end: Interventionen är slut och plagget har stängts av.
+  # SPEC.md 15: en session som återupptas under återuppvärmningen ber aldrig om värmen igen.
+  rekindle_resumed: >-
+    Sessionen återupptogs under återuppvärmningen. Värmen startades före avbrottet och efterfrågas
+    inte igen; återuppvärmningen räknas därifrån. Tryck på Starta block för att bekräfta. Om
+    värmen i själva verket inte gavs, ge den nu och skriv en anteckning. Plagget förblir avstängt
+    tills återuppvärmningen är klar.
 
 controls:
   start_block: Starta block
@@ -235,6 +249,12 @@ dialogs:
   abort_reason: Orsak till avbrott
   # SPEC.md 15. Båda värdena formateras av sessionen från dess egen text.
   resume_found: 'En oavslutad session hittades för denna deltagare. Genomfört: {completed}. Sensitiseringen började för {since_sensitisation} sedan. Återuppta den med den ursprungliga tidsplanen?'
+  # De två värdena som fylls i resume_found: vad som genomförts, och hur länge sedan
+  # sensitiseringen började (run_session.resume_summary). Fasnamnen kommer från `phases:` ovan.
+  resume_blocks: block {value}
+  resume_nothing_completed: inget ännu
+  resume_since_sensitisation: '{value} (timmar:minuter)'
+  resume_not_sensitised: '— den hade inte börjat, så förberedelserna börjar om —'
   distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem nu, eller avsluta sessionen med dem flaggade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
@@ -243,6 +263,24 @@ dialogs:
   # Knapparna till frågan om att återuppta.
   resume_yes: Återuppta sessionen
   resume_no: Starta en ny session
+
+preflight:
+  # Vad startprogrammet kontrollerar innan en session startar (SPEC.md 11, 15, 17.5). En vägran
+  # stoppar sessionen; en varning visas och sessionen får fortsätta. {value} fylls i.
+  session_completed: Session {value} för denna deltagare är redan genomförd. Den körs inte igen.
+  code_not_allocated: Deltagarkoden {value} finns inte i allokeringsfilen. Kontrollera koden.
+  previous_session_missing: >-
+    Inga data hittades för session {value} för denna deltagare. Sessionen kan köras, men dess
+    första kalibrering börjar från det konfigurerade filamentet i stället för föregående
+    sessions skattning, och loggen registrerar det.
+  previous_estimate_missing: >-
+    Session {value} för denna deltagare har ingen godkänd skattning före sensitisering. Denna
+    sessions första kalibrering börjar i stället från det konfigurerade filamentet, och loggen
+    registrerar det.
+  session_aborted_before: >-
+    Session {value} för denna deltagare har startats tidigare och avbrutits. En ny session
+    registreras vid sidan av den.
+  another_instance: En annan session körs redan från den här datamappen ({value}). Stäng den först.
 
 zones:
   # Bredvid zondiagrammet (SPEC.md 11): var den aktuella stimuleringen ska ges.

@@ -22,7 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from tatp.clock import Clock
-from tatp.garment.patterns import ChannelEvent, Pattern, expand
+from tatp.garment.patterns import ChannelEvent, Pattern, loop_events
 from tatp.units import MS_PER_S
 
 
@@ -82,6 +82,7 @@ class GarmentController(ABC):
         self._last_command_s: dict[int, float] = {}
         self._pattern: Pattern | None = None
         self._pattern_events: tuple[ChannelEvent, ...] = ()
+        self._later_cycle_events: tuple[ChannelEvent, ...] = ()
         self._pattern_start_s: float | None = None
         self._pattern_delivered = 0
         self._channels_on: set[int] = set()
@@ -198,7 +199,7 @@ class GarmentController(ABC):
                 f"{self.driver_name} has {self.n_channels}"
             )
         self._pattern = pattern
-        self._pattern_events = expand(pattern)
+        self._pattern_events, self._later_cycle_events = loop_events(pattern)
         self._pattern_start_s = self.clock.elapsed_s()
         self._pattern_delivered = 0
         self.self_start_latency_ms = None
@@ -242,6 +243,9 @@ class GarmentController(ABC):
             elapsed -= cycle
             self._pattern_start_s += cycle
             self._pattern_delivered = 0
+            # A channel held on across the wrap is not switched off and on again
+            # (`patterns.loop_events`).
+            self._pattern_events = self._later_cycle_events
 
     def stop_pattern(self) -> None:
         """Stop the pattern and return every channel it left on to off."""

@@ -157,10 +157,24 @@ def test_the_full_grid_checks_go_live_when_every_scheduled_block_has_run(loaded)
     assert "1 of the 3 scheduled blocks" in vs.needs_full_session({vs.NORMAL: partial})
     whole = _run(loaded, schedule_offsets_min=planned, rows={"blocks": _block_rows(1, 2, 3)})
     assert vs.needs_full_session({vs.NORMAL: whole}) is None
-    # ...and the unwritten ones then fail rather than pass.
-    unwritten = [c for c in vs.CHECKS if c.needs is vs.needs_full_session]
-    assert unwritten
-    assert all(r.status == vs.FAILED for r in vs.evaluate(unwritten, {vs.NORMAL: whole}))
+    # Milestone 5 wrote them: every full-grid check now has a body.
+    full_grid = [c for c in vs.CHECKS if c.needs is vs.needs_full_session]
+    assert len(full_grid) == 3 and all(c.run is not None for c in full_grid)
+    assert all(c.run is not None for c in vs.CHECKS), "no check is left unwritten"
+
+
+def test_an_out_of_range_flag_the_applications_do_not_support_fails(loaded):
+    lightest = min(loaded.filaments["filaments"], key=lambda f: f["force_nominal_mn"])
+    search = _pinprick(phase="pre_sensitisation", protocol="long", run_index="1",
+                       purpose="search", applied_filament_label_g=lightest["label_g"],
+                       rating_percent="55.0")
+    calibration = dict.fromkeys(vs.SCHEMA["calibration_pinprick"].column_names, "")
+    calibration.update(phase="pre_sensitisation", run_index="1", out_of_range="false")
+    run = _run(loaded, rows={"pinprick": [search], "calibration_pinprick": [calibration]})
+    failures = vs.check_out_of_range_when_and_only_when({vs.NORMAL: run})
+    assert failures and "below" in failures[0]
+    calibration.update(out_of_range="true", out_of_range_direction="below")
+    assert vs.check_out_of_range_when_and_only_when({vs.NORMAL: run}) == []
 
 
 def test_checks_that_measure_rows_skip_when_there_are_none(loaded):
@@ -183,20 +197,38 @@ def test_an_empty_pattern_list_does_not_match_every_screen(loaded):
     assert vs.check_screens_showed_nothing_forbidden({vs.NORMAL: run}) == []
 
 
-def test_a_rating_interval_off_by_the_configured_delay_fails(loaded):
-    speed = 10.0
+def _timed(loaded, rating_cue_ms: int) -> dict:
+    """A timing run at the slow speed with one application, its rating cued this many real
+    milliseconds after its warning cue."""
     rows = [
         _pinprick(cue_onset_iso="2026-09-23T10:00:00.000",
-                  rating_cue_iso="2026-09-23T10:00:00.100", trial_index="1")
+                  rating_cue_iso=f"2026-09-23T10:00:{rating_cue_ms // 1000:02d}."
+                                 f"{rating_cue_ms % 1000:03d}", trial_index="1")
     ]
-    run = _run(loaded, rows={"pinprick": rows}, session={"clock_speed": str(speed)})
-    assert vs.check_rating_cue_interval({vs.NORMAL: run})
+    speed = str(vs.SLOW_CLOCK_SPEED)
+    return {vs.TIMING: _run(loaded, vs.TIMING, rows={"pinprick": rows},
+                            session={"clock_speed": speed})}
+
+
+def test_the_rating_interval_is_judged_in_session_seconds(loaded):
+    # 1 s lead plus 9 s delay: 10 s of session time, 1000 ms real at 10x.
+    assert vs.check_rating_cue_interval(_timed(loaded, 1000)) == []
+    assert vs.check_rating_cue_interval(_timed(loaded, 1015)) == [], "a timer 15 ms late"
+
+
+def test_a_missing_half_second_warning_lead_fails(loaded):
+    """The 0.5 s between the cue and the stimulus, left out: 50 ms real at 10x."""
+    assert vs.check_rating_cue_interval(_timed(loaded, 950))
+
+
+def test_a_rating_interval_off_by_the_configured_delay_fails(loaded):
+    assert vs.check_rating_cue_interval(_timed(loaded, 100))
 
 
 def _orders(loaded, *sites):
     rows = {
         name: _run(loaded, name, rows={"pinprick": [_pinprick(
-            timestamp_iso="2026-09-23T10:00:00.000", site_index=site
+            timestamp_iso="2026-09-23T10:00:00.000", site_index=site, block_index="1"
         )]})
         for name, site in zip((vs.NORMAL, vs.SAME_SEED, vs.OTHER_SEED), sites, strict=True)
     }

@@ -45,7 +45,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
 from tatp.interruption import Interruptions
 from tatp.session import Session
@@ -69,6 +69,7 @@ class Rig(QObject):
         self.participant = participant
         self.experimenter = experimenter
         self.interruptions = Interruptions(session, participant, experimenter, self)
+        session.attach_interruptions(lambda: self.interruptions.active)
         # SPEC.md 10.5: the audible cue sounds with the visual one, from one signal, so no
         # protocol can show the one and forget the other.
         participant.warning_cue_shown.connect(session.audio.participant_cue)
@@ -120,6 +121,9 @@ class Procedure(QObject):
         self._child: Procedure | None = None
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
+        # Precise, like the trials' (tatp/pinprick.py): the intervals between applications are
+        # timed against their configured length.
+        self._timer.setTimerType(Qt.PreciseTimer)
         self._timer.timeout.connect(self._fire)
         self._pending: Callable[[], None] | None = None
         self._on_go: Callable[[], None] | None = None

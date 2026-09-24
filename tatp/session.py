@@ -12,13 +12,16 @@ experimenter may see is decided, and a test asserts the condition is not in it.
 from __future__ import annotations
 
 import random
+import time
+from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 from tatp import allocation as alloc
 from tatp import provenance
 from tatp import schedule as sched
 from tatp.audio import Audio
-from tatp.clock import Clock
+from tatp.clock import ISO_FORMAT, Clock
 from tatp.config import REPO_ROOT, Config, hash_files
 from tatp.datafiles import DataFileCollection
 from tatp.garment.base import GarmentController, Limits
@@ -30,6 +33,9 @@ from tatp.units import S_PER_MIN
 # enough that two sessions do not collide and small enough to survive a round trip through the
 # data file as text. 2**31 is the conventional choice for both.
 SEED_RANGE = 2**31
+# How long to wait before trying the filename stamp again. A polling interval, not a study
+# timing: the stamp changes once a second, so anything well under that serves.
+STAMP_RETRY_S = 0.05
 
 # The controlled vocabulary of the `phase` column, from the Conventions section of
 # docs/DATA_SCHEMA.md. A test asserts this tuple still matches the document.
@@ -46,6 +52,13 @@ PHASES = (
     "session_end",
 )
 
+
+# The phases in which the garment delivers the condition's own touch. The experimenter view
+# carries no per-channel pressure during them (SPEC.md 16, docs/LOG.md N7.D1).
+CONDITION_PHASES = ("intervention", "rekindle")
+# What the experimenter's countdown can be counting down to (`Session.set_upcoming`).
+UPCOMING_KINDS = ("block", "phase", "rekindle")
+
 ORIGINS = ("software", "experimenter", "participant")
 SEVERITIES = ("info", "warning", "error")
 
@@ -54,6 +67,26 @@ DRIVERS: dict[str, type[GarmentController]] = {"mock": MockGarment}
 
 class SessionError(Exception):
     """The session cannot start or continue as asked. Fatal."""
+
+
+def earlier_experimenters(
+    data_folder: Path, participant_code: str, exclude: Path | None = None
+) -> set[str]:
+    """Initials recorded in this participant's session files (SPEC.md 11, 14.2).
+
+    Shared by the session's own `experimenter_changed` key and the launcher's preflight
+    warning (`tatp/preflight.py`), so the two cannot disagree about what "differ" means.
+    """
+    pattern = f"TATP1_*_P{participant_code}_S*_session.csv"
+    found = set()
+    for path in sorted(data_folder.glob(pattern)):
+        if path == exclude:
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            key, _, value = line.partition(",")
+            if key == "experimenter_initials" and value:
+                found.add(value)
+    return found
 
 
 class Session:
@@ -111,6 +144,13 @@ class Session:
         self.aborted_reason = ""
         self.closed = False
 
+        # What the experimenter screen counts down to (SPEC.md 11), set by the session runner:
+        # (kind, label_key, block_index, block_type, due t_session_s). None when nothing is
+        # scheduled -- before t=0, and after the last scheduled step.
+        self._upcoming: tuple[str, str, int | None, str | None, float] | None = None
+        # Which interruption is in force, read from `Interruptions` once a rig attaches it.
+        self._read_interruption: Callable[[], str | None] = lambda: None
+
         # SPEC.md 11.1. Off by default; a session run with it on shows the experimenter the
         # participant's ratings and is recorded as unblinded in that respect.
         self.fit_preview_enabled = config.study1["fit_preview"]["enabled"]
@@ -139,7 +179,7 @@ class Session:
             self.data_folder,
             participant_code,
             session_number,
-            self.clock.filename_stamp(),
+            self._unused_stamp(participant_code, session_number),
         )
 
         driver_name = config.hardware["garment"]["driver"]
@@ -153,6 +193,21 @@ class Session:
         # SPEC.md 10.5, 10.7. Owned here beside the garment for the same reason: every phase
         # needs it and none of them does it.
         self.audio = Audio(config.hardware["audio"], self.clock, self.log)
+
+    def _unused_stamp(self, participant_code: str, session_number: int) -> str:
+        """A filename stamp no file of this participant and session already has.
+
+        Files are named to the second (SPEC.md 14.2), so a session started within the same
+        second as an earlier one -- a quick restart after a crash, say -- would append to the
+        earlier session's files and make the new one resume from itself. It waits into the
+        next second instead, which keeps the documented name.
+        """
+        while True:
+            stamp = self.clock.filename_stamp()
+            pattern = f"TATP1_{stamp}_P{participant_code}_S{session_number}_*.csv"
+            if not any(self.data_folder.glob(pattern)):
+                return stamp
+            time.sleep(STAMP_RETRY_S)
 
     # -- blinding ----------------------------------------------------------------------
 
@@ -182,21 +237,60 @@ class Session:
             "placeholder_text": self.config.has_placeholder_text(),
             "reduced_capability_device": not self.garment.per_channel_pressure,
             "fit_preview_enabled": self.fit_preview_enabled,
-            # STUB for the Stream D contract, so the Stream E window has the keys it reads.
-            # Stream D's sequencer supplies the real values; on merge, take Stream D's version.
-            "next_event": None,
-            "interruption": None,
+            "next_event": self._next_event(),
+            "interruption": self._read_interruption(),
             "hardware": {
                 "connected": self.garment.connected,
                 "faults": list(self.garment.faults),
-                # Hidden while the intervention and the rekindle run: it differs by condition.
+                # Hidden while the condition's touch is being delivered (docs/LOG.md N7.D1):
+                # the sham is static at a lower pressure, so per-channel pressure and activity
+                # would name the condition. Everywhere else the garment runs the same in every
+                # condition.
                 "channel_pressure_kpa": (
-                    None
-                    if self.phase in ("intervention", "rekindle")
-                    else dict(self.garment.pressure_kpa)
+                    None if self.phase in CONDITION_PHASES else dict(self.garment.pressure_kpa)
                 ),
             },
         }
+
+    def _next_event(self) -> dict | None:
+        if self._upcoming is None:
+            return None
+        kind, label_key, block_index, block_type, due_s = self._upcoming
+        now_s = self.clock.t_session_s()
+        due_in_s = due_s - (0.0 if now_s is None else now_s)
+        return {
+            "kind": kind,
+            "label_key": label_key,
+            "block_index": block_index,
+            "block_type": block_type,
+            "due_in_s": due_in_s,
+            "overdue": due_in_s < 0,
+        }
+
+    def set_upcoming(
+        self,
+        kind: str,
+        label_key: str,
+        due_t_session_s: float,
+        block: sched.Block | None = None,
+    ) -> None:
+        """What the countdown counts down to (SPEC.md 7.4, 11). Never a condition."""
+        if kind not in UPCOMING_KINDS:
+            raise SessionError(f"upcoming kind {kind!r} is not one of {list(UPCOMING_KINDS)}")
+        self._upcoming = (
+            kind,
+            label_key,
+            None if block is None else block.index,
+            None if block is None else block.type,
+            float(due_t_session_s),
+        )
+
+    def clear_upcoming(self) -> None:
+        self._upcoming = None
+
+    def attach_interruptions(self, read: Callable[[], str | None]) -> None:
+        """Let the experimenter view say whether a stop or a pause is in force."""
+        self._read_interruption = read
 
     # -- logging -----------------------------------------------------------------------
 
@@ -234,7 +328,27 @@ class Session:
         """Session t=0 (SPEC.md 7.4). Everything scheduled is timed from here."""
         self.set_phase("sensitisation")
         self.clock.start_session()
-        self.log("sensitisation_started")
+        # The exact t=0 in the detail: the session file gets it only at close, and a resume
+        # after a crash has to reconstruct the clock from it (SPEC.md 15, tatp/resume.py).
+        self.log("sensitisation_started", detail=self.clock.sensitisation_start_iso)
+
+    def resume_sensitisation(self, start_iso: str, recorded_speed: float) -> None:
+        """Keep the original session t=0 after a crash (SPEC.md 15).
+
+        Reconstructed from the recorded wall-clock start, not from process start. The elapsed
+        wall time is scaled by the speed the crashed session ran at, which must be this one's:
+        a session resumed at another speed would have two time axes in one file.
+        """
+        if recorded_speed != self.clock.speed:
+            raise SessionError(
+                f"the session being resumed ran at clock speed {recorded_speed}, this one at "
+                f"{self.clock.speed}"
+            )
+        started = datetime.strptime(start_iso, ISO_FORMAT)
+        elapsed_wall_s = (datetime.now() - started).total_seconds()
+        self.clock.resume_session(elapsed_wall_s * recorded_speed)
+        self.clock.sensitisation_start_iso = start_iso
+        self.log("sensitisation_resumed", detail=start_iso)
 
     # -- blocks ------------------------------------------------------------------------
 
@@ -424,17 +538,9 @@ class Session:
     # -- provenance --------------------------------------------------------------------
 
     def _earlier_experimenters(self) -> set[str]:
-        """Initials recorded in this participant's earlier session files (SPEC.md 14.2)."""
-        pattern = f"TATP1_*_P{self.participant_code}_S*_session.csv"
-        found = set()
-        for path in sorted(self.data_folder.glob(pattern)):
-            if path == self.files.path("session"):
-                continue
-            for line in path.read_text(encoding="utf-8").splitlines():
-                key, _, value = line.partition(",")
-                if key == "experimenter_initials" and value:
-                    found.add(value)
-        return found
+        return earlier_experimenters(
+            self.data_folder, self.participant_code, self.files.path("session")
+        )
 
     def _provenance(
         self, room_temperature_c: float | None, relative_humidity_pct: float | None

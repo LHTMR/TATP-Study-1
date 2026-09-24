@@ -50,7 +50,7 @@ import statistics
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
 from tatp.config import Config
 from tatp.procedure import Procedure, Rig
@@ -606,6 +606,9 @@ class _RatedTrial(QObject):
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
+        # Precise: a coarse timer on Windows fires on the 15.6 ms system tick, which at the
+        # validator's accelerated clock is a large part of the 0.5 s it must be able to time.
+        self._timer.setTimerType(Qt.PreciseTimer)
         self._timer.timeout.connect(self._fire)
 
     # -- hooks -------------------------------------------------------------------------
