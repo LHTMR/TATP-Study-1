@@ -38,8 +38,11 @@ PAIN_F40_MN = 130.0
 PAIN_SLOPE = 51.6
 BRUSH_PCT = 10.0
 DISTANCES_MM = (40.0, 35.0, 45.0, 30.0)
-# Session seconds a timer-driven step may run late at CLOCK_SPEED on a loaded machine.
+# The touch-start test times what the experimenter sees, so it runs slower: at this speed the
+# tolerance below is 80 ms of real time, which a loaded machine's timers stay inside.
+TIMING_CLOCK_SPEED = 50.0
 TIMING_TOLERANCE_S = 4.0
+ROUNDING_S = 0.1  # two rounded milliseconds at TIMING_CLOCK_SPEED
 
 
 def compressed_schedule(loaded: cfg.Config) -> dict:
@@ -75,7 +78,7 @@ def loaded():
 
 
 def make_runner(loaded, tmp_path, resume=None, condition=None, seed=7,
-                fit_preview=False, session_number=1) -> SessionRunner:
+                fit_preview=False, session_number=1, speed=CLOCK_SPEED) -> SessionRunner:
     base = make_config(loaded, tmp_path)
     study1 = {**short_study(loaded), "choice": base.study1["choice"]}
     if fit_preview:
@@ -84,7 +87,7 @@ def make_runner(loaded, tmp_path, resume=None, condition=None, seed=7,
         **base.__dict__, "schedule": compressed_schedule(loaded), "study1": study1,
     })
     session = Session(
-        config, "01", session_number, "SM", EXAMPLES, clock=Clock(speed=CLOCK_SPEED),
+        config, "01", session_number, "SM", EXAMPLES, clock=Clock(speed=speed),
         rng_seed=seed if resume is None else resume.rng_seed,
         resumed_from="" if resume is None else resume.open.session_file.name,
     )
@@ -647,7 +650,8 @@ PRESS_AFTER_S = 20.0
 def _experimenter_sequence(app, loaded, tmp_path, condition) -> list[tuple[str, float]]:
     """What the experimenter screen shows, and when, from the touch start until the session
     moves on -- with a participant who presses the self-start after PRESS_AFTER_S."""
-    runner = make_runner(loaded, tmp_path / condition, condition=condition)
+    runner = make_runner(loaded, tmp_path / condition, condition=condition,
+                         speed=TIMING_CLOCK_SPEED)
     session = runner.session
     session.start_sensitisation()
     session.set_phase("intervention")
@@ -698,4 +702,5 @@ def test_the_touch_start_looks_the_same_to_the_experimenter_in_every_condition(
     assert texts[0] == texts[1] == texts[2]
     for sequence in sequences:
         moved_s = sequence[-1][1] - sequence[0][1]
-        assert display_s <= moved_s < display_s + TIMING_TOLERANCE_S
+        # A timer's milliseconds are rounded, so it can fire a hair early.
+        assert display_s - ROUNDING_S <= moved_s < display_s + TIMING_TOLERANCE_S

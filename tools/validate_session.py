@@ -5,15 +5,17 @@ Two halves, as SPEC.md 17.3 builds it.
 **The runner** drives `run_session.py`'s own path -- `run_session.build()`, then the event
 loop -- headless, with an accelerated clock, the mock garment, a virtual participant and a
 virtual experimenter (`sim/`), each scenario into a temporary data folder of its own. The
-normal participant runs two whole sessions, the full grid of `config/schedule.yaml`, with one
-seed. Every other scenario runs only as far as its error path needs and is then ended by the
-virtual experimenter's abort (`SCENARIO_ENDED`), because the rest of a session would prove
-nothing the normal runs do not: the other seed, the adversarial participants, the window closed
-mid-block. The adversarial experimenter's distances need both mapped time points and the
-session's end, so it runs whole. One scenario crashes mid-block -- the process stops with the
-session open -- and the next resumes it from its files (SPEC.md 15) and runs to the end. An
-exception anywhere in a run, or a run that does not finish, is recorded and fails the first
-check rather than being lost in Qt's stderr.
+normal participant runs one whole session, the full grid of `config/schedule.yaml`, and the
+same seed again into the intervention's blocks. Every other scenario runs only as far as its
+error path needs and is then ended by the virtual experimenter's abort (`SCENARIO_ENDED`),
+because the rest of a session would prove nothing the normal run does not. The adversarial
+experimenter's distances need both mapped time points and the session's end, so it runs whole;
+session 2 runs in the normal run's folder, to start from its estimate. One scenario crashes
+mid-block -- the process stops with the session open -- and the next resumes it from its files
+(SPEC.md 15) and runs to the end. The timing scenario, which is also the other seed, runs at
+SLOW_CLOCK_SPEED so its intervals can be judged in session seconds. An exception anywhere in a
+run, or a run that does not finish, is recorded and fails the first check rather than being
+lost in Qt's stderr.
 
 **Speed.** `CLOCK_SPEED` accelerates every session-paced interval. The ceiling on it is the
 garment table: every pattern event is a row, appended and flushed (SPEC.md 14.3), and above a
@@ -42,14 +44,14 @@ from __future__ import annotations
 import csv
 import math
 import os
-import statistics
+import shutil
 import sys
 import tempfile
 import time
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -66,6 +68,7 @@ import run_session  # noqa: E402
 from sim.experimenters import (  # noqa: E402
     RESUME_AFTER_S,
     SCENARIO_ENDED,
+    DisconnectsGarment,
     ImplausibleDistances,
     VirtualExperimenter,
 )
@@ -74,6 +77,9 @@ from sim.responders import (  # noqa: E402
     F40AboveTop,
     F40BelowBottom,
     HoldsAdjustmentAtMaximum,
+    RatesEverythingHundred,
+    RatesEverythingZero,
+    RatesRandomly,
     StopsAtMaximum,
     StopsMidBlock,
     StopsResponding,
@@ -86,6 +92,7 @@ from tatp import preflight as pre  # noqa: E402
 from tatp.clock import ISO_FORMAT  # noqa: E402
 from tatp.config import CONFIG_DIR, REPO_ROOT, hash_files  # noqa: E402
 from tatp.datafiles import parse_schema  # noqa: E402
+from tatp.pinprick import PAIN_SCALE, prior_for  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
 from tatp.units import MS_PER_S, S_PER_MIN  # noqa: E402
 
@@ -112,8 +119,17 @@ SAME_SEED = "normal_same_seed"
 OTHER_SEED = "normal_other_seed"
 CRASHED = "crashes_mid_block"
 RESUMED = "resumed"
-CLOSED = "closes_window_mid_block"
 DISTANCES = "implausible_distances"
+SESSION_TWO = "session_two"
+RATES_ZERO = "rates_everything_zero"
+RATES_HUNDRED = "rates_everything_hundred"
+RATES_RANDOM = "rates_randomly"
+DISCONNECTS = "disconnects_garment_then_closes_window"
+CLOSED = DISCONNECTS
+# The run the timing checks are judged on (docs/LOG.md N7.D15).
+TIMING = OTHER_SEED
+# Every table a VAS answer is written to.
+RATED_TABLES = ("pinprick", "brush", "touch_ratings", "touchcal_estimate")
 
 
 @dataclass(frozen=True)
@@ -138,16 +154,40 @@ class Scenario:
     # Keep the adjustment time-out as configured: the scenario that tests it.
     configured_timeout: bool = False
     clock_speed: float = CLOCK_SPEED
+    # ...or once the participant has rated this many pinprick applications.
+    ends_after_pinprick: int | None = None
+    session_number: int = SESSION_NUMBER
+    # Run in this scenario's data folder, after it, instead of a folder of its own.
+    folder_of: str | None = None
+    # study1.yaml sections replaced, key by key, for this scenario only.
+    study_overrides: dict = field(default_factory=dict)
 
     @property
     def ends_early(self) -> bool:
-        return self.ends_after_stage is not None or self.ends_after_adjustments is not None
+        return (self.ends_after_stage is not None or self.ends_after_adjustments is not None
+                or self.ends_after_pinprick is not None)
 
+
+# The timing scenario's touch calibration, cut to the fewest trials the schema allows: it is
+# there only to be got through, at a speed slow enough to time the pinprick intervals by.
+QUICK_CALIBRATION = {
+    "estimation_n_amplitudes": 3, "channel_match_adjustments": 1,
+    "equalisation_pairs_to_flag": 1, "equalisation_readjust_max_passes": 0,
+    "pleasantness_adjustments": 1, "evenness_check": False,
+}
+TIMING_APPLICATIONS = 10
 
 SCENARIOS: tuple[Scenario, ...] = (
     Scenario(NORMAL),
-    Scenario(SAME_SEED),
-    Scenario(OTHER_SEED, seed=SEED + 1, ends_after_stage="pre_sensitisation.brush_primary"),
+    # Far enough to take in the intervention's blocks; compared with the normal run's prefix.
+    Scenario(SAME_SEED, ends_after_stage="block.2"),
+    # The other seed, and the timing: slow enough that the configured intervals are tens of
+    # milliseconds of real time, so a missing 0.5 s is a measurable 50 ms (docs/LOG.md N7.D15).
+    Scenario(OTHER_SEED, seed=SEED + 1, clock_speed=SLOW_CLOCK_SPEED,
+             ends_after_pinprick=TIMING_APPLICATIONS,
+             study_overrides={"touch_calibration": QUICK_CALIBRATION}),
+    Scenario(SESSION_TWO, session_number=2, folder_of=NORMAL,
+             ends_after_stage="pre_sensitisation.long"),
     Scenario("confirms_without_marker", ConfirmsWithoutMarker,
              ends_after_stage="pre_sensitisation.brush_primary"),
     Scenario("stops_mid_block", StopsMidBlock, ends_after_stage="block.1"),
@@ -161,13 +201,18 @@ SCENARIOS: tuple[Scenario, ...] = (
              configured_timeout=True),
     Scenario("f40_below_bottom", F40BelowBottom, ends_after_stage="pre_sensitisation.long"),
     Scenario("f40_above_top", F40AboveTop, ends_after_stage="pre_sensitisation.long"),
+    Scenario(RATES_ZERO, RatesEverythingZero, ends_after_stage="pre_sensitisation.long"),
+    Scenario(RATES_HUNDRED, RatesEverythingHundred, ends_after_stage="pre_sensitisation.long"),
+    Scenario(RATES_RANDOM, RatesRandomly, ends_after_stage="pre_sensitisation.long"),
+    # Disconnects in block 1, reconnects after it, and then the window is closed in block 4:
+    # two of SPEC.md 17.5's experimenters in one run.
+    Scenario(DISCONNECTS, experimenter=DisconnectsGarment, closes_in_block=4),
     Scenario(DISTANCES, experimenter=ImplausibleDistances),
-    Scenario(CLOSED, closes_in_block=2),
     Scenario(CRASHED, crashes_in_block=4),
     Scenario(RESUMED, resumes=CRASHED),
 )
 BY_NAME = {scenario.name: scenario for scenario in SCENARIOS}
-FULL = (NORMAL, SAME_SEED, DISTANCES)
+FULL = (NORMAL, DISTANCES)
 # Normal participants whose trials must all be there, like the normal run's, as far as they go.
 LOSSLESS = ("confirms_without_marker", "stops_mid_block", DISTANCES)
 # Out of range by design at pre-S, and in which direction.
@@ -195,15 +240,12 @@ TRIAL_ORDER_COLUMNS = {
         "channel", "reference_channel", "comparison_index", "order", "catch_trial",
     ),
 }
-# Real seconds the median timer-driven interval may be off its configured length. At
-# CLOCK_SPEED the configured intervals are milliseconds of real time, and each of the chained
-# single-shot timers that make one can be late by the platform's timer resolution, so the check
-# is over every application of every run. It is loose enough for a loaded machine -- the gate
-# runs this beside the whole test suite -- and still catches a misread interval: leaving out
-# the 9 s rating delay moves every interval by 9 ms.
-INTERVAL_TOLERANCE_S = 0.004
-# The low decile: 1 / 10 of the way up the sorted intervals.
-UNLOADED_QUANTILE_DIVISOR = 10
+# SESSION seconds a timed interval may be off its configured length. Judged only on the timing
+# scenario, at SLOW_CLOCK_SPEED, where this is 25 ms of real time -- above the platform's timer
+# resolution, and half of the smallest thing that must not be lost: dropping the 0.5 s between
+# the cue and the stimulus moves every interval by 0.5 s and fails. A loaded machine makes a
+# timer late, never early, so each check is on the interval the load disturbed least.
+TIMING_TOLERANCE_S = 0.25
 # Float columns round-trip through text, so equal values compare within this.
 FLOAT_TOLERANCE = 1e-6
 
@@ -262,6 +304,8 @@ def run_config(loaded: cfg.Config, folder: Path, scenario: Scenario) -> cfg.Conf
     touch = dict(loaded.study1["touch_calibration"])
     if not scenario.configured_timeout:
         touch["adjustment_timeout_s"] = float(touch["adjustment_timeout_s"]) * speed
+    for key, value in scenario.study_overrides.get("touch_calibration", {}).items():
+        touch[key] = value
     study1 = {**loaded.study1, "choice": choice, "touch_calibration": touch}
     return cfg.Config(**{**loaded.__dict__, "hardware": hardware, "study1": study1})
 
@@ -272,7 +316,7 @@ def run_one(scenario: Scenario, folder: Path, loaded: cfg.Config) -> Run:
     args = run_session.parse_args(
         [
             "--participant", PARTICIPANT,
-            "--session", str(SESSION_NUMBER),
+            "--session", str(scenario.session_number),
             "--experimenter", EXPERIMENTER,
             "--patterns", str(PATTERNS),
             "--participant-language", loaded.participant_language,
@@ -291,6 +335,9 @@ def run_one(scenario: Scenario, folder: Path, loaded: cfg.Config) -> Run:
             return scenario.ends_after_stage in _completed_now(session)
         if scenario.ends_after_adjustments is not None:
             return participant.adjustments_seen >= scenario.ends_after_adjustments
+        if scenario.ends_after_pinprick is not None:
+            pain = sum(scale == PAIN_SCALE for scale, _ in participant.ratings)
+            return pain >= scenario.ends_after_pinprick
         return False
 
     experimenter = scenario.experimenter(
@@ -415,7 +462,7 @@ def _read_run(scenario, config, session, runner, participant, experimenter, erro
 def run_all(loaded: cfg.Config, root: Path) -> dict[str, Run]:
     runs = {}
     for scenario in SCENARIOS:
-        folder = root / (scenario.resumes or scenario.name)
+        folder = root / (scenario.resumes or scenario.folder_of or scenario.name)
         runs[scenario.name] = run_one(scenario, folder, loaded)
     return runs
 
@@ -820,94 +867,79 @@ def needs_pinprick_rows(runs):
     return None
 
 
+def _session_s(run: Run, start_iso: str, end_iso: str) -> float:
+    """The session seconds between two wall-clock stamps of one run."""
+    real_s = (_iso(end_iso) - _iso(start_iso)).total_seconds()
+    return real_s * float(run.session["clock_speed"])
+
+
 def needs_rated_pinprick_rows(runs):
-    if not any(row["rating_cue_iso"] for row in runs[NORMAL].rows.get("pinprick", [])):
-        return "the normal run wrote no pinprick row with a rating cue"
+    if TIMING not in runs:
+        return "the timing scenario did not run"
+    if not any(row["rating_cue_iso"] for row in runs[TIMING].rows.get("pinprick", [])):
+        return "the timing run wrote no pinprick row with a rating cue"
     return None
 
 
 def check_rating_cue_interval(runs):
-    """Warning cue to rating cue: the cue lead plus the 9 s delay (SPEC.md 10.5, 8).
-
-    Judged over every rated application in every run, against an absolute tolerance. One
-    interval is three chained single-shot timers, and on a loaded Windows machine -- the gate
-    runs this beside the whole test suite -- any one of them can be late by far more than its
-    resolution. A late interval says the machine was busy; the unloaded ones off by a
-    configured interval's worth say the software timed the wrong thing.
-    """
-    # Each run is judged against its own clock speed, so what is pooled is how far each
-    # interval is from what its run configured, in real seconds.
-    deviations = []
-    for run in runs.values():
-        study = run.config.study1
-        expected_s = (
-            float(study["cues"]["warning_lead_s"])
-            + float(study["pinprick"]["rating_cue_delay_s"])
-        ) / float(run.session["clock_speed"])
-        deviations += [
-            (_iso(row["rating_cue_iso"]) - _iso(row["cue_onset_iso"])).total_seconds()
-            - expected_s
-            for row in run.rows.get("pinprick", [])
-            if row["rating_cue_iso"]
-        ]
-    # A busy machine only ever makes a timer late, never early, so the intervals the load left
-    # alone are the short ones: judged on a low quantile rather than the median, which the gate
-    # running beside the whole test suite drags late by more than a millisecond or two.
-    ordered = sorted(deviations)
-    low_s = ordered[len(ordered) // UNLOADED_QUANTILE_DIVISOR]
-    if abs(low_s) > INTERVAL_TOLERANCE_S:
-        return [
-            f"the warning-cue-to-rating-cue interval is off its configured length by "
-            f"{low_s:+.4f} s real at the low decile of {len(deviations)} applications, beyond "
-            f"+/- {INTERVAL_TOLERANCE_S} s"
-        ]
+    """Warning cue to rating cue: the 1 s cue lead plus the 9 s delay (SPEC.md 10.5, 8), in
+    session seconds, within TIMING_TOLERANCE_S, on the application the load disturbed least."""
+    run = runs[TIMING]
+    study = run.config.study1
+    expected_s = (float(study["cues"]["warning_lead_s"])
+                  + float(study["pinprick"]["rating_cue_delay_s"]))
+    deviations = [
+        _session_s(run, row["cue_onset_iso"], row["rating_cue_iso"]) - expected_s
+        for row in run.rows.get("pinprick", []) if row["rating_cue_iso"]
+    ]
+    least_s = min(deviations)
+    if abs(least_s) > TIMING_TOLERANCE_S:
+        return [f"warning cue to rating cue is {least_s:+.3f} s of session time off its "
+                f"configured {expected_s:g} s at best over {len(deviations)} applications, "
+                f"beyond +/- {TIMING_TOLERANCE_S} s"]
     return []
 
 
-def _isi_intervals(run: Run) -> list[float]:
-    """Real seconds from each rating's confirm to the next application's cue, in one run of a
-    protocol. The confirm is the rating cue plus `rt_s`, which is session time."""
-    speed = float(run.session["clock_speed"])
-    discarded = {row["trial_timestamp_iso"] for row in run.rows.get("discards", [])}
-    intervals = []
-    for table in ("pinprick", "brush"):
-        rows = [r for r in run.rows.get(table, []) if r["timestamp_iso"] not in discarded]
-        for a, b in zip(rows, rows[1:], strict=False):
-            same = all(a.get(k) == b.get(k) for k in
-                       ("phase", "block_index", "protocol", "region", "run_index"))
-            if not same or int(b["trial_index"]) != int(a["trial_index"]) + 1:
-                continue
-            if not (a["rating_cue_iso"] and a["rt_s"]):
-                continue
-            confirmed = _iso(a["rating_cue_iso"]) + timedelta(seconds=float(a["rt_s"]) / speed)
-            intervals.append((_iso(b["cue_onset_iso"]) - confirmed).total_seconds())
-    return intervals
+def _isi_deviations(run: Run) -> list[tuple[float, float]]:
+    """(drawn, measured - drawn) in session seconds for every jittered interval followed by
+    its next application's cue. The draw is what the protocol logged as `interval`."""
+    events = run.events()
+    found = []
+    for i, row in enumerate(events):
+        if row["event"] != "interval":
+            continue
+        drawn_s = float(row["detail"].split()[0])
+        cue = next((later for later in events[i + 1:] if later["event"] == "warning_cue"), None)
+        if cue is None or not cue["detail"].startswith("trial"):
+            continue  # the protocol ended; the next cue is another protocol's
+        found.append((drawn_s, _session_s(run, row["timestamp_iso"], cue["timestamp_iso"])
+                      - drawn_s))
+    return found
 
 
 def needs_two_applications_in_a_run(runs):
-    if not _isi_intervals(runs[NORMAL]):
-        return "no protocol run has two consecutive rated applications"
+    if TIMING not in runs:
+        return "the timing scenario did not run"
+    if not _isi_deviations(runs[TIMING]):
+        return "the timing run has no interval between two applications"
     return None
 
 
 def check_inter_stimulus_interval(runs):
-    """The jittered interval after each application (SPEC.md 8.3): its median inside the
-    configured range, at the clock's speed, give or take the timers' tolerance."""
-    failures = []
-    for name in FULL:
-        run = runs[name]
-        speed = float(run.session["clock_speed"])
-        pinprick = run.config.study1["pinprick"]
-        low_s = float(pinprick["isi_min_s"]) / speed - INTERVAL_TOLERANCE_S
-        high_s = float(pinprick["isi_max_s"]) / speed + INTERVAL_TOLERANCE_S
-        intervals = _isi_intervals(run)
-        median_s = statistics.median(intervals)
-        if not low_s <= median_s <= high_s:
-            failures.append(f"{name}: median inter-stimulus interval {median_s:.4f} s real "
-                            f"over {len(intervals)}, expected {low_s:.4f}-{high_s:.4f} s")
-        if min(intervals) < low_s:
-            failures.append(f"{name}: an inter-stimulus interval of {min(intervals):.4f} s "
-                            f"real is shorter than the configured minimum")
+    """The jittered interval after each application (SPEC.md 8.3): every draw inside the
+    configured range, and the interval actually waited equal to the draw, in session seconds,
+    within TIMING_TOLERANCE_S on the one the load disturbed least."""
+    run = runs[TIMING]
+    pinprick = run.config.study1["pinprick"]
+    low_s, high_s = float(pinprick["isi_min_s"]), float(pinprick["isi_max_s"])
+    found = _isi_deviations(run)
+    failures = [f"an interval of {drawn_s} s was drawn outside {low_s:g}-{high_s:g} s"
+                for drawn_s, _ in found if not low_s <= drawn_s <= high_s]
+    least_s = min(deviation for _, deviation in found)
+    if abs(least_s) > TIMING_TOLERANCE_S:
+        failures.append(f"the interval waited is {least_s:+.3f} s of session time off the "
+                        f"one drawn, at best over {len(found)}, beyond +/- "
+                        f"{TIMING_TOLERANCE_S} s")
     return failures
 
 
@@ -943,16 +975,21 @@ def needs_the_seed_to_matter(runs):
     orders = [_trial_order(run) for run in _normal_runs(runs)]
     if not orders[0]:
         return "the normal run recorded no trials"
-    # The other seed's run is shorter, so it is compared over as far as it goes.
-    other = orders[2]
-    if orders[0] == orders[1] and orders[0][: len(other)] == other:
+    # The other runs are shorter, so each is compared over as far as it goes.
+    same, other = orders[1], orders[2]
+    if orders[0][: len(same)] == same and orders[0][: len(other)] == other:
         return ("trial order is identical under two different seeds, so nothing the seed "
                 "controls is in it yet")
     return None
 
 
 def check_same_seed_same_trial_order(runs):
-    first, second = _trial_order(runs[NORMAL]), _trial_order(runs[SAME_SEED])
+    # The same-seed run ends in the intervention, so it is the normal run's prefix that must
+    # match, and it must reach the intervention's blocks to count.
+    second = _trial_order(runs[SAME_SEED])
+    first = _trial_order(runs[NORMAL])[: len(second)]
+    if not any(trial[0] == "pinprick" and trial[2] for trial in second):
+        return ["the same-seed run never reached an intervention block"]
     if first == second:
         return []
     differ = next(
@@ -1206,6 +1243,15 @@ def check_emergency_stop_mid_block_resumes(runs):
         failures.append(f"after the stop, expected {wanted} in order")
     if "garment_restored" not in after:
         failures.append("the intervention's touch was not restored after the stop")
+    # Exactly one resume answers the mid-block stop, and the experimenter pressed Resume once
+    # for every stop in the run -- the rehearsal's and this one.
+    resumes_after = after.count("resumed")
+    if resumes_after != 1:
+        failures.append(f"the mid-block stop was resumed {resumes_after} times, not once")
+    all_stops = sum(row["event"] == "emergency_stop" for row in events)
+    if run.stats["resumes"] != all_stops:
+        failures.append(f"the experimenter resumed {run.stats['resumes']} times for "
+                        f"{all_stops} stops")
     stop_s = float(stop["t_session_s"])
     zeroed = [row for row in run.rows.get("garment", [])
               if row["event"] == "stop" and row["t_session_s"]
@@ -1327,10 +1373,26 @@ def check_implausible_distances_are_queried_and_missing_ones_flagged(runs):
 
 
 def check_preflight_refuses_and_warns(runs):
-    """SPEC.md 17.5's launch-time experimenters, against the normal run's own data folder."""
-    run = runs[NORMAL]
+    """SPEC.md 17.5's launch-time experimenters, against a data folder holding one completed
+    session 1 (the adversarial experimenter's), and one holding an aborted attempt followed by
+    a completed session."""
+    run = runs[DISTANCES]
     config, folder = run.config, run.folder
     failures = []
+
+    # An aborted file listed before a completed one: every file is read, not the first.
+    mixed = folder.parent / "preflight_aborted_then_completed"
+    mixed.mkdir()
+    closed_file, completed_file = _session_path(runs[CLOSED]), _session_path(run)
+    shutil.copy(closed_file, mixed / closed_file.name.replace("TATP1_", "TATP1_0000_"))
+    shutil.copy(completed_file, mixed / completed_file.name.replace("TATP1_", "TATP1_9999_"))
+    ordered = sorted(mixed.glob("*_session.csv"))
+    if "0000" not in ordered[0].name:
+        failures.append("the aborted file is not listed first, so the case tests nothing")
+    found = {(f.severity, f.text_key)
+             for f in pre.preflight(config, PARTICIPANT, SESSION_NUMBER, EXPERIMENTER, mixed)}
+    if (pre.REFUSE, "preflight.session_completed") not in found:
+        failures.append(f"an aborted attempt then a completed session: not refused, {found}")
 
     def keys(code, number, initials):
         return {(f.severity, f.text_key)
@@ -1347,7 +1409,7 @@ def check_preflight_refuses_and_warns(runs):
                            (pre.WARN, "warnings.experimenter_changed")),
     }
     lock = pre.InstanceLock(folder)
-    assert lock.acquire(), "the normal run left its data folder locked"
+    assert lock.acquire(), "the run left its data folder locked"
     cases["a second instance"] = (keys(PARTICIPANT, 2, EXPERIMENTER),
                                   (pre.REFUSE, "preflight.another_instance"))
     lock.release()
@@ -1404,7 +1466,149 @@ def check_a_crashed_session_resumes_where_it_stopped(runs):
         failures.append("post-I did not start from the reloaded post-S estimate")
     if not resumed.completed:
         failures.append("the resumed session did not reach its end")
+    # SPEC.md 15, docs/LOG.md N7.D13: every stage from the crash on draws exactly what the
+    # uninterrupted session with the same seed drew -- here, every jittered interval of every
+    # block, the redone one included.
+    normal = runs[NORMAL]
+    for index in sorted(resumed.schedule_offsets_min):
+        if index < BY_NAME[CRASHED].crashes_in_block:
+            continue
+        drawn = _drawn_intervals(resumed, index)
+        if drawn != _drawn_intervals(normal, index):
+            failures.append(f"block {index} drew {drawn} after the resume, "
+                            f"{_drawn_intervals(normal, index)} uninterrupted")
     return failures
+
+
+def _drawn_intervals(run: Run, block_index: int) -> list[str]:
+    return [row["detail"] for row in run.events()
+            if row["event"] == "interval" and row["block_index"] == str(block_index)]
+
+
+def check_every_rating_given_is_recorded(runs):
+    """SPEC.md 17.5, "no data is lost": every VAS the rating adversaries answered is a row."""
+    failures = []
+    for name in (RATES_ZERO, RATES_HUNDRED, RATES_RANDOM):
+        run = runs[name]
+        given = len(run.stats["ratings"])
+        rows = sum(len(run.rows.get(table, [])) for table in RATED_TABLES)
+        if given != rows:
+            failures.append(f"{name}: {given} ratings given, {rows} rows")
+    return failures
+
+
+def check_rating_everything_zero_falls_back_and_runs_off_the_top(runs):
+    run = runs[RATES_ZERO]
+    failures = []
+    fits = run.rows.get("touchcal_fit", [])
+    if not fits or any(r["stage1_pass"] == "true" for r in fits):
+        failures.append("a flat touch calibration was not failed at stage 1")
+    channels = run.rows.get("touchcal_channels", [])
+    if not channels or any(r["targets_source"] == "fit" for r in channels):
+        failures.append("the unusable fit was not replaced by a recorded fallback")
+    if any(r["valid_for_analysis"] == "true" for r in channels):
+        failures.append("a fallback calibration is marked valid for analysis")
+    pre_s = [r for r in run.rows.get("calibration_pinprick", [])
+             if r["phase"] == "pre_sensitisation"]
+    if not pre_s or pre_s[-1]["out_of_range_direction"] != "above":
+        failures.append("every rating 0: the pre-S estimate is not out of range above")
+    return failures
+
+
+def check_rating_everything_hundred_caps_every_site(runs):
+    """SPEC.md 8.2: no filament at or above one rated intolerable, at that site and, once
+    enough sites are capped, anywhere -- within the time point."""
+    run = runs[RATES_HUNDRED]
+    pinprick = run.config.study1["pinprick"]
+    order = [f["label_g"] for f in sorted(run.config.filaments["filaments"],
+                                          key=lambda f: f["force_nominal_mn"])]
+    global_after = int(pinprick["intolerable_sites_for_global_cap"])
+    failures = []
+    rows = [r for r in run.rows.get("pinprick", []) if r["phase"] == "pre_sensitisation"]
+    if not rows or any(r["intolerable"] != "true" for r in rows):
+        failures.append("a rating at the top of the scale was not flagged intolerable")
+    caps: dict[tuple[str, str], int] = {}
+    for row in rows:
+        label = row["applied_filament_label_g"]
+        key, index = (row["region"], row["site_index"]), order.index(label)
+        region_caps = [cap for (region, _), cap in caps.items() if region == row["region"]]
+        ceiling = min(region_caps) if len(region_caps) >= global_after else None
+        if key in caps and index >= caps[key]:
+            failures.append(f"site {row['site_index']} was given {label} g after its cap")
+        if ceiling is not None and index >= ceiling:
+            failures.append(f"{label} g was given after every site was capped")
+        caps[key] = min(caps.get(key, index), index)
+    if "intolerable_global_cap" not in _event_names(run):
+        failures.append("the cap never escalated to every site")
+    return failures
+
+
+def check_random_ratings_are_flagged_inconsistent_when_and_only_when(runs):
+    """The consistency check (comparison doc 6.7) warns exactly when rho is below the floor."""
+    run = runs[RATES_RANDOM]
+    floor = float(run.config.study1["pinprick"]["ordinal_rho_min"])
+    failures = []
+    rows = run.rows.get("calibration_pinprick", [])
+    if not rows:
+        return ["the random rater produced no estimate"]
+    low = sum(1 for r in rows if r["ordinal_rho"] and float(r["ordinal_rho"]) < floor)
+    warned = _event_names(run).count("ordinal_consistency_low")
+    if low != warned:
+        failures.append(f"{low} estimates below the rho floor, {warned} warnings")
+    return failures
+
+
+def check_a_garment_disconnected_mid_block_loses_nothing(runs):
+    run = runs[DISCONNECTS]
+    failures = []
+    names = _event_names(run)
+    if "garment_disconnected" not in names or "garment_connected" not in names:
+        return ["the disconnect and the reconnect were not both logged"]
+    off = next(r for r in run.events() if r["event"] == "garment_disconnected")
+    if off["block_index"] != str(DisconnectsGarment.BLOCK):
+        failures.append("the garment was not disconnected mid-block")
+    commands = [r["event"] for r in run.rows.get("garment", [])]
+    if "disconnect" not in commands or "connect" not in commands[commands.index("disconnect"):]:
+        failures.append("the garment table does not show the disconnect and the reconnect")
+    later = names[names.index("garment_connected"):]
+    if "garment_activated" not in later:
+        failures.append("the touch was not started again after the reconnect")
+    block = str(DisconnectsGarment.BLOCK)
+    expected = [r for r in runs[NORMAL].rows.get("pinprick", []) if r["block_index"] == block]
+    got = [r for r in run.rows.get("pinprick", []) if r["block_index"] == block]
+    if len(got) != len(expected):
+        failures.append(f"the block the garment was disconnected in has {len(got)} rows, "
+                        f"not {len(expected)}")
+    return failures
+
+
+def check_session_two_starts_from_session_ones_estimate(runs):
+    """SPEC.md 8.2: a later session's pre-S search starts from the previous session's pre-S."""
+    run, first = runs[SESSION_TWO], runs[NORMAL]
+    session_one = [r for r in first.rows.get("calibration_pinprick", [])
+                   if r["phase"] == "pre_sensitisation" and r["superseded"] == "false"]
+    rows = [r for r in run.rows.get("calibration_pinprick", [])
+            if r["phase"] == "pre_sensitisation"]
+    if not session_one or not rows:
+        return ["no pre-S estimate in session 1 or session 2"]
+    prior = prior_for(run.config, "pre_sensitisation", 2, float(session_one[-1]["f40_mn"]))
+    failures = []
+    if rows[0]["start_source"] != "previous_timepoint":
+        failures.append(f"session 2 started from {rows[0]['start_source']}")
+    if rows[0]["start_filament_label_g"] != prior.start_filament_label_g:
+        failures.append(f"session 2 started at {rows[0]['start_filament_label_g']} g, the "
+                        f"prior is {prior.start_filament_label_g} g")
+    return failures
+
+
+def _session_path(run: Run) -> Path:
+    """The run's own session file: the one holding its seed and start time."""
+    for path in sorted(run.folder.glob(f"TATP1_*_P{PARTICIPANT}_S*_session.csv")):
+        with path.open(encoding="utf-8", newline="") as handle:
+            values = {row["key"]: row["value"] for row in csv.DictReader(handle)}
+        if values.get("session_start_iso") == run.session.get("session_start_iso"):
+            return path
+    raise AssertionError(f"{run.name}: its session file is not in {run.folder}")
 
 
 def _session_file_name(run: Run) -> str:
@@ -1468,6 +1672,17 @@ CHECKS: list[Check] = [
           check_closing_the_window_mid_block_loses_nothing),
     Check("a_crashed_session_resumes_where_it_stopped", _needs(RESUMED),
           check_a_crashed_session_resumes_where_it_stopped),
+    Check("every_rating_given_is_recorded", _always, check_every_rating_given_is_recorded),
+    Check("rating_everything_zero_falls_back_and_runs_off_the_top", _needs(RATES_ZERO),
+          check_rating_everything_zero_falls_back_and_runs_off_the_top),
+    Check("rating_everything_hundred_caps_every_site", _needs(RATES_HUNDRED),
+          check_rating_everything_hundred_caps_every_site),
+    Check("random_ratings_flagged_inconsistent_when_and_only_when", _needs(RATES_RANDOM),
+          check_random_ratings_are_flagged_inconsistent_when_and_only_when),
+    Check("a_garment_disconnected_mid_block_loses_nothing", _needs(DISCONNECTS),
+          check_a_garment_disconnected_mid_block_loses_nothing),
+    Check("session_two_starts_from_session_ones_estimate", _needs(SESSION_TWO),
+          check_session_two_starts_from_session_ones_estimate),
 ]
 
 

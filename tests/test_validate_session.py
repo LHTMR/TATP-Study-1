@@ -197,21 +197,38 @@ def test_an_empty_pattern_list_does_not_match_every_screen(loaded):
     assert vs.check_screens_showed_nothing_forbidden({vs.NORMAL: run}) == []
 
 
-def test_a_rating_interval_off_by_the_configured_delay_fails(loaded):
-    speed = 1000.0
-    # The configured 1 s lead plus 9 s delay is 10 ms at this speed; this one took 1 ms.
+def _timed(loaded, rating_cue_ms: int) -> dict:
+    """A timing run at the slow speed with one application, its rating cued this many real
+    milliseconds after its warning cue."""
     rows = [
         _pinprick(cue_onset_iso="2026-09-23T10:00:00.000",
-                  rating_cue_iso="2026-09-23T10:00:00.001", trial_index="1")
+                  rating_cue_iso=f"2026-09-23T10:00:{rating_cue_ms // 1000:02d}."
+                                 f"{rating_cue_ms % 1000:03d}", trial_index="1")
     ]
-    run = _run(loaded, rows={"pinprick": rows}, session={"clock_speed": str(speed)})
-    assert vs.check_rating_cue_interval({vs.NORMAL: run})
+    speed = str(vs.SLOW_CLOCK_SPEED)
+    return {vs.TIMING: _run(loaded, vs.TIMING, rows={"pinprick": rows},
+                            session={"clock_speed": speed})}
+
+
+def test_the_rating_interval_is_judged_in_session_seconds(loaded):
+    # 1 s lead plus 9 s delay: 10 s of session time, 1000 ms real at 10x.
+    assert vs.check_rating_cue_interval(_timed(loaded, 1000)) == []
+    assert vs.check_rating_cue_interval(_timed(loaded, 1015)) == [], "a timer 15 ms late"
+
+
+def test_a_missing_half_second_warning_lead_fails(loaded):
+    """The 0.5 s between the cue and the stimulus, left out: 50 ms real at 10x."""
+    assert vs.check_rating_cue_interval(_timed(loaded, 950))
+
+
+def test_a_rating_interval_off_by_the_configured_delay_fails(loaded):
+    assert vs.check_rating_cue_interval(_timed(loaded, 100))
 
 
 def _orders(loaded, *sites):
     rows = {
         name: _run(loaded, name, rows={"pinprick": [_pinprick(
-            timestamp_iso="2026-09-23T10:00:00.000", site_index=site
+            timestamp_iso="2026-09-23T10:00:00.000", site_index=site, block_index="1"
         )]})
         for name, site in zip((vs.NORMAL, vs.SAME_SEED, vs.OTHER_SEED), sites, strict=True)
     }

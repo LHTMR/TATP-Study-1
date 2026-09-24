@@ -45,7 +45,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
 from tatp.interruption import Interruptions
 from tatp.session import Session
@@ -121,6 +121,9 @@ class Procedure(QObject):
         self._child: Procedure | None = None
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
+        # Precise, like the trials' (tatp/pinprick.py): the intervals between applications are
+        # timed against their configured length.
+        self._timer.setTimerType(Qt.PreciseTimer)
         self._timer.timeout.connect(self._fire)
         self._pending: Callable[[], None] | None = None
         self._on_go: Callable[[], None] | None = None

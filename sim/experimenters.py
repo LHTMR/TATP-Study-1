@@ -223,6 +223,31 @@ class VirtualExperimenter(QObject):
         self.rig.experimenter.resume_requested.emit()
 
 
+class DisconnectsGarment(VirtualExperimenter):
+    """SPEC.md 17.5: disconnects the garment mid-block, then connects it again after the block.
+
+    It knows which block it launched, as the experimenter at the bench does.
+    """
+
+    BLOCK = 1
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disconnected = False
+        self.reconnected = False
+
+    def _tick(self) -> None:
+        super()._tick()
+        session, window = self.rig.session, self.rig.experimenter
+        if not self.disconnected and session.block_index == self.BLOCK:
+            self.disconnected = True
+            window.garment_disconnect_requested.emit()
+        elif (self.disconnected and not self.reconnected
+              and session.block_index != self.BLOCK):
+            self.reconnected = True
+            window.garment_connect_requested.emit()
+
+
 class ImplausibleDistances(VirtualExperimenter):
     """SPEC.md 17.5: implausible mapping distances, then the last time point left unentered.
 

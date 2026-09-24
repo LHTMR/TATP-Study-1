@@ -709,6 +709,43 @@ class StopsResponding(VirtualParticipant):
         return {**super().stats(), "ignored_adjustments": self.ignored_adjustments}
 
 
+class _RatesFixed(VirtualParticipant):
+    """Every VAS rated at one level, whatever it asks about. Adjustments and choices as normal.
+
+    The pain it is asked about is still felt and discarded, so a filament applied is never
+    carried into the next rating.
+    """
+
+    LEVEL_PCT = MIN_PCT
+
+    def rating_for(self, scale: str) -> float:
+        super().rating_for(scale)
+        return self.LEVEL_PCT
+
+
+class RatesEverythingZero(_RatesFixed):
+    """SPEC.md 17.5. The error paths: the touch calibration's fit is flat, so stage 1 fails,
+    is re-run and falls back; the pain search climbs off the top of the ladder."""
+
+    LEVEL_PCT = MIN_PCT
+
+
+class RatesEverythingHundred(_RatesFixed):
+    """SPEC.md 17.5. Every pinprick at the top of the scale is the intolerable proxy, so every
+    rating caps its site and the cap escalates to every site (SPEC.md 8.2)."""
+
+    LEVEL_PCT = MAX_PCT
+
+
+class RatesRandomly(VirtualParticipant):
+    """SPEC.md 17.5. Every VAS rated uniformly at random, from the participant's own seeded
+    stream. The error paths: the consistency check (low rank correlation) and stage 1."""
+
+    def rating_for(self, scale: str) -> float:
+        super().rating_for(scale)
+        return float(self.model._reported["rng"].uniform(MIN_PCT, MAX_PCT))
+
+
 class F40BelowBottom(VirtualParticipant):
     """Sensitive beyond the ladder: even the lightest filament is rated above 40.
 

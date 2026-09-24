@@ -283,6 +283,7 @@ class SessionRunner(Procedure):
         self._touch_on = False
         self._delivery: _QuietDeliveryStart | None = None
         self._redeliver = False
+        self._touch_after_block = False
         # Set for a session resumed after its rekindle heat was launched (LOG N7.D14).
         self._resumed_heat_t_s: float | None = None
 
@@ -640,7 +641,34 @@ class SessionRunner(Procedure):
     def _delivery_resumed(self) -> None:
         if self._redeliver:
             self._redeliver = False
+            self._restart_touch()
+
+    def _restart_touch(self) -> None:
+        """Start the touch again -- at once, or once the block in progress has ended.
+
+        A delivery puts its cue, and any self-start prompt, on the participant's screen, and
+        inside a block that screen belongs to the block's own trial. So in a block the touch
+        stays off until the block ends, and that is logged (docs/LOG.md N7.D17).
+        """
+        if self.session.block_index is None:
             self._start_delivery()
+            return
+        self._touch_after_block = True
+        self.session.log(
+            "touch_restart_deferred", severity="warning",
+            detail=f"block {self.session.block_index} is running; the touch restarts after it",
+        )
+
+    def _block_ended(self, _result: object = None) -> None:
+        """The block's protocol is done: close the block, restart a deferred touch through the
+        same experimenter-side sequence as any touch start, then the next stage."""
+        self.session.end_block()
+        restart = self._touch_after_block and self._touch_on
+        self._touch_after_block = False
+        if restart and self.session.garment.connected:
+            self._deliver(self._stage_done)
+        else:
+            self._stage_done()
 
     def _stop_touch(self, why: str) -> None:
         """The condition's touch off: for the rekindle and at the intervention's end."""
@@ -674,7 +702,7 @@ class SessionRunner(Procedure):
         garment.connect()
         self.session.log("garment_connected", origin="experimenter")
         if self._touch_on:
-            self._start_delivery()
+            self._restart_touch()
         self.experimenter.refresh()
 
     def _block(self, block: Block, at: Upcoming) -> None:
@@ -682,16 +710,15 @@ class SessionRunner(Procedure):
             self._arm_launch(block)
             if block.type == "pinprick":
                 filament = self.chosen_filament_label_g[POST_S]
-                self._protocol(
+                self.run_child(
                     lambda: ShortProtocol(
                         self.rig, SECONDARY, filament, self._cap((INTERVENTION, block.index))
                     ),
-                    lambda _: self.session.end_block(),
+                    self._block_ended,
                 )
             else:
-                self._protocol(
-                    lambda: TouchBlock(self.rig, self.reference_channel),
-                    lambda _: self.session.end_block(),
+                self.run_child(
+                    lambda: TouchBlock(self.rig, self.reference_channel), self._block_ended
                 )
 
         self._set_alarms(at, f"block {block.index}")
