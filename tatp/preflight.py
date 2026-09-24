@@ -25,12 +25,13 @@ from typing import NamedTuple
 
 from tatp import allocation as alloc
 from tatp.config import REPO_ROOT, Config
-from tatp.resume import read_session_values, session_files
+from tatp.resume import previous_session_f40, read_session_values, session_files
 from tatp.session import earlier_experimenters
 
 REFUSE = "refuse"
 WARN = "warn"
 LOCK_NAME = "TATP1_instance.lock"
+PRE_SENSITISATION = "pre_sensitisation"
 # The lock covers one byte of the lock file: all a byte-range lock needs to exclude a second
 # holder. A size, not a study parameter.
 LOCK_BYTES = 1
@@ -119,19 +120,27 @@ def preflight(
         # An unknown code has no sessions at all, so one check covers both typing errors.
         findings.append(Finding(REFUSE, "preflight.code_not_allocated", participant_code))
 
-    for session_file in session_files(data_folder, participant_code, session_number):
-        values = read_session_values(session_file)
-        number = str(session_number)
-        if values.get("session_end_iso") and not values.get("abort_reason"):
-            findings.append(Finding(REFUSE, "preflight.session_completed", number))
-            break
-        if values.get("abort_reason"):
-            findings.append(Finding(WARN, "preflight.session_aborted_before", number))
-            break
+    # Every file, not the first that says anything: an aborted attempt followed by a completed
+    # one is a completed session, whichever the folder lists first.
+    endings = [
+        read_session_values(session_file)
+        for session_file in session_files(data_folder, participant_code, session_number)
+    ]
+    number = str(session_number)
+    if any(v.get("session_end_iso") and not v.get("abort_reason") for v in endings):
+        findings.append(Finding(REFUSE, "preflight.session_completed", number))
+    elif any(v.get("abort_reason") for v in endings):
+        findings.append(Finding(WARN, "preflight.session_aborted_before", number))
 
     previous = session_number - 1
     if previous >= 1 and not session_files(data_folder, participant_code, previous):
         findings.append(Finding(WARN, "preflight.previous_session_missing", str(previous)))
+    elif previous >= 1 and previous_session_f40(
+        data_folder, participant_code, previous, PRE_SENSITISATION
+    ) is None:
+        # Files, but no estimate to start this session's search from (SPEC.md 8.2): visible at
+        # launch, not only in the log once the calibration begins.
+        findings.append(Finding(WARN, "preflight.previous_estimate_missing", str(previous)))
 
     earlier = earlier_experimenters(data_folder, participant_code)
     if earlier and initials not in earlier:

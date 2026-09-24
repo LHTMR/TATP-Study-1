@@ -200,6 +200,15 @@ patterns:
   # (docs/research/R31: it slightly favours ct_targeted in the pleasantness step).
   fixed_ct_pattern: sweep_03cms
 
+delivery:
+  # How long the experimenter screen shows `instructions.touch_start` when the intervention's
+  # touch is started, before the session moves on (SPEC.md 12.3, 16; docs/LOG.md N7.D17). The
+  # same in every condition, and it never waits for the participant's self-start press: an
+  # instruction that stayed up until the press would tell the experimenter which condition
+  # this is. Long enough to be read. The participant's own start screen stays up on their side
+  # for as long as it takes them, and the garment never starts without their press.
+  touch_start_display_s: 5.0
+
 touch_block:
   # A touch-rating block of the intervention, and the touch-calibration baseline (Bilaga 1 3.9,
   # Table 2; docs/LOG.md N7.D3). Scale names are `vas` keys in config/text/participant_*.yaml.

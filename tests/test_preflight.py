@@ -63,16 +63,46 @@ def test_an_aborted_session_is_warned_not_refused(config):
     assert _keys(findings, pre.REFUSE) == []
 
 
+def test_an_aborted_attempt_before_a_completed_one_is_still_refused(config):
+    _session(config, abort="participant unwell")
+    _session(config, abort="")
+    findings = pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config))
+    assert _keys(findings, pre.REFUSE) == ["preflight.session_completed"]
+
+
 def test_session_three_before_session_two_is_warned(config):
     _session(config, number=1, abort="")
     findings = pre.preflight(config, "01", 3, "SM", pre.data_folder_for(config))
     assert findings == [pre.Finding(pre.WARN, "preflight.previous_session_missing", "2")]
 
 
+def _with_pre_s_estimate(session):
+    """Session 1 as though its pre-S long protocol had been accepted."""
+    row = dict.fromkeys(session.files.tables["calibration_pinprick"].column_names)
+    row.update(
+        timestamp_iso=session.clock.wall_iso(), phase="pre_sensitisation", region="secondary",
+        run_index=1, superseded=False, start_filament_label_g="26",
+        start_source="config_default", applications_total=12, applications_measure=9,
+        capped=False, slope_prior_vas_per_log10=51.6, f40_mn=150.0,
+        chosen_filament_label_g="15", chosen_force_mn=147.0, out_of_range=False,
+    )
+    session.files.write("calibration_pinprick", **row)
+    session.close("")
+
+
 def test_different_initials_are_warned_with_the_existing_warning(config):
-    _session(config, number=1, initials="AB", abort="")
+    _with_pre_s_estimate(_session(config, number=1, initials="AB"))
     findings = pre.preflight(config, "01", 2, "SM", pre.data_folder_for(config))
     assert findings == [pre.Finding(pre.WARN, "warnings.experimenter_changed", "SM")]
+
+
+def test_a_previous_session_without_an_estimate_is_warned_at_launch(config):
+    """SPEC.md 8.2: the fallback prior is visible before the session, not only in its log."""
+    _session(config, number=1, abort="")
+    findings = pre.preflight(config, "01", 2, "SM", pre.data_folder_for(config))
+    assert findings == [pre.Finding(pre.WARN, "preflight.previous_estimate_missing", "1")]
+    _with_pre_s_estimate(_session(config, number=1))
+    assert pre.preflight(config, "01", 2, "SM", pre.data_folder_for(config)) == []
 
 
 def test_a_second_instance_is_refused_and_the_lock_frees_on_release(config):

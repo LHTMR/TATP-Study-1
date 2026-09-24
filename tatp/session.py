@@ -12,6 +12,7 @@ experimenter may see is decided, and a test asserts the condition is not in it.
 from __future__ import annotations
 
 import random
+import time
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +33,9 @@ from tatp.units import S_PER_MIN
 # enough that two sessions do not collide and small enough to survive a round trip through the
 # data file as text. 2**31 is the conventional choice for both.
 SEED_RANGE = 2**31
+# How long to wait before trying the filename stamp again. A polling interval, not a study
+# timing: the stamp changes once a second, so anything well under that serves.
+STAMP_RETRY_S = 0.05
 
 # The controlled vocabulary of the `phase` column, from the Conventions section of
 # docs/DATA_SCHEMA.md. A test asserts this tuple still matches the document.
@@ -175,7 +179,7 @@ class Session:
             self.data_folder,
             participant_code,
             session_number,
-            self.clock.filename_stamp(),
+            self._unused_stamp(participant_code, session_number),
         )
 
         driver_name = config.hardware["garment"]["driver"]
@@ -189,6 +193,21 @@ class Session:
         # SPEC.md 10.5, 10.7. Owned here beside the garment for the same reason: every phase
         # needs it and none of them does it.
         self.audio = Audio(config.hardware["audio"], self.clock, self.log)
+
+    def _unused_stamp(self, participant_code: str, session_number: int) -> str:
+        """A filename stamp no file of this participant and session already has.
+
+        Files are named to the second (SPEC.md 14.2), so a session started within the same
+        second as an earlier one -- a quick restart after a crash, say -- would append to the
+        earlier session's files and make the new one resume from itself. It waits into the
+        next second instead, which keeps the documented name.
+        """
+        while True:
+            stamp = self.clock.filename_stamp()
+            pattern = f"TATP1_{stamp}_P{participant_code}_S{session_number}_*.csv"
+            if not any(self.data_folder.glob(pattern)):
+                return stamp
+            time.sleep(STAMP_RETRY_S)
 
     # -- blinding ----------------------------------------------------------------------
 

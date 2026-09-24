@@ -138,6 +138,12 @@ instructions:
   touch_block: 'Skattningsblock för beröring: deltagaren skattar beröringen.'
   baseline_ratings: 'Utgångsläge: deltagaren skattar hur hen känner sig just nu.'
   intervention_end: Interventionen är slut och plagget har stängts av.
+  # SPEC.md 15: en session som återupptas under återuppvärmningen ber aldrig om värmen igen.
+  rekindle_resumed: >-
+    Sessionen återupptogs under återuppvärmningen. Värmen startades före avbrottet och efterfrågas
+    inte igen; återuppvärmningen räknas därifrån. Tryck på Starta block för att bekräfta. Om
+    värmen i själva verket inte gavs, ge den nu och skriv en anteckning. Plagget förblir avstängt
+    tills återuppvärmningen är klar.
 
 controls:
   start_block: Starta block
@@ -267,6 +273,10 @@ preflight:
     Inga data hittades för session {value} för denna deltagare. Sessionen kan köras, men dess
     första kalibrering börjar från det konfigurerade filamentet i stället för föregående
     sessions skattning, och loggen registrerar det.
+  previous_estimate_missing: >-
+    Session {value} för denna deltagare har ingen godkänd skattning före sensitisering. Denna
+    sessions första kalibrering börjar i stället från det konfigurerade filamentet, och loggen
+    registrerar det.
   session_aborted_before: >-
     Session {value} för denna deltagare har startats tidigare och avbrutits. En ny session
     registreras vid sidan av den.

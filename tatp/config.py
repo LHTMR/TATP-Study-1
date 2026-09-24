@@ -69,6 +69,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "pinprick.n_sites", int, 1, None),
     ("study1.yaml", "pinprick.ordinal_rho_min", NUMBER, -1, 1),
     ("study1.yaml", "pinprick.primary_filament_label_g", str, None, None),
+    ("study1.yaml", "delivery.touch_start_display_s", NUMBER, 0, None),
     ("study1.yaml", "touch_block.n_repetitions", int, 1, None),
     ("study1.yaml", "touch_block.repeated_scales[*]", str, None, None),
     ("study1.yaml", "touch_block.once_scales[*]", str, None, None),

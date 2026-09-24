@@ -28,11 +28,12 @@ from pathlib import Path
 from tatp import config as cfg
 from tatp import preflight as pre
 from tatp import resume as resumption
+from tatp import schedule
 from tatp.clock import ISO_FORMAT, Clock
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import DRIVERS, Session, SessionError
-from tatp.session_runner import SessionRunner
+from tatp.session_runner import SessionRunner, stage_layout, summary_phase
 from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -46,6 +47,7 @@ WINDOW_CLOSED = "the window was closed before the session ended"
 RESUME_OFFER = "dialogs.resume_found"
 # The prefix of a scheduled block's stage id (`tatp/session_runner.py`).
 BLOCK_STAGE = "block"
+INTERVENTION_PHASE = "intervention"
 # Exit codes, for a script that runs sessions.
 EXIT_REFUSED = 2
 EXIT_OPEN_SESSION = 3
@@ -116,19 +118,19 @@ def resume_summary(config: cfg.Config, open_session: resumption.OpenSession) -> 
     ago sensitisation began -- both in the experimenter's language."""
     text = config.experimenter_text
     dialogs = text["dialogs"]
-    stages = list(open_session.completed_stages)
-    # Stages run in order, so every phase before the last one reached is finished.
-    phases = []
-    for stage in stages:
-        phase = stage.split(".")[0]
-        if phase != BLOCK_STAGE and phase not in phases:
-            phases.append(phase)
-    if stages and not stages[-1].startswith(BLOCK_STAGE) and phases:
-        phases.pop()
+    done = set(open_session.completed_stages)
+    # A phase is completed when its last stage is: read against the plan, not guessed from
+    # the order the stages happen to appear in.
+    last_of: dict[str, str] = {}
+    for stage_id, _, _ in stage_layout(schedule.generate(config.schedule)):
+        last_of[summary_phase(stage_id)] = stage_id
+    phases = [phase for phase, last in last_of.items() if last in done]
     parts = [text["phases"][phase] for phase in phases if phase in text["phases"]]
-    blocks = [stage.split(".")[1] for stage in stages if stage.startswith(BLOCK_STAGE + ".")]
-    if blocks:
-        parts.append(dialogs["resume_blocks"].format(value=", ".join(blocks)))
+    if INTERVENTION_PHASE not in phases:
+        blocks = [stage.split(".")[1] for stage in open_session.completed_stages
+                  if stage.startswith(BLOCK_STAGE + ".")]
+        if blocks:
+            parts.append(dialogs["resume_blocks"].format(value=", ".join(blocks)))
     started = open_session.sensitisation_start_iso
     if started is None:
         since = dialogs["resume_not_sensitised"]
@@ -162,13 +164,26 @@ def build(
     lock = pre.InstanceLock(data_folder)
     if not lock.acquire():
         raise SessionError(f"another session is running from {data_folder} ({lock.path})")
+    handed_over = False
+    try:
+        runner = _build_holding(config, args, resume_decision, data_folder)
+        runner.lock = lock
+        handed_over = True
+        return runner
+    finally:
+        # Not a catch: whatever went wrong still propagates. Only the lock is let go, so a
+        # failed start does not refuse the next one as "another instance".
+        if not handed_over:
+            lock.release()
 
+
+def _build_holding(config, args, resume_decision, data_folder) -> SessionRunner:
+    """`build`, with the lock held. Every refusal comes before `Session.start` writes."""
     open_session = resumption.find_open_session(data_folder, args.participant, args.session)
     state = None
     if open_session is not None:
         resume = args.resume if resume_decision is None else resume_decision(open_session)
         if resume is None:
-            lock.release()
             raise SessionError(
                 f"{open_session.session_file.name} is an open session; decide whether to "
                 f"resume it (SPEC.md 15) before starting"
@@ -176,6 +191,13 @@ def build(
         if resume:
             driver = DRIVERS[config.hardware["garment"]["driver"]]
             state = resumption.load(open_session, config, driver.per_channel_pressure)
+            # Checked here rather than when the clock is rebuilt, which is after the new
+            # files exist: a refused resume must leave nothing behind to join the chain.
+            if state.clock_speed != args.clock_speed:
+                raise SessionError(
+                    f"{open_session.session_file.name} ran at clock speed {state.clock_speed}; "
+                    f"it can only be resumed at that speed, not {args.clock_speed}"
+                )
 
     session = Session(
         config,
@@ -206,9 +228,7 @@ def build(
     participant.place(config.hardware["screens"])
     participant.show()
     experimenter.show()
-    runner = SessionRunner(Rig(session, participant, experimenter), resume=state)
-    runner.lock = lock
-    return runner
+    return SessionRunner(Rig(session, participant, experimenter), resume=state)
 
 
 def shut_down(runner: SessionRunner) -> None:

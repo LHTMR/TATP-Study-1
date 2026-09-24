@@ -7,6 +7,9 @@ both follow.
 
 Files are named `TATP1_{YYYY-MM-DD_HH-MM-SS}_P{code}_S{session}_{table}.csv`, one per
 observational unit (Wickham 2014). Every row is appended and flushed as it is produced (§14.3).
+The stamp is unique per participant and session: a session started within the same second as
+an earlier one of the same participant and session waits into the next second, so two sessions
+never share a file.
 
 ## Parsing contract
 

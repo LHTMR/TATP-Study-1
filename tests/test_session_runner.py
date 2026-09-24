@@ -21,11 +21,12 @@ from virtual_participant import EXAMPLES, Virtual, make_config, press
 from tatp import config as cfg
 from tatp import resume as resumption
 from tatp.clock import Clock
-from tatp.pinprick import BrushTrial, F40Fit, LongProtocol, PinprickTrial, ladder
+from tatp.pinprick import BrushTrial, F40Fit, LongProtocol, PinprickTrial, ladder, prior_for
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import Session
 from tatp.session_runner import SessionRunner, Upcoming
+from tatp.touchcal_maths import Delivery
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 
@@ -37,6 +38,8 @@ PAIN_F40_MN = 130.0
 PAIN_SLOPE = 51.6
 BRUSH_PCT = 10.0
 DISTANCES_MM = (40.0, 35.0, 45.0, 30.0)
+# Session seconds a timer-driven step may run late at CLOCK_SPEED on a loaded machine.
+TIMING_TOLERANCE_S = 4.0
 
 
 def compressed_schedule(loaded: cfg.Config) -> dict:
@@ -72,7 +75,7 @@ def loaded():
 
 
 def make_runner(loaded, tmp_path, resume=None, condition=None, seed=7,
-                fit_preview=False) -> SessionRunner:
+                fit_preview=False, session_number=1) -> SessionRunner:
     base = make_config(loaded, tmp_path)
     study1 = {**short_study(loaded), "choice": base.study1["choice"]}
     if fit_preview:
@@ -81,7 +84,7 @@ def make_runner(loaded, tmp_path, resume=None, condition=None, seed=7,
         **base.__dict__, "schedule": compressed_schedule(loaded), "study1": study1,
     })
     session = Session(
-        config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=CLOCK_SPEED),
+        config, "01", session_number, "SM", EXAMPLES, clock=Clock(speed=CLOCK_SPEED),
         rng_seed=seed if resume is None else resume.rng_seed,
         resumed_from="" if resume is None else resume.open.session_file.name,
     )
@@ -382,17 +385,25 @@ def test_nothing_in_the_experimenter_view_differs_between_conditions(app, loaded
 # -- resume (SPEC.md 15) -----------------------------------------------------------------------
 
 
-def _crash_after(app, loaded, tmp_path, stage_id):
-    """Run a session until `stage_id` has completed, then abandon it as a crash would."""
+def _crash_after(app, loaded, tmp_path, stage_id, event="stage_completed"):
+    """Run a session until `event` is logged for `stage_id`, then abandon it as a crash would.
+
+    `stage_id` is matched against the start of the event's detail."""
     runner = make_runner(loaded, tmp_path)
 
     def reached() -> bool:
-        return any(r["event"] == "stage_completed" and r["detail"] == stage_id
+        return any(r["event"] == event and r["detail"].startswith(stage_id)
                    for r in _events(runner.session))
 
     Driver(runner.rig, runner, stop_when=reached).run()
     runner.cancel()  # the process dies: nothing is closed, nothing more is written
     return runner
+
+
+def _resumed(loaded, tmp_path, crashed):
+    found = resumption.find_open_session(crashed.session.data_folder, "01", 1)
+    state = resumption.load(found, crashed.session.config, True)
+    return make_runner(loaded, tmp_path, resume=state)
 
 
 def test_an_open_session_is_found_and_a_closed_one_is_not(app, loaded, tmp_path):
@@ -406,19 +417,61 @@ def test_an_open_session_is_found_and_a_closed_one_is_not(app, loaded, tmp_path)
     assert resumption.find_open_session(folder, "01", 1) is None
 
 
-def test_a_crash_before_t_zero_restarts_setup(app, loaded, tmp_path):
-    crashed = _crash_after(app, loaded, tmp_path, "setup.masking_check")
-    found = resumption.find_open_session(crashed.session.data_folder, "01", 1)
-    state = resumption.load(found, crashed.session.config, True)
-    assert not state.after_t_zero
-    runner = make_runner(loaded, tmp_path, resume=state)
-    Driver(runner.rig, runner, stop_when=lambda: runner.stage_index >= 1).run()
-    names = [r["event"] for r in _events(runner.session)]
-    assert "resume_restarts_setup" in names
-    assert runner.stages[0].id in [r["detail"] for r in _events(runner.session)
-                                   if r["event"] == "stage_started"]
+def test_a_crash_before_t_zero_reloads_what_was_completed(app, loaded, tmp_path):
+    """SPEC.md 15: calibrations are reloaded, not redone -- before t=0 as after it."""
+    crashed = _crash_after(app, loaded, tmp_path, "touch_calibration.baseline")
+    runner = _resumed(loaded, tmp_path, crashed)
+    assert not runner.resume.after_t_zero
+    assert runner.resume.in_progress == "pre_sensitisation.long"
+    begun = []
+    Driver(runner.rig, runner, stop_when=lambda: begun.append(1) or len(begun) > 1).run()
+    events = _events(runner.session)
+    started = [r["detail"] for r in events if r["event"] == "stage_started"]
+    assert started[0] == "pre_sensitisation.long", "resumed at the stage that was interrupted"
+    redone = [r for r in events if r["event"] == "stage_redone"]
+    assert redone and "pre_sensitisation.long" in redone[0]["detail"]
+    assert runner.deliveries == crashed.deliveries, "the touch calibration was reloaded"
+    values = {r["key"]: r["value"] for r in _rows(runner.session, "session")}
+    old = {r["key"]: r["value"] for r in _rows(crashed.session, "session")}
+    assert values["white_noise_level_dbfs"] == old["white_noise_level_dbfs"]
+    assert runner.session.audio.noise_running, "the noise is back at the chosen level"
     runner.cancel()
     runner.session.close()
+
+
+def test_a_resume_during_the_rekindle_never_prompts_the_heat_again(app, loaded, tmp_path):
+    """The heat was launched before the crash: it is confirmed, timed from then, and the
+    garment stays off until the rekindle completes."""
+    crashed = _crash_after(app, loaded, tmp_path, "rekindle;", event="scheduled_step_started")
+    runner = _resumed(loaded, tmp_path, crashed)
+    assert runner.resume.rekindle_heat_t_s is not None
+    # Until the touch is running again, which at this clock speed can land a timer tick after
+    # the stage itself completes.
+    Driver(runner.rig, runner, stop_when=lambda: "garment_activated" in [
+        r["event"] for r in _events(runner.session)
+    ]).run()
+    events = [(r["event"], r["detail"]) for r in _events(runner.session)]
+    names = [event for event, _ in events]
+    assert ("stage_started", "rekindle") in events
+    assert not any(e == "scheduled_step_started" and d.startswith("rekindle")
+                   for e, d in events), "the heat is not prompted a second time"
+    assert "rekindle_resumed" in names
+    assert names.index("rekindle_heat_confirmed") < names.index("garment_activated")
+    confirmed_s = next(float(r["t_session_s"]) for r in _events(runner.session)
+                       if r["event"] == "rekindle_heat_confirmed")
+    early = [r for r in _rows(runner.session, "garment")
+             if r["event"] == "pattern_start" and float(r["t_session_s"]) <= confirmed_s]
+    assert not early, "the garment stays off until the rekindle is over"
+    runner.cancel()
+    runner.session.close()
+
+
+def test_a_chain_that_resumes_from_itself_is_refused(tmp_path):
+    path = tmp_path / "TATP1_2026-09-24_10-00-00_P01_S1_session.csv"
+    path.write_text(f"key,value\nrng_seed,1\nresumed_from_session_file,{path.name}\n",
+                    encoding="utf-8")
+    with pytest.raises(resumption.ResumeError, match="already in its chain"):
+        resumption.find_open_session(tmp_path, "01", 1)
 
 
 def test_a_truncated_data_folder_reconstructs_the_session_state(app, loaded, tmp_path):
@@ -446,6 +499,27 @@ def test_a_truncated_data_folder_reconstructs_the_session_state(app, loaded, tmp
             assert state.deliveries[condition].pressure_kpa[channel] == pytest.approx(kpa)
     assert state.masking[0] == pytest.approx(old.white_noise_level_dbfs)
     assert "block.1" in state.completed_stages and "block.2" not in state.completed_stages
+
+
+def _intervals(session, block_index: str) -> list[str]:
+    return [r["detail"] for r in _events(session)
+            if r["event"] == "interval" and r["block_index"] == block_index]
+
+
+def test_after_a_resume_every_stage_draws_what_it_would_have(app, loaded, tmp_path,
+                                                              finished):
+    """Each stage has its own stream from the seed and its id: the jittered intervals of a
+    block after the crash are those of the uninterrupted session with the same seed."""
+    crashed = _crash_after(app, loaded, tmp_path, "block.2")
+    runner = _resumed(loaded, tmp_path, crashed)
+    Driver(runner.rig, runner, stop_when=lambda: any(
+        r["event"] == "stage_completed" and r["detail"] == "block.3"
+        for r in _events(runner.session)
+    )).run()
+    assert _intervals(runner.session, "3") == _intervals(finished.session, "3")
+    assert _intervals(runner.session, "3"), "block 3 is a pinprick block, with intervals"
+    runner.cancel()
+    runner.session.close()
 
 
 def test_a_resumed_session_keeps_t_zero_and_finishes_what_was_left(app, loaded, tmp_path):
@@ -529,3 +603,99 @@ def test_with_the_fit_preview_on_an_f40_is_rerun_once_then_accepted(app, loaded,
     assert values == 1
     runner.cancel()
     runner.session.close()
+
+
+# -- the prior of a later session (SPEC.md 8.2) ------------------------------------------------
+
+
+def test_session_two_starts_from_session_ones_pre_s_estimate(app, loaded, tmp_path):
+    first = make_runner(loaded, tmp_path)
+    row = dict.fromkeys(first.session.files.tables["calibration_pinprick"].column_names)
+    row.update(
+        timestamp_iso=first.session.clock.wall_iso(), phase="pre_sensitisation",
+        region="secondary", run_index=1, superseded=False, start_filament_label_g="26",
+        start_source="config_default", applications_total=12, applications_measure=9,
+        capped=False, slope_prior_vas_per_log10=51.6, f40_mn=40.0,
+        chosen_filament_label_g="4.0", chosen_force_mn=39.2, out_of_range=False,
+    )
+    first.session.files.write("calibration_pinprick", **row)
+    first.session.close()
+    second = make_runner(loaded, tmp_path, session_number=2)
+    prior = second._prior("pre_sensitisation")
+    assert prior == prior_for(second.session.config, "pre_sensitisation", 2, 40.0)
+    assert prior.source == "previous_timepoint"
+    second.session.close()
+
+
+def test_without_an_estimate_session_two_starts_from_the_default_and_warns(app, loaded,
+                                                                          tmp_path):
+    make_runner(loaded, tmp_path).session.close()
+    second = make_runner(loaded, tmp_path, session_number=2)
+    prior = second._prior("pre_sensitisation")
+    assert prior.source == "config_default"
+    assert any(r["event"] == "no_previous_session_estimate" and r["severity"] == "warning"
+               for r in _events(second.session))
+    second.session.close()
+
+
+# -- the touch start, the same on the experimenter's side in every condition (SPEC.md 16) -----
+
+
+PRESS_AFTER_S = 20.0
+
+
+def _experimenter_sequence(app, loaded, tmp_path, condition) -> list[tuple[str, float]]:
+    """What the experimenter screen shows, and when, from the touch start until the session
+    moves on -- with a participant who presses the self-start after PRESS_AFTER_S."""
+    runner = make_runner(loaded, tmp_path / condition, condition=condition)
+    session = runner.session
+    session.start_sensitisation()
+    session.set_phase("intervention")
+    levels = {channel: 30.0 for channel in session.garment.channels()}
+    runner.deliveries = {
+        name: Delivery("static_sham" if name == "sham" else "sweep_03cms", levels)
+        for name in loaded.study1["design"]["conditions"]
+    }
+    shown: list[tuple[str, float]] = []
+    real = runner.experimenter.set_instruction
+
+    def spy(text):
+        shown.append((text, session.clock.t_session_s()))
+        real(text)
+
+    runner.experimenter.set_instruction = spy
+    moved_on = []
+    runner._deliver(lambda: moved_on.append(session.clock.t_session_s()))
+    window = runner.participant
+    deadline = time.monotonic() + RUN_TIMEOUT_S
+    pressed = False
+    self_start = loaded.participant_text["screens"]["self_start"]
+    while not (moved_on and session.clock.t_session_s() > PRESS_AFTER_S + 1):
+        assert time.monotonic() < deadline, "the touch start never moved on"
+        QApplication.processEvents()
+        if (not pressed and session.clock.t_session_s() > PRESS_AFTER_S
+                and window.message.text == self_start):
+            press(window, "period")
+            pressed = True
+        time.sleep(0.0005)
+    assert (condition == "participant_preferred") == pressed
+    assert session.garment.status()["pattern_name"] is not None, "the touch is running"
+    runner.cancel()
+    session.close()
+    return [*shown, ("moved on", moved_on[0])]
+
+
+def test_the_touch_start_looks_the_same_to_the_experimenter_in_every_condition(
+    app, loaded, tmp_path
+):
+    display_s = loaded.study1["delivery"]["touch_start_display_s"]
+    assert display_s < PRESS_AFTER_S, "so the press comes after the session has moved on"
+    sequences = [
+        _experimenter_sequence(app, loaded, tmp_path, condition)
+        for condition in loaded.study1["design"]["conditions"]
+    ]
+    texts = [[text for text, _ in sequence] for sequence in sequences]
+    assert texts[0] == texts[1] == texts[2]
+    for sequence in sequences:
+        moved_s = sequence[-1][1] - sequence[0][1]
+        assert display_s <= moved_s < display_s + TIMING_TOLERANCE_S

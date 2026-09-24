@@ -40,6 +40,7 @@ screen in every condition. Nothing else here depends on the condition.
 
 from __future__ import annotations
 
+import random
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -59,9 +60,15 @@ from tatp.pinprick import (
     prior_for,
 )
 from tatp.procedure import Procedure, Rig
-from tatp.schedule import Block
+from tatp.schedule import Block, Schedule
 from tatp.setup_checks import MaskingCheck, StopRehearsal
-from tatp.touchcal import DeliveryStart, TouchCalibration, TouchRating
+from tatp.touchcal import (
+    SELF_START_SCREEN,
+    TOUCH_START_INSTRUCTION,
+    DeliveryStart,
+    TouchCalibration,
+    TouchRating,
+)
 from tatp.touchcal_maths import Delivery
 from tatp.trials import MessageConfirm
 from tatp.units import S_PER_MIN
@@ -107,6 +114,90 @@ class Stage:
     phase: str
     begin: Callable[[], None]
     upcoming: Upcoming | None = None
+
+
+def stage_layout(schedule: Schedule) -> list[tuple[str, str, Upcoming | None]]:
+    """Every stage of the session in order: (id, the phase it begins in, what is scheduled).
+
+    A function of the schedule alone, so the launcher's resume offer can say what a crashed
+    session had completed without building a session (`run_session.resume_summary`).
+    """
+    stages: list[tuple[str, str, Upcoming | None]] = []
+
+    def add(stage_id: str, phase: str, upcoming: Upcoming | None = None) -> None:
+        stages.append((stage_id, phase, upcoming))
+
+    def time_point(phase: str) -> None:
+        # One time point's pain measures, in Bilaga 1 Table 1's order (docs/LOG.md N7.D2).
+        add(f"{phase}.long", phase)
+        if phase in MAPPED:
+            add(f"{phase}.mapping", phase)
+        for measure in ("short_primary", "brush_secondary", "brush_primary"):
+            add(f"{phase}.{measure}", phase)
+
+    add("setup.garment", SETUP)
+    add("setup.welcome", SETUP)
+    add("setup.masking_check", SETUP)
+    add("setup.stop_rehearsal", SETUP)
+    # Its own phase is set by the calibration itself.
+    add("touch_calibration", SETUP)
+    add("touch_calibration.baseline", TOUCH_CALIBRATION)
+    time_point(PRE_S)
+    # t=0 is set by the experimenter's press in this stage, so it begins in pre-S.
+    add("sensitisation", PRE_S)
+
+    capsaicin = schedule.window(CAPSAICIN)
+    add("capsaicin.apply", SENSITISATION,
+        Upcoming(PHASE, CAPSAICIN, capsaicin.start_min * S_PER_MIN))
+    add("capsaicin.remove", CAPSAICIN, Upcoming(PHASE, POST_S, capsaicin.end_min * S_PER_MIN))
+    time_point(POST_S)
+
+    intervention = schedule.window(INTERVENTION)
+    add("intervention.start", INTERVENTION,
+        Upcoming(PHASE, INTERVENTION, intervention.start_min * S_PER_MIN))
+    rekindle = schedule.window(REKINDLE)
+    rekindle_at = Upcoming(REKINDLE, REKINDLE, rekindle.start_min * S_PER_MIN)
+    # A rekindle outside the intervention divides nothing (SPEC.md 7.1): piloting may run
+    # without one.
+    rekindle_pending = intervention.start_min <= rekindle.start_min < intervention.end_min
+    for block in sorted(schedule.blocks, key=lambda b: (b.planned_offset_min, b.index)):
+        if rekindle_pending and block.planned_offset_min >= rekindle.start_min:
+            add(REKINDLE, INTERVENTION, rekindle_at)
+            rekindle_pending = False
+        add(f"{BLOCK}.{block.index}", INTERVENTION,
+            Upcoming(BLOCK, BLOCK, block.planned_offset_s, block))
+    if rekindle_pending:
+        add(REKINDLE, INTERVENTION, rekindle_at)
+    add("intervention.end", INTERVENTION,
+        Upcoming(PHASE, POST_I, intervention.end_min * S_PER_MIN))
+    time_point(POST_I)
+    add("session_end", POST_I)
+    return stages
+
+
+class _QuietDeliveryStart(DeliveryStart):
+    """`DeliveryStart` that leaves the experimenter screen to the runner (LOG N7.D17).
+
+    The runner shows `touch_start` itself, for the same time in every condition; a delivery
+    that did it too would put it back whenever it restarts -- after a stop, or a reconnect --
+    which in the participant-preferred condition happens for as long as the press is awaited.
+    `prompting` is whether the self-start prompt is up, waiting for the press.
+    """
+
+    prompting = False
+
+    def instruct(self, key: str, **values: object) -> None:
+        """Nothing on the experimenter screen."""
+
+    def _cued(self) -> None:
+        super()._cued()
+        self.prompting = not self.ended
+
+
+def summary_phase(stage_id: str) -> str:
+    """The phase a stage belongs to, for saying what a session has completed."""
+    prefix = stage_id.split(".")[0]
+    return INTERVENTION if prefix in (BLOCK, REKINDLE) else prefix
 
 
 class TouchBlock(Procedure):
@@ -186,81 +277,78 @@ class SessionRunner(Procedure):
         self._alarm_timer.setSingleShot(True)
         self._alarm_timer.timeout.connect(self._fire_alarm)
 
+        self.touch_start_display_s = float(config.study1["delivery"]["touch_start_display_s"])
+        # The condition's touch: whether it should be running, and the delivery that is
+        # starting it, until the garment is running (docs/LOG.md N7.D17).
+        self._touch_on = False
+        self._delivery: _QuietDeliveryStart | None = None
+        self._redeliver = False
+        # Set for a session resumed after its rekindle heat was launched (LOG N7.D14).
+        self._resumed_heat_t_s: float | None = None
+
         self.experimenter.abort_requested.connect(self.abort)
+        # Connected here, before `start` connects the procedure's own handlers, so a pending
+        # delivery is cancelled and restarted before any step repeats.
+        self.rig.interruptions.interrupted.connect(self._delivery_interrupted)
+        self.rig.interruptions.resumed.connect(self._delivery_resumed)
+
+    def connect_actions(self) -> None:
+        self.experimenter.garment_disconnect_requested.connect(self._disconnect_garment)
+        self.experimenter.garment_connect_requested.connect(self._connect_garment)
+
+    def disconnect_actions(self) -> None:
+        self.experimenter.garment_disconnect_requested.disconnect(self._disconnect_garment)
+        self.experimenter.garment_connect_requested.disconnect(self._connect_garment)
 
     # == the plan ==============================================================================
 
     def _plan(self) -> list[Stage]:
-        schedule = self.session.schedule
-        stages: list[Stage] = []
-
-        def add(stage_id, phase, begin, upcoming=None) -> None:
-            stages.append(Stage(stage_id, phase, begin, upcoming))
-
-        add("setup.garment", SETUP, self._fit_garment)
-        add("setup.welcome", SETUP, self._welcome)
-        add("setup.masking_check", SETUP,
-            lambda: self._protocol(lambda: MaskingCheck(self.rig)))
-        add("setup.stop_rehearsal", SETUP,
-            lambda: self._protocol(lambda: StopRehearsal(self.rig)))
-        # Its own phase is set by the calibration itself.
-        add("touch_calibration", SETUP, self._touch_calibration)
-        add("touch_calibration.baseline", TOUCH_CALIBRATION, self._baseline)
-        self._time_point(add, PRE_S)
-        # t=0 is set by the experimenter's press in this stage, so it begins in pre-S.
-        add("sensitisation", PRE_S, self._sensitisation)
-
-        capsaicin = schedule.window(CAPSAICIN)
-        apply_at = Upcoming(PHASE, CAPSAICIN, capsaicin.start_min * S_PER_MIN)
-        remove_at = Upcoming(PHASE, POST_S, capsaicin.end_min * S_PER_MIN)
-        add("capsaicin.apply", SENSITISATION, lambda: self._capsaicin_apply(apply_at), apply_at)
-        add("capsaicin.remove", CAPSAICIN, lambda: self._capsaicin_remove(remove_at), remove_at)
-        self._time_point(add, POST_S)
-
-        intervention = schedule.window(INTERVENTION)
-        start_at = Upcoming(PHASE, INTERVENTION, intervention.start_min * S_PER_MIN)
-        add("intervention.start", INTERVENTION,
-            lambda: self._intervention_start(start_at), start_at)
-
-        rekindle = schedule.window(REKINDLE)
-        rekindle_at = Upcoming(REKINDLE, REKINDLE, rekindle.start_min * S_PER_MIN)
-        # A rekindle outside the intervention divides nothing (SPEC.md 7.1): piloting may run
-        # without one.
-        rekindle_pending = intervention.start_min <= rekindle.start_min < intervention.end_min
-        for block in sorted(schedule.blocks, key=lambda b: (b.planned_offset_min, b.index)):
-            if rekindle_pending and block.planned_offset_min >= rekindle.start_min:
-                add("rekindle", INTERVENTION, lambda: self._rekindle(rekindle_at), rekindle_at)
-                rekindle_pending = False
-            at = Upcoming(BLOCK, BLOCK, block.planned_offset_s, block)
-            add(f"block.{block.index}", INTERVENTION,
-                lambda block=block, at=at: self._block(block, at), at)
-        if rekindle_pending:
-            add("rekindle", INTERVENTION, lambda: self._rekindle(rekindle_at), rekindle_at)
-
-        end_at = Upcoming(PHASE, POST_I, intervention.end_min * S_PER_MIN)
-        add("intervention.end", INTERVENTION, lambda: self._intervention_end(end_at), end_at)
-        self._time_point(add, POST_I)
-        add("session_end", POST_I, self._session_end)
-
+        stages = [
+            Stage(stage_id, phase, self._begin_for(stage_id, upcoming), upcoming)
+            for stage_id, phase, upcoming in stage_layout(self.session.schedule)
+        ]
         # Stage boundary (CLAUDE.md): a resume identifies stages by id.
         ids = [stage.id for stage in stages]
         assert len(set(ids)) == len(ids), f"stage ids repeat: {ids}"
-        assert sum(s.id.startswith("block.") for s in stages) == len(schedule.blocks)
+        assert sum(s.id.startswith(BLOCK + ".") for s in stages) == len(
+            self.session.schedule.blocks
+        )
         return stages
 
-    def _time_point(self, add, phase: str) -> None:
-        """One time point's pain measures, in Bilaga 1 Table 1's order (docs/LOG.md N7.D2)."""
+    def _begin_for(self, stage_id: str, at: Upcoming | None) -> Callable[[], None]:
+        """What each stage of `stage_layout` does."""
+        fixed = {
+            "setup.garment": self._fit_garment,
+            "setup.welcome": self._welcome,
+            "setup.masking_check": lambda: self._protocol(lambda: MaskingCheck(self.rig)),
+            "setup.stop_rehearsal": lambda: self._protocol(lambda: StopRehearsal(self.rig)),
+            "touch_calibration": self._touch_calibration,
+            "touch_calibration.baseline": self._baseline,
+            "sensitisation": self._sensitisation,
+            "capsaicin.apply": lambda: self._capsaicin_apply(at),
+            "capsaicin.remove": lambda: self._capsaicin_remove(at),
+            "intervention.start": lambda: self._intervention_start(at),
+            REKINDLE: lambda: self._rekindle(at),
+            "intervention.end": lambda: self._intervention_end(at),
+            "session_end": self._session_end,
+        }
+        if stage_id in fixed:
+            return fixed[stage_id]
+        if stage_id.startswith(BLOCK + "."):
+            return lambda: self._block(at.block, at)
+        phase, measure = stage_id.split(".")
         primary_g = self.pinprick["primary_filament_label_g"]
-        add(f"{phase}.long", phase, lambda: self._long(phase))
-        if phase in MAPPED:
-            add(f"{phase}.mapping", phase, lambda: self._mapping())
-        add(f"{phase}.short_primary", phase, lambda: self._protocol(
-            lambda: ShortProtocol(self.rig, PRIMARY, primary_g, self._cap(phase))
-        ))
-        add(f"{phase}.brush_secondary", phase,
-            lambda: self._protocol(lambda: BrushProtocol(self.rig, SECONDARY)))
-        add(f"{phase}.brush_primary", phase,
-            lambda: self._protocol(lambda: BrushProtocol(self.rig, PRIMARY)))
+        return {
+            "long": lambda: self._long(phase),
+            "mapping": self._mapping,
+            "short_primary": lambda: self._protocol(
+                lambda: ShortProtocol(self.rig, PRIMARY, primary_g, self._cap(phase))
+            ),
+            "brush_secondary": lambda: self._protocol(
+                lambda: BrushProtocol(self.rig, SECONDARY)
+            ),
+            "brush_primary": lambda: self._protocol(lambda: BrushProtocol(self.rig, PRIMARY)),
+        }[measure]
 
     # == running the stages ====================================================================
 
@@ -276,6 +364,11 @@ class SessionRunner(Procedure):
         if self.session.phase != stage.phase:
             self.session.set_phase(stage.phase)
         self.session.log("stage_started", detail=stage.id)
+        # Each stage draws from a stream of its own, derived from the seed and the stage id
+        # (docs/LOG.md N7.D13). A string seed is hashed the same in every process, unlike
+        # `hash()`, so a session is reproducible from its seed alone, and a resume draws for
+        # every stage after the crash exactly what an uninterrupted session would have.
+        self.session.rng = random.Random(f"{self.session.rng_seed}:{stage.id}")
         self._show_upcoming(index)
         stage.begin()
 
@@ -296,7 +389,7 @@ class SessionRunner(Procedure):
 
     def _standby(self, instruction: str) -> Callable[[], None]:
         def prepare() -> None:
-            self.participant.show_message(STANDBY_SCREEN)
+            self._show_between()
             self.experimenter.set_instruction(
                 self.experimenter.text["instructions"][instruction]
             )
@@ -304,6 +397,18 @@ class SessionRunner(Procedure):
             self.experimenter.refresh()
 
         return prepare
+
+    def _show_between(self) -> None:
+        """The participant's screen between steps: standby, unless the touch is starting.
+
+        A delivery still starting owns the participant's screen -- the cue, then in the
+        participant-preferred condition the self-start prompt, which is put back if a block
+        took the screen in the meantime (docs/LOG.md N7.D17).
+        """
+        if self._delivery is None:
+            self.participant.show_message(STANDBY_SCREEN)
+        elif self._delivery.prompting:
+            self.participant.show_message(SELF_START_SCREEN)
 
     # == setup and touch calibration ===========================================================
 
@@ -465,8 +570,7 @@ class SessionRunner(Procedure):
 
     def _intervention_end(self, at: Upcoming) -> None:
         def ended() -> None:
-            self.session.garment.stop()
-            self.session.log("garment_deactivated", detail="the intervention has ended")
+            self._stop_touch("the intervention has ended")
             self.experimenter.set_instruction(
                 self.experimenter.text["instructions"]["intervention_end"]
             )
@@ -478,23 +582,100 @@ class SessionRunner(Procedure):
     # == the intervention ======================================================================
 
     def _deliver(self, then: Callable[[], None]) -> None:
-        """Start the condition's touch (SPEC.md 12.3). The two reads of the condition."""
+        """Start the condition's touch (SPEC.md 12.3), the same on the experimenter's side in
+        every condition (SPEC.md 16, docs/LOG.md N7.D17).
+
+        The experimenter screen shows `touch_start` for `touch_start_display_s`, then the
+        session goes on; it never waits for the participant. The delivery runs on the
+        participant's side alone: the pressures, the cue, and either the pattern at once or,
+        in the participant-preferred condition, the self-start prompt until they press.
+        """
+        self._touch_on = True
+        self._start_delivery()
+
+        def show() -> None:
+            self._show_between()
+            self.experimenter.set_instruction(
+                self.experimenter.text["instructions"][TOUCH_START_INSTRUCTION]
+            )
+            self.experimenter.set_status("")
+            self.experimenter.refresh()
+            self._after(self.touch_start_display_s, then)
+
+        self.step(show)
+
+    def _start_delivery(self) -> None:
+        """The two reads of the condition: which delivery, and whether it is self-started."""
         assert self.deliveries is not None, "the touch calibration has not delivered a result"
+        self._cancel_delivery()
         condition = self.session.condition
-        delivery = self.deliveries[condition]
-        self_start = condition == SELF_STARTED
-
-        def started(_latency) -> None:
-            self.session.log("garment_activated")
-            self.participant.show_message(STANDBY_SCREEN)
-            then()
-
-        self.run_trial(
-            lambda: DeliveryStart(
-                self.session, self.participant, self.experimenter, delivery, self_start
-            ),
-            started,
+        trial = _QuietDeliveryStart(
+            self.session, self.participant, self.experimenter, self.deliveries[condition],
+            condition == SELF_STARTED,
         )
+        self._delivery = trial
+        trial.finished.connect(lambda _latency: self._delivered(trial))
+        trial.start()
+
+    def _delivered(self, trial: _QuietDeliveryStart) -> None:
+        if trial is not self._delivery:
+            return
+        self._delivery = None
+        self.session.log("garment_activated")
+        if self._child is None:
+            self.participant.show_message(STANDBY_SCREEN)
+
+    def _cancel_delivery(self) -> None:
+        if self._delivery is not None:
+            trial, self._delivery = self._delivery, None
+            trial.cancel()
+
+    def _delivery_interrupted(self, kind: str) -> None:
+        # A delivery is not a step of any procedure, so the interruption's own machinery does
+        # not reach it: cancelled here, and started afresh once the session resumes.
+        if self._delivery is not None:
+            self._cancel_delivery()
+            self._redeliver = True
+
+    def _delivery_resumed(self) -> None:
+        if self._redeliver:
+            self._redeliver = False
+            self._start_delivery()
+
+    def _stop_touch(self, why: str) -> None:
+        """The condition's touch off: for the rekindle and at the intervention's end."""
+        self._touch_on = False
+        self._cancel_delivery()
+        if self.session.garment.connected:
+            self.session.garment.stop()
+        self.session.log("garment_deactivated", detail=why)
+
+    def _disconnect_garment(self) -> None:
+        """The experimenter's Disconnect (SPEC.md 11). The session goes on; nothing is lost."""
+        garment = self.session.garment
+        if not garment.connected:
+            return
+        pending = self._delivery is not None
+        self._cancel_delivery()
+        garment.stop()
+        garment.disconnect()
+        self.session.log(
+            "garment_disconnected", origin="experimenter", severity="warning",
+            detail="touch was starting" if pending else "",
+        )
+        self.experimenter.refresh()
+
+    def _connect_garment(self) -> None:
+        """The experimenter's Connect. If the condition's touch should be running, it is
+        started again, through the delivery, with its cue and any self-start."""
+        garment = self.session.garment
+        if garment.connected:
+            return
+        garment.connect()
+        self.session.log("garment_connected", origin="experimenter")
+        if self._touch_on:
+            self._start_delivery()
+        self.experimenter.refresh()
 
     def _block(self, block: Block, at: Upcoming) -> None:
         def armed() -> None:
@@ -530,6 +711,13 @@ class SessionRunner(Procedure):
             self._clear_alarms()
             self._show_upcoming(self.stage_index + 1)
             self.session.start_block(block)
+            if self._delivery is not None and self._delivery.prompting:
+                # docs/LOG.md N7.D17: the block runs, its screens take the participant's, and
+                # the touch is still not started without the press; the prompt returns after.
+                self.session.log(
+                    "self_start_pending_at_block", severity="warning",
+                    detail=f"block {block.index} began before the touch was started",
+                )
 
         self._launch = launched
         self.experimenter.proceed_requested.connect(launched)
@@ -544,17 +732,34 @@ class SessionRunner(Procedure):
 
         def armed() -> None:
             # SPEC.md 7.4, 12.3: deactivated for the rekindle, logged.
-            self.session.garment.stop()
             self.session.set_phase(REKINDLE)
-            self.session.log("garment_deactivated", detail="rekindle")
+            self._stop_touch(REKINDLE)
             self.await_proceed(started, self._standby("thermode_rekindle"))
 
         def started() -> None:
             self._clear_alarms()
             self._launched(at)
-            end_s = self.session.clock.t_session_s() + duration_s
+            heating(self.session.clock.t_session_s(), "thermode_rekindle")
+
+        def heating(heat_t_s: float, instruction: str) -> None:
             self._show_upcoming(self.stage_index + 1)
-            self._wait_until(end_s, ended, self._standby("thermode_rekindle"))
+            self._wait_until(heat_t_s + duration_s, ended, self._standby(instruction))
+
+        def resumed_after_heat(heat_t_s: float) -> None:
+            # docs/LOG.md N7.D14: the heat was already launched before the crash. It is never
+            # prompted again; the experimenter confirms, and the garment stays off meanwhile.
+            self.session.set_phase(REKINDLE)
+            self._stop_touch(REKINDLE)
+            self.session.log(
+                "rekindle_resumed", severity="warning",
+                detail=f"the heat was launched at {heat_t_s / S_PER_MIN:.2f} min, before the "
+                "crash; not prompted again, and timed from then",
+            )
+            def confirmed() -> None:
+                self.session.log("rekindle_heat_confirmed", origin="experimenter")
+                heating(heat_t_s, "rekindle_resumed")
+
+            self.await_proceed(confirmed, self._standby("rekindle_resumed"))
 
         def ended() -> None:
             self.session.set_phase(INTERVENTION)
@@ -565,6 +770,10 @@ class SessionRunner(Procedure):
 
             self._deliver(reactivated)
 
+        if self._resumed_heat_t_s is not None:
+            heat_t_s, self._resumed_heat_t_s = self._resumed_heat_t_s, None
+            resumed_after_heat(heat_t_s)
+            return
         self._set_alarms(at, REKINDLE)
         self._wait_until(at.due_s, armed, self._standby("waiting"))
 
@@ -602,6 +811,7 @@ class SessionRunner(Procedure):
     def cancel(self) -> None:
         self._disarm()
         self._clear_alarms()
+        self._cancel_delivery()
         super().cancel()
 
     def _close(self, abort_reason: str) -> None:
@@ -702,31 +912,39 @@ class SessionRunner(Procedure):
     # == resume (SPEC.md 15) ===================================================================
 
     def _resume(self) -> None:
+        """SPEC.md 15, before t=0 as after it (docs/LOG.md N7.D16): what was completed is
+        reloaded, not redone, and the session goes on from the first stage that was not."""
         state = self.resume
-        stages_done = state.completed_stages
+        done = state.completed_stages
         self.session.log(
             "session_resumed", severity="warning",
-            detail=f"from {state.open.session_file.name}; {len(stages_done)} stages completed; "
-            f"RNG re-seeded from the recorded seed {state.rng_seed}",
+            detail=f"from {state.open.session_file.name}; {len(done)} stages completed",
         )
-        if not state.after_t_zero:
-            # No clock to keep and nothing scheduled yet: the session starts again (LOG N7.D9).
+        if state.in_progress is not None:
             self.session.log(
-                "resume_restarts_setup", severity="warning",
-                detail="the crash came before session t=0, so setup and calibration run again",
+                "stage_redone", severity="warning",
+                detail=f"{state.in_progress} was in progress at the crash; any rows it wrote "
+                f"in {state.current_file} are superseded by this session's",
             )
-            self._run_stage(0)
-            return
-        assert state.deliveries is not None, "a session past t=0 has a touch calibration"
-        assert state.masking is not None, "a session past t=0 has run the masking check"
-        self.session.resume_sensitisation(state.open.sensitisation_start_iso, state.clock_speed)
-        self.session.record_masking(*state.masking)
-        if state.stop_rehearsal_press_detected is not None:
+        if state.after_t_zero:
+            self.session.resume_sensitisation(
+                state.open.sensitisation_start_iso, state.clock_speed
+            )
+        if "setup.masking_check" in done:
+            assert state.masking is not None, "a completed masking check recorded its result"
+            self.session.record_masking(*state.masking)
+            self.session.audio.start_noise(state.masking[0])
+        if "setup.stop_rehearsal" in done and state.stop_rehearsal_press_detected is not None:
             self.session.record_stop_rehearsal(state.stop_rehearsal_press_detected)
-        self.session.audio.start_noise(state.masking[0])
-        self.deliveries = dict(state.deliveries)
-        self.f40_mn = dict(state.f40_mn)
-        self.chosen_filament_label_g = dict(state.chosen_filament_label_g)
+        if "touch_calibration" in done:
+            assert state.deliveries is not None, "a completed calibration wrote its channels"
+            self.deliveries = dict(state.deliveries)
+        # Only estimates whose protocol completed: a row written just before the crash, by a
+        # stage that is now redone, is not the time point's estimate.
+        for phase in (PRE_S, POST_S, POST_I):
+            if f"{phase}.long" in done and phase in state.f40_mn:
+                self.f40_mn[phase] = state.f40_mn[phase]
+                self.chosen_filament_label_g[phase] = state.chosen_filament_label_g[phase]
         filaments = pinprick.ladder(self.session.config)
         for phase, block_index, region, site, label in state.intolerable:
             key = phase if block_index is None else (INTERVENTION, block_index)
@@ -737,10 +955,16 @@ class SessionRunner(Procedure):
         if self.ledger.time_points:
             self.experimenter.set_mapping_phases([*self.ledger.time_points])
 
-        index = next(i for i, stage in enumerate(self.stages) if stage.id not in stages_done)
+        index = next(i for i, stage in enumerate(self.stages) if stage.id not in done)
         stage = self.stages[index]
         self.session.log("resume_stage", detail=stage.id)
-        if stage.phase == INTERVENTION and stage.id != "intervention.start":
+        if stage.id == REKINDLE:
+            # The garment stays off until the rekindle completes, and heat already launched is
+            # never prompted a second time (docs/LOG.md N7.D14).
+            if state.in_progress == REKINDLE:
+                self._resumed_heat_t_s = state.rekindle_heat_t_s
+            self._run_stage(index)
+        elif stage.phase == INTERVENTION and stage.id != "intervention.start":
             # The garment was on when the session crashed; it is started again, with the cue.
             self.session.set_phase(INTERVENTION)
             self._deliver(lambda: self._run_stage(index))

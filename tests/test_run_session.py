@@ -112,25 +112,67 @@ def test_preflight_offers_the_resume_of_an_open_session(app, config):
 def test_the_resume_summary_names_finished_phases_and_blocks(config):
     from datetime import datetime
 
+    from tatp import schedule
     from tatp.clock import ISO_FORMAT
     from tatp.resume import OpenSession
+    from tatp.session_runner import stage_layout
 
-    stages = ("setup.garment", "setup.welcome", "touch_calibration", "pre_sensitisation.long",
-              "pre_sensitisation.brush_primary", "sensitisation", "capsaicin.apply",
-              "capsaicin.remove", "post_sensitisation.long", "intervention.start", "block.1",
-              "block.2")
+    ids = [stage_id for stage_id, _, _ in stage_layout(schedule.generate(config.schedule))]
     now = datetime.now().strftime(ISO_FORMAT)[:-3]
-    summary = run_session.resume_summary(
-        config, OpenSession(Path("x_session.csv"), now, now, stages)
-    )
     phases = config.experimenter_text["phases"]
-    assert summary["completed"] == ", ".join([
+    dialogs = config.experimenter_text["dialogs"]
+
+    def summary(done):
+        return run_session.resume_summary(
+            config, OpenSession(Path("x_session.csv"), now, now, tuple(done))
+        )
+
+    # Everything up to block 2: the intervention itself is not completed, its blocks are.
+    upto = summary(ids[: ids.index("block.2") + 1])
+    assert upto["completed"] == ", ".join([
         phases["setup"], phases["touch_calibration"], phases["pre_sensitisation"],
         phases["sensitisation"], phases["capsaicin"], phases["post_sensitisation"],
-        phases["intervention"],
-        config.experimenter_text["dialogs"]["resume_blocks"].format(value="1, 2"),
+        dialogs["resume_blocks"].format(value="1, 2"),
     ])
-    assert "0:00" in summary["since_sensitisation"]
+    assert "0:00" in upto["since_sensitisation"]
+    # A phase is completed only when its last stage is: pre-S's long protocol alone is not.
+    partial = summary(ids[: ids.index("pre_sensitisation.long") + 1])
+    assert phases["pre_sensitisation"] not in partial["completed"]
+    assert phases["touch_calibration"] in partial["completed"]
+
+
+def test_a_failed_build_releases_the_lock(app, config, monkeypatch):
+    def broken(*args, **kwargs):
+        raise RuntimeError("the windows could not be made")
+
+    monkeypatch.setattr(run_session, "ParticipantWindow", broken)
+    with pytest.raises(RuntimeError, match="windows"):
+        run_session.build(config, run_session.parse_args(ARGV))
+    assert not pre.refusals(pre.preflight(config, "01", 2, "SM", pre.data_folder_for(config)))
+
+
+def test_a_resume_at_another_clock_speed_is_refused_before_anything_is_written(app, config):
+    first = run_session.build(config, run_session.parse_args(ARGV))
+    first.start()
+    first.cancel()
+    first.lock.release()
+    folder = pre.data_folder_for(config)
+    before = sorted(folder.glob("*.csv"))
+    args = run_session.parse_args([*ARGV, "--resume", "--clock-speed", "5"])
+    with pytest.raises(SessionError, match="clock speed"):
+        run_session.build(config, args)
+    assert sorted(folder.glob("*.csv")) == before, "nothing was written for the refused resume"
+    assert not pre.refusals(pre.preflight(config, "01", 2, "SM", folder)), "lock released"
+
+
+def test_two_sessions_started_in_one_second_never_share_files(app, config):
+    first = run_session.build(config, run_session.parse_args(ARGV))
+    first.start()
+    first.cancel()
+    first.lock.release()
+    second = run_session.build(config, run_session.parse_args([*ARGV, "--new"]))
+    assert second.session.files.stamp != first.session.files.stamp
+    run_session.shut_down(second)
 
 
 def test_temperature_and_humidity_are_recorded_when_given(app, config):

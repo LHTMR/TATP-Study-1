@@ -140,6 +140,12 @@ instructions:
   touch_block: 'Touch-rating block: the participant rates the touch.'
   baseline_ratings: 'Baseline: the participant rates how they feel right now.'
   intervention_end: The intervention has ended and the garment has been switched off.
+  # SPEC.md 15: a session resumed during the rekindle never prompts the heat a second time.
+  rekindle_resumed: >-
+    The session resumed during the rekindle. The heat was started before the interruption and
+    is not prompted again; the rekindle is timed from then. Press Start block to confirm. If the
+    heat was not in fact applied, apply it now and enter a note. The garment stays off until the
+    rekindle is over.
 
 controls:
   start_block: Start block
@@ -269,6 +275,10 @@ preflight:
     No data was found for session {value} of this participant. This session can run, but its
     first calibration starts from the configured filament instead of the previous session's
     estimate, and the log records it.
+  previous_estimate_missing: >-
+    Session {value} of this participant has no accepted pre-sensitisation estimate. This
+    session's first calibration starts from the configured filament instead, and the log
+    records it.
   session_aborted_before: >-
     Session {value} for this participant was started before and aborted. A new session will be
     recorded alongside it.

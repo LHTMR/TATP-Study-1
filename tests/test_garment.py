@@ -288,6 +288,21 @@ def test_a_channel_on_at_both_ends_of_a_loop_is_held_and_the_rest_still_cycle(tm
     assert [(e.t_s, e.channel_id, e.on) for e in later] == [(0.1, 2, True), (0.2, 2, False)]
 
 
+def test_the_hold_across_the_wrap_is_found_by_row_not_by_time(tmp_path):
+    """3 rows at 100 ms: 3 * 0.1 is 0.30000000000000004, not the cycle's 0.3."""
+    (tmp_path / "p.csv").write_text("1,2\n1,0\n0,1\n1,1\n", encoding="utf-8")
+    (tmp_path / "p.yaml").write_text(
+        "name: p\nrow_interval_ms: 100\nchannel_ids: [1, 2]\nloop: true\n", encoding="utf-8"
+    )
+    pattern = pat.load_pattern(tmp_path / "p.csv")
+    first, later = pat.loop_events(pattern)
+    assert not [e for e in first if e.channel_id == 1 and not e.on and e.t_s > 0.25], (
+        "channel 1 is on in the first and last rows, so it is not switched off at the wrap"
+    )
+    assert not [e for e in later if e.channel_id == 1 and e.on and e.t_s == 0]
+    assert [e.on for e in later if e.channel_id == 1] == [False, True]
+
+
 def test_stopping_a_pattern_turns_off_what_it_left_on(garment):
     garment.play_pattern(pat.load_pattern(EXAMPLES / "static_sham.csv"))
     garment.advance()

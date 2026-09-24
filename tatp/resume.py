@@ -10,8 +10,11 @@ each stage of the session ends (`tatp/session_runner.py`). A stage is one protoc
 point, a scheduled block, the rekindle, or one of the timed phases, so "resume from the last
 completed block" becomes "resume at the first stage the log does not record as completed".
 A block is additionally recorded in `blocks` when it ends; the two are written together.
-Everything up to and including sensitisation happens before session t=0, so a crash before t=0
-has no clock to keep and restarts the session from setup -- which is logged as that.
+This holds before session t=0 as well: a crash in setup or calibration resumes at the stage it
+interrupted, with the stages already completed reloaded rather than redone; there is only no
+clock to keep. The stage in progress is the one redone (`in_progress`), and the rows it had
+written stay in the earlier files, superseded by the redone stage's -- which the resumed session
+logs, because an append-only file cannot be rewritten to say so.
 
 **What is reloaded, not redone.** The F40 estimates and the chosen filament
 (`calibration_pinprick`), the touch calibration and the preferred pattern
@@ -19,6 +22,10 @@ has no clock to keep and restarts the session from setup -- which is logged as t
 cap the time point in progress, the mapping distances still outstanding, and the RNG seed. Each
 is read from every file in the resume chain, since a session resumed twice has its history in
 three sets of files.
+
+The RNG is not reloaded as a state: every stage draws from a stream derived from the seed and
+its own id (`tatp/session_runner.py`), so the stages after the crash draw exactly what they
+would have in an uninterrupted session.
 
 Nothing here writes. The files read are the crashed session's own, never overwritten (SPEC.md
 14.3); the resumed session writes new ones that name the file they resumed from.
@@ -34,10 +41,17 @@ from tatp.touchcal_maths import Delivery
 
 SESSION_SUFFIX = "session.csv"
 STAGE_COMPLETED = "stage_completed"
+STAGE_STARTED = "stage_started"
+SCHEDULED_STEP_STARTED = "scheduled_step_started"
+REKINDLE = "rekindle"
 SENSITISATION_STARTED = "sensitisation_started"
 MAPPING_PATH_STARTED = "mapping_path_started"
 PATH_MARKER = ", path "
 CONDITIONS = ("sham", "ct_targeted", "participant_preferred")
+
+
+class ResumeError(Exception):
+    """The crashed session cannot be resumed as its files stand. Never worked around."""
 
 
 def session_files(data_folder: Path, participant_code: str, session_number: int) -> list[Path]:
@@ -117,6 +131,12 @@ class ResumeState:
     # One per ceiling rating: (phase, block_index or None, region, site_index, applied label)
     intolerable: tuple[tuple[str, int | None, str, int, str], ...]
     mapping: dict[str, MappingPoint]
+    # The stage that had started and not completed when the session crashed, if any: it is the
+    # one redone, and its partial rows in the earlier files are superseded (LOG N7.D16).
+    in_progress: str | None = None
+    # Session time the rekindle's heat was launched, if it was (LOG N7.D14).
+    rekindle_heat_t_s: float | None = None
+    current_file: str = ""
 
     @property
     def after_t_zero(self) -> bool:
@@ -127,7 +147,6 @@ def load(open_session: OpenSession, config, per_channel_pressure: bool) -> Resum
     """Read the crashed session's history back from its files and every one it resumed from."""
     chain = _chain(open_session.session_file)
     first = read_session_values(chain[0])
-    latest = read_session_values(chain[-1])
     setup = next((read_session_values(p) for p in reversed(chain)
                   if read_session_values(p).get("masking_confirmed")), None)
     rehearsal = next((read_session_values(p) for p in reversed(chain)
@@ -144,8 +163,12 @@ def load(open_session: OpenSession, config, per_channel_pressure: bool) -> Resum
     return ResumeState(
         open=open_session,
         rng_seed=int(first["rng_seed"]),
-        clock_speed=float(latest["clock_speed"]),
+        # The first file's: t=0 was set in it, and every later file had to match it.
+        clock_speed=float(first["clock_speed"]),
         completed_stages=frozenset(open_session.completed_stages),
+        in_progress=_in_progress(chain),
+        rekindle_heat_t_s=_rekindle_heat(chain),
+        current_file=latest_file_name(chain),
         masking=None if setup is None else (
             float(setup["white_noise_level_dbfs"]),
             setup["masking_confirmed"] == "true",
@@ -193,6 +216,10 @@ def _chain(session_file: Path) -> list[Path]:
             return chain
         path = session_file.with_name(previous)
         assert path.exists(), f"{chain[0].name} resumed from {previous}, which is not there"
+        # A file that resumed from itself, or from one later in its own chain, would be read
+        # for ever. The stamps are unique (Session._unused_stamp), so this is a damaged folder.
+        if path in chain:
+            raise ResumeError(f"{chain[0].name} names {previous}, already in its chain")
         chain.insert(0, path)
 
 
@@ -202,6 +229,24 @@ def _rows(chain: list[Path], table: str) -> list[dict[str, str]]:
 
 def _completed(chain: list[Path]) -> list[str]:
     return [row["detail"] for row in _rows(chain, "log") if row["event"] == STAGE_COMPLETED]
+
+
+def _in_progress(chain: list[Path]) -> str | None:
+    started = [r["detail"] for r in _rows(chain, "log") if r["event"] == STAGE_STARTED]
+    completed = set(_completed(chain))
+    unfinished = [stage for stage in started if stage not in completed]
+    return unfinished[-1] if unfinished else None
+
+
+def _rekindle_heat(chain: list[Path]) -> float | None:
+    for row in _rows(chain, "log"):
+        if row["event"] == SCHEDULED_STEP_STARTED and row["detail"].startswith(REKINDLE + ";"):
+            return float(row["t_session_s"])
+    return None
+
+
+def latest_file_name(chain: list[Path]) -> str:
+    return chain[-1].name
 
 
 def _sensitisation_start(chain: list[Path]) -> str | None:
