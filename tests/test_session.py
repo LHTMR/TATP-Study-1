@@ -322,6 +322,11 @@ def test_garment_commands_are_written_with_the_session_context(session):
 def test_a_pattern_run_through_the_session_is_recorded(session):
     session.start()
     session.set_phase("intervention")
+    # What is under test is the recording, not the timing. At the fixture's speed-60 clock one
+    # sham cycle lasts about 8 ms of real time, so a delay before `advance()` under a loaded
+    # parallel run played extra cycles and the count came out a multiple of five. At real speed
+    # the cycle is far longer than the gap between the two calls.
+    session.clock.speed = 1.0
     session.garment.play_pattern(session.patterns["static_sham"])
     session.garment.advance()
     session.garment.stop_pattern()
