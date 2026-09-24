@@ -13,6 +13,7 @@ import pytest
 from tatp import config as cfg
 from tatp import pattern_design as pd
 from tatp.garment import patterns
+from tatp.garment.arduino_mosfet import channel_wiring
 from tatp.pattern_design import DesignError
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
@@ -21,7 +22,7 @@ IDS = (3, 4, 11)
 # Every bit wired to the channel of the same number. The prototype repository's own files
 # address bits, so its fixtures are compared through this; `SLEEVE` is the real wiring.
 RAW = {bit: bit for bit in range(32)}
-SLEEVE = pd.wiring(cfg.load("sv", "sv").hardware["garment"]["prototype"]["channel_bits"])
+SLEEVE = channel_wiring(cfg.load("sv", "sv").hardware["garment"]["prototype"]["channel_bits"])
 
 
 @pytest.fixture(scope="module")

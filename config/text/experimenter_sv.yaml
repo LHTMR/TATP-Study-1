@@ -511,6 +511,8 @@ designer:
     garment_channels: '{garment}: har kanalerna {have}, och det här mönstret använder {value}.'
     # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
     connect_failed: '{garment}: kunde inte ansluta ({value}). Inget spelades.'
+    # DRAFT (LOG N7.U5): written by the build, not ethics-sourced
+    garment_lost: '{garment}: anslutningen bröts ({value}). Uppspelningen stoppades. Tryck på Spela för att ansluta igen.'
     # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
     unwired_bit: 'Bit {value} är inte kopplad till någon av ärmens kanaler. De kopplade bitarna är {wired} (hardware.yaml).'
     # DRAFT (LOG N7.U2): written by the build, not ethics-sourced

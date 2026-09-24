@@ -87,6 +87,16 @@ def test_the_grid_is_drawn_by_clicking(window, tmp_path):
     assert window.rows == [[1, 0, 0], [1, 0, 0]]
 
 
+def test_the_current_row_is_marked_without_hiding_its_cells(window):
+    """Pre-merge review: a selected row was painted in the selection colour over its cells,
+    and with no digits left the fill is the only sign of on or off."""
+    window.open_file(EXAMPLES / "sweep_03cms.csv")
+    window.grid.setCurrentCell(1, 0)
+    assert not window.grid.selectedItems()
+    assert window.grid.verticalHeaderItem(1).font().bold()
+    assert not window.grid.verticalHeaderItem(0).font().bold()
+
+
 def test_changing_the_channels_keeps_the_columns_kept(window):
     _parameters(window)
     window.add_row()
@@ -286,6 +296,27 @@ def test_choosing_another_garment_lets_the_sleeve_go(window, sleeve):
     _choose(window, "mock")
     assert sleeve[0].lines[-1] == "closed"
     assert window.play()
+
+
+def test_a_sleeve_lost_mid_play_stops_playback_and_can_reconnect(window, app, sleeve, loaded):
+    """Pre-merge review: a pulled cable used to raise on every tick into a dead port."""
+    window.open_file(EXAMPLES / "sweep_20cms.csv")
+    _choose(window, "arduino_mosfet")
+    assert window.play()
+
+    def unplugged(data):
+        raise serial.SerialException("device unplugged")
+
+    sleeve[0].write = unplugged
+    deadline = time.perf_counter() + 2.0
+    while time.perf_counter() < deadline and window.playing:
+        app.processEvents()
+    assert not window.playing and not window.timer.isActive()
+    assert sleeve[0].lines[-1] == "closed", "the dead port was let go"
+    prefix = loaded.experimenter_text["designer"]["errors"]["garment_lost"].split("{")[0]
+    assert window.message.text().startswith(prefix)
+    assert window.play(), "Play reconnects"
+    assert len(sleeve) == 2
 
 
 def test_a_sleeve_that_cannot_be_reached_is_reported(window, loaded, monkeypatch):

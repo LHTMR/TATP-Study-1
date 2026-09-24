@@ -50,17 +50,7 @@ class ArduinoMosfetGarment(GarmentController):
         self.baud = int(prototype["baud"])
         self.boot_s = float(prototype["boot_s"])
         self.timeout_s = float(self.hardware["garment"]["connect_timeout_s"])
-        bits = [int(bit) for bit in prototype["channel_bits"]]
-        # Stage boundary (CLAUDE.md): a channel with no bit, or two channels on one bit, would
-        # be a stimulus the software records but the sleeve never delivers.
-        assert len(bits) == self.n_channels, (
-            f"hardware.yaml: garment.prototype.channel_bits has {len(bits)} bits for "
-            f"{self.n_channels} channels"
-        )
-        assert len(set(bits)) == len(bits), (
-            f"hardware.yaml: garment.prototype.channel_bits repeats a bit: {bits}"
-        )
-        self.bit_for = dict(zip(self.channels(), bits, strict=True))
+        self.bit_for = channel_wiring(prototype["channel_bits"])
         self._port = None
         self._mask = 0
 
@@ -68,16 +58,21 @@ class ArduinoMosfetGarment(GarmentController):
 
     def _connect(self) -> None:
         self._port = self.serial_factory(self.port_name, self.baud, timeout=self.timeout_s)
-        # Opening the port resets the Arduino; anything sent while it boots is lost.
-        time.sleep(self.boot_s)
-        self._port.reset_input_buffer()
-        self._mask = 0
-        self._write_state()
-        self._send(HANDSHAKE)
-        reply = self._port.readline().decode(ENCODING, errors="replace").strip()
+        try:
+            # Opening the port resets the Arduino; anything sent while it boots is lost.
+            time.sleep(self.boot_s)
+            self._port.reset_input_buffer()
+            self._mask = 0
+            self._write_state()
+            self._send(HANDSHAKE)
+            reply = self._port.readline().decode(ENCODING, errors="replace").strip()
+        except (serial.SerialException, GarmentError):
+            # Let the port go before the failure travels on: a handle left open is a port
+            # Windows refuses to the next attempt, the designer's retry or the session's.
+            self._drop_port()
+            raise
         if reply != HANDSHAKE:
-            self._port.close()
-            self._port = None
+            self._drop_port()
             raise GarmentError(
                 f"{self.port_name} did not answer {HANDSHAKE!r} (replied {reply!r}); it is not "
                 f"the prototype's controller, or its firmware is older than the handshake"
@@ -108,6 +103,13 @@ class ArduinoMosfetGarment(GarmentController):
     def _write_state(self) -> None:
         self._send(SET_STATE.format(mask=self._mask))
 
+    def _drop_port(self) -> None:
+        """Close the port without a last write, which is what failed. Reconnecting then opens
+        it afresh rather than being refused a handle this driver still holds."""
+        port, self._port = self._port, None
+        if port is not None:
+            port.close()
+
     def _send(self, command: str) -> None:
         if self._port is None:
             raise GarmentError(f"{self.driver_name}: {self.port_name} is not open")
@@ -117,5 +119,22 @@ class ArduinoMosfetGarment(GarmentController):
         except serial.SerialException as error:
             # Reported and raised, never swallowed: a sleeve that silently stops obeying is
             # worse than a session that stops (SPEC.md 13).
+            self._drop_port()
             self.fault(f"serial write failed on {self.port_name}: {error}")
             raise GarmentError(f"{self.driver_name}: {error}") from error
+
+
+def channel_wiring(channel_bits) -> dict[int, int]:
+    """Channel to bit, from `garment.prototype.channel_bits` (channels 1-5 in order). Shared by
+    the driver and the pattern designer's import and export, so they cannot drift apart."""
+    bits = [int(bit) for bit in channel_bits]
+    # Stage boundary (CLAUDE.md): a channel with no bit, or two channels on one bit, would be
+    # a stimulus the software records but the sleeve never delivers.
+    assert len(bits) == ArduinoMosfetGarment.n_channels, (
+        f"hardware.yaml: garment.prototype.channel_bits has {len(bits)} bits for "
+        f"{ArduinoMosfetGarment.n_channels} channels"
+    )
+    assert len(set(bits)) == len(bits), (
+        f"hardware.yaml: garment.prototype.channel_bits repeats a bit: {bits}"
+    )
+    return {channel: bit for channel, bit in enumerate(bits, start=1)}

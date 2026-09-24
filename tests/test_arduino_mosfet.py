@@ -174,6 +174,26 @@ def test_a_failed_write_is_a_recorded_fault_not_a_silence(made):
     with pytest.raises(GarmentError, match="unplugged"):
         garment.set_channel(1, True)
     assert garment.faults and "unplugged" in garment.faults[-1]
+    assert ports[0].closed, "a dead port is let go, so a reconnect can open it afresh"
+    garment.disconnect()
+    garment.connect()
+    assert len(ports) == 2 and not ports[1].closed
+
+
+def test_a_connect_that_fails_after_opening_lets_the_port_go(made):
+    """Pre-merge review: the designer retries a failed connect, and the session follows it."""
+    garment, ports = made
+
+    class Unplugged(FakePort):
+        def write(self, data: bytes):
+            raise serial.SerialException("device unplugged")
+
+    type(garment).serial_factory = staticmethod(
+        lambda *a, **k: ports.append(Unplugged(*a, **k)) or ports[-1]
+    )
+    with pytest.raises(GarmentError):
+        garment.connect()
+    assert ports[-1].closed and not garment.connected
 
 
 def test_the_wiring_must_give_every_channel_its_own_bit(loaded):

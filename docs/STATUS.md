@@ -4,7 +4,7 @@
 **Milestone:** 6 (pilotable), in progress. Milestones 2–5 are merged and in `main`. Acceleration
 push under way (`CLAUDE.md`).
 **Branch:** `accel/ui-review`, cut from `accel/integration` for S's lab UI review. **Not merged
-yet.** It is two commits ahead.
+yet.** Both pre-merge reviews have run, and their findings are fixed (N7.U5).
 
 ---
 
@@ -13,7 +13,7 @@ yet.** It is two commits ahead.
 **The build runs a whole session**, against the mock garment or the prototype sleeve. The garment
 is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.1).
 
-**The UI review branch (`docs/LOG.md` N7.U1–N7.U4)** fixes what S found on the lab laptop, and
+**The UI review branch (`docs/LOG.md` N7.U1–N7.U5)** fixes what S found on the lab laptop, and
 what a full review of the other screens then found:
 - **Instruments:** entry in grams, no balance field, all twenty filaments in view.
 - **Pattern designer:**
@@ -46,8 +46,8 @@ too (N7.U3). Close other programs, including a launcher left open, before runnin
 
 ## Next steps
 
-1. **Review, then merge `accel/ui-review` into `accel/integration`:** `/code-review high`, then
-   the spec-review agent, then `make check` on the integration branch.
+1. **Merge `accel/ui-review` into `accel/integration`,** then run `make check` there. Both
+   reviews are done and fixed (N7.U5).
 2. **S's decisions from the UI review** that change how a session runs or what the participant
    sees, so the build did not take them:
    - **"Start block" is the go button for every step** and is always enabled, and a press

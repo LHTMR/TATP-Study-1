@@ -26,9 +26,9 @@ shown to six significant figures and read back would silently change a row inter
 1000/12 ms on the next save.
 
 **Channels are not bits.** A pattern addresses the sleeve's channels 1-5, distal to proximal,
-as the session does. The prototype's files address shift-register bits. `wiring` is the map
-between them, `hardware.yaml`'s `garment.prototype.channel_bits`, the same one the
-`arduino_mosfet` driver plays through, so an imported prototype CSV arrives in channels and an
+as the session does. The prototype's files address shift-register bits. The map between them
+is `arduino_mosfet.channel_wiring` of `hardware.yaml`'s `garment.prototype.channel_bits`, the
+one the driver itself plays through, so an imported prototype CSV arrives in channels and an
 exported command file fires the bits the sleeve is wired to. A bit or a channel outside the
 wiring is refused, never passed through: a pattern on an unwired bit plays nothing.
 
@@ -436,16 +436,6 @@ def from_pattern(pattern: Pattern) -> Design:
 
 def open_pattern(path: Path) -> Design:
     return from_pattern(patterns.load_pattern(path))
-
-
-def wiring(channel_bits: Sequence[int]) -> dict[int, int]:
-    """Channel to bit, from `garment.prototype.channel_bits` (channels 1, 2, ... in order)."""
-    bit_for = {channel: int(bit) for channel, bit in enumerate(channel_bits, start=1)}
-    # Stage boundary (CLAUDE.md): two channels on one bit would be one stimulus played as two.
-    assert len(set(bit_for.values())) == len(bit_for), (
-        f"channel_bits repeats a bit: {channel_bits}"
-    )
-    return bit_for
 
 
 def from_reference_csv(

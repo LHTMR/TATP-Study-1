@@ -507,6 +507,8 @@ designer:
     garment_channels: '{garment}: it has channels {have}, and this pattern uses {value}.'
     # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
     connect_failed: '{garment}: could not connect ({value}). Nothing was played.'
+    # DRAFT (LOG N7.U5): written by the build, not ethics-sourced
+    garment_lost: '{garment}: the connection was lost ({value}). Playback stopped. Press Play to reconnect.'
     # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
     unwired_bit: 'Bit {value} is not wired to a channel of the sleeve. The wired bits are {wired} (hardware.yaml).'
     # DRAFT (LOG N7.U2): written by the build, not ethics-sourced

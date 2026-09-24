@@ -454,12 +454,13 @@ def test_the_reduced_capability_banner_names_the_garment_in_words(app, session):
     assert session.garment.driver_name not in window.reduced_capability_banner.text()
 
 
-def test_a_banner_that_comes_mid_session_is_refused(experimenter):
+def test_a_banner_that_comes_mid_session_is_refused(experimenter, session):
     """UI_PRINCIPLES.md 3.3. Every banner is settled before the session starts, so the region
     takes only the space of the banners present; one appearing later would move the phase and
-    the instruction at exactly the wrong moment, and is refused instead."""
+    the instruction at exactly the wrong moment, and is refused instead. The flag is flipped
+    from whatever the config holds, so this holds as placeholders come and go."""
     window, held = experimenter
-    held["override"] = {"placeholder_text": True}
+    held["override"] = {"placeholder_text": not session.config.has_placeholder_text()}
     with pytest.raises(AssertionError, match="banners changed"):
         window.refresh()
 
@@ -824,6 +825,26 @@ def test_a_fault_from_the_intervention_stays_withheld_afterwards(drawn):
     window.refresh()
     assert "channel 4" not in window.faults.text() + window.faults.toolTip()
     assert "channel 2" in window.faults.text(), "a fault raised afterwards is shown, in full"
+
+
+def test_accumulating_faults_do_not_grow_the_side_column(drawn):
+    """Pre-merge review: faults accumulate for the session, and a wrapped line that grew with
+    each would move everything in the side column (UI_PRINCIPLES.md 3.3)."""
+    window, held = drawn
+    window.show()
+    faults = [f"channel {n}: a fault reported with enough words to wrap" for n in range(1, 9)]
+    held["view"] = _all_keys(phase="setup", hardware=_hardware(faults=faults[:1]))
+    window.refresh()
+    app = QApplication.instance()
+    app.processEvents()
+    one = window.faults.height()
+    held["view"] = _all_keys(phase="setup", hardware=_hardware(faults=faults))
+    window.refresh()
+    app.processEvents()
+    limit = window.faults.fontMetrics().lineSpacing() * experimenter_ui.FAULT_LINES
+    assert window.faults.height() <= limit and one <= limit
+    assert faults[-1] in window.faults.text() and faults[0] not in window.faults.text()
+    assert faults[0] in window.faults.toolTip()
 
 
 def test_refresh_does_not_refit_unchanged_text(drawn, monkeypatch):

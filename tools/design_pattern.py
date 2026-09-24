@@ -28,7 +28,7 @@ sys.path.insert(0, str(REPO_ROOT))
 import serial  # noqa: E402  -- after the path insert, with the rest
 import yaml  # noqa: E402
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer  # noqa: E402
-from PySide6.QtGui import QColor, QPainter, QPen  # noqa: E402
+from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QAbstractItemView,
     QApplication,
@@ -52,6 +52,7 @@ from PySide6.QtWidgets import (  # noqa: E402
 from tatp import config as cfg  # noqa: E402
 from tatp import pattern_design as pd  # noqa: E402
 from tatp.clock import Clock  # noqa: E402
+from tatp.garment.arduino_mosfet import channel_wiring  # noqa: E402
 from tatp.garment.base import GarmentController, GarmentError, Limits  # noqa: E402
 from tatp.garment.patterns import Pattern, PatternError  # noqa: E402
 from tatp.pattern_design import Design, DesignError  # noqa: E402
@@ -61,6 +62,7 @@ from tatp.ui.widgets import (  # noqa: E402
     BACKGROUND,
     CONTROL_BACKGROUND,
     CONTROL_BORDER,
+    CONTROL_PADDING_PX,
     DISCONNECTED_COLOUR,
     FOREGROUND,
     GROUP_GAP_PX,
@@ -104,7 +106,6 @@ REPEAT_ALPHA = 110
 # cells carry no digits: on or off is the fill, which reads at a glance where a 1 among 0s
 # did not (S, 24 Sep 2026).
 GRID_ROW_PX = 22
-GRID_SELECTION = "rgba(224, 161, 42, 70)"
 ID_SEPARATORS = re.compile(r"[,;\s]+")
 # What a user-chosen pattern file can raise on the way in (`DesignerWindow.open_file`).
 FILE_ERRORS = (PatternError, yaml.YAMLError, ValueError, TypeError, KeyError, OSError)
@@ -117,7 +118,7 @@ def designer_stylesheet() -> str:
     """The lab-side look, plus the controls only this window has."""
     return stylesheet() + (
         f"QTableWidget {{ background-color: {BACKGROUND}; color: {FOREGROUND}; "
-        f"gridline-color: {SECONDARY}; selection-background-color: {GRID_SELECTION}; }}"
+        f"gridline-color: {SECONDARY}; }}"
         f"QHeaderView::section {{ background-color: {CONTROL_BACKGROUND}; color: {SECONDARY}; "
         f"border: 1px solid {CONTROL_BORDER}; }}"
         f"QTableCornerButton::section {{ background-color: {CONTROL_BACKGROUND}; }}"
@@ -284,7 +285,7 @@ class DesignerWindow(QWidget):
         self.hardware = hardware
         self.command_limits = hardware["prototype_command_file"]
         # The sleeve's channel-to-bit wiring, which import and export translate through.
-        self.bit_for = pd.wiring(hardware["garment"]["prototype"]["channel_bits"])
+        self.bit_for = channel_wiring(hardware["garment"]["prototype"]["channel_bits"])
         self.folder = folder
         self.channel_ids: tuple[int, ...] = ()
         self.rows: list[list[int]] = []
@@ -297,8 +298,8 @@ class DesignerWindow(QWidget):
 
         # The real playback path (SPEC.md 12.1): `play_pattern`, then `advance` from a timer at
         # the session's own tick interval, through whichever driver is chosen. A real garment
-        # is woken on the first Play, not on opening, and let go on closing, so the window
-        # never holds the serial port a session is about to open.
+        # is woken on the first Play, not on opening, and let go on switching or closing, and
+        # by the launcher before a session connects its own (`launcher._start_session`).
         self.clock = Clock()
         self.garment: GarmentController = self._make_garment(DEFAULT_GARMENT)
         self.timer = QTimer(self)
@@ -467,8 +468,11 @@ class DesignerWindow(QWidget):
         hint.setText(self.words["grid_hint"])
         self.grid = sized(QTableWidget(0, 0), SIZE_SMALL)
         self.grid.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.grid.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.grid.setSelectionMode(QAbstractItemView.SingleSelection)
+        # No selection painting: a selected row was drawn in the selection colour instead of
+        # its cells' fill, hiding which were on. The row Add, Duplicate and Remove act on is
+        # the current one, marked by its time in bold (`_mark_current_row`).
+        self.grid.setSelectionMode(QAbstractItemView.NoSelection)
+        self.grid.currentCellChanged.connect(self._mark_current_row)
         self.grid.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.grid.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.grid.verticalHeader().setDefaultSectionSize(GRID_ROW_PX)
@@ -501,14 +505,11 @@ class DesignerWindow(QWidget):
         self.mode_buttons[pd.MODES[0]].setChecked(True)
         self.delay_field = line_edit()
         self.delay_field.setFixedWidth(NUMBER_FIELD_PX)
-        delay = QHBoxLayout()
-        delay.addWidget(self._caption("delay_ms"))
-        delay.addWidget(self.delay_field)
-        delay.addSpacing(GROUP_GAP_PX)
         controls.addSpacing(ITEM_GAP_PX)
-        controls.addLayout(delay)
+        controls.addLayout(self._convert_row(self.convert_ordered, self._caption("delay_ms"),
+                                             self.delay_field))
         controls.addStretch(1)
-        return self._channel_tab(self.ordered, self.convert_ordered, controls, delay)
+        return self._channel_tab(self.ordered, controls)
 
     @property
     def mode(self) -> str:
@@ -520,16 +521,27 @@ class DesignerWindow(QWidget):
     def _timed_tab(self) -> QWidget:
         self.timed = self._table([self.words[key] for key in ("channel", "onset_ms",
                                                                "offset_ms")])
-        convert_row = QHBoxLayout()
         side = QVBoxLayout()
-        side.addLayout(convert_row)
+        side.addLayout(self._convert_row(self.convert_timed))
         side.addStretch(1)
-        return self._channel_tab(self.timed, self.convert_timed, side, convert_row)
+        return self._channel_tab(self.timed, side)
 
-    def _channel_tab(self, table: QTableWidget, convert, side: QVBoxLayout,
-                     convert_row: QHBoxLayout) -> QWidget:
-        """A channel table and its buttons; beside them, `side`, whose `convert_row` ends with
-        Convert."""
+    def _convert_row(self, convert, *before: QWidget) -> QHBoxLayout:
+        """`before`, then Convert, which follows the channel ids alone (`revalidate`)."""
+        row = QHBoxLayout()
+        for widget in before:
+            row.addWidget(widget)
+        if before:
+            row.addSpacing(GROUP_GAP_PX)
+        convert_button = button(self.words["to_grid"])
+        convert_button.clicked.connect(convert)
+        self.convert_buttons.append(convert_button)
+        row.addWidget(convert_button)
+        row.addStretch(1)
+        return row
+
+    def _channel_tab(self, table: QTableWidget, side: QVBoxLayout) -> QWidget:
+        """A channel table and its buttons; beside them, `side`."""
         tab = QWidget()
         layout = QHBoxLayout(tab)
         layout.setContentsMargins(ITEM_GAP_PX, ITEM_GAP_PX, ITEM_GAP_PX, ITEM_GAP_PX)
@@ -540,11 +552,6 @@ class DesignerWindow(QWidget):
             ("add_channel", lambda: self._add_entry(table)),
             ("remove_channel", lambda: self._remove_entry(table)),
         ))
-        convert_button = button(self.words["to_grid"])
-        convert_button.clicked.connect(convert)
-        self.convert_buttons.append(convert_button)
-        convert_row.addWidget(convert_button)
-        convert_row.addStretch(1)
         holder = QWidget()
         holder.setFixedWidth(CHANNEL_TABLE_PX)
         holder.setLayout(left)
@@ -706,6 +713,20 @@ class DesignerWindow(QWidget):
             for index in range(len(self.rows))
         ]
         self.grid.setVerticalHeaderLabels(labels)
+        # Wide enough for the longest time in bold, which the header does not allow for.
+        header = self.grid.verticalHeader()
+        bold = header.font()
+        bold.setBold(True)
+        widest = max((QFontMetrics(bold).horizontalAdvance(text) for text in labels), default=0)
+        header.setMinimumWidth(widest + 2 * CONTROL_PADDING_PX)
+        self._mark_current_row(self.grid.currentRow())
+
+    def _mark_current_row(self, row: int, *_) -> None:
+        for index in range(self.grid.rowCount()):
+            item = self.grid.verticalHeaderItem(index)
+            font = item.font()
+            font.setBold(index == row)
+            item.setFont(font)
 
     def _cell(self, value: int) -> QTableWidgetItem:
         item = QTableWidgetItem()
@@ -982,8 +1003,9 @@ class DesignerWindow(QWidget):
             return False
         if not self.garment.connected:
             self.tell(self.words["connecting"].format(garment=self.garment_name))
-            # Shown before the wait: opening the prototype's port resets its board.
-            QApplication.processEvents()
+            # Painted before the wait (opening the prototype's port resets its board), but no
+            # events are processed: a second Play click handled in here would connect twice.
+            self.message.repaint()
             try:
                 self.garment.connect()
             except CONNECT_ERRORS as error:
@@ -1001,7 +1023,11 @@ class DesignerWindow(QWidget):
     def _tick(self) -> None:
         if not self.playing:
             return
-        self.garment.advance()
+        try:
+            self.garment.advance()
+        except GarmentError as error:
+            self._garment_lost(error)
+            return
         elapsed = self.clock.elapsed_s() - self._play_start_s
         if not self.pattern.loop and elapsed >= self.pattern.duration_s:
             self.stop()
@@ -1016,16 +1042,35 @@ class DesignerWindow(QWidget):
     def stop(self) -> None:
         if not self.playing:
             return
+        self._end_playback()
+        try:
+            self.garment.stop_pattern()
+        except GarmentError as error:
+            self._garment_lost(error)
+            return
+        self.tell(self.words["stopped"])
+
+    def _end_playback(self) -> None:
         self.timer.stop()
         self._play_start_s = None
         self.stop_button.setEnabled(False)
-        self.garment.stop_pattern()
         self.timeline.set_cursor(None)
-        self.tell(self.words["stopped"])
+
+    def _garment_lost(self, error: GarmentError) -> None:
+        """The sleeve stopped answering mid-play (its cable, say). The driver has already let
+        the port go and recorded the fault; here playback ends and a fresh, unconnected
+        garment of the same kind takes its place, so the next Play reconnects rather than
+        ticking an error into a dead port."""
+        self._end_playback()
+        self.garment = self._make_garment(self.garment_choice.currentData())
+        self.tell(self.explain(DesignError(
+            "garment_lost", garment=self.garment_name, value=str(error),
+        )), problem=True)
 
     def closeEvent(self, event) -> None:
         self.stop()
-        # The port is the session's the moment this window closes (launcher._start_session).
+        # The port is let go on closing. A session started from the launcher is not left to
+        # this: `launcher._start_session` releases it before the session connects.
         self.release_garment()
         super().closeEvent(event)
 

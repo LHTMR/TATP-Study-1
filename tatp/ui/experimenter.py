@@ -104,6 +104,9 @@ STATUS_LINES = 2
 STATUS_SIZES = (SIZE_BODY, SIZE_SMALL)
 OPEN_ITEMS_LINES = 2
 SIDE_COLUMN_PX = 300
+# The fault line: the newest entries only, within a fixed number of lines.
+FAULT_ENTRIES = 2
+FAULT_LINES = 3
 ZONE_MIN_HEIGHT_PX = 100
 SUBSTITUTION_FIELD_PX = 300
 DISTANCE_FIELD_PX = 110
@@ -323,10 +326,12 @@ class ExperimenterWindow(QWidget):
         self.hardware_title.setText(self.text["hardware"]["title"])
         self.garment = label(SIZE_BODY)
         self.pressures = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
-        # Wrapped, never cut short: a fault is read once, in full, when it happens, and a
-        # tooltip is not somewhere a safety message can live.
+        # Wrapped, so the newest fault is read in full when it happens, but within a bounded
+        # height: faults accumulate, and a line that grew with each would move the side column
+        # mid-session (UI_PRINCIPLES.md 3.3). The whole list is in the tooltip and the data.
         self.faults = label(SIZE_SMALL, wrap=True, colour=DISCONNECTED_COLOUR)
         self.faults.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.faults.setMaximumHeight(self.faults.fontMetrics().lineSpacing() * FAULT_LINES)
         # One disconnect/reconnect button (SPEC.md 11) that says what it will do now.
         self.garment_button = button("")
         self.garment_button.clicked.connect(self._garment_clicked)
@@ -790,7 +795,8 @@ class ExperimenterWindow(QWidget):
         ]
         if withheld:
             lines.append(words["fault_withheld"].format(value=len(withheld)))
-        self.faults.setText(LINE_SEPARATOR.join(lines))
+        self.faults.setText(LINE_SEPARATOR.join(lines[-FAULT_ENTRIES:]))
+        self.faults.setToolTip(LINE_SEPARATOR.join(lines))
         self.faults.setVisible(bool(lines))
 
     def _apply_enabled(self) -> None:

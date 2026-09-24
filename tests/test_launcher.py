@@ -143,6 +143,61 @@ def test_starting_a_session_closes_the_designer(app, loaded, tmp_path):
     assert not designer.isVisible()
 
 
+def test_a_designer_playing_on_the_sleeve_lets_its_port_go_before_the_session_connects(
+    app, loaded, tmp_path, monkeypatch
+):
+    """Pre-merge review: the build connects the session's garment, so the designer's hold on
+    the prototype's serial port must end before it, not after (Windows refuses a second)."""
+    from tatp.garment.arduino_mosfet import ArduinoMosfetGarment
+
+    closed = []
+
+    class Port:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def reset_input_buffer(self):
+            pass
+
+        def write(self, data):
+            pass
+
+        def flush(self):
+            pass
+
+        def readline(self):
+            return b"hello\r\n"
+
+        def close(self):
+            closed.append(True)
+
+    monkeypatch.setattr(ArduinoMosfetGarment, "serial_factory", staticmethod(Port))
+    monkeypatch.setattr("tatp.garment.arduino_mosfet.time.sleep", lambda s: None)
+    fakes = Fakes()
+    at_build = []
+
+    def build(config, args):
+        at_build.append(list(closed))
+        return fakes.build(config, args)
+
+    window = LauncherWindow(loaded, fakes.preflight, build)
+    designer = window.open_designer()
+    designer.open_file(cfg.CONFIG_DIR / "patterns" / "examples" / "sweep_20cms.csv")
+    designer.garment_choice.setCurrentIndex(designer.garment_choice.findData("arduino_mosfet"))
+    assert designer.play()
+    _filled(window, tmp_path).start()
+    assert at_build == [[True]], "the port was closed before the session was built"
+    assert not designer.playing
+
+
+def test_the_pattern_folder_hint_goes_once_a_folder_is_chosen(app, loaded, tmp_path):
+    window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
+    dialog = window.session_dialog()
+    assert dialog.pattern_folder_hint.isVisibleTo(dialog)
+    dialog.pattern_folder.setText(str(tmp_path))
+    assert not dialog.pattern_folder_hint.isVisibleTo(dialog)
+
+
 def test_the_dialog_asks_for_exactly_what_spec_6_lists(app, loaded, tmp_path):
     window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
     dialog = _filled(window, tmp_path)

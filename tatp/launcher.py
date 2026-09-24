@@ -76,6 +76,7 @@ from tatp.ui.widgets import (
     sized,
     stylesheet,
 )
+from tatp.units import S_PER_MIN
 
 LANGUAGES = ("sv", "en")
 # The launcher's own screens open before anyone has chosen a language, so they are drawn in the
@@ -117,6 +118,26 @@ def build(config: cfg.Config, args: argparse.Namespace):
     import run_session
 
     return run_session.build(config, args)
+
+
+def resume_offer(text: dict, phases: list[str], blocks: list[str],
+                 ago_min: int | None) -> dict:
+    """The resume offer's two values, worded (SPEC.md 15): the phases and intervention blocks
+    completed, and how long ago sensitisation began, in minutes, or None if it had not.
+    `run_session.resume_summary` reads them from the data; the screenshots pass samples."""
+    dialogs = text["dialogs"]
+    parts = [text["phases"][phase] for phase in phases if phase in text["phases"]]
+    if blocks:
+        parts.append(dialogs["resume_blocks"].format(value=", ".join(blocks)))
+    if ago_min is None:
+        since = dialogs["resume_not_sensitised"]
+    else:
+        hours, minutes = divmod(ago_min, int(S_PER_MIN))
+        since = dialogs["resume_since_sensitisation"].format(hours=hours, minutes=minutes)
+    return {
+        "completed": ", ".join(parts) or dialogs["resume_nothing_completed"],
+        "since_sensitisation": since,
+    }
 
 
 def formatted(template: str, value: object) -> str:
@@ -184,9 +205,11 @@ class SessionDialog(QDialog):
         # run the provisional mockups in place of the real patterns (open item 5).
         self.pattern_folder = line_edit(SIZE_BODY)
         self.pattern_folder.setPlaceholderText(words["choose"])
-        # Why it is empty, under the form: as a placeholder it was cut off by the field.
+        # Why it is empty, under the form while it is: as a placeholder it was cut off by the
+        # field. Gone once a folder is chosen, as a placeholder would be.
         self.pattern_folder_hint = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
         self.pattern_folder_hint.setText(words["no_pattern_folder"])
+        self.pattern_folder.textChanged.connect(self._pattern_folder_changed)
 
         form = QFormLayout()
         form.setVerticalSpacing(ITEM_GAP_PX)
@@ -269,6 +292,9 @@ class SessionDialog(QDialog):
         chosen = QFileDialog.getExistingDirectory(self, "", field.text())
         if chosen:
             field.setText(chosen)
+
+    def _pattern_folder_changed(self, text: str) -> None:
+        self.pattern_folder_hint.setVisible(not text.strip())
 
     def _stale(self, *_) -> None:
         self.start_button.setEnabled(False)
@@ -565,6 +591,12 @@ class LauncherWindow(QWidget):
         )
 
     def _start_session(self, config: cfg.Config, args: argparse.Namespace) -> None:
+        # Before the build, which connects the session's garment: a designer playing on the
+        # prototype sleeve holds its serial port, and Windows would refuse the session a
+        # second handle on it.
+        if self.designer is not None:
+            self.designer.stop()
+            self.designer.release_garment()
         self.runner = self._build(config, args)
         # A designer left open would show pattern names beside a running session (SPEC.md 16).
         if self.designer is not None:

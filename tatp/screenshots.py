@@ -49,7 +49,7 @@ from tatp import pattern_design as pd
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
 from tatp.instruments import InstrumentsDialog
-from tatp.launcher import WARN, LauncherWindow
+from tatp.launcher import WARN, LauncherWindow, resume_offer
 from tatp.pinprick import F40Fit, LongResult
 from tatp.responder import Action, Responder
 from tatp.touchcal import FitReady
@@ -120,11 +120,11 @@ SAMPLE_PARTICIPANT = "07"
 SAMPLE_INITIALS = "SM"
 SAMPLE_PATTERN_FOLDER = "config/patterns/examples"
 SAMPLE_DATA_FOLDER = "data"
-# The resume offer's completed phases, and how long ago sensitisation began, in (h, min):
-# filled from the text as `run_session.resume_summary` fills them.
+# The resume offer's completed phases and blocks, and how long ago sensitisation began,
+# worded by the same `launcher.resume_offer` the real offer is.
 SAMPLE_RESUME_COMPLETED = ("setup", "touch_calibration", "pre_sensitisation", "sensitisation")
-SAMPLE_RESUME_BLOCKS = "1, 2, 3, 4"
-SAMPLE_RESUME_AGO = (1, 12)
+SAMPLE_RESUME_BLOCKS = ("1", "2", "3", "4")
+SAMPLE_RESUME_AGO_MIN = 72
 SAMPLE_SESSION_NUMBER = 1
 SAMPLE_LANGUAGES = ("sv", "en")
 # The garment the checked session dialog shows chosen: the prototype, which the lab pilots on.
@@ -641,20 +641,6 @@ def _grab_dialog(dialog: QWidget) -> QPixmap:
     return dialog.grab()
 
 
-def _sample_resume(text: dict) -> dict:
-    """The resume offer's values, worded as `run_session.resume_summary` words them."""
-    dialogs = text["dialogs"]
-    completed = [text["phases"][phase] for phase in SAMPLE_RESUME_COMPLETED]
-    completed.append(dialogs["resume_blocks"].format(value=SAMPLE_RESUME_BLOCKS))
-    hours, minutes = SAMPLE_RESUME_AGO
-    return {
-        "completed": ", ".join(completed),
-        "since_sensitisation": dialogs["resume_since_sensitisation"].format(
-            hours=hours, minutes=minutes
-        ),
-    }
-
-
 def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     """The launcher and its dialogs (SPEC.md 4.1). Nothing is started and nothing is written."""
     def no_session(config, args):
@@ -703,7 +689,10 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"The resume question (SPEC.md 15): what was completed and how long ago "
         f"sensitisation began. Resume, or an explicit new session; closing it starts nothing "
         f"({language}).",
-        _grab_dialog(dialog.resume_dialog(_sample_resume(config.experimenter_text))),
+        _grab_dialog(dialog.resume_dialog(resume_offer(
+            config.experimenter_text, list(SAMPLE_RESUME_COMPLETED),
+            list(SAMPLE_RESUME_BLOCKS), SAMPLE_RESUME_AGO_MIN,
+        ))),
     )
 
     # The unweighed set, whatever filaments.yaml holds today, so weighing the kit does not

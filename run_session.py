@@ -30,6 +30,7 @@ from tatp import preflight as pre
 from tatp import resume as resumption
 from tatp import schedule
 from tatp.clock import ISO_FORMAT, Clock
+from tatp.launcher import resume_offer
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import DRIVERS, Session, SessionError, with_session_choices
@@ -126,7 +127,6 @@ def resume_summary(config: cfg.Config, open_session: resumption.OpenSession) -> 
     """The two values the resume offer shows (SPEC.md 15): what was completed, and how long
     ago sensitisation began -- both in the experimenter's language."""
     text = config.experimenter_text
-    dialogs = text["dialogs"]
     done = set(open_session.completed_stages)
     # A phase is completed when its last stage is: read against the plan, not guessed from
     # the order the stages happen to appear in.
@@ -134,23 +134,16 @@ def resume_summary(config: cfg.Config, open_session: resumption.OpenSession) -> 
     for stage_id, _, _ in stage_layout(schedule.generate(config.schedule)):
         last_of[summary_phase(stage_id)] = stage_id
     phases = [phase for phase, last in last_of.items() if last in done]
-    parts = [text["phases"][phase] for phase in phases if phase in text["phases"]]
+    blocks = []
     if INTERVENTION_PHASE not in phases:
         blocks = [stage.split(".")[1] for stage in open_session.completed_stages
                   if stage.startswith(BLOCK_STAGE + ".")]
-        if blocks:
-            parts.append(dialogs["resume_blocks"].format(value=", ".join(blocks)))
     started = open_session.sensitisation_start_iso
-    if started is None:
-        since = dialogs["resume_not_sensitised"]
-    else:
+    ago_min = None
+    if started is not None:
         ago_s = (datetime.now() - datetime.strptime(started, ISO_FORMAT)).total_seconds()
-        hours, minutes = divmod(int(ago_s // S_PER_MIN), int(S_PER_MIN))
-        since = dialogs["resume_since_sensitisation"].format(hours=hours, minutes=minutes)
-    return {
-        "completed": ", ".join(parts) or dialogs["resume_nothing_completed"],
-        "since_sensitisation": since,
-    }
+        ago_min = int(ago_s // S_PER_MIN)
+    return resume_offer(text, phases, blocks, ago_min)
 
 
 def build(

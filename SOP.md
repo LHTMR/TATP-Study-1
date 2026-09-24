@@ -99,7 +99,7 @@ What the messages mean:
 | **Enter the weighing date before saving measured forces.** | Type the date, then press **Save forces** again. |
 | **… is not a date in the form YYYY-MM-DD.** | Retype the date, for example `2026-09-24`. |
 | **Filament … g: … is not a weight in grams above zero.** | Correct that filament's value. |
-| **No measured forces entered.** | Nothing was typed in the Measured column. |
+| **No measured forces entered.** | Nothing new was typed in the **Weighed (g)** column. A value left as it was shown on opening is not saved again, so re-weigh and type the new reading. |
 
 Saving changes `config/filaments.yaml` on the lab PC.
 **[TBC: who commits the changed filaments.yaml, so that the weighing is kept.]**
