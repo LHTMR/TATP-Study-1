@@ -44,6 +44,12 @@ def config(loaded, tmp_path):
         **loaded.hardware,
         "data": {"folder": str(tmp_path / "data"), "cloud_sync_markers": []},
         "audio": {**loaded.hardware["audio"], "backend": "recording"},
+        # One offscreen screen, not the lab's two.
+        "screens": {
+            **loaded.hardware["screens"],
+            "participant_screen_index": None,
+            "experimenter_screen_index": None,
+        },
     }
     return cfg.Config(**{**loaded.__dict__, "hardware": hardware})
 

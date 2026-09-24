@@ -39,7 +39,7 @@ import re
 from collections.abc import Callable, Sequence
 
 from PySide6.QtCore import QRegularExpression, Qt, QTimer, Signal, SignalInstance
-from PySide6.QtGui import QRegularExpressionValidator
+from PySide6.QtGui import QGuiApplication, QRegularExpressionValidator
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -416,6 +416,27 @@ class ExperimenterWindow(QWidget):
         self.entries.addWidget(self.substitution_button)
         self.entries.addSpacing(GROUP_GAP_PX)
         self.entries.addWidget(self.distances_button)
+
+    # -- placement ---------------------------------------------------------------------
+
+    def place(self, screens: dict) -> None:
+        """Put the window maximised on `screens.experimenter_screen_index`.
+
+        Maximised rather than fullscreen, because the experimenter's dialogs open over it. A
+        null index leaves it where the system puts it, which is right for a development machine
+        and warns at startup (open item 9), as for the participant window.
+        """
+        index = screens["experimenter_screen_index"]
+        if index is None:
+            return
+        available = QGuiApplication.screens()
+        if not 0 <= index < len(available):
+            raise IndexError(
+                f"hardware.yaml: screens.experimenter_screen_index is {index}, but this machine "
+                f"has {len(available)} screen(s)"
+            )
+        self.setGeometry(available[index].availableGeometry())
+        self.showMaximized()
 
     # -- pushed in by the protocol ------------------------------------------------------
 

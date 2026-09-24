@@ -72,8 +72,12 @@ responder:
 screens:
   # SPEC.md 20 item 9. Null means "primary screen, windowed", which is right for a
   # development machine and wrong for the lab PC, so startup warns while they are null.
-  participant_screen_index: null
-  experimenter_screen_index: null
+  # Set 25 Sep 2026 on the lab laptop, with S: screen 0 is the laptop's own display (1280x800
+  # at 150 %), screen 1 the HP Z24i (1920x1200) behind the curtain. The approved participant
+  # screenshots are 1280x800, so on the HP the participant's text wraps differently from them
+  # (docs/LOG.md N5.19).
+  participant_screen_index: 1
+  experimenter_screen_index: 0
   participant_fullscreen: true
   # How often the experimenter screen redraws its clock, countdown and hardware panel
   # (SPEC.md 7.4, 11; docs/LOG.md N6.20). A display rate, not a study timing: the countdown
@@ -100,11 +104,18 @@ audio:
                                      # it plays nothing and records what it was asked to play,
                                      # as MockGarment does. Never a silent fallback -- a real
                                      # session whose device fails raises (tatp/audio.py).
-  participant_device: null           # the participant's headphones; null = system default
-  experimenter_device: null          # lab-side alerts. Null = system default, which on the lab
-                                     # PC may BE the participant's headphones. Local item L10.
+  # Devices are named by words that must ALL appear in "<device name>, <host API>" (sounddevice's
+  # matching), so each resolves to exactly one output. Set 25 Sep 2026 on the lab laptop, with
+  # S present. WASAPI, not MME or DirectSound, which add 90-120 ms of latency. Bluetooth adds
+  # its own delay on top, unreported. And never the headset's "Hands-Free" output, which is mono
+  # 16 kHz and which Windows switches to if anything opens the headset microphone.
+  participant_device: Bose QC Headphones WASAPI   # the participant's headphones
+  experimenter_device: Speakers Realtek WASAPI    # lab-side alerts: the laptop's own speakers.
+                                     # Local item L10 -- whether they are inaudible to the
+                                     # participant over the noise is still to meter (L3).
   output_channels: 2                 # the same noise to both ears
-  sample_rate_hz: 44100
+  sample_rate_hz: 48000              # WASAPI shared mode refuses anything but the device's own
+                                     # rate, which is 48 kHz for both devices on the lab laptop
   tone_ramp_s: 0.01                  # raised-cosine onset/offset on every tone, so a cue does
                                      # not start with a click -- a second, louder cue
   # The two-button control of SPEC.md 10.3, applied to the noise level. The tap and hold

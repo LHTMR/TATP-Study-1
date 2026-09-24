@@ -287,17 +287,23 @@ class Run:
         return [row["detail"] for row in self.events() if row["event"] == "stage_completed"]
 
 
+# The offscreen platform has one screen, so the lab's screen indices would not exist.
+HEADLESS_SCREENS = {"participant_screen_index": None, "experimenter_screen_index": None}
+
+
 def run_config(loaded: cfg.Config, folder: Path, scenario: Scenario) -> cfg.Config:
     """The configuration a validator run uses: the loaded one, with the harness's changes.
 
     The data folder is the run's own, the audio is the recording double (there is no sound
-    device headless), and the three real-time settings the module docstring names are scaled
-    back to real time at `CLOCK_SPEED`.
+    device headless), the windows go on the one offscreen screen rather than the lab's two, and
+    the three real-time settings the module docstring names are scaled back to real time at
+    `CLOCK_SPEED`.
     """
     hardware = {
         **loaded.hardware,
         "data": {**loaded.hardware["data"], "folder": str(folder)},
         "audio": {**loaded.hardware["audio"], "backend": "recording"},
+        "screens": {**loaded.hardware["screens"], **HEADLESS_SCREENS},
     }
     speed = scenario.clock_speed
     choice = {key: float(value) / speed for key, value in loaded.study1["choice"].items()}

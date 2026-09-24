@@ -120,9 +120,25 @@ def test_escape_is_swallowed_off_the_vas_as_well(participant):
 
 
 def test_a_null_screen_index_leaves_the_window_where_it_is(participant, session):
-    """Open item 9: null means primary screen, windowed. Never silently fullscreened."""
-    participant.place(session.config.hardware["screens"])
+    """Open item 9: null means primary screen, windowed. Never silently fullscreened.
+
+    Driven from a crafted value, not the live config: the lab PC's own indices are set there
+    (docs/LOG.md N6.16).
+    """
+    screens = {**session.config.hardware["screens"], "participant_screen_index": None}
+    participant.place(screens)
     assert not participant.isFullScreen()
+
+
+def test_the_experimenter_window_is_placed_on_its_screen(session):
+    screens = session.config.hardware["screens"]
+    window = ExperimenterWindow(session.config.experimenter_text, session.experimenter_view)
+    window.place({**screens, "experimenter_screen_index": None})
+    assert not window.isMaximized()
+    with pytest.raises(IndexError, match="experimenter_screen_index"):
+        window.place({**screens, "experimenter_screen_index": 99})
+    window.place({**screens, "experimenter_screen_index": 0})
+    assert window.isMaximized()
 
 
 def test_an_impossible_screen_index_is_refused_rather_than_wrapped(participant):

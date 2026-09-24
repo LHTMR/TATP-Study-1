@@ -229,6 +229,7 @@ def _build_holding(config, args, resume_decision, data_folder) -> SessionRunner:
     )
     participant.place(config.hardware["screens"])
     participant.show()
+    experimenter.place(config.hardware["screens"])
     experimenter.show()
     return SessionRunner(Rig(session, participant, experimenter), resume=state)
 
