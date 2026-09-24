@@ -72,8 +72,12 @@ class Rig(QObject):
         self.interruptions = Interruptions(session, participant, experimenter, self)
         session.attach_interruptions(lambda: self.interruptions.active)
         # The remote's presses reach the participant window whichever window is active. The
-        # filter is a child of the rig, and Qt drops it from the application when it is deleted.
-        self._remote_keys = RemoteKeyRouter(participant, self)
+        # filter is a child of that window, not of the rig: Qt deletes it with the window, and a
+        # deleted filter is dropped from the application. As a child of the rig it could
+        # outlive the window it points at -- the rig sits in reference cycles, so its end is
+        # the garbage collector's timing -- and a key event anywhere then reached a filter
+        # whose window was gone (docs/LOG.md N7.I3).
+        self._remote_keys = RemoteKeyRouter(participant, participant)
         QApplication.instance().installEventFilter(self._remote_keys)
         # SPEC.md 10.5: the audible cue sounds with the visual one, from one signal, so no
         # protocol can show the one and forget the other.

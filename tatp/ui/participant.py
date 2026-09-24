@@ -23,6 +23,7 @@ with no protocol in it.
 
 from __future__ import annotations
 
+import shiboken6
 from PySide6.QtCore import QEvent, QObject, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
@@ -751,6 +752,10 @@ class RemoteKeyRouter(QObject):
         if event.type() not in (QEvent.KeyPress, QEvent.KeyRelease):
             return False
         participant = self.participant
+        # Parented to its window, so it dies with it; this guards the moment in between, when
+        # the window's C++ object is gone but a queued event still reaches the filter.
+        if not shiboken6.isValid(participant):
+            return False
         # A key already addressed to a participant window -- this one, or the one another
         # router has just forwarded it to -- is left alone. Without that, two routers alive at
         # once would forward each other's events back and forth without end.

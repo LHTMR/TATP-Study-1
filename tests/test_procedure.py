@@ -11,6 +11,7 @@ import csv
 import time
 
 import pytest
+import shiboken6
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication, QLineEdit, QPushButton
@@ -281,6 +282,36 @@ def test_typing_in_an_experimenter_field_is_not_taken_for_the_remote(rig):
     rig.participant.show_message("welcome")
     _key(field, QT_KEYS["period"], QEvent.KeyPress)
     assert confirmed == []
+
+
+def test_a_deleted_participant_window_takes_its_key_router_with_it(app, loaded, tmp_path):
+    """docs/LOG.md N7.I3. The router is the window's child, so it cannot outlive it.
+
+    A router that outlived its window was reached by every later key event in the process, and
+    touched a deleted C++ object. That was the intermittent worker crash in the test suite.
+    """
+    import gc
+
+    for attempt in range(3):
+        hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / f"d{attempt}"),
+                                                "cloud_sync_markers": []},
+                    "audio": {**loaded.hardware["audio"], "backend": "recording"}}
+        config = cfg.Config(**{**loaded.__dict__, "hardware": hardware})
+        session = Session(config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=CLOCK_SPEED))
+        session.start()
+        participant = ParticipantWindow(config, Responder(config.hardware), session.clock)
+        experimenter = ExperimenterWindow(config.experimenter_text, session.experimenter_view)
+        made = Rig(session, participant, experimenter)
+        router = made._remote_keys
+        session.close()
+        participant.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        assert not shiboken6.isValid(router), "the router went with its window"
+        del made, participant, experimenter, session
+        gc.collect()
+    elsewhere = QPushButton()
+    elsewhere.show()
+    _key(elsewhere, QT_KEYS["pagedown"])  # reaches no dead filter, and does not crash
 
 
 def test_the_rig_plays_patterns(rig):
