@@ -211,6 +211,18 @@ def test_a_stop_during_the_resume_cue_cancels_the_restore(rigged):
     assert interruptions.active == EMERGENCY_STOP
 
 
+def test_a_garment_disconnected_during_the_stop_is_not_restored(rigged):
+    """The resume still completes; commanding a disconnected garment would raise."""
+    session, participant, _, interruptions, seen = rigged
+    _deliver(session)
+    _press(participant, "f5")
+    session.garment.disconnect()
+    interruptions.resume()
+    _spin(lambda: "resumed" in seen)
+    assert _events(session, "restore_skipped_disconnected")
+    assert not _events(session, "garment_restored")
+
+
 def test_a_resume_with_nothing_interrupted_is_a_defect(rigged):
     _, _, _, interruptions, _ = rigged
     with pytest.raises(SessionError, match="nothing is interrupted"):

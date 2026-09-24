@@ -49,6 +49,8 @@ RESUME_OFFER = "dialogs.resume_found"
 BLOCK_STAGE = "block"
 INTERVENTION_PHASE = "intervention"
 # Exit codes, for a script that runs sessions.
+# Its presence on the command line means a session is named there rather than in the launcher.
+LAUNCH_SESSION_FLAG = "--participant"
 EXIT_REFUSED = 2
 EXIT_OPEN_SESSION = 3
 
@@ -251,6 +253,14 @@ def experimenter_text(config: cfg.Config, dotted_key: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    # SPEC.md 4.1: run with no session named, this opens the launcher, so an experimenter never
+    # needs the command line. Naming one on the command line is the scripted route, and the
+    # validator's.
+    if LAUNCH_SESSION_FLAG not in argv:
+        from tatp.launcher import run_launcher  # the launcher imports this module
+
+        return run_launcher(argv)
     args = parse_args(argv)
     config = cfg.load(args.participant_language, args.experimenter_language)
     for line in warnings_for(config):

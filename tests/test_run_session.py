@@ -60,6 +60,17 @@ def _never(open_session):
 # -- arguments and warnings ---------------------------------------------------------------
 
 
+def test_no_session_on_the_command_line_opens_the_launcher(monkeypatch):
+    """SPEC.md 4.1: `run_session.py` opens the launcher; naming a session skips it."""
+    import tatp.launcher
+
+    opened = []
+    monkeypatch.setattr(tatp.launcher, "run_launcher", lambda argv: opened.append(argv) or 0)
+    assert run_session.main([]) == 0
+    assert run_session.main(["--language", "sv"]) == 0
+    assert opened == [[], ["--language", "sv"]]
+
+
 def test_the_pattern_folder_has_no_default():
     """Defaulting it would silently substitute the provisional mockups (open item 5)."""
     with pytest.raises(SystemExit):
