@@ -16,6 +16,7 @@ from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication, QLabel
 
 from tatp import config as cfg
+from tatp import screenshots
 from tatp.clock import Clock
 from tatp.responder import Action, Responder, ResponderError
 from tatp.session import Session
@@ -63,10 +64,11 @@ def _press(widget, name):
 
 
 def _visible_texts(window) -> list[str]:
+    """What the window itself shows -- not a dialog it owns, which is a window of its own."""
     return [
         label.text()
         for label in window.findChildren(QLabel)
-        if label.isVisibleTo(window) and label.text()
+        if label.window() is window and label.isVisibleTo(window) and label.text()
     ]
 
 
@@ -454,23 +456,27 @@ def test_nothing_moves_when_the_banners_appear(experimenter):
     assert (window.phase.pos().y(), window.instruction.pos().y()) == quiet
 
 
-def test_both_banners_fit_the_reserved_region(experimenter):
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_every_banner_fits_the_reserved_region(app, language):
     """The reserved height is only honest if the warnings actually fit inside it.
 
     A longer wording, or a second language, would otherwise clip a SPEC.md 12.4 banner rather
-    than push the layout -- which is worse than the reflow it was reserved to prevent.
+    than push the layout -- which is worse than the reflow it was reserved to prevent. All
+    three at once, in both languages, at the screenshot width.
     """
-    window, held = experimenter
-    held["override"] = {"placeholder_text": True, "reduced_capability_device": True}
-    window.refresh()
+    text = cfg.load(language, language).experimenter_text
+    view = _all_keys(placeholder_text=True, reduced_capability_device=True,
+                     fit_preview_enabled=True)
+    window = ExperimenterWindow(text, lambda: view)
+    window.resize(1280, 800)
     window.show()
+    banners = (window.placeholder_banner, window.reduced_capability_banner,
+               window.fit_preview_banner)
     width = window.placeholder_banner.width()
-    needed = sum(
-        banner.heightForWidth(width)
-        for banner in (window.placeholder_banner, window.reduced_capability_banner)
-    )
+    spacing = window.banner_area.layout().spacing() * (len(banners) - 1)
+    needed = sum(banner.heightForWidth(width) for banner in banners) + spacing
     assert needed <= experimenter_ui.BANNER_AREA_PX, (
-        f"the two banners need {needed} px but only {experimenter_ui.BANNER_AREA_PX} "
+        f"the three banners need {needed} px but only {experimenter_ui.BANNER_AREA_PX} "
         f"is reserved -- raise BANNER_AREA_PX"
     )
 
@@ -502,16 +508,540 @@ def test_the_unresolved_open_items_are_on_the_screen(experimenter, session):
     assert not window.open_items.isVisibleTo(window)
 
 
+def _hardware(connected=True, faults=(), pressures=None):
+    return {"connected": connected, "faults": list(faults), "channel_pressure_kpa": pressures}
+
+
 def test_the_garment_state_is_shown(experimenter, session):
     window, held = experimenter
     text = session.config.experimenter_text["status"]
+    controls = session.config.experimenter_text["controls"]
     assert window.garment.text() == text["connected"]
-    held["override"] = {"garment_connected": False}
+    assert window.garment_button.text() == controls["disconnect"]
+    disconnects = _emitted(window.garment_disconnect_requested)
+    window.garment_button.click()
+    assert disconnects == [()]
+
+    held["override"] = {"hardware": _hardware(connected=False)}
     window.refresh()
     assert window.garment.text() == text["disconnected"]
+    assert window.garment_button.text() == controls["connect"]
+    connects = _emitted(window.garment_connect_requested)
+    window.garment_button.click()
+    assert connects == [()]
 
 
 def test_it_reads_the_session_only_through_experimenter_view(experimenter):
     """The window holds a reader, not a Session, so it cannot reach Session.condition."""
     window, _ = experimenter
     assert not any(isinstance(value, Session) for value in vars(window).values())
+
+
+# -- the experimenter window's controls, SPEC.md 11 --------------------------------------
+
+
+def _all_keys(**overrides) -> dict:
+    return screenshots._experimenter_view(**overrides)
+
+
+@pytest.fixture
+def drawn(app, loaded):
+    """The window over a hand-built view with every key, for states a session rarely reaches."""
+    held = {"view": _all_keys()}
+    window = ExperimenterWindow(loaded.experimenter_text, lambda: held["view"])
+    window.resize(1280, 800)
+    return window, held
+
+
+def _emitted(signal) -> list:
+    seen = []
+    signal.connect(lambda *args: seen.append(args))
+    return seen
+
+
+def test_every_action_signal_has_a_control_that_emits_it(drawn):
+    """SPEC.md 11: each action the experimenter has is a control on the screen."""
+    window, _ = drawn
+    window.set_actions_enabled(rebalance=True, fit_decision=True)
+    for widget, signal in (
+        (window.proceed_button, window.proceed_requested),
+        (window.pause_button, window.pause_requested),
+        (window.discard_button, window.discard_requested),
+        (window.rebalance_button, window.rebalance_requested),
+        (window.fit_accept_button, window.fit_accepted),
+        (window.garment_button, window.garment_disconnect_requested),
+    ):
+        seen = _emitted(signal)
+        widget.click()
+        assert seen == [()], f"{widget.text()} did not emit"
+
+
+def test_resume_is_enabled_only_while_interrupted(drawn):
+    """Interruptions.resume raises when nothing is interrupted, so the button must not offer."""
+    window, held = drawn
+    assert not window.resume_button.isEnabled()
+    assert window.pause_button.isEnabled()
+    for kind in ("emergency_stop", "pause"):
+        held["view"] = _all_keys(interruption=kind)
+        window.refresh()
+        assert window.resume_button.isEnabled()
+        assert not window.pause_button.isEnabled()
+        assert not window.proceed_button.isEnabled()
+        assert window.abort_button.isEnabled()
+        seen = _emitted(window.resume_requested)
+        window.resume_button.click()
+        assert seen == [()]
+        assert window.alert.text() == window.text["status"][f"interrupted_{kind}"]
+    held["view"] = _all_keys()
+    window.refresh()
+    assert not window.resume_button.isEnabled()
+    assert window.alert.text() == ""
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_the_interruption_line_fits_its_reserved_height(app, language):
+    text = cfg.load(language, language).experimenter_text
+    for kind in ("emergency_stop", "pause"):
+        view = _all_keys(interruption=kind)
+        window = ExperimenterWindow(text, lambda view=view: view)
+        window.resize(1280, 800)
+        window.show()
+        assert window.alert.heightForWidth(window.alert.width()) <= window.alert.height(), (
+            f"status.interrupted_{kind} wraps past the reserved line in {language}"
+        )
+
+
+def test_the_window_fits_the_screenshot_size(drawn):
+    """At 1280 x 800 nothing is squeezed below its minimum; the grab would grow otherwise."""
+    window, _ = drawn
+    assert window.minimumSizeHint().height() <= 800
+
+
+def test_the_interruption_line_does_not_move_the_instruction(drawn):
+    window, held = drawn
+    window.set_instruction("x")
+    window.show()
+    before = window.instruction.pos().y()
+    held["view"] = _all_keys(interruption="emergency_stop")
+    window.refresh()
+    assert window.instruction.pos().y() == before
+
+
+def test_rebalance_and_the_fit_choice_wait_to_be_asked_for(drawn):
+    window, _ = drawn
+    for widget in (window.rebalance_button, window.fit_accept_button, window.fit_rerun_button):
+        assert not widget.isEnabled()
+    window.set_actions_enabled(rebalance=True)
+    assert window.rebalance_button.isEnabled()
+    assert not window.fit_accept_button.isEnabled()
+    window.set_actions_enabled(fit_decision=True)
+    assert window.fit_accept_button.isEnabled() and window.fit_rerun_button.isEnabled()
+    window.set_actions_enabled(rebalance=False, fit_decision=False)
+    assert not window.rebalance_button.isEnabled()
+    assert not window.fit_accept_button.isEnabled()
+
+
+def test_an_experimenter_choice_enables_the_controls_it_waits_on(app, session, participant):
+    """touchcal's accept/re-run and rebalance questions reach the buttons with no wiring."""
+    from tatp.trials import ExperimenterChoice
+
+    window = ExperimenterWindow(session.config.experimenter_text, session.experimenter_view)
+    choice = ExperimenterChoice(
+        session, participant, window,
+        {"accept": window.fit_accepted, "rerun": window.fit_rerun_requested},
+        "touchcal_fit_review",
+    )
+    choice.start()
+    assert window.fit_accept_button.isEnabled()
+    assert not window.rebalance_button.isEnabled()
+    window.fit_accept_button.click()
+    assert not window.fit_accept_button.isEnabled(), "disabled again once answered"
+
+
+def test_abort_asks_for_confirmation_and_a_reason(drawn):
+    window, _ = drawn
+    seen = _emitted(window.abort_requested)
+    dialog = window.open_abort_dialog()
+    assert not dialog.confirm.isEnabled(), "an abort with no reason is not offered"
+    dialog.reason.setText("participant withdrew")
+    dialog.confirm.click()
+    assert seen == [("participant withdrew",)]
+
+    dialog = window.open_abort_dialog()
+    dialog.reason.setText("changed my mind")
+    dialog.cancel.click()
+    assert seen == [("participant withdrew",)], "cancelling aborts nothing"
+
+
+def test_a_rerun_carries_its_reason(drawn):
+    window, _ = drawn
+    window.set_actions_enabled(fit_decision=True)
+    seen = _emitted(window.fit_rerun_requested)
+    dialog = window.open_rerun_dialog()
+    dialog.reason.setText("filament slipped")
+    dialog.confirm.click()
+    assert seen == [("filament slipped",)]
+
+
+def test_a_note_and_a_substitution_are_emitted_and_cleared(drawn):
+    window, _ = drawn
+    notes, substitutions = _emitted(window.note_entered), _emitted(window.substitution_entered)
+    window.note.setText("  participant sneezed ")
+    window.note_button.click()
+    window.substitution.setText("15")
+    window.substitution_button.click()
+    assert notes == [("participant sneezed",)]
+    assert substitutions == [("15",)]
+    assert window.note.text() == window.substitution.text() == ""
+    window.note_button.click()
+    assert notes == [("participant sneezed",)], "an empty note is not a note"
+
+
+def test_the_distance_fields_follow_the_configured_path_order(drawn, loaded):
+    """The ledger reads the tuple in mapping.path_ids order; the fields come from the text."""
+    window, _ = drawn
+    assert window.distances.path_ids == loaded.study1["mapping"]["path_ids"]
+
+
+def test_distances_are_entered_for_a_mapped_phase_and_never_block(drawn):
+    window, _ = drawn
+    distances = window.distances
+    seen = _emitted(window.distances_entered)
+    assert not window.distances_button.isEnabled(), "nothing mapped yet"
+    assert not distances.enter_button.isEnabled()
+    window.set_mapping_phases(["post_sensitisation"])
+    assert window.distances_button.isEnabled()
+    window.distances_button.click()
+    assert distances.isVisible() and not distances.isModal()
+    distances.fields[0].setText("42,5")
+    distances.fields[2].setText("-3")
+    distances.enter_button.click()
+    assert seen == [("post_sensitisation", (42.5, None, -3.0, None))]
+
+    # A new mapping while distances are typed changes neither the fields nor the phase.
+    window.set_mapping_phases(["post_sensitisation", "post_intervention"])
+    assert distances.phase.currentData() == "post_sensitisation"
+    assert distances.fields[0].text() == "42,5"
+
+    # With nothing typed, the latest phase is selected.
+    distances.clear()
+    window.set_mapping_phases(["post_sensitisation", "post_intervention", "rekindle"])
+    assert distances.phase.currentData() == "rekindle", "the latest when nothing is typed"
+
+
+def test_an_unfinished_distance_is_not_sent(drawn):
+    window, _ = drawn
+    seen = _emitted(window.distances_entered)
+    window.set_mapping_phases(["post_sensitisation"])
+    window.distances.fields[1].setText("12.")
+    window.distances.enter_button.click()
+    assert seen == []
+
+
+@pytest.mark.parametrize(
+    "event, key",
+    [
+        ({"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch",
+          "due_in_s": 125.2, "overdue": False}, "next_event"),
+        ({"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch",
+          "due_in_s": -4.0, "overdue": False}, "block_due"),
+        ({"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch",
+          "due_in_s": -400.0, "overdue": True}, "block_overdue"),
+        ({"kind": "rekindle", "label_key": "rekindle", "block_index": None, "block_type": None,
+          "due_in_s": -1.0, "overdue": False}, "event_due"),
+    ],
+)
+def test_the_countdown_states(drawn, event, key):
+    window, held = drawn
+    held["view"] = _all_keys(next_event=event)
+    window.refresh()
+    status = window.text["status"]
+    if key == "next_event":
+        assert window.countdown.text() == status["next_event"].format(
+            phase=status["block_label"].format(
+                block=3, value=window.text["terms"]["block_types"]["touch"]
+            ),
+            time="02:06",
+        )
+    elif key == "event_due":
+        assert window.countdown.text() == status["event_due"].format(
+            phase=window.text["phases"]["rekindle"]
+        )
+    else:
+        assert window.countdown.text() == status[key].format(block=3)
+
+
+def test_the_countdown_is_redrawn_by_its_timer(app, loaded):
+    """LOG N6.20: the clock ticks on its own, at the configured interval."""
+    ticks = {"n": 0}
+
+    def view():
+        ticks["n"] += 1
+        return _all_keys(elapsed_s=float(ticks["n"]))
+
+    interval = loaded.hardware["screens"]["experimenter_refresh_interval_s"]
+    window = ExperimenterWindow(loaded.experimenter_text, view, refresh_interval_s=interval)
+    assert window.timer.isActive()
+    first = ticks["n"]
+    _spin(lambda: ticks["n"] > first)
+
+
+def test_the_hardware_panel_shows_pressure_only_when_given(drawn):
+    window, held = drawn
+    held["view"] = _all_keys(hardware=_hardware(pressures={1: 12.0, 2: 30.25}))
+    window.refresh()
+    assert window.pressures.isVisibleTo(window)
+    assert "30.2" in window.pressures.text() or "30.3" in window.pressures.text()
+
+    held["view"] = _all_keys(hardware=_hardware(pressures=None, faults=["valve 3 stuck"]))
+    window.refresh()
+    assert not window.pressures.isVisibleTo(window)
+    assert window.pressures.text() == ""
+    assert "valve 3 stuck" in window.faults.text()
+
+
+def test_no_pressure_is_drawn_during_the_intervention_even_if_the_view_leaks_it(drawn):
+    """SPEC.md 16. The view withholds it; the window holds the same line on its own."""
+    window, held = drawn
+    for phase in ("intervention", "rekindle"):
+        held["view"] = _all_keys(phase=phase, hardware=_hardware(pressures={1: 55.0}))
+        window.refresh()
+        assert window.pressures.text() == ""
+
+
+def test_a_fault_from_the_intervention_stays_withheld_afterwards(drawn):
+    """Shown in full after the rekindle, it would reveal the channel just the same."""
+    window, held = drawn
+    first, later = "channel 4: valve stuck", "channel 2: sensor offline"
+    held["view"] = _all_keys(phase="intervention", hardware=_hardware(faults=[first]))
+    window.refresh()
+    held["view"] = _all_keys(phase="post_intervention",
+                             hardware=_hardware(faults=[first, later]))
+    window.refresh()
+    assert "channel 4" not in window.faults.text() + window.faults.toolTip()
+    assert "channel 2" in window.faults.toolTip(), "a fault raised afterwards is shown"
+
+
+def test_refresh_does_not_refit_unchanged_text(drawn, monkeypatch):
+    window, _ = drawn
+    window.set_instruction("apply")
+    calls = []
+    monkeypatch.setattr(experimenter_ui, "_fit_to", lambda *args: calls.append(args))
+    window.refresh()
+    window.refresh()
+    assert calls == []
+    window.set_status("received")
+    assert calls, "a changed text is fitted"
+
+
+def test_a_fault_in_the_intervention_is_shown_without_its_channel(drawn):
+    """Which channel faulted could say which pattern is running (SPEC.md 16)."""
+    window, held = drawn
+    held["view"] = _all_keys(phase="intervention",
+                             hardware=_hardware(faults=["channel 4: valve stuck"]))
+    window.refresh()
+    assert window.faults.isVisibleTo(window)
+    assert "channel 4" not in window.faults.text()
+    assert "channel 4" not in window.faults.toolTip()
+    assert "1" in window.faults.text()
+
+
+def test_the_zone_diagram_marks_the_target_and_a_new_step_clears_it(drawn):
+    window, _ = drawn
+    window.set_instruction("apply")
+    window.set_target("secondary", 4)
+    assert window.zone.region == "secondary"
+    assert "4" in window.target.text()
+    window.set_instruction("next")
+    assert window.zone.region is None
+    assert window.target.text() == ""
+
+
+def test_a_pinprick_trial_marks_its_zone(rig_trial):
+    window, _ = rig_trial
+    assert window.zone.region == "primary"
+
+
+def test_the_fit_preview_banner_follows_the_view(drawn):
+    window, held = drawn
+    assert not window.fit_preview_banner.isVisibleTo(window)
+    held["view"] = _all_keys(fit_preview_enabled=True)
+    window.refresh()
+    assert window.fit_preview_banner.isVisibleTo(window)
+
+
+# -- blinding: no rating and no condition on the lab screen, SPEC.md 11, 11.1, 16 ---------
+
+RATING_PRESSES = 3  # right presses after the first: 75 % + 3 x 0.5 % = 76.5 %
+RATING_SHOWN = "76.5"
+
+
+@pytest.fixture
+def rig_trial(app, session, participant):
+    """One real pinprick trial rated at a known, distinctive value."""
+    from tatp.pinprick import Application, PinprickTrial
+
+    window = ExperimenterWindow(
+        session.config.experimenter_text,
+        lambda: {**session.experimenter_view(), "unresolved_open_items": []},
+    )
+    window.resize(1280, 800)
+    session.set_phase("pre_sensitisation")
+    application = Application(
+        protocol="short", region="primary", trial_index=1, purpose="measure",
+        filament_label_g=session.config.study1["pinprick"]["start_filament_label_g_session1_pre_s"],
+        site_index=1,
+    )
+    trial = PinprickTrial(session, participant, window, application)
+    done = []
+    trial.finished.connect(done.append)
+    trial.start()
+    # The trial is held here too: a parentless QObject nobody references is collected, and its
+    # connections with it.
+    return window, (participant, done, trial)
+
+
+def test_the_window_never_draws_a_rating(rig_trial):
+    """Bilaga 1 3.3. The rating is in the data file; nothing on the lab screen carries it."""
+    window, (participant, done, _) = rig_trial
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    _press(participant.vas, "pagedown")
+    for _ in range(RATING_PRESSES):
+        _press(participant.vas, "pagedown")
+    assert participant.vas.state.percent == float(RATING_SHOWN)
+    _press(participant.vas, "period")
+    assert len(done) == 1, "the trial ends when the participant confirms"
+    window.refresh()
+    shown = " ".join(_visible_texts(window))
+    assert RATING_SHOWN not in shown
+    assert "76" not in shown
+
+
+def _f40_fit():
+    from tatp.pinprick import F40Fit, LongResult
+
+    result = LongResult(
+        phase="pre_sensitisation", region="primary", run_index=1,
+        start_filament_label_g="26", start_source="config_default", f40_mn=321.0,
+        chosen_filament_label_g="26", chosen_force_mn=255.0, out_of_range=False,
+        out_of_range_direction="", capped=False, applications_total=12,
+        applications_measure=9, ordinal_rho=0.71,
+    )
+    return F40Fit(result, 51.6, 40.0, ((147.0, 23.5), (255.0, 37.5), (588.0, 58.5)))
+
+
+def _touch_fit():
+    from tatp import touchcal_maths as maths
+    from tatp.touchcal import FitReady
+
+    fit = maths.RatingFit(
+        fit_form=maths.LOG_PRESSURE, intercept=-40.0, slope=50.0, r_squared=0.87,
+        residual_sd=6.5, span_vas=60.0, spearman_rho=0.9, bracket_min_kpa=10.0,
+        bracket_max_kpa=160.0,
+    )
+    return FitReady(
+        run_index=2, points=((10.0, 12.5, False), (40.0, 41.5, False), (0.0, 3.0, True),
+                             (160.0, 71.5, False)),
+        fit=fit, r_squared=0.87, residual_sd=6.5, monotonic=True, stage1_pass=True,
+        stage1_failures=(), p20_kpa=15.8, p30_kpa=25.1, p80_kpa=158.5,
+    )
+
+
+def test_a_fit_is_refused_while_the_preview_is_off_and_nothing_is_drawn(drawn):
+    """SPEC.md 11.1: the preview is the one exception, and only while it is on."""
+    window, _ = drawn
+    before = window.grab().toImage()
+    for fit in (_f40_fit(), _touch_fit()):
+        with pytest.raises(experimenter_ui.FitPreviewRefused):
+            window.show_fit_preview(fit)
+    preview = window.fit_preview
+    assert not preview.isVisible()
+    assert preview.plot.points == ()
+    assert preview.quality.text() == preview.derived.text() == ""
+    assert not window.fit_accept_button.isEnabled()
+    shown = " ".join(_visible_texts(window) + _visible_texts(preview))
+    for rating in ("23.5", "37.5", "58.5", "41.5", "71.5", "321"):
+        assert rating not in shown
+    assert window.grab().toImage() == before
+
+
+@pytest.mark.parametrize("make_fit", [_f40_fit, _touch_fit])
+def test_the_enabled_preview_draws_the_fit_and_hides_it_again(drawn, make_fit):
+    window, held = drawn
+    held["view"] = _all_keys(fit_preview_enabled=True)
+    window.refresh()
+    window.show_fit_preview(make_fit())
+    preview = window.fit_preview
+    assert preview.isVisible() and not preview.isModal()
+    assert preview.plot.points and preview.plot.line
+    assert window.fit_accept_button.isEnabled() and window.fit_rerun_button.isEnabled()
+    assert preview.accept_button.isEnabled() and preview.rerun_button.isEnabled()
+    assert preview.derived.text() and preview.quality.text()
+    seen = _emitted(window.fit_accepted)
+    preview.accept_button.click()
+    assert seen == [()], "the preview's Accept is the window's"
+
+    window.hide_fit_preview()
+    assert not preview.isVisible()
+    assert preview.plot.points == ()
+    assert preview.derived.text() == preview.quality.text() == ""
+    assert not window.fit_accept_button.isEnabled()
+
+
+def test_the_main_window_never_carries_the_fit(drawn):
+    """Even with the preview on and open, the ratings are in the preview window only."""
+    window, held = drawn
+    held["view"] = _all_keys(fit_preview_enabled=True)
+    window.show_fit_preview(_f40_fit())
+    shown = " ".join(_visible_texts(window))
+    for rating in ("23.5", "37.5", "58.5", "321"):
+        assert rating not in shown
+
+
+def test_catch_trials_are_left_off_the_touch_plot(drawn):
+    window, held = drawn
+    held["view"] = _all_keys(fit_preview_enabled=True)
+    window.show_fit_preview(_touch_fit())
+    assert (0.0, 3.0) not in window.fit_preview.plot.points
+    assert len(window.fit_preview.plot.points) == 3
+
+
+def test_a_long_instruction_steps_down_the_scale_and_moves_nothing(drawn):
+    window, _ = drawn
+    window.show()
+    window.set_instruction("x")
+    status_y = window.status.pos().y()
+    assert window.instruction.font().pointSize() == experimenter_ui.SIZE_HEADLINE
+    longest = max(window.text["instructions"].values(), key=len)
+    window.set_instruction(longest)
+    assert window.instruction.font().pointSize() < experimenter_ui.SIZE_HEADLINE
+    assert window.instruction.heightForWidth(window.instruction.width()) <= (
+        window.instruction.height()
+    ), "the longest instruction does not fit even at the smallest size"
+    assert window.status.pos().y() == status_y
+
+
+def test_nothing_drawn_differs_between_conditions(app, session, loaded):
+    """SPEC.md 16, UI_PRINCIPLES.md 2.3. The same session under each condition, pixel for pixel.
+
+    The intervention and the rekindle are the phases where the garment delivers something that
+    depends on the condition, so each condition is given a different pressure there.
+    """
+    def still_view():
+        # The clock is the one thing allowed to change between two grabs.
+        return {**session.experimenter_view(), "elapsed_s": 0.0, "t_session_s": 0.0}
+
+    window = ExperimenterWindow(session.config.experimenter_text, still_view)
+    window.resize(1280, 800)
+    for phase in ("intervention", "rekindle"):
+        session.set_phase(phase)
+        images, views = [], []
+        for index, condition in enumerate(loaded.study1["design"]["conditions"]):
+            session._condition = condition
+            # Each condition delivers differently; none of it may reach the lab screen.
+            session.garment.set_pressure(1, float(index + 1))
+            views.append(still_view())
+            window.refresh()
+            images.append(window.grab().toImage())
+        assert all(v == views[0] for v in views), f"the view differs by condition in {phase}"
+        assert all(image == images[0] for image in images), f"the screen differs in {phase}"

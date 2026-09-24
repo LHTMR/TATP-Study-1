@@ -1,12 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 404" width="320" height="404">
   <title>Placeholder: primary and secondary hyperalgesia zones, dorsum of the hand</title>
 
+  <!-- Drawn for the dark experimenter screen (UI_PRINCIPLES.md 3.5): light lines on nothing,
+       so the diagram is never the brightest thing in the room. The ids `primary` and
+       `secondary` are what tatp/ui/widgets.py highlights for the current stimulus; a
+       replacement figure must keep them. -->
   <style>
-    .outline { fill: #ffffff; stroke: #333333; stroke-width: 3; stroke-linejoin: round; }
-    .sh      { fill: none;    stroke: #333333; stroke-width: 2.5; stroke-dasharray: 7 5; }
-    .ph      { fill: #cccccc; stroke: #333333; stroke-width: 2.5; }
-    .lbl     { font-family: Helvetica, Arial, sans-serif; font-size: 17px; fill: #333333; }
-    .cap     { font-family: Helvetica, Arial, sans-serif; font-size: 12px; fill: #777777; }
+    .outline { fill: none;    stroke: #9a9a9a; stroke-width: 3; stroke-linejoin: round; }
+    .sh      { fill: none;    stroke: #9a9a9a; stroke-width: 2.5; stroke-dasharray: 7 5; }
+    .ph      { fill: #3a3a3a; stroke: #9a9a9a; stroke-width: 2.5; }
+    .lbl     { font-family: Roboto, Helvetica, Arial, sans-serif; font-size: 17px; fill: #ebebeb; }
+    .cap     { font-family: Roboto, Helvetica, Arial, sans-serif; font-size: 12px; fill: #9a9a9a; }
   </style>
 
   <!-- Dorsum of the left hand, schematic. Fingers point up, thumb to the left. -->
@@ -37,10 +41,10 @@
     Z" />
 
   <!-- Secondary hyperalgesia: the surrounding zone, mapped along four paths -->
-  <ellipse class="sh" cx="154" cy="250" rx="62" ry="52" />
+  <ellipse id="secondary" class="sh" cx="154" cy="250" rx="62" ry="52" />
 
   <!-- Primary hyperalgesia: the thermode / capsaicin site itself -->
-  <rect class="ph" x="128" y="232" width="48" height="40" rx="3" />
+  <rect id="primary" class="ph" x="128" y="232" width="48" height="40" rx="3" />
 
   <text class="lbl" x="146" y="257" text-anchor="middle">PH</text>
   <text class="lbl" x="154" y="322" text-anchor="middle">SH</text>

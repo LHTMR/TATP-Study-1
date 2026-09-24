@@ -182,6 +182,20 @@ class Session:
             "placeholder_text": self.config.has_placeholder_text(),
             "reduced_capability_device": not self.garment.per_channel_pressure,
             "fit_preview_enabled": self.fit_preview_enabled,
+            # STUB for the Stream D contract, so the Stream E window has the keys it reads.
+            # Stream D's sequencer supplies the real values; on merge, take Stream D's version.
+            "next_event": None,
+            "interruption": None,
+            "hardware": {
+                "connected": self.garment.connected,
+                "faults": list(self.garment.faults),
+                # Hidden while the intervention and the rekindle run: it differs by condition.
+                "channel_pressure_kpa": (
+                    None
+                    if self.phase in ("intervention", "rekindle")
+                    else dict(self.garment.pressure_kpa)
+                ),
+            },
         }
 
     # -- logging -----------------------------------------------------------------------

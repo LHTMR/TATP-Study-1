@@ -36,6 +36,15 @@ terms:
   out_of_range:
     below: the lightest filament was already rated at or above the target
     above: the heaviest filament was still rated below the target
+  # The two kinds of intervention block, filled into status.block_label. Identical in every
+  # condition, so naming them reveals nothing (SPEC.md 16).
+  block_types:
+    pinprick: pinprick
+    touch: touch
+  # The launcher's language choices, each written in its own language.
+  languages:
+    sv: Svenska
+    en: English
   stage1:
     # Why a touch-calibration estimate failed its quality check (SPEC.md 9). Says what kind of
     # failure, never a rating.
@@ -137,15 +146,34 @@ controls:
   # SPEC.md 11.1, shown only when fit_preview.enabled.
   fit_accept: Accept this estimate
   fit_rerun: Re-run the procedure
+  # The free-text entries (SPEC.md 8.2, 8.4, 11). None of them ever blocks the session.
+  add_note: Add note
+  substitution: Filament applied instead (g)
+  record_substitution: Record filament
+  distances: 'Mapping distances (mm), measured from the centre of the primary zone:'
+  enter_distances: Enter distances
+  open_distances: Mapping distances…
+  cancel: Cancel
 
 status:
   connected: Connected
   disconnected: Disconnected
   channel_pressure: 'Channel {channel}: {value} kPa'
+  # The hardware panel's compact form: every channel on one or two lines.
+  channel_pressures: 'kPa by channel: {value}'
+  channel_pressure_short: '{channel}: {value}'
   elapsed: Session elapsed {time}
   next_event: 'Next: {phase} in {time}'
   block_due: Block {block} is due.
   block_overdue: Block {block} is OVERDUE.
+  # A scheduled phase change or the rekindle, due and overdue, as for a block.
+  event_due: '{phase} is due.'
+  event_overdue: '{phase} is OVERDUE.'
+  # Filled into next_event's {phase} when the next event is a block.
+  block_label: block {block} ({value})
+  # Shown for as long as the session is interrupted (SPEC.md 13).
+  interrupted_emergency_stop: EMERGENCY STOP. The garment is at zero. Press Resume when the participant is ready.
+  interrupted_pause: Paused. The garment is at zero. Press Resume to continue.
   discarded: Last trial discarded. It will be repeated.
   discarded_not_repeated: >-
     Last trial discarded. The application limit has been reached, so it will not be repeated.
@@ -201,15 +229,113 @@ banners:
   # SPEC.md 11.1. Unmissable, because the experimenter must not switch this on without seeing
   # what it costs.
   fit_preview: >-
-    FIT PREVIEW IS ON. You will see the participant's ratings, which Bilaga 1 3.3 says you will
-    not and the participant information sheet says you do not. This session is recorded as
-    unblinded in that respect.
+    FIT PREVIEW IS ON. You will see the participant's ratings, which Bilaga 1 3.3 and the
+    information sheet say you do not. The session is recorded as unblinded in that respect.
 
 dialogs:
   abort_confirm: Abort this session? All data collected so far is kept.
   abort_reason: Reason for aborting
-  resume_found: An unfinished session was found for this participant, started {time} ago. Resume it?
+  # SPEC.md 15. Both values are formatted by the session from its own text.
+  resume_found: 'An unfinished session was found for this participant. Completed: {completed}. Sensitisation began {since_sensitisation} ago. Resume it, keeping the original timing?'
   distances_outstanding: Mapping distances are still outstanding. Enter them now, or close the session with them flagged missing.
   fit_rerun_reason: Why are you re-running? Recorded with the discarded estimate, which is kept.
   fit_rerun_exhausted: The re-run limit for this procedure has been reached. This estimate will be used.
   error: Error
+  close: Close
+  # Buttons of the resume question.
+  resume_yes: Resume the session
+  resume_no: Start a new session
+
+zones:
+  # Beside the zone diagram (SPEC.md 11): where the current stimulus goes.
+  target: '{region} zone, site {site}'
+  target_region: '{region} zone'
+
+hardware:
+  # The hardware panel (SPEC.md 11, 12.1). Per-channel pressure is left out entirely while the
+  # intervention and the rekindle run, because it would differ by condition (SPEC.md 16).
+  title: Garment
+  fault: 'Fault: {value}'
+  # During the intervention and the rekindle a fault's detail names a channel, and which
+  # channels a pattern uses differs by condition (SPEC.md 16). The fault itself is still shown.
+  fault_withheld: 'Garment faults: {value} (detail in the data)'
+
+fit_preview:
+  # SPEC.md 11.1. Shown only when fit_preview.enabled is true. The one place a participant's
+  # ratings reach the experimenter.
+  f40_title: 'F40, run {value}'
+  touch_title: 'Touch calibration, run {value}'
+  x_force: Force (mN, log scale)
+  x_pressure_log: Pressure (kPa, log scale)
+  x_pressure_linear: Pressure (kPa)
+  y_rating: Rating (%)
+  missing: '–'
+  # Quoted: YAML reads a bare yes or no as a boolean.
+  answer_yes: 'yes'
+  answer_no: 'no'
+  # Short, because the preview shares a narrow column with the plot. rho is the rank
+  # correlation of rating on force, the F40 run's consistency check.
+  f40_quality: 'rho {rho} · {measure} of {total} applications measured'
+  f40_flags_out_of_range: 'Ran out of ladder: {value}'
+  f40_flags_capped: Application limit reached
+  f40_derived: 'F40 {f40} mN, so {filament} g ({force} mN); slope {slope}'
+  touch_quality: 'R² {r_squared} · residual SD {residual_sd} · rising {monotonic}'
+  touch_stage1_pass: 'Stage 1: passes'
+  touch_stage1_fail: 'Stage 1: fails ({value})'
+  touch_derived: 'P20 {p20} · P30 {p30} · P80 {p80} kPa'
+
+launcher:
+  # SPEC.md 4.1: the four entries.
+  title: TATP Study 1
+  run_session: Run a session
+  run_session_detail: The experiment. Needs the participant code, session number and pattern folder.
+  instruments: Instruments and environment
+  instruments_detail: Enter weighed filament forces, and today's room temperature and humidity.
+  design_pattern: Design a pattern
+  design_pattern_detail: Not available yet. The pattern designer is built in Milestone 6; until then, edit the pattern CSV files by hand.
+  preview_schedule: Preview schedule
+  preview_schedule_detail: The session timeline and its warnings. Nothing is started.
+  environment_entered: 'Room {temperature} °C, {humidity} % RH, handed to the next session.'
+  # The session dialog. It collects only what SPEC.md 6 lists; everything else is config.
+  session_title: Run a session
+  participant_code: Participant code
+  session_number: Session number
+  experimenter_initials: Experimenter initials
+  participant_language: Participant language
+  experimenter_language: Experimenter language
+  data_folder: Data folder
+  pattern_folder: Pattern folder
+  browse: Browse…
+  # The unchosen state of the session number and the languages, which have no default.
+  choose: Choose…
+  check: Check
+  start: Start session
+  close: Close
+  missing_field: 'Required: {value}'
+  no_pattern_folder: Choose the pattern folder. There is no default, so the provisional example patterns are never used by accident.
+  refusals: 'The session cannot start:'
+  warnings: 'Warnings. The session can start, and each is recorded:'
+  no_findings: No problems found.
+  preview_title: Schedule preview
+
+instruments:
+  # SPEC.md 8.1. Writes the measured forces and the weighing date into config/filaments.yaml.
+  title: Instruments and environment
+  filaments: Filament forces
+  label: Label (g)
+  size: Size
+  nominal: Nominal (mN)
+  measured: Measured (mN)
+  weighing_date: 'Weighing date (YYYY-MM-DD):'
+  weighing_balance: 'Balance used:'
+  save_forces: Save forces
+  saved: 'Saved {value} measured forces to filaments.yaml.'
+  invalid_force: 'Filament {filament} g: {value} is not a force in mN above zero.'
+  invalid_date: '{value} is not a date in the form YYYY-MM-DD.'
+  date_required: Enter the weighing date before saving measured forces.
+  nothing_to_save: No measured forces entered.
+  environment: Room environment (optional)
+  room_temperature: 'Room temperature (°C):'
+  relative_humidity: 'Relative humidity (%):'
+  use_environment: Use for the next session
+  invalid_number: '{value} is not a number.'

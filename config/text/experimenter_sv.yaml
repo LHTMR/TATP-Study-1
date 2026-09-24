@@ -37,6 +37,15 @@ terms:
   out_of_range:
     below: det lättaste filamentet skattades redan på eller över målet
     above: det tyngsta filamentet skattades fortfarande under målet
+  # De två sorternas interventionsblock, fylls i status.block_label. Samma i alla betingelser,
+  # så namnen avslöjar ingenting (SPEC.md 16).
+  block_types:
+    pinprick: filament
+    touch: beröring
+  # Språkvalen i startfönstret, vart och ett på sitt eget språk.
+  languages:
+    sv: Svenska
+    en: English
   stage1:
     # Varför en skattning i beröringskalibreringen underkändes (SPEC.md 9). Anger vilken sorts
     # fel, aldrig en skattning.
@@ -135,15 +144,34 @@ controls:
   # SPEC.md 11.1, visas endast när fit_preview.enabled är på.
   fit_accept: Godkänn den här skattningen
   fit_rerun: Gör om proceduren
+  # Fritextfälten (SPEC.md 8.2, 8.4, 11). Inget av dem avbryter någonsin sessionen.
+  add_note: Lägg till anteckning
+  substitution: Filament använt i stället (g)
+  record_substitution: Registrera filament
+  distances: 'Kartläggningsavstånd (mm), mätta från mitten av den primära zonen:'
+  enter_distances: Registrera avstånd
+  open_distances: Kartläggningsavstånd…
+  cancel: Avbryt
 
 status:
   connected: Ansluten
   disconnected: Frånkopplad
   channel_pressure: 'Kanal {channel}: {value} kPa'
+  # Hårdvarupanelens kompakta form: alla kanaler på en eller två rader.
+  channel_pressures: 'kPa per kanal: {value}'
+  channel_pressure_short: '{channel}: {value}'
   elapsed: Förfluten tid {time}
   next_event: 'Nästa: {phase} om {time}'
   block_due: Block {block} ska starta nu.
   block_overdue: Block {block} är FÖRSENAT.
+  # Ett schemalagt fasbyte eller återuppvärmningen, i tid och försenat, som för ett block.
+  event_due: '{phase} ska starta nu.'
+  event_overdue: '{phase} är FÖRSENAD.'
+  # Fylls i next_event:s {phase} när nästa händelse är ett block.
+  block_label: block {block} ({value})
+  # Visas så länge sessionen är avbruten (SPEC.md 13).
+  interrupted_emergency_stop: NÖDSTOPP. Plagget är på noll. Tryck på Återuppta när deltagaren är redo.
+  interrupted_pause: Pausad. Plagget är på noll. Tryck på Återuppta för att fortsätta.
   discarded: Senaste trial kasserad. Den upprepas.
   discarded_not_repeated: >-
     Senaste trial kasserad. Gränsen för antal appliceringar är nådd, så den upprepas inte.
@@ -198,15 +226,114 @@ banners:
   # SPEC.md 11.1. Omöjlig att missa, eftersom försöksledaren inte ska kunna slå på detta utan
   # att se vad det kostar.
   fit_preview: >-
-    FÖRHANDSGRANSKNING AV ANPASSNINGEN ÄR PÅ. Du kommer att se deltagarens skattningar, vilket
-    Bilaga 1 3.3 säger att du inte gör och som forskningspersonsinformationen säger att du inte
-    gör. Sessionen registreras som oblindad i det avseendet.
+    FÖRHANDSGRANSKNING AV ANPASSNINGEN ÄR PÅ. Du ser deltagarens skattningar, vilket Bilaga 1
+    3.3 och forskningspersonsinformationen säger att du inte gör. Sessionen registreras som
+    oblindad i det avseendet.
 
 dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.
   abort_reason: Orsak till avbrott
-  resume_found: En oavslutad session hittades för denna deltagare, startad för {time} sedan. Återuppta den?
+  # SPEC.md 15. Båda värdena formateras av sessionen från dess egen text.
+  resume_found: 'En oavslutad session hittades för denna deltagare. Genomfört: {completed}. Sensitiseringen började för {since_sensitisation} sedan. Återuppta den med den ursprungliga tidsplanen?'
   distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem nu, eller avsluta sessionen med dem flaggade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
   error: Fel
+  close: Stäng
+  # Knapparna till frågan om att återuppta.
+  resume_yes: Återuppta sessionen
+  resume_no: Starta en ny session
+
+zones:
+  # Bredvid zondiagrammet (SPEC.md 11): var den aktuella stimuleringen ska ges.
+  target: '{region} zonen, plats {site}'
+  target_region: '{region} zonen'
+
+hardware:
+  # Hårdvarupanelen (SPEC.md 11, 12.1). Trycket per kanal utelämnas helt under interventionen
+  # och återuppvärmningen, eftersom det skulle skilja sig mellan betingelserna (SPEC.md 16).
+  title: Plagget
+  fault: 'Fel: {value}'
+  # Under interventionen och återuppvärmningen nämner felets detalj en kanal, och vilka kanaler
+  # ett mönster använder skiljer sig mellan betingelserna (SPEC.md 16). Själva felet visas.
+  fault_withheld: 'Fel i plagget: {value} (detalj i data)'
+
+fit_preview:
+  # SPEC.md 11.1. Visas bara när fit_preview.enabled är på. Det enda stället där deltagarens
+  # skattningar når försöksledaren.
+  f40_title: 'F40, körning {value}'
+  touch_title: 'Beröringskalibrering, körning {value}'
+  x_force: Kraft (mN, logaritmisk skala)
+  x_pressure_log: Tryck (kPa, logaritmisk skala)
+  x_pressure_linear: Tryck (kPa)
+  y_rating: Skattning (%)
+  missing: '–'
+  # Citerade: YAML läser ett ensamt yes eller no som ett booleskt värde.
+  answer_yes: 'ja'
+  answer_no: 'nej'
+  # Korta, eftersom förhandsgranskningen delar en smal kolumn med diagrammet. rho är
+  # rangkorrelationen mellan skattning och kraft, F40-körningens konsistenskontroll.
+  f40_quality: 'rho {rho} · {measure} av {total} appliceringar mätta'
+  f40_flags_out_of_range: 'Stegen tog slut: {value}'
+  f40_flags_capped: Gränsen för antal appliceringar nådd
+  f40_derived: 'F40 {f40} mN, alltså {filament} g ({force} mN); lutning {slope}'
+  touch_quality: 'R² {r_squared} · residual-SD {residual_sd} · stigande {monotonic}'
+  touch_stage1_pass: 'Steg 1: godkänd'
+  touch_stage1_fail: 'Steg 1: underkänd ({value})'
+  touch_derived: 'P20 {p20} · P30 {p30} · P80 {p80} kPa'
+
+launcher:
+  # SPEC.md 4.1: de fyra valen.
+  title: TATP Studie 1
+  run_session: Kör en session
+  run_session_detail: Själva experimentet. Kräver deltagarkod, sessionsnummer och mönstermapp.
+  instruments: Instrument och miljö
+  instruments_detail: Skriv in vägda filamentkrafter och dagens rumstemperatur och luftfuktighet.
+  design_pattern: Skapa ett mönster
+  design_pattern_detail: Inte tillgängligt än. Mönsterverktyget byggs i milstolpe 6; redigera mönstrens CSV-filer för hand tills dess.
+  preview_schedule: Förhandsgranska schemat
+  preview_schedule_detail: Sessionens tidslinje och dess varningar. Ingenting startas.
+  environment_entered: 'Rummet {temperature} °C, {humidity} % RF, lämnas till nästa session.'
+  # Sessionsdialogen. Den frågar bara efter det SPEC.md 6 räknar upp; allt annat är konfiguration.
+  session_title: Kör en session
+  participant_code: Deltagarkod
+  session_number: Sessionsnummer
+  experimenter_initials: Försöksledarens initialer
+  participant_language: Deltagarens språk
+  experimenter_language: Försöksledarens språk
+  data_folder: Datamapp
+  pattern_folder: Mönstermapp
+  browse: Bläddra…
+  # Sessionsnumrets och språkens ovalda läge; de har inget standardvärde.
+  choose: Välj…
+  check: Kontrollera
+  start: Starta sessionen
+  close: Stäng
+  missing_field: 'Obligatoriskt: {value}'
+  no_pattern_folder: Välj mönstermappen. Det finns ingen standardmapp, så att exempelmönstren aldrig används av misstag.
+  refusals: 'Sessionen kan inte starta:'
+  warnings: 'Varningar. Sessionen kan starta, och var och en registreras:'
+  no_findings: Inga problem hittades.
+  preview_title: Förhandsgranskning av schemat
+
+instruments:
+  # SPEC.md 8.1. Skriver de uppmätta krafterna och vägningsdatumet till config/filaments.yaml.
+  title: Instrument och miljö
+  filaments: Filamentkrafter
+  label: Märkning (g)
+  size: Storlek
+  nominal: Nominell (mN)
+  measured: Uppmätt (mN)
+  weighing_date: 'Vägningsdatum (ÅÅÅÅ-MM-DD):'
+  weighing_balance: 'Våg som användes:'
+  save_forces: Spara krafterna
+  saved: 'Sparade {value} uppmätta krafter i filaments.yaml.'
+  invalid_force: 'Filament {filament} g: {value} är inte en kraft i mN över noll.'
+  invalid_date: '{value} är inte ett datum på formen ÅÅÅÅ-MM-DD.'
+  date_required: Skriv in vägningsdatumet innan uppmätta krafter sparas.
+  nothing_to_save: Inga uppmätta krafter har skrivits in.
+  environment: Rumsmiljö (valfritt)
+  room_temperature: 'Rumstemperatur (°C):'
+  relative_humidity: 'Relativ luftfuktighet (%):'
+  use_environment: Använd för nästa session
+  invalid_number: '{value} är inte ett tal.'

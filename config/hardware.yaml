@@ -70,6 +70,10 @@ screens:
   participant_screen_index: null
   experimenter_screen_index: null
   participant_fullscreen: true
+  # How often the experimenter screen redraws its clock, countdown and hardware panel
+  # (SPEC.md 7.4, 11; docs/LOG.md N6.20). A display rate, not a study timing: the countdown
+  # reads the session clock, so a slower tick shows the same times less often, never wrong ones.
+  experimenter_refresh_interval_s: 0.5
   # The fonts every screen draws in, committed under fonts/ and installed at startup (S, 23 Sep
   # 2026). Left to the platform, the Mac drew its system font and the lab PC Segoe UI, and
   # headless Windows drew empty boxes -- so the approved screenshots described a screen the lab

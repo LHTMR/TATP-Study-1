@@ -146,6 +146,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "responder.button_symbols.confirm", str, None, None),
     ("hardware.yaml", "responder.button_symbols.emergency_stop", str, None, None),
     ("hardware.yaml", "screens.participant_fullscreen", bool, None, None),
+    ("hardware.yaml", "screens.experimenter_refresh_interval_s", NUMBER, 0, None),
     ("hardware.yaml", "screens.font_families[*]", str, None, None),
     ("hardware.yaml", "screens.font_files[*]", str, None, None),
     ("hardware.yaml", "audio.backend", str, None, None),
@@ -317,6 +318,18 @@ def _check(filename: str, path: str, expected, low, high, loaded: dict[str, dict
             raise ConfigError(f"{filename}: {path!r} is {value}, below the minimum {low}")
         if high is not None and value > high:
             raise ConfigError(f"{filename}: {path!r} is {value}, above the maximum {high}")
+
+
+def validate_file(filename: str, data: dict) -> None:
+    """Every SCHEMA row for one file, against `data` -- what `load` checks, before a write.
+
+    For a tool that rewrites a config file (tatp/instruments.py), so a file it is about to
+    write is refused by the same rules that would refuse it at the next startup.
+    """
+    rows = [row for row in SCHEMA if row[0] == filename]
+    assert rows, f"SCHEMA has no rows for {filename}"
+    for _, path, expected, low, high in rows:
+        _check(filename, path, expected, low, high, {filename: data})
 
 
 def _name(expected) -> str:
