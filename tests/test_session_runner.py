@@ -498,11 +498,22 @@ def test_abort_marks_the_open_block_and_flags_missing_distances(app, loaded, tmp
 
 def test_with_the_fit_preview_on_an_f40_is_rerun_once_then_accepted(app, loaded, tmp_path,
                                                                     monkeypatch):
-    hidden = []
-    monkeypatch.setattr(ExperimenterWindow, "hide_fit_preview", lambda self: hidden.append(1))
+    """Against the real experimenter window: its preview is drawn, then taken down."""
+    shown, hidden = [], []
+    real_show = ExperimenterWindow.show_fit_preview
+    real_hide = ExperimenterWindow.hide_fit_preview
+
+    def spy_show(self, fit):
+        shown.append(fit)
+        real_show(self, fit)
+
+    def spy_hide(self):
+        hidden.append(1)
+        real_hide(self)
+
+    monkeypatch.setattr(ExperimenterWindow, "show_fit_preview", spy_show)
+    monkeypatch.setattr(ExperimenterWindow, "hide_fit_preview", spy_hide)
     runner = make_runner(loaded, tmp_path, fit_preview=True)
-    shown = []
-    runner.experimenter.show_fit_preview = shown.append
     driver = Driver(runner.rig, runner, stop_when=lambda: runner.stage_index > [
         s.id for s in runner.stages].index("pre_sensitisation.long"))
     driver.reruns_left = 1

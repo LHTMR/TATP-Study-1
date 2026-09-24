@@ -187,12 +187,6 @@ class SessionRunner(Procedure):
         self._alarm_timer.timeout.connect(self._fire_alarm)
 
         self.experimenter.abort_requested.connect(self.abort)
-        if self.session.fit_preview_enabled:
-            # SPEC.md 11.1: the preview comes down once the experimenter has decided.
-            self.experimenter.fit_accepted.connect(self.experimenter.hide_fit_preview)
-            self.experimenter.fit_rerun_requested.connect(
-                lambda _reason: self.experimenter.hide_fit_preview()
-            )
 
     # == the plan ==============================================================================
 
@@ -435,9 +429,10 @@ class SessionRunner(Procedure):
         if cue == 1:
             # The mapping walks the secondary zone towards the primary. Set on the path's first
             # cue, because the path's own instruction clears the diagram's target.
-            self.experimenter.set_target(SECONDARY)
+            self.experimenter.set_target(SECONDARY, filament=True)
 
     def _preview(self, procedure) -> None:
+        """SPEC.md 11.1. The procedures take the preview down themselves once decided."""
         if self.session.fit_preview_enabled:
             procedure.fit_ready.connect(self.experimenter.show_fit_preview)
 

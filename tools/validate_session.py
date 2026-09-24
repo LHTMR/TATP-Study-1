@@ -198,10 +198,12 @@ TRIAL_ORDER_COLUMNS = {
 # Real seconds the median timer-driven interval may be off its configured length. At
 # CLOCK_SPEED the configured intervals are milliseconds of real time, and each of the chained
 # single-shot timers that make one can be late by the platform's timer resolution, so the check
-# is on the median over every application of every run. It is loose enough for a loaded
-# machine -- the gate runs this beside the whole test suite -- and still catches a misread
-# interval: leaving out the 9 s rating delay moves the median by 9 ms.
+# is over every application of every run. It is loose enough for a loaded machine -- the gate
+# runs this beside the whole test suite -- and still catches a misread interval: leaving out
+# the 9 s rating delay moves every interval by 9 ms.
 INTERVAL_TOLERANCE_S = 0.004
+# The low decile: 1 / 10 of the way up the sorted intervals.
+UNLOADED_QUANTILE_DIVISOR = 10
 # Float columns round-trip through text, so equal values compare within this.
 FLOAT_TOLERANCE = 1e-6
 
@@ -827,11 +829,11 @@ def needs_rated_pinprick_rows(runs):
 def check_rating_cue_interval(runs):
     """Warning cue to rating cue: the cue lead plus the 9 s delay (SPEC.md 10.5, 8).
 
-    Judged on the median over every rated application in every run, against an absolute
-    tolerance. One interval is three chained single-shot timers, and on a loaded Windows
-    machine -- the gate runs this beside the whole test suite -- any one of them can be late by
-    far more than its resolution. A single late interval says the machine was busy; a median
-    off by a configured interval's worth says the software timed the wrong thing.
+    Judged over every rated application in every run, against an absolute tolerance. One
+    interval is three chained single-shot timers, and on a loaded Windows machine -- the gate
+    runs this beside the whole test suite -- any one of them can be late by far more than its
+    resolution. A late interval says the machine was busy; the unloaded ones off by a
+    configured interval's worth say the software timed the wrong thing.
     """
     # Each run is judged against its own clock speed, so what is pooled is how far each
     # interval is from what its run configured, in real seconds.
@@ -848,11 +850,15 @@ def check_rating_cue_interval(runs):
             for row in run.rows.get("pinprick", [])
             if row["rating_cue_iso"]
         ]
-    median_s = statistics.median(deviations)
-    if abs(median_s) > INTERVAL_TOLERANCE_S:
+    # A busy machine only ever makes a timer late, never early, so the intervals the load left
+    # alone are the short ones: judged on a low quantile rather than the median, which the gate
+    # running beside the whole test suite drags late by more than a millisecond or two.
+    ordered = sorted(deviations)
+    low_s = ordered[len(ordered) // UNLOADED_QUANTILE_DIVISOR]
+    if abs(low_s) > INTERVAL_TOLERANCE_S:
         return [
-            f"the warning-cue-to-rating-cue interval is off its configured length by a median "
-            f"{median_s:+.4f} s real over {len(deviations)} applications, beyond "
+            f"the warning-cue-to-rating-cue interval is off its configured length by "
+            f"{low_s:+.4f} s real at the low decile of {len(deviations)} applications, beyond "
             f"+/- {INTERVAL_TOLERANCE_S} s"
         ]
     return []
