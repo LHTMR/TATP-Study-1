@@ -19,9 +19,13 @@ imports this module to open the launcher, so importing it back at module level i
 
 What `preflight(config, args)` returns: a list of `(severity, text_key, value)`. `severity` is
 `REFUSE` or `WARN`; `text_key` is a dotted key into the experimenter text, formatted with
-`value`. One finding is special: `dialogs.resume_found`, the offer to resume an unfinished
-session, whose `value` is the time since its sensitisation began. The answer goes to `build`
-as `args.resume`.
+`**value` when `value` is a dict and with `value=value` otherwise. One finding is special:
+`dialogs.resume_found`, the offer to resume an unfinished session, whose `value` is
+`{"completed": str, "since_sensitisation": str}` (SPEC.md 15). The answer goes to `build` as
+`args.resume`, True or False; a dismissed question starts nothing.
+
+The session number and both languages start unchosen, and Start stays disabled until each has
+been picked (SPEC.md 6: nothing supplied by the experimenter is defaulted).
 """
 
 from __future__ import annotations
@@ -44,7 +48,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -73,8 +76,9 @@ from tatp.ui.widgets import (
 )
 
 LANGUAGES = ("sv", "en")
-# The launcher opens before anyone has chosen a language, so it reads the experimenter language
-# run_session.py defaults to.
+# The launcher's own screens open before anyone has chosen a language, so they are drawn in the
+# experimenter language run_session.py defaults to. The config is loaded with a participant
+# language only because loading needs one; the session's own are chosen in the dialog.
 DEFAULT_LANGUAGE = "en"
 DEFAULT_PARTICIPANT_LANGUAGE = "sv"
 
@@ -82,15 +86,15 @@ REFUSE = "refuse"
 WARN = "warn"
 SEVERITIES = (REFUSE, WARN)
 RESUME_KEY = "dialogs.resume_found"
+# The resume question's result codes: QDialog's Accepted is resume, Rejected (Esc, the close
+# box) is no answer at all, and this is the explicit new session.
+NEW_SESSION = 2
+RESUME_ANSWERS = {QDialog.DialogCode.Accepted.value: True, NEW_SESSION: False}
 
 LAUNCHER_WIDTH_PX = 720
 PREVIEW_WIDTH_PX = 900
 PREVIEW_HEIGHT_PX = 640
 PREVIEW_TAB_PX = 110
-# Where the table sits in tools/preview_schedule.render()'s lines; tests/test_launcher.py
-# holds the two in step.
-PREVIEW_LEAD_LINES = 2
-PREVIEW_TABLE_START = 4
 TAB = "\t"
 
 Finding = tuple[str, str, object]
@@ -111,6 +115,11 @@ def build(config: cfg.Config, args: argparse.Namespace):
     import run_session
 
     return run_session.build(config, args)
+
+
+def formatted(template: str, value: object) -> str:
+    """A finding's wording: a dict fills named fields, anything else fills `{value}`."""
+    return template.format(**value) if isinstance(value, dict) else template.format(value=value)
 
 
 def lookup(text: dict, dotted: str) -> str:
@@ -149,12 +158,17 @@ class SessionDialog(QDialog):
         self.setWindowTitle(words["session_title"])
         self.setStyleSheet(stylesheet())
 
+        # The session number and both languages start unchosen (SPEC.md 6): a default would be
+        # a value the experimenter never supplied, and a wrong session number or participant
+        # language is a whole session run against the wrong allocation or in the wrong words.
         self.participant = line_edit(SIZE_BODY)
-        self.session_number = sized(QSpinBox(), SIZE_BODY)
-        self.session_number.setRange(1, n_sessions)
+        self.session_number = self._choice(
+            [(str(number), number) for number in range(1, n_sessions + 1)]
+        )
         self.experimenter = line_edit(SIZE_BODY)
-        self.participant_language = self._languages(DEFAULT_PARTICIPANT_LANGUAGE)
-        self.experimenter_language = self._languages(DEFAULT_LANGUAGE)
+        languages = [(text["terms"]["languages"][code], code) for code in LANGUAGES]
+        self.participant_language = self._choice(languages)
+        self.experimenter_language = self._choice(languages)
         self.data_folder = line_edit(SIZE_BODY)
         self.data_folder.setText(str(_resolve(hardware["data"]["folder"])))
         # No default (docs/LOG.md N6.14): defaulting to config/patterns/examples/ would quietly
@@ -189,8 +203,8 @@ class SessionDialog(QDialog):
         typed = (self.participant, self.experimenter, self.data_folder, self.pattern_folder)
         for field in typed:
             field.textChanged.connect(self._stale)
-        self.session_number.valueChanged.connect(self._stale)
-        for combo in (self.participant_language, self.experimenter_language):
+        chosen = (self.session_number, self.participant_language, self.experimenter_language)
+        for combo in chosen:
             combo.currentIndexChanged.connect(self._stale)
 
         buttons = QHBoxLayout()
@@ -211,11 +225,13 @@ class SessionDialog(QDialog):
         layout.addStretch(1)
         layout.addLayout(buttons)
 
-    def _languages(self, selected: str) -> QComboBox:
+    def _choice(self, options: list[tuple[str, object]]) -> QComboBox:
+        """A choice that starts on a placeholder carrying no value, so nothing is assumed."""
         combo = sized(QComboBox(), SIZE_BODY)
-        for language in LANGUAGES:
-            combo.addItem(self.text["terms"]["languages"][language], language)
-        combo.setCurrentIndex(LANGUAGES.index(selected))
+        combo.addItem(self.text["launcher"]["choose"], None)
+        for shown, value in options:
+            combo.addItem(shown, value)
+        combo.setCurrentIndex(0)
         return combo
 
     def _with_browse(self, field: QLineEdit) -> QWidget:
@@ -250,13 +266,22 @@ class SessionDialog(QDialog):
             )
             if not field.text().strip()
         ]
+        empty += [
+            words[key]
+            for key, combo in (
+                ("session_number", self.session_number),
+                ("participant_language", self.participant_language),
+                ("experimenter_language", self.experimenter_language),
+            )
+            if combo.currentData() is None
+        ]
         return empty
 
     def args(self) -> argparse.Namespace:
         """As `run_session.parse_args` returns them, plus the room and the resume answer."""
         return argparse.Namespace(
             participant=self.participant.text().strip(),
-            session=self.session_number.value(),
+            session=self.session_number.currentData(),
             experimenter=self.experimenter.text().strip(),
             patterns=Path(self.pattern_folder.text().strip()),
             participant_language=self.participant_language.currentData(),
@@ -293,7 +318,7 @@ class SessionDialog(QDialog):
                 continue
             if severity not in SEVERITIES:
                 raise ValueError(f"preflight severity {severity!r} is not one of {SEVERITIES}")
-            line = lookup(self.text, key).format(value=value)
+            line = formatted(lookup(self.text, key), value)
             (refusals if severity == REFUSE else warnings).append(line)
         self._show(refusals, warnings)
         self.start_button.setEnabled(not refusals)
@@ -314,52 +339,60 @@ class SessionDialog(QDialog):
         colour = DISCONNECTED_COLOUR if refusals else WARNING_COLOUR if warnings else SECONDARY
         self.report.setStyleSheet(f"color: {colour};")
 
-    def resume_dialog(self, value: object) -> MessageDialog:
+    def resume_dialog(self, value: dict) -> MessageDialog:
+        """SPEC.md 15: what was completed and how long ago sensitisation began.
+
+        `value` is `{"completed": str, "since_sensitisation": str}`, both formatted by the
+        session from its own text. Resume accepts, Start a new session finishes with
+        `NEW_SESSION`, and anything else -- Esc, the close box -- rejects.
+        """
+        assert isinstance(value, dict), f"the resume offer carries a dict, not {value!r}"
         dialogs = self.text["dialogs"]
-        return MessageDialog(
+        dialog = MessageDialog(
             self.text["launcher"]["session_title"],
-            dialogs["resume_found"].format(time=value, value=value),
+            dialogs["resume_found"].format(**value),
             dialogs["resume_yes"],
             dialogs["resume_no"],
             parent=self,
         )
+        dialog.reject_button.clicked.disconnect()
+        dialog.reject_button.clicked.connect(lambda: dialog.done(NEW_SESSION))
+        return dialog
 
     def start(self) -> None:
-        """Start, asking first about an unfinished session if the preflight found one."""
+        """Start, asking first about an unfinished session if the preflight found one.
+
+        A dismissed question starts nothing: only an explicit choice decides between resuming
+        a session and starting another over it.
+        """
         if not self.check():
             return
         args = self.args()
         offer = [value for _, key, value in self.findings if key == RESUME_KEY]
         if offer:
             args.resume = self.ask_resume(offer[0])
+            if args.resume is None:
+                return
         self._start(self.config(args), args)
         self.accept()
 
-    def ask_resume(self, value: object) -> bool:
-        """SPEC.md 15: resume the unfinished session, or start a new one. Modal."""
-        return self.resume_dialog(value).exec() == QDialog.Accepted
+    def ask_resume(self, value: dict) -> bool | None:
+        """True to resume, False for a new session, None when the question was dismissed."""
+        return RESUME_ANSWERS.get(self.resume_dialog(value).exec())
 
 
 # -- the preview, SPEC.md 7.2 --------------------------------------------------------------
 
 
 def preview_lines(config: cfg.Config, t_zero: datetime) -> list[str]:
-    """`tools/preview_schedule.py`'s report, its table re-set with tabs.
+    """`tools/preview_schedule.py`'s report, unchanged, with its columns tab-separated.
 
-    The tool pads its columns with spaces, which only line up in a fixed-pitch face, and the
-    study font is proportional. The rows and every line around them are the tool's own.
+    The tool pads with spaces for a terminal, which only lines up in a fixed-pitch face, and
+    the study font is proportional; the window sets tab stops instead.
     """
     from tools import preview_schedule
 
-    schedule = sched.generate(config.schedule)
-    lines = preview_schedule.render(schedule, t_zero)
-    rows = schedule.preview_rows(t_zero)
-    columns = preview_schedule.COLUMNS
-    # render() is: the t=0 line, a blank, the heading, its rule, one line per row, the rest.
-    table = [TAB.join(heading for _, heading, _ in columns)] + [
-        TAB.join(preview_schedule._cell(row, key) for key, _, _ in columns) for row in rows
-    ]
-    return lines[:PREVIEW_LEAD_LINES] + table + lines[PREVIEW_TABLE_START + len(rows):]
+    return preview_schedule.render(sched.generate(config.schedule), t_zero, separator=TAB)
 
 
 class PreviewDialog(QDialog):

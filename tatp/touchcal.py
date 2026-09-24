@@ -1322,6 +1322,8 @@ class TouchCalibration(Procedure):
 
         def decided(outcome) -> None:
             name, args = outcome
+            # The fit preview, if open, closes on the decision that ends the wait -- not on a
+            # refused one, which puts the same estimate to the experimenter again.
             if name == RERUN and exhausted:
                 self.session.log("rerun_refused", severity="warning",
                                  detail=f"{self.reruns} of {self.max_reruns} re-runs used")
@@ -1330,12 +1332,15 @@ class TouchCalibration(Procedure):
                     self.experimenter.set_status(
                         self.experimenter.text["dialogs"]["fit_rerun_exhausted"]
                     )
+                    self.experimenter.hide_fit_preview()
                     self._accept(reasons, usable)
                 else:
                     self._decide(usable, reasons)
             elif name == RERUN:
+                self.experimenter.hide_fit_preview()
                 self._rerun(reasons, args[0] if args else "")
             elif usable or exhausted:
+                self.experimenter.hide_fit_preview()
                 self._accept(reasons, usable)
             else:
                 self.session.log("accept_refused", severity="warning",

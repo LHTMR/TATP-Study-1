@@ -3,11 +3,13 @@
 Two jobs.
 
 **Filament weighing.** The experimenter enters a precision-balance measurement for each
-filament, and the weighing date, and they are written into `config/filaments.yaml`. Only the
-`force_measured_mn` values, `weighing_date` and `weighing_balance` change: the file is edited
-line by line rather than re-dumped, because it is mostly comments -- the transcription record
-of the manufacturer's chart, which a YAML dump would throw away. Once every filament has a
-measured force and the date is set, open item 1 resolves itself on the next start.
+filament, and the weighing date, and they are written into `config/filaments.yaml`. Only a
+re-weighed row's `force_measured_mn` and `weighed_date` change, with the file-level
+`weighing_date` (the latest row date) and `weighing_balance`: the file is edited line by line
+rather than re-dumped, because it is mostly comments -- the transcription record of the
+manufacturer's chart, which a YAML dump would throw away. The new text is validated in full
+before the file is touched, then swapped in whole. Once every filament has a measured force,
+open item 1 resolves itself on the next start.
 
 **Room temperature and humidity.** Optional (SPEC.md 8.1). They are not configuration and
 are not written here: they are handed to the next session start, which records them in the
@@ -17,7 +19,10 @@ session file, or records them missing.
 from __future__ import annotations
 
 import json
+import math
+import os
 import re
+import tempfile
 from collections.abc import Callable, Mapping
 from datetime import date
 from pathlib import Path
@@ -33,6 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tatp import config as cfg
 from tatp.config import CONFIG_DIR
 from tatp.ui.widgets import (
     DISCONNECTED_COLOUR,
@@ -51,11 +57,16 @@ from tatp.ui.widgets import (
 
 FILAMENTS_PATH = CONFIG_DIR / "filaments.yaml"
 
-# One filament row as filaments.yaml writes it: `- {label_g: "26", ..., force_measured_mn: X}`.
+# One filament row as filaments.yaml writes it:
+# `- {label_g: "26", ..., force_measured_mn: X, weighed_date: D}`.
 ROW = re.compile(
     r'^(?P<head>\s*-\s*\{\s*label_g:\s*"(?P<label>[^"]+)".*force_measured_mn:\s*)'
-    r"(?P<value>[^,}]*?)(?P<tail>\s*\}\s*)$"
+    r"(?P<value>[^,}]*?)(?P<middle>\s*,\s*weighed_date:\s*)(?P<date>[^,}]*?)"
+    r"(?P<tail>\s*\}\s*)$"
 )
+# YYYY-MM-DD and nothing else: date.fromisoformat also takes 20260924 and week dates, which
+# are not what a person typing the date meant to be recorded.
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # A top-level scalar with its trailing comment kept: `weighing_date: null   # ISO date ...`.
 SCALAR = r'^(?P<head>{key}:\s*)(?P<value>"[^"]*"|[^#\s]+)(?P<tail>\s*(#.*)?)$'
 # The columns shown for each filament before the measured-force field.
@@ -65,6 +76,9 @@ FIELD_PX = 90
 
 DECIMAL_COMMA = ","
 DECIMAL_POINT = "."
+POSITIONAL = ".15f"
+ENCODING = "utf-8"
+TEMP_SUFFIX = ".tmp"
 
 
 class InstrumentsError(Exception):
@@ -76,54 +90,140 @@ def parse_number(typed: str) -> float:
     return float(typed.strip().replace(DECIMAL_COMMA, DECIMAL_POINT))
 
 
+def parse_date(typed: str) -> str:
+    """A weighing date, strictly YYYY-MM-DD. Raises ValueError otherwise."""
+    typed = typed.strip()
+    if not ISO_DATE.match(typed):
+        raise ValueError(f"{typed!r} is not a date in the form YYYY-MM-DD")
+    date.fromisoformat(typed)  # and a real one: no 2026-02-30
+    return typed
+
+
+def yaml_number(value: float) -> str:
+    """`value` spelled so YAML reads it back as the same float.
+
+    PyYAML reads `1e-05` as a string -- its float needs a decimal point -- so an exponent is
+    spelled out in positional form instead.
+    """
+    spelled = repr(float(value))
+    if "e" in spelled:
+        spelled = format(value, POSITIONAL).rstrip("0")
+    if spelled.endswith(DECIMAL_POINT):
+        spelled += "0"
+    return spelled
+
+
 def write_filament_forces(
     forces_mn: Mapping[str, float],
-    weighing_date: str,
+    weighed_date: str,
     balance: str | None,
     path: Path = FILAMENTS_PATH,
-) -> None:
-    """Write measured forces, by gram label, and the weighing record into `filaments.yaml`.
+) -> int:
+    """Write measured forces, by gram label, into `filaments.yaml`. Returns the rows written.
 
-    Every label must name exactly one row, and the date must be an ISO date. Labels not given
-    keep what they have. The file is read back afterwards and checked, so a pattern that
-    stopped matching the file's layout fails here rather than writing nothing silently.
+    Only a row whose force differs from what the file holds is written, and it gets
+    `weighed_date`: re-saving the dialog does not re-date filaments nobody re-weighed. The
+    file-level `weighing_date` becomes the latest row date, which is what the session file
+    records and what open item 1 checks. `balance`, if given, replaces `weighing_balance`.
+
+    Nothing touches the file until the new text has been built, parsed and validated -- by the
+    rules `config.load` applies and by the checks below -- and it is then written to a
+    temporary file in the same folder and moved into place, so a failure at any point leaves
+    the old file exactly as it was.
     """
-    date.fromisoformat(weighing_date)  # raises on anything that is not YYYY-MM-DD
+    weighed_date = parse_date(weighed_date)
     for label_g, force in forces_mn.items():
-        if not force > 0:
-            raise InstrumentsError(f"filament {label_g} g: a measured force must be above zero")
+        if not (math.isfinite(force) and force > 0):
+            raise InstrumentsError(f"filament {label_g} g: {force!r} is not a force above zero")
 
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    # Bytes, so the file's own line endings are kept whatever the platform.
+    old_text = path.read_bytes().decode(ENCODING)
+    old = yaml.safe_load(old_text)
+    old_rows = {row["label_g"]: row for row in old["filaments"]}
+    unknown = sorted(set(forces_mn) - set(old_rows))
+    if unknown:
+        raise InstrumentsError(f"{path}: no filament labelled {unknown}")
+    changed = {
+        label_g: force
+        for label_g, force in forces_mn.items()
+        if old_rows[label_g]["force_measured_mn"] is None
+        or float(yaml_number(force)) != float(old_rows[label_g]["force_measured_mn"])
+    }
+    if not changed and (balance is None or balance == old["weighing_balance"]):
+        return 0
+
+    dates = [row["weighed_date"] for row in old["filaments"] if row["weighed_date"]]
+    if changed:
+        dates.append(weighed_date)
+    latest = max(dates) if dates else None
+
     matched: dict[str, int] = {}
     edited = []
-    for line in lines:
+    for line in old_text.splitlines(keepends=True):
         ending = line[len(line.rstrip("\r\n")):]
         body = line[: len(line) - len(ending)]
         row = ROW.match(body)
-        if row and row["label"] in forces_mn:
+        if row and row["label"] in changed:
             matched[row["label"]] = matched.get(row["label"], 0) + 1
-            body = f"{row['head']}{forces_mn[row['label']]:g}{row['tail']}"
-        body = _set_scalar(body, "weighing_date", json.dumps(weighing_date))
+            body = (
+                f"{row['head']}{yaml_number(changed[row['label']])}{row['middle']}"
+                f"{json.dumps(weighed_date)}{row['tail']}"
+            )
+        if latest is not None:
+            body = _set_scalar(body, "weighing_date", json.dumps(latest))
         if balance is not None:
             # JSON's string syntax is valid YAML, and escapes whatever was typed.
             body = _set_scalar(body, "weighing_balance", json.dumps(balance))
         edited.append(body + ending)
-
-    for label_g in forces_mn:
+    for label_g in changed:
         if matched.get(label_g) != 1:
             raise InstrumentsError(
                 f"{path}: filament {label_g!r} matched {matched.get(label_g, 0)} rows, not one"
             )
-    path.write_text("".join(edited), encoding="utf-8")
+    new_text = "".join(edited)
 
-    # Stage boundary (CLAUDE.md): what was meant to be written is what the file now says.
-    written = yaml.safe_load(path.read_text(encoding="utf-8"))
-    assert written["weighing_date"] == weighing_date, "weighing_date was not written"
-    by_label = {row["label_g"]: row for row in written["filaments"]}
-    for label_g, force in forces_mn.items():
-        assert by_label[label_g]["force_measured_mn"] == float(f"{force:g}"), label_g
-    if balance is not None:
-        assert written["weighing_balance"] == balance, "weighing_balance was not written"
+    # Stage boundary (CLAUDE.md), before the write: the new file is what was meant.
+    new = yaml.safe_load(new_text)
+    _validate(old, new, changed, weighed_date, latest, balance)
+
+    handle = tempfile.NamedTemporaryFile(
+        "wb", dir=path.parent, prefix=f".{path.name}.", suffix=TEMP_SUFFIX, delete=False
+    )
+    with handle:
+        handle.write(new_text.encode(ENCODING))
+    os.replace(handle.name, path)
+    return len(changed)
+
+
+def _validate(old: dict, new: dict, changed: Mapping[str, float], weighed_date: str,
+              latest: str | None, balance: str | None) -> None:
+    cfg.validate_file("filaments.yaml", new)
+    old_rows = [dict(row) for row in old["filaments"]]
+    new_rows = [dict(row) for row in new["filaments"]]
+    if [row["label_g"] for row in old_rows] != [row["label_g"] for row in new_rows]:
+        raise InstrumentsError("the rewrite changed which filaments are listed")
+    for before, after in zip(old_rows, new_rows, strict=True):
+        label_g = after["label_g"]
+        measured, dated = after["force_measured_mn"], after["weighed_date"]
+        if label_g in changed:
+            expected = {**before, "force_measured_mn": float(yaml_number(changed[label_g])),
+                        "weighed_date": weighed_date}
+        else:
+            expected = before
+        if after != expected:
+            raise InstrumentsError(f"filament {label_g}: the rewrite would write {after}")
+        if measured is not None and not (
+            isinstance(measured, float) and math.isfinite(measured) and measured > 0
+        ):
+            raise InstrumentsError(f"filament {label_g}: {measured!r} is not a force")
+        if (measured is None) != (dated is None):
+            raise InstrumentsError(f"filament {label_g}: a force and its date go together")
+        if dated is not None:
+            parse_date(dated)
+    if new["weighing_date"] != latest:
+        raise InstrumentsError(f"weighing_date would be {new['weighing_date']!r}, not {latest}")
+    if balance is not None and new["weighing_balance"] != balance:
+        raise InstrumentsError("weighing_balance would not be what was entered")
 
 
 def _set_scalar(body: str, key: str, value: str) -> str:
@@ -182,8 +282,9 @@ class InstrumentsDialog(QDialog):
         scroll.setWidget(table)
         scroll.setWidgetResizable(True)
 
+        # Empty, not the last weighing's date: it dates what is weighed now, and an old date
+        # carried over would be recorded against a new measurement.
         self.weighing_date = line_edit()
-        self.weighing_date.setText(filaments["weighing_date"] or "")
         self.balance = line_edit()
         self.balance.setText(filaments["weighing_balance"] or "")
         self.save_button = button(words["save_forces"], SIZE_BODY)
@@ -233,7 +334,7 @@ class InstrumentsDialog(QDialog):
                 force = parse_number(typed)
             except ValueError:
                 force = None
-            if force is None or not force > 0:
+            if force is None or not (math.isfinite(force) and force > 0):
                 self._report(
                     self.forces_status,
                     words["invalid_force"].format(filament=label_g, value=typed),
@@ -249,14 +350,18 @@ class InstrumentsDialog(QDialog):
             self._report(self.forces_status, words["date_required"], True)
             return False
         try:
-            date.fromisoformat(typed_date)
+            parse_date(typed_date)
         except ValueError:
             message = words["invalid_date"].format(value=typed_date)
             self._report(self.forces_status, message, True)
             return False
         balance = self.balance.text().strip() or None
-        write_filament_forces(forces, typed_date, balance, self.path)
-        self._report(self.forces_status, words["saved"].format(value=len(forces)), False)
+        written = write_filament_forces(forces, typed_date, balance, self.path)
+        if not written:
+            # Every force typed is what the file already holds: nothing is re-dated.
+            self._report(self.forces_status, words["nothing_to_save"], True)
+            return False
+        self._report(self.forces_status, words["saved"].format(value=written), False)
         return True
 
     def hand_on_environment(self) -> bool:

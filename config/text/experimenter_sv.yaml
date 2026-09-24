@@ -233,7 +233,8 @@ banners:
 dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.
   abort_reason: Orsak till avbrott
-  resume_found: En oavslutad session hittades för denna deltagare, startad för {time} sedan. Återuppta den?
+  # SPEC.md 15. Båda värdena formateras av sessionen från dess egen text.
+  resume_found: 'En oavslutad session hittades för denna deltagare. Genomfört: {completed}. Sensitiseringen började för {since_sensitisation} sedan. Återuppta den med den ursprungliga tidsplanen?'
   distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem nu, eller avsluta sessionen med dem flaggade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
@@ -303,6 +304,8 @@ launcher:
   data_folder: Datamapp
   pattern_folder: Mönstermapp
   browse: Bläddra…
+  # Sessionsnumrets och språkens ovalda läge; de har inget standardvärde.
+  choose: Välj…
   check: Kontrollera
   start: Starta sessionen
   close: Stäng

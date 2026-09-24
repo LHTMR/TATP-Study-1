@@ -235,7 +235,8 @@ banners:
 dialogs:
   abort_confirm: Abort this session? All data collected so far is kept.
   abort_reason: Reason for aborting
-  resume_found: An unfinished session was found for this participant, started {time} ago. Resume it?
+  # SPEC.md 15. Both values are formatted by the session from its own text.
+  resume_found: 'An unfinished session was found for this participant. Completed: {completed}. Sensitisation began {since_sensitisation} ago. Resume it, keeping the original timing?'
   distances_outstanding: Mapping distances are still outstanding. Enter them now, or close the session with them flagged missing.
   fit_rerun_reason: Why are you re-running? Recorded with the discarded estimate, which is kept.
   fit_rerun_exhausted: The re-run limit for this procedure has been reached. This estimate will be used.
@@ -305,6 +306,8 @@ launcher:
   data_folder: Data folder
   pattern_folder: Pattern folder
   browse: Browse…
+  # The unchosen state of the session number and the languages, which have no default.
+  choose: Choose…
   check: Check
   start: Start session
   close: Close

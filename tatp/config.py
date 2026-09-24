@@ -320,6 +320,18 @@ def _check(filename: str, path: str, expected, low, high, loaded: dict[str, dict
             raise ConfigError(f"{filename}: {path!r} is {value}, above the maximum {high}")
 
 
+def validate_file(filename: str, data: dict) -> None:
+    """Every SCHEMA row for one file, against `data` -- what `load` checks, before a write.
+
+    For a tool that rewrites a config file (tatp/instruments.py), so a file it is about to
+    write is refused by the same rules that would refuse it at the next startup.
+    """
+    rows = [row for row in SCHEMA if row[0] == filename]
+    assert rows, f"SCHEMA has no rows for {filename}"
+    for _, path, expected, low, high in rows:
+        _check(filename, path, expected, low, high, {filename: data})
+
+
 def _name(expected) -> str:
     if isinstance(expected, tuple):
         return " or ".join(t.__name__ for t in expected)

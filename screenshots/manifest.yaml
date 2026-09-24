@@ -63,11 +63,12 @@ screens:
     the weighing date and balance; the optional room temperature and humidity (en).'
   experimenter_en_launcher_preview: 'The schedule preview (SPEC.md 7.2): tools/preview_schedule.py''s
     report, read-only (en).'
-  experimenter_en_launcher_resume: The resume question (SPEC.md 15), naming how long
-    ago the session began (en).
+  experimenter_en_launcher_resume: 'The resume question (SPEC.md 15): what was completed
+    and how long ago sensitisation began. Resume, or an explicit new session; closing
+    it starts nothing (en).'
   experimenter_en_launcher_session: 'The session dialog as it opens: the data folder
-    filled in from config, the pattern folder empty with no default, Start disabled
-    until a check passes (en).'
+    filled in from config; the session number, both languages and the pattern folder
+    unchosen, with no default; Start disabled until a check passes (en).'
   experimenter_en_launcher_session_checked: 'The session dialog after Check: a preflight
     warning listed in amber, Start enabled because nothing refuses (en).'
   experimenter_en_long_instruction: 'The longest instruction the session gives, set
@@ -150,11 +151,12 @@ screens:
     the weighing date and balance; the optional room temperature and humidity (sv).'
   experimenter_sv_launcher_preview: 'The schedule preview (SPEC.md 7.2): tools/preview_schedule.py''s
     report, read-only (sv).'
-  experimenter_sv_launcher_resume: The resume question (SPEC.md 15), naming how long
-    ago the session began (sv).
+  experimenter_sv_launcher_resume: 'The resume question (SPEC.md 15): what was completed
+    and how long ago sensitisation began. Resume, or an explicit new session; closing
+    it starts nothing (sv).'
   experimenter_sv_launcher_session: 'The session dialog as it opens: the data folder
-    filled in from config, the pattern folder empty with no default, Start disabled
-    until a check passes (sv).'
+    filled in from config; the session number, both languages and the pattern folder
+    unchosen, with no default; Start disabled until a check passes (sv).'
   experimenter_sv_launcher_session_checked: 'The session dialog after Check: a preflight
     warning listed in amber, Start enabled because nothing refuses (sv).'
   experimenter_sv_long_instruction: 'The longest instruction the session gives, set

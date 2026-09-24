@@ -198,6 +198,10 @@ class ExperimenterWindow(QWidget):
         self._status_text = ""
         self._open_items_text = ""
         self._open_items_detail = ""
+        # Faults first seen during the intervention or the rekindle: never shown in detail.
+        self._withheld_faults: set[str] = set()
+        # What `_fit_text` last fitted, so a refresh with nothing new does no layout work.
+        self._fitted: tuple | None = None
 
         self._build_banners()
         self._build_header()
@@ -636,8 +640,17 @@ class ExperimenterWindow(QWidget):
         return self.width() - 2 * MARGIN_PX - GROUP_GAP_PX - SIDE_COLUMN_PX
 
     def _fit_text(self) -> None:
-        """Fit the instruction and the status to their regions, stepping down the scale."""
+        """Fit the instruction and the status to their regions, stepping down the scale.
+
+        Only when a text or the width has changed: `refresh()` runs on a timer, and measuring
+        wrapped text at up to four sizes every tick is work that changes nothing.
+        """
         width = self._left_width()
+        wanted = (self._instruction_text, self._status_text, self._open_items_text,
+                  self._open_items_detail, width)
+        if wanted == self._fitted:
+            return
+        self._fitted = wanted
         _fit_to(self.instruction, self._instruction_text, INSTRUCTION_SIZES, width,
                 self.instruction.height())
         _fit_to(self.status, self._status_text, STATUS_SIZES, width, self.status.height())
@@ -724,17 +737,22 @@ class ExperimenterWindow(QWidget):
             )
             self.pressures.setText(status["channel_pressures"].format(value=readings))
             self.pressures.setVisible(bool(pressures))
+        # That there is a fault is shown; which channel is not, if it arose while the
+        # condition's own pattern was running, because the channels in use differ by condition
+        # (SPEC.md 16). A fault seen then stays withheld for the rest of the session: showing
+        # it in full after the rekindle would reveal it just the same. The data has the detail.
         words = self.text["hardware"]
-        if not hardware["faults"]:
-            faults = ""
-        elif phase in BLINDED_PHASES:
-            # That there is a fault is shown; which channel is not, because the channels in use
-            # differ by condition (SPEC.md 16). The log has the detail.
-            faults = words["fault_withheld"].format(value=len(hardware["faults"]))
-        else:
-            faults = LINE_SEPARATOR.join(
-                words["fault"].format(value=fault) for fault in hardware["faults"]
-            )
+        if phase in BLINDED_PHASES:
+            self._withheld_faults.update(hardware["faults"])
+        withheld = [fault for fault in hardware["faults"] if fault in self._withheld_faults]
+        lines = [
+            words["fault"].format(value=fault)
+            for fault in hardware["faults"]
+            if fault not in self._withheld_faults
+        ]
+        if withheld:
+            lines.append(words["fault_withheld"].format(value=len(withheld)))
+        faults = LINE_SEPARATOR.join(lines)
         self.faults.setText(
             self.faults.fontMetrics().elidedText(faults, Qt.ElideRight, SIDE_COLUMN_PX)
         )
@@ -981,14 +999,26 @@ class DistancesDialog(QDialog):
         self.set_phases([])
 
     def set_phases(self, phases: Sequence[str]) -> None:
-        """The phases with a mapping, the latest selected; nothing to enter before the first."""
+        """The phases with a mapping; nothing to enter before the first.
+
+        A new mapping is added without disturbing an entry in progress: if anything is typed,
+        the fields and the selected phase stay as they are, because distances typed for the
+        last time point must not silently become the new one's. With nothing typed, the latest
+        phase is selected.
+        """
+        phases = list(phases)
+        before = [self.phase.itemData(i) for i in range(self.phase.count())]
+        selected = self.phase.currentData()
+        typed = any(field.text().strip() for field in self.fields)
+        keep = typed and phases[: len(before)] == before and selected in phases
         self.phase.blockSignals(True)
         self.phase.clear()
         for phase in phases:
             self.phase.addItem(self.text["phases"][phase], phase)
-        self.phase.setCurrentIndex(len(phases) - 1)
+        self.phase.setCurrentIndex(phases.index(selected) if keep else len(phases) - 1)
         self.phase.blockSignals(False)
-        self.clear()
+        if not keep:
+            self.clear()
         for widget in (self.phase, self.enter_button, *self.fields):
             widget.setEnabled(bool(phases))
 

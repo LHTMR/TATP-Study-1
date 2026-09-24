@@ -55,13 +55,23 @@ class Fakes:
         return Runner()
 
 
+def _choose(combo, value) -> None:
+    combo.setCurrentIndex(combo.findData(value))
+
+
 def _filled(window, tmp_path):
     dialog = window.session_dialog()
     dialog.participant.setText("07")
     dialog.experimenter.setText("SM")
+    _choose(dialog.session_number, 1)
+    _choose(dialog.participant_language, "sv")
+    _choose(dialog.experimenter_language, "en")
     dialog.data_folder.setText(str(tmp_path / "data"))
     dialog.pattern_folder.setText(str(cfg.CONFIG_DIR / "patterns" / "examples"))
     return dialog
+
+
+RESUME = {"completed": "blocks 1-4", "since_sensitisation": "1 h 12 min"}
 
 
 def test_the_four_entries_and_the_one_not_built(app, loaded):
@@ -90,6 +100,21 @@ def test_there_is_no_default_pattern_folder(app, loaded):
     dialog = LauncherWindow(loaded, Fakes().preflight, Fakes().build).session_dialog()
     assert dialog.pattern_folder.text() == ""
     assert dialog.data_folder.text(), "the data folder does default, from hardware.yaml"
+
+
+@pytest.mark.parametrize("combo", ["session_number", "participant_language",
+                                   "experimenter_language"])
+def test_the_session_number_and_languages_start_unchosen(app, loaded, tmp_path, combo):
+    """SPEC.md 6: nothing the experimenter supplies is defaulted."""
+    fakes = Fakes()
+    window = LauncherWindow(loaded, fakes.preflight, fakes.build)
+    assert getattr(window.session_dialog(), combo).currentData() is None
+    dialog = _filled(window, tmp_path)
+    getattr(dialog, combo).setCurrentIndex(0)
+    assert not dialog.check()
+    assert not dialog.start_button.isEnabled()
+    assert fakes.checked == []
+    assert dialog.text["launcher"][combo] in dialog.report.text()
 
 
 def test_a_missing_field_stops_the_check_before_preflight(app, loaded):
@@ -139,7 +164,7 @@ def test_start_builds_with_the_chosen_folder_and_the_room(app, loaded, tmp_path)
     window = LauncherWindow(loaded, fakes.preflight, fakes.build)
     window.set_environment(21.5, None)
     dialog = _filled(window, tmp_path)
-    dialog.participant_language.setCurrentIndex(launcher.LANGUAGES.index("en"))
+    _choose(dialog.participant_language, "en")
     dialog.start()
     assert fakes.started and window.runner is not None
     config, args = fakes.built[0]
@@ -155,32 +180,67 @@ def test_start_builds_with_the_chosen_folder_and_the_room(app, loaded, tmp_path)
 def test_an_unfinished_session_is_put_as_a_question(app, loaded, tmp_path, monkeypatch,
                                                     answer):
     """SPEC.md 15. The offer is not a warning and is not listed as one."""
-    fakes = Fakes([(WARN, RESUME_KEY, "1 h 12 min")])
+    fakes = Fakes([(WARN, RESUME_KEY, RESUME)])
     dialog = _filled(LauncherWindow(loaded, fakes.preflight, fakes.build), tmp_path)
     asked = []
     monkeypatch.setattr(dialog, "ask_resume", lambda value: asked.append(value) or answer)
     dialog.start()
-    assert asked == ["1 h 12 min"]
+    assert asked == [RESUME]
     assert fakes.built[0][1].resume is answer
     assert "1 h 12 min" not in dialog.report.text()
-    assert "1 h 12 min" in dialog.resume_dialog("1 h 12 min").message.text()
+
+
+def test_the_resume_question_says_what_was_done_and_when(app, loaded, tmp_path):
+    """SPEC.md 15: what was completed and how long ago sensitisation began."""
+    dialog = _filled(LauncherWindow(loaded, Fakes().preflight, Fakes().build), tmp_path)
+    shown = dialog.resume_dialog(RESUME).message.text()
+    assert "blocks 1-4" in shown and "1 h 12 min" in shown
+
+
+def test_dismissing_the_resume_question_starts_nothing(app, loaded, tmp_path, monkeypatch):
+    fakes = Fakes([(WARN, RESUME_KEY, RESUME)])
+    dialog = _filled(LauncherWindow(loaded, fakes.preflight, fakes.build), tmp_path)
+    monkeypatch.setattr(dialog, "ask_resume", lambda value: None)
+    dialog.start()
+    assert fakes.built == []
+
+
+@pytest.mark.parametrize(
+    "press, expected",
+    [("accept_button", True), ("reject_button", False), (None, None)],
+)
+def test_only_an_explicit_choice_answers_the_resume_question(app, loaded, tmp_path,
+                                                            monkeypatch, press, expected):
+    """Esc or the close box is no answer; only Start a new session means False."""
+    dialog = _filled(LauncherWindow(loaded, Fakes().preflight, Fakes().build), tmp_path)
+    made = dialog.resume_dialog(RESUME)
+    monkeypatch.setattr(dialog, "resume_dialog", lambda value: made)
+
+    def exec_():
+        if press is None:
+            made.reject()
+        else:
+            getattr(made, press).click()
+        return made.result()
+
+    monkeypatch.setattr(made, "exec", exec_)
+    assert dialog.ask_resume(RESUME) is expected
+
+
+def test_a_dict_value_fills_named_fields():
+    assert launcher.formatted("{a} and {b}", {"a": 1, "b": 2}) == "1 and 2"
+    assert launcher.formatted("got {value}", 3) == "got 3"
 
 
 def test_the_preview_shows_the_tools_report(app, loaded):
     """SPEC.md 7.2: the same report as tools/preview_schedule.py, every block in it."""
     schedule = sched.generate(loaded.schedule)
-    report = preview_schedule.render(schedule, T_ZERO)
     shown = launcher.preview_lines(loaded, T_ZERO)
-    # The table's position in render()'s output, which preview_lines relies on.
-    assert report[launcher.PREVIEW_LEAD_LINES].startswith("Block")
-    assert set(report[launcher.PREVIEW_TABLE_START - 1]) <= {"-", " "}
-    rows = schedule.preview_rows(T_ZERO)
-    assert len(shown) == len(report) - 1, "the rule under the heading is the only line dropped"
-    assert shown[: launcher.PREVIEW_LEAD_LINES] == report[: launcher.PREVIEW_LEAD_LINES]
-    assert shown[-len(report) + launcher.PREVIEW_TABLE_START + len(rows):] == (
-        report[launcher.PREVIEW_TABLE_START + len(rows):]
-    )
-    for row in rows:
+    assert shown == preview_schedule.render(schedule, T_ZERO, separator="\t")
+    padded = preview_schedule.render(schedule, T_ZERO)
+    assert len(shown) == len(padded), "the same report, only the separator differs"
+    assert [line.split() for line in shown] == [line.split() for line in padded]
+    for row in schedule.preview_rows(T_ZERO):
         assert any(line.startswith(f"{row['index']}\t") for line in shown)
     window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
     dialog = window.preview_dialog(T_ZERO)

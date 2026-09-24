@@ -112,7 +112,10 @@ SAMPLE_PARTICIPANT = "07"
 SAMPLE_INITIALS = "SM"
 SAMPLE_PATTERN_FOLDER = "config/patterns/examples"
 SAMPLE_DATA_FOLDER = "data"
-SAMPLE_RESUME_AGO = "1 h 12 min"
+SAMPLE_RESUME = {"completed": "setup, touch calibration, blocks 1-4",
+                 "since_sensitisation": "1 h 12 min"}
+SAMPLE_SESSION_NUMBER = 1
+SAMPLE_LANGUAGES = ("sv", "en")
 SAMPLE_T_ZERO = datetime(2026, 9, 24, 9, 30)
 
 
@@ -619,13 +622,20 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     dialog.data_folder.setText(SAMPLE_DATA_FOLDER)
     yield Shot(
         f"experimenter_{language}_launcher_session",
-        f"The session dialog as it opens: the data folder filled in from config, the pattern "
-        f"folder empty with no default, Start disabled until a check passes ({language}).",
+        f"The session dialog as it opens: the data folder filled in from config; the session "
+        f"number, both languages and the pattern folder unchosen, with no default; Start "
+        f"disabled until a check passes ({language}).",
         _grab_dialog(dialog),
     )
     dialog.participant.setText(SAMPLE_PARTICIPANT)
     dialog.experimenter.setText(SAMPLE_INITIALS)
     dialog.pattern_folder.setText(SAMPLE_PATTERN_FOLDER)
+    for combo, value in (
+        (dialog.session_number, SAMPLE_SESSION_NUMBER),
+        (dialog.participant_language, SAMPLE_LANGUAGES[0]),
+        (dialog.experimenter_language, SAMPLE_LANGUAGES[-1]),
+    ):
+        combo.setCurrentIndex(combo.findData(value))
     dialog.check()
     yield Shot(
         f"experimenter_{language}_launcher_session_checked",
@@ -635,9 +645,10 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     )
     yield Shot(
         f"experimenter_{language}_launcher_resume",
-        f"The resume question (SPEC.md 15), naming how long ago the session began "
+        f"The resume question (SPEC.md 15): what was completed and how long ago "
+        f"sensitisation began. Resume, or an explicit new session; closing it starts nothing "
         f"({language}).",
-        _grab_dialog(dialog.resume_dialog(SAMPLE_RESUME_AGO)),
+        _grab_dialog(dialog.resume_dialog(SAMPLE_RESUME)),
     )
 
     # The unweighed set, whatever filaments.yaml holds today, so weighing the kit does not

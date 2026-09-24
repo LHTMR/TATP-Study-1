@@ -1256,6 +1256,8 @@ class LongProtocol(_Series):
         def begin() -> None:
             self.participant.show_blank()
             self._awaiting_fit = result
+            # Accept and Re-run are live exactly while this waits on them (SPEC.md 11.1).
+            self.experimenter.set_actions_enabled(fit_decision=True)
             self.fit_ready.emit(fit)
 
         self.step(begin)
@@ -1330,6 +1332,8 @@ class LongProtocol(_Series):
         if result is None or self.rig.interruptions.active is not None:
             return
         self._awaiting_fit = None
+        # The decision is taken: the preview closes and its buttons go dead.
+        self.experimenter.hide_fit_preview()
         self.session.log("fit_accepted", origin="experimenter", detail=f"run {self.run_index}")
         self._record(result, superseded=False, rerun_reason="")
         self.finish(result)
@@ -1339,6 +1343,7 @@ class LongProtocol(_Series):
         if result is None or self.rig.interruptions.active is not None:
             return
         self._awaiting_fit = None
+        self.experimenter.hide_fit_preview()
         if self.run_index - 1 >= self.max_reruns:
             # The bound on the forking path: this estimate is the one used (SPEC.md 11.1).
             self.session.log(

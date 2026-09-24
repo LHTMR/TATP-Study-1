@@ -718,9 +718,15 @@ def test_distances_are_entered_for_a_mapped_phase_and_never_block(drawn):
     distances.enter_button.click()
     assert seen == [("post_sensitisation", (42.5, None, -3.0, None))]
 
+    # A new mapping while distances are typed changes neither the fields nor the phase.
     window.set_mapping_phases(["post_sensitisation", "post_intervention"])
-    assert distances.phase.currentData() == "post_intervention", "the latest by default"
-    assert all(field.text() == "" for field in distances.fields)
+    assert distances.phase.currentData() == "post_sensitisation"
+    assert distances.fields[0].text() == "42,5"
+
+    # With nothing typed, the latest phase is selected.
+    distances.clear()
+    window.set_mapping_phases(["post_sensitisation", "post_intervention", "rekindle"])
+    assert distances.phase.currentData() == "rekindle", "the latest when nothing is typed"
 
 
 def test_an_unfinished_distance_is_not_sent(drawn):
@@ -801,6 +807,31 @@ def test_no_pressure_is_drawn_during_the_intervention_even_if_the_view_leaks_it(
         held["view"] = _all_keys(phase=phase, hardware=_hardware(pressures={1: 55.0}))
         window.refresh()
         assert window.pressures.text() == ""
+
+
+def test_a_fault_from_the_intervention_stays_withheld_afterwards(drawn):
+    """Shown in full after the rekindle, it would reveal the channel just the same."""
+    window, held = drawn
+    first, later = "channel 4: valve stuck", "channel 2: sensor offline"
+    held["view"] = _all_keys(phase="intervention", hardware=_hardware(faults=[first]))
+    window.refresh()
+    held["view"] = _all_keys(phase="post_intervention",
+                             hardware=_hardware(faults=[first, later]))
+    window.refresh()
+    assert "channel 4" not in window.faults.text() + window.faults.toolTip()
+    assert "channel 2" in window.faults.toolTip(), "a fault raised afterwards is shown"
+
+
+def test_refresh_does_not_refit_unchanged_text(drawn, monkeypatch):
+    window, _ = drawn
+    window.set_instruction("apply")
+    calls = []
+    monkeypatch.setattr(experimenter_ui, "_fit_to", lambda *args: calls.append(args))
+    window.refresh()
+    window.refresh()
+    assert calls == []
+    window.set_status("received")
+    assert calls, "a changed text is fitted"
 
 
 def test_a_fault_in_the_intervention_is_shown_without_its_channel(drawn):
