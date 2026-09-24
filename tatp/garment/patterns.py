@@ -15,6 +15,7 @@ that turns on also turns off.
 from __future__ import annotations
 
 import csv
+import io
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -65,15 +66,30 @@ def load_pattern(csv_path: Path) -> Pattern:
             f"{csv_path.name} has no sidecar {sidecar.name}. The row interval is a per-pattern "
             f"parameter and is not defaulted (SPEC.md 12.2)."
         )
-    meta = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
+    # Bytes decoded rather than `read_text`, so line endings reach the CSV reader exactly as
+    # `open(newline="")` would hand them over.
+    return from_text(
+        csv_path.read_bytes().decode("utf-8"), sidecar.read_text(encoding="utf-8"), csv_path
+    )
+
+
+def from_text(csv_text: str, sidecar_text: str, csv_path: Path) -> Pattern:
+    """Every rule `load_pattern` applies, on the text of a pattern and its sidecar.
+
+    `load_pattern` reads the two files and calls this, so a pattern held in memory -- the
+    designer's, before it is saved -- is refused by exactly the code that would refuse it on
+    loading, not by a second copy of the rules. `csv_path` names the pattern in messages and
+    becomes its `source`.
+    """
+    sidecar = csv_path.with_suffix(".yaml")
+    meta = yaml.safe_load(sidecar_text)
     if not isinstance(meta, dict):
         raise PatternError(f"{sidecar.name}: expected a mapping at the top level")
     missing = [key for key in SIDECAR_KEYS if meta.get(key) is None]
     if missing:
         raise PatternError(f"{sidecar.name}: {missing} are missing or null")
 
-    with csv_path.open(encoding="utf-8", newline="") as handle:
-        grid = [row for row in csv.reader(handle) if row]
+    grid = [row for row in csv.reader(io.StringIO(csv_text, newline="")) if row]
     if len(grid) < 2:
         raise PatternError(f"{csv_path.name}: needs a channel-id header and at least one row")
 
