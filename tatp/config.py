@@ -187,6 +187,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "audio.pacing_tick_hz", NUMBER, 0, None),
     ("hardware.yaml", "audio.pacing_tick_duration_s", NUMBER, 0, None),
     ("hardware.yaml", "data.folder", str, None, None),
+    ("hardware.yaml", "data.upload_folder", str, None, None),
     ("hardware.yaml", "data.cloud_sync_markers", list, None, None),
     ("schedule.yaml", "generate.n_pinprick_blocks", int, 0, None),
     ("schedule.yaml", "generate.n_touch_blocks", int, 0, None),

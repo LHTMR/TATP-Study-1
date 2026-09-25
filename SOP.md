@@ -779,17 +779,44 @@ in config/open_items.yaml.]**
   and the table, for example `…_P07_S1_session.csv`, `…_P07_S1_log.csv` and
   `…_P07_S1_pinprick.csv`. A resumed session writes a second set, which names the first.
 - Every row is saved the moment it is collected. Nothing is ever overwritten.
-- **Do not open, rename, move or delete them** during the session or before they are transferred.
+- **Do not open, rename, move or delete them** during the session or before they are uploaded (section 14.2).
   They record which kind of touch was given.
 - The lock file in the data folder is the software's. Leave it.
 
-### 14.2 Transfer to the LiU secure server
+### 14.2 Upload to the study's network storage
 
-**[TBC: the manual transfer to the LiU secure server (LOG N4.1). The process is not defined
-yet. Needed: who does it, when, to where, how it is checked, and whether the local copy is then
-deleted.]**
+The study's data live on LiU network storage, in a *samarbetsmapp* (collaboration folder):
 
-### 14.3 What never leaves the lab PC except by that transfer
+```
+\\fillager.liu.se\coop\t\tatp
+```
+
+LiU IT's instructions for connecting to it:
+<https://liudesk.liu.se/tas/public/ssp/content/detail/knowledgeitem?unid=c857f79e-6dfb-4f93-8f81-0b31a5efa9a2>
+
+It has three folders:
+
+| Folder | What goes in it |
+|---|---|
+| `01_raw` | **The session's data files, exactly as the software wrote them.** This is where you upload. |
+| `02_anonymised` | Not yours. Leave it alone. |
+| `03_processed` | Not yours. Leave it alone. |
+
+**You upload at the end of every session**, once the software is closed.
+
+1. Copy every file of the session from the data folder into `01_raw`. That is every file whose
+   name contains `P<code>_S<session>_`, including a resumed session's second set. Copy the files;
+   do not move them.
+2. If Windows says a file already exists in `01_raw`, choose **Skip**, never **Replace**, and tell
+   S.
+3. **Check the upload.** Show both folders in the **Details** view. For this session's files,
+   `01_raw` must have the same number of files as the data folder, with the same names and the
+   same sizes. If anything differs, copy the missing or different file again, check again, and
+   tell S if it still differs.
+4. Do not rename, edit or reorganise the files, in the data folder or in `01_raw`.
+5. **Never delete the lab PC's copy.** The data folder keeps every session.
+
+### 14.3 What never leaves the lab PC except by that upload
 
 - The data files. Never by email, a USB stick, OneDrive or another cloud-synced folder, and never
   into git. The `data` folder is excluded from git on purpose.

@@ -163,7 +163,8 @@ Before touching either calibration procedure, read `docs/calibration_methods_com
 Each session writes one CSV file per table (`docs/DATA_SCHEMA.md`) to `data/`, named
 `TATP1_{YYYY-MM-DD_HH-MM-SS}_P{code}_S{session}_{table}.csv`. Every row is appended and flushed
 as it is produced, and no file is ever overwritten. The files carry the participant code only.
-They are transferred by hand to the LiU secure server (`SOP.md` §14).
+They are uploaded by hand into `01_raw` on the study's LiU network storage,
+`\\fillager.liu.se\coop\t\tatp` (`SOP.md` §14.2).
 
 ## Licence
 
