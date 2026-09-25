@@ -503,7 +503,6 @@ class ParticipantWindow(QWidget):
     ):
         super().__init__(parent)
         self.text = config.participant_text
-        self.training_min_display_s = float(config.study1["training"]["vas_min_display_s"])
         self.responder = responder
         self.clock = clock
         # Real seconds at the start of the latest key press, before anything else runs. The
@@ -661,18 +660,18 @@ class ParticipantWindow(QWidget):
         self.vas.show_scale(scale, self.text["vas"][scale])
         self._show(self.vas)
 
-    def show_vas_training(self, scale: str) -> None:
-        """The proportionality training for `scale` (SPEC.md 10.6): the scale as it is rated,
-        `training.<scale>` below it, then `training_continue`. Answered by the play button once
-        `training.vas_min_display_s` has passed, which emits `vas_training_confirmed`."""
-        self.vas.show_training(
-            scale,
-            self.text["vas"][scale],
-            TRAINING_PARAGRAPH_BREAK.join(
-                (self.text["training"][scale], self.text[TRAINING_CONTINUE])
-            ),
-            self.training_min_display_s,
-        )
+    def show_vas_training(self, scale: str, accepting: bool) -> None:
+        """The proportionality training for `scale` (SPEC.md 10.6): the scale as it is rated
+        with `training.<scale>` below it.
+
+        While the experimenter explains the anchors, that is all, and ▶ does nothing. Once they
+        have (`accepting`), `training_continue` follows the sentence and ▶ emits
+        `vas_training_confirmed`.
+        """
+        sentence = self.text["training"][scale]
+        if accepting:
+            sentence = TRAINING_PARAGRAPH_BREAK.join((sentence, self.text[TRAINING_CONTINUE]))
+        self.vas.show_training(scale, self.text["vas"][scale], sentence, accepting)
         self._show(self.vas)
 
     def _show(self, screen: QWidget, adjusting: bool = False, choosing: bool = False) -> None:

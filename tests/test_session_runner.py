@@ -25,7 +25,7 @@ from tatp.pinprick import BrushTrial, F40Fit, LongProtocol, PinprickTrial, ladde
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import Session
-from tatp.session_runner import SessionRunner, Upcoming
+from tatp.session_runner import SessionRunner, TouchBlock, Upcoming
 from tatp.touchcal_maths import Delivery
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -284,7 +284,9 @@ def test_each_scale_is_trained_once_before_its_first_rating(finished):
     assert names.index(("vas_training_confirmed", "pleasantness")) < first_adjustment
     for scale in ("intensity", "pain", "pleasantness"):
         shown = names.index(("vas_training_shown", scale))
-        assert shown < names.index(("vas_training_confirmed", scale))
+        explained = names.index(("vas_training_explained", scale))
+        assert events[explained]["origin"] == "experimenter"
+        assert shown < explained < names.index(("vas_training_confirmed", scale))
         assert names.index(("vas_training_confirmed", scale)) < names.index(
             ("rating_cued", scale)
         ), f"{scale} was rated before its training"
@@ -306,6 +308,27 @@ def test_training_is_given_only_in_the_configured_sessions(app, loaded, tmp_path
             second.close()
     finally:
         first.close()
+
+
+def test_an_empty_session_list_means_no_training(app, loaded, tmp_path):
+    study1 = {**loaded.study1,
+              "training": {**loaded.study1["training"], "vas_proportionality_sessions": []}}
+    config = cfg.Config(**{**make_config(loaded, tmp_path).__dict__, "study1": study1})
+    session = Session(config, "01", 1, "SM", EXAMPLES, rng_seed=7)
+    try:
+        assert not any(session.vas_training_due(s) for s in session.trained_scales)
+    finally:
+        session.close()
+
+
+def test_a_touch_block_refuses_to_run_a_scale_never_trained(app, loaded, tmp_path):
+    """SPEC.md 10.6: a touch scale the calibration did not train is a defect, not a rating."""
+    runner = make_runner(loaded, tmp_path)
+    try:
+        with pytest.raises(AssertionError, match="never trained"):
+            TouchBlock(runner.rig, runner.reference_channel)
+    finally:
+        runner.session.close()
 
 
 def test_the_garment_is_off_for_the_rekindle_and_on_again_after(finished):

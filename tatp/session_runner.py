@@ -217,6 +217,12 @@ class TouchBlock(Procedure):
         )
         self.channel = channel
         self.done_count = 0
+        # Stage boundary (CLAUDE.md). No VAS training here: every touch scale was trained
+        # during the touch calibration (SPEC.md 10.6), so the intervention never contains it.
+        # A scale added to the block without being trained there is a defect, stopped here
+        # before the block begins rather than rated untrained.
+        untrained = [s for s in self.plan if self.session.vas_training_due(s)]
+        assert not untrained, f"touch block scales {untrained} were never trained"
 
     def begin(self) -> None:
         def prepare() -> None:
@@ -224,8 +230,6 @@ class TouchBlock(Procedure):
             self.experimenter.set_instruction(self.experimenter.text["instructions"]["ready"])
             self.experimenter.refresh()
 
-        # No VAS training here: every touch scale was trained during the touch calibration
-        # (SPEC.md 10.6), so the intervention never contains it.
         self.await_proceed(self._next, prepare)
 
     def _next(self) -> None:

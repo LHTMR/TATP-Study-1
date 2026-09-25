@@ -202,20 +202,22 @@ def test_the_pain_training_comes_before_the_first_application(app, loaded, tmp_p
         protocol = _long(made)
         done = _start(protocol)
         _spin(lambda: participant.stack.currentWidget() is participant.vas)
-        assert participant.vas.training and participant.vas.scale == "pain"
+        vas = participant.vas
+        assert vas.training and vas.scale == "pain" and not vas.training_accepting
         assert "warning_cue" not in _events(made.session), "no stimulus before the training"
-
-        def dismissed() -> bool:
-            # ▶ is ignored until the minimum reading time has passed, so pressed until it is.
-            _press(participant.vas, "period")
-            return not participant.vas.training or (
-                participant.stack.currentWidget() is not participant.vas
-            )
-
-        _spin(dismissed)
+        _press(vas, "period")
+        assert "vas_training_confirmed" not in _events(made.session), (
+            "▶ dismissed the training before the experimenter's go"
+        )
+        # The anchors explained aloud; the experimenter's go.
+        made.experimenter.proceed_requested.emit()
+        assert vas.training_accepting
+        _press(vas, "period")
         _drive(protocol, done)
         events = _events(made.session)
         assert events.count("vas_training_confirmed") == 1
+        assert events.index("vas_training_shown") < events.index("vas_training_explained")
+        assert events.index("vas_training_explained") < events.index("vas_training_confirmed")
         assert events.index("vas_training_confirmed") < events.index("warning_cue")
     finally:
         made.session.close()

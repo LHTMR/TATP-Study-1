@@ -123,6 +123,11 @@ class Virtual:
             return
         trial = self.current()
         if trial is None:
+            vas = window.vas
+            explaining = vas.training and not vas.training_accepting
+            if window.stack.currentWidget() is vas and explaining:
+                # The experimenter has explained the anchors: their go (SPEC.md 10.6).
+                rig.experimenter.proceed_requested.emit()
             return
         self.before_step(trial)
         if interruptions.active is not None or trial is not self.current():

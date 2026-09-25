@@ -343,7 +343,8 @@ class VirtualParticipant(QObject):
     def _token_for(self, screen: QWidget) -> tuple:
         window = self.window
         if screen is window.vas:
-            return (screen, window.vas.scale, window.vas.training, window.vas.state.cue_iso)
+            vas = window.vas
+            return (screen, vas.scale, vas.training, vas.training_accepting, vas.state.cue_iso)
         if screen is window.control:
             return (screen, window.control.target, id(window.control))
         if screen is window.choice:
@@ -411,12 +412,15 @@ class VirtualParticipant(QObject):
         """A different screen is up. Per-screen state an adversary keeps is reset here."""
 
     def on_vas(self) -> None:
-        if self.window.vas.training:
-            # The proportionality training (SPEC.md 10.6): read, then ▶, pressed again on each
-            # look until the screen has been up long enough to accept it. Nothing is rated.
-            self.tap(Action.CONFIRM)
-            return
         if self._handled:
+            return
+        vas = self.window.vas
+        if vas.training:
+            # The proportionality training (SPEC.md 10.6): listen to the experimenter, and
+            # press ▶ once the continue line shows. Nothing is rated.
+            if vas.training_accepting:
+                self._handled = True
+                self.tap(Action.CONFIRM)
             return
         self._handled = True
         scale = self.window.vas.scale

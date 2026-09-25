@@ -51,9 +51,6 @@ from tatp.units import MS_PER_S
 
 # Config keys and controlled-vocabulary values, not wording.
 INTENSITY_SCALE = "intensity"
-PLEASANTNESS_SCALE = "pleasantness"
-# The touch scales trained at the start of the calibration, in the order they are trained.
-TRAINED_TOUCH_SCALES = (INTENSITY_SCALE, PLEASANTNESS_SCALE)
 ANCHOR_STAGE = "anchor"
 MATCH_STAGE = "channel_match"
 PLEASANTNESS_STAGE = "pleasantness"
@@ -1142,12 +1139,18 @@ class TouchCalibration(Procedure):
 
     def begin(self) -> None:
         self.session.set_phase(TOUCH_CALIBRATION)
-        # SPEC.md 10.6, Bilaga 1 3.9: the training for both touch scales, during touch
+        # SPEC.md 10.6, Bilaga 1 3.9: the training for the touch scales, during touch
         # calibration, before step 1 -- whose adjustments already ask for the intensity scale's
-        # anchors, so that is the scale's first use. The garment is off for it. A re-run of
-        # steps 1 and 2 finds it already given.
+        # anchors, so that is the scale's first use. The touch scales are the touch block's
+        # repeated ones, in their order, that have a training sentence; `TouchBlock` asserts
+        # none is left untrained. The garment is off for it. A re-run of steps 1 and 2 finds it
+        # already given.
+        touch_scales = [
+            scale for scale in self.session.config.study1["touch_block"]["repeated_scales"]
+            if scale in self.session.trained_scales
+        ]
         self.session.garment.stop()
-        self.train_then(TRAINED_TOUCH_SCALES, self._start_run)
+        self.train_then(touch_scales, self._start_run)
 
     def _start_run(self) -> None:
         self.run_index += 1

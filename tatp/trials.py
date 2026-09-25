@@ -21,9 +21,8 @@ from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 
-# A `log` event name (docs/DATA_SCHEMA.md) and an experimenter text key, not wording.
-VAS_TRAINING_SHOWN = "vas_training_shown"
-VAS_TRAINING_INSTRUCTION = "vas_training"
+# An experimenter text key, not wording.
+VAS_TRAINING_WAIT_INSTRUCTION = "vas_training_wait"
 
 
 class Trial(QObject):
@@ -223,11 +222,13 @@ class MessageConfirm(Trial):
 
 
 class VasTraining(Trial):
-    """One scale's proportionality training (SPEC.md 10.6), dismissed with the play button.
+    """The second half of one scale's proportionality training (SPEC.md 10.6): the anchors
+    have been explained, so the continue line is up and the play button dismisses it.
 
-    `vas_training_shown` and `vas_training_confirmed` carry the scale in `detail`, and the
-    second is what a resume reads to know the training was given (`tatp/resume.py`). Nothing
-    here reads the condition: the screen is the same in every one (SPEC.md 16).
+    The first half -- the screen without the continue line, while the experimenter explains
+    the anchors -- is `Procedure.train_then`'s wait for the experimenter.
+    `vas_training_confirmed` carries the scale in `detail` and is what a resume reads to know
+    the training was given (`tatp/resume.py`). Nothing here reads the condition (SPEC.md 16).
     """
 
     def __init__(self, session, participant, experimenter, scale: str):
@@ -236,9 +237,8 @@ class VasTraining(Trial):
 
     def start(self) -> None:
         self.listen(self.participant.vas_training_confirmed, self._confirmed)
-        self.participant.show_vas_training(self.scale)
-        self.instruct(VAS_TRAINING_INSTRUCTION)
-        self.session.log(VAS_TRAINING_SHOWN, detail=self.scale)
+        self.participant.show_vas_training(self.scale, accepting=True)
+        self.instruct(VAS_TRAINING_WAIT_INSTRUCTION)
 
     def _confirmed(self) -> None:
         self.session.vas_trained.add(self.scale)

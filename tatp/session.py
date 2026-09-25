@@ -200,9 +200,13 @@ class Session:
         training_sessions = config.study1["training"]["vas_proportionality_sessions"]
         # Stage boundary (CLAUDE.md): a session number no session has would never train.
         n_sessions = int(config.study1["design"]["n_sessions"])
-        assert max(training_sessions) <= n_sessions, (
-            f"study1.yaml: training.vas_proportionality_sessions {training_sessions} names a "
-            f"session after the last, {n_sessions}"
+        # An empty list is valid: no training in any session.
+        assert all(
+            isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= n_sessions
+            for n in training_sessions
+        ), (
+            f"study1.yaml: training.vas_proportionality_sessions {training_sessions} names "
+            f"something that is not a session 1..{n_sessions}"
         )
         self.vas_training_this_session = session_number in training_sessions
         # Every key is a scale: `config.load` refuses one that is not.

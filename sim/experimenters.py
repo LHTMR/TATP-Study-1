@@ -53,6 +53,8 @@ SCENARIO_ENDED = "validator: the scenario's error path is over"
 PROCEED_INSTRUCTIONS = (
     "fit_garment", "thermode_start", "capsaicin_apply", "capsaicin_remove",
     "intervention_start", "thermode_rekindle", "ready", "touchcal_uneven", "earplugs",
+    # The VAS training: the anchors explained aloud, then the go (SPEC.md 10.6).
+    "vas_training",
 )
 
 

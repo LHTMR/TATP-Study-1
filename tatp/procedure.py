@@ -57,6 +57,11 @@ from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow, RemoteKeyRouter
 from tatp.units import MS_PER_S
 
+# `log` event names (docs/DATA_SCHEMA.md) and an experimenter text key, not wording.
+VAS_TRAINING_SHOWN = "vas_training_shown"
+VAS_TRAINING_EXPLAINED = "vas_training_explained"
+VAS_TRAINING_INSTRUCTION = "vas_training"
+
 
 class Rig(QObject):
     """The session, both windows, the interruptions and the pattern clock, held together."""
@@ -217,18 +222,38 @@ class Procedure(QObject):
         """The proportionality training for each of `scales` still due, then `then` (10.6).
 
         Called by a procedure before the first stimulus of a run that rates on those scales, so
-        a training screen never falls between a stimulus and its rating. Each screen is a step,
-        so an interruption during one shows it again; once confirmed it is not shown again this
-        session (`Session.vas_training_due`).
+        a training screen never falls between a stimulus and its rating. Each scale is two
+        steps, so an interruption repeats the one it was in:
+
+        1. The scale and its sentence, with ▶ doing nothing, while the experimenter explains
+           the anchors aloud (Bilaga 1 3.6.1, 3.9); their go is logged `vas_training_explained`.
+        2. `VasTraining`: the continue line appears and ▶ dismisses the screen.
+
+        Once confirmed it is not shown again this session (`Session.vas_training_due`).
         """
         due = [scale for scale in dict.fromkeys(scales) if self.session.vas_training_due(scale)]
         if not due:
             then()
             return
-        self.run_trial(
-            lambda: VasTraining(self.session, self.participant, self.experimenter, due[0]),
-            lambda _: self.train_then(due[1:], then),
-        )
+        scale = due[0]
+
+        def show() -> None:
+            self.participant.show_vas_training(scale, accepting=False)
+            self.experimenter.set_instruction(
+                self.experimenter.text["instructions"][VAS_TRAINING_INSTRUCTION]
+            )
+            self.experimenter.set_status("")
+            self.experimenter.refresh()
+            self.session.log(VAS_TRAINING_SHOWN, detail=scale)
+
+        def explained() -> None:
+            self.session.log(VAS_TRAINING_EXPLAINED, origin="experimenter", detail=scale)
+            self.run_trial(
+                lambda: VasTraining(self.session, self.participant, self.experimenter, scale),
+                lambda _: self.train_then(due[1:], then),
+            )
+
+        self.await_proceed(explained, show)
 
     def wait(self, seconds: float, then: Callable[[], None]) -> None:
         """Session-paced time: scaled by the clock, and restarted if interrupted."""

@@ -104,7 +104,10 @@ instructions:
   response_received: Svar mottaget.
   # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. Övningen i proportionalitet på
   # VAS (SPEC.md 10.6), före en skalas första skattning; densamma i alla betingelser.
-  vas_training: 'Övning på skattningsskalan: förklara etiketterna längs linjen högt, och vänta sedan tills deltagaren trycker på ▶.'
+  vas_training: 'Övning på skattningsskalan: förklara etiketterna längs linjen högt, och tryck sedan på Nästa steg.'
+  # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. Efter det Nästa steg, medan
+  # deltagarens skärm ber om ▶.
+  vas_training_wait: 'Övning på skattningsskalan: väntar på att deltagaren trycker på ▶.'
   # Förberedelser och beröringskalibrering (SPEC.md 9, 10.7, 10.9). Ingen nämner ett mönster
   # eller en betingelse.
   masking_check: 'Ljudinställning: deltagaren ställer in brusnivån mot plagget.'

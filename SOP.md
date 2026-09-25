@@ -386,15 +386,18 @@ session, once per scale, before that scale is first used:
 
 The intervention never contains training.
 
-The participant sees the scale as it will be rated, with no marker, and a sentence below it:
-*a mark twice as far along the line means it was twice as painful* (or *intense*, or
-*pleasant*), then **Press ▶ to continue**. The two large buttons do nothing on this screen,
-and ▶ is ignored for the first 3 seconds (`training.vas_min_display_s`), so a press meant for
-the screen before cannot skip it. Your screen shows **Rating scale training: explain the labels
-along the line aloud, then wait for the participant to press ▶.** Every time, read out each
-label on the participant's screen and where it sits on the line (Bilaga 1 §3.6.1, §3.9 ask
-for instructions on the anchors), then wait. Do not apply a filament until your screen shows
-the application instruction. The relaxation and alertness questions have no training. After a
+For each scale:
+
+1. The participant sees the scale as it will be rated, with no marker, and a sentence below
+   it: *a mark twice as far along the line means it was twice as painful* (or *intense*, or
+   *pleasant*). No button does anything on it yet. Your screen shows **Rating scale training:
+   explain the labels along the line aloud, then press Next step.**
+2. Every time, read out each label on the participant's screen and where it sits on the line
+   (Bilaga 1 §3.6.1, §3.9 ask for instructions on the anchors). Then press **Next step**.
+3. **Press ▶ to continue** appears under the sentence, and your screen shows **Rating scale
+   training: waiting for the participant to press ▶.** The participant presses ▶.
+
+Do not apply a filament until your screen shows the application instruction. The relaxation and alertness questions have no training. After a
 crash, a resumed session does not repeat training already given in that session.
 
 ---

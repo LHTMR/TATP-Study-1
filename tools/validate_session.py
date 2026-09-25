@@ -93,6 +93,7 @@ from tatp.clock import ISO_FORMAT  # noqa: E402
 from tatp.config import CONFIG_DIR, REPO_ROOT, hash_files  # noqa: E402
 from tatp.datafiles import parse_schema  # noqa: E402
 from tatp.pinprick import PAIN_SCALE, prior_for  # noqa: E402
+from tatp.procedure import VAS_TRAINING_EXPLAINED  # noqa: E402
 from tatp.resume import VAS_TRAINING_CONFIRMED  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
 from tatp.units import MS_PER_S, S_PER_MIN  # noqa: E402
@@ -1610,7 +1611,8 @@ def check_session_two_starts_from_session_ones_estimate(runs):
 
 def check_vas_training_once_before_first_rating(runs):
     """SPEC.md 10.6: each trained scale's training is given once per session in which it is
-    given, before that scale's first rating, never inside the intervention, and never in a
+    given, before that scale's first rating, confirmed only after the experimenter's go that
+    the anchors were explained, never inside the intervention, and never in a
     session it is not configured for. A resumed session is read together with the crashed one
     it continues, since the training is not repeated."""
     failures = []
@@ -1626,11 +1628,17 @@ def check_vas_training_once_before_first_rating(runs):
         sessions = run.config.study1["training"]["vas_proportionality_sessions"]
         due = int(run.session["session_number"]) in sessions
         given: list[str] = []
+        explained: set[str] = set()
         rated_untrained: set[str] = set()
         for row in events:
             scale = row["detail"]
-            if row["event"] == VAS_TRAINING_CONFIRMED:
+            if row["event"] == VAS_TRAINING_EXPLAINED:
+                explained.add(scale)
+            elif row["event"] == VAS_TRAINING_CONFIRMED:
                 given.append(scale)
+                if scale not in explained:
+                    failures.append(f"{run.name}: {scale} confirmed before the anchors were "
+                                    f"explained")
                 if row["phase"] == "intervention":
                     failures.append(f"{run.name}: {scale} trained inside the intervention")
             elif (row["event"] == "rating_cued" and scale in trained and due

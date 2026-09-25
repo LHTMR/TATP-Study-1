@@ -431,17 +431,12 @@ def test_the_text_block_clears_the_scale(by_language, scale, language):
 TRAINED_SCALES = ("pain", "intensity", "pleasantness")
 
 
-MIN_DISPLAY_S = 3.0
-
-
-def _show_training(widget, config, scale, min_display_s=0.0):
+def _show_training(widget, config, scale, accepting=True):
     text = config.participant_text
-    widget.show_training(
-        scale,
-        text["vas"][scale],
-        f"{text['training'][scale]}\n\n{text['training_continue']}",
-        min_display_s,
-    )
+    sentence = text["training"][scale]
+    if accepting:
+        sentence = f"{sentence}\n\n{text['training_continue']}"
+    widget.show_training(scale, text["vas"][scale], sentence, accepting)
 
 
 def test_every_trained_scale_has_its_sentence_in_both_languages(configs):
@@ -462,22 +457,18 @@ def test_a_training_key_that_is_not_a_scale_is_refused(tmp_path):
         cfg.load("en", "en", config_dir=tmp_path / "config")
 
 
-def test_play_is_ignored_until_the_training_has_been_up_long_enough(widget, loaded):
+def test_play_is_ignored_until_the_anchors_have_been_explained(widget, loaded):
+    """While the experimenter explains, ▶ does nothing; after their go it dismisses."""
     confirmed = []
     widget.training_confirmed.connect(lambda: confirmed.append(1))
-    clock = widget.state.clock
-    _show_training(widget, loaded, "pain", MIN_DISPLAY_S)
+    _show_training(widget, loaded, "pain", accepting=False)
+    assert loaded.participant_text["training_continue"] not in widget.training
     _press(widget, "period")
-    clock.now += MIN_DISPLAY_S / 2
-    _press(widget, "period")
-    assert confirmed == [], "a press before the minimum reading time dismissed the training"
-    clock.now += MIN_DISPLAY_S / 2
+    assert confirmed == [], "▶ dismissed the training before the anchors were explained"
+    _show_training(widget, loaded, "pain", accepting=True)
+    assert widget.training.endswith(loaded.participant_text["training_continue"])
     _press(widget, "period")
     assert confirmed == [1]
-
-
-def test_the_minimum_reading_time_is_configured(loaded):
-    assert float(loaded.study1["training"]["vas_min_display_s"]) > 0
 
 
 @pytest.mark.parametrize("scale", TRAINED_SCALES)

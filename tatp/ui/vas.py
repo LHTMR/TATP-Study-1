@@ -202,8 +202,10 @@ class VasWidget(QWidget):
 
     **The training screen** (SPEC.md 10.6, `show_training`) is the same scale, drawn exactly as
     it is rated, with the proportionality sentence below it. It is not a rating: the marker
-    stays hidden, the two large buttons do nothing, and the play button emits
-    `training_confirmed`. The emergency stop works as on every screen.
+    stays hidden and the two large buttons do nothing. The play button does nothing either
+    until the protocol makes it the answer (`accepting`, once the experimenter has explained
+    the anchors), and then emits `training_confirmed`. The emergency stop works as on every
+    screen.
     """
 
     confirmed = Signal(object)
@@ -234,8 +236,8 @@ class VasWidget(QWidget):
         self.anchors: list[dict] = []
         # The training sentence while the training screen is up; empty on a rating.
         self.training = ""
-        # Session time from which ▶ dismisses the training screen.
-        self._training_ready_s = 0.0
+        # Whether ▶ dismisses the training screen yet.
+        self.training_accepting = False
 
         self._repeat_delay_ms = int(round(float(vas_config["hold_repeat_delay_s"]) * MS_PER_S))
         self._repeat_interval_ms = int(
@@ -255,20 +257,17 @@ class VasWidget(QWidget):
         self.state.cue()
         self.update()
 
-    def show_training(
-        self, scale: str, text: dict, training: str, min_display_s: float
-    ) -> None:
+    def show_training(self, scale: str, text: dict, training: str, accepting: bool) -> None:
         """The scale as `show_scale` draws it, uncued, with `training` below it (SPEC.md 10.6).
 
-        Uncued, so no reaction time runs and no press can reveal the marker: this screen asks
-        for nothing but the play button, and ignores that until it has been up for
-        `min_display_s` of session time, so a press meant for the screen before cannot skip it.
+        Uncued, so no reaction time runs and no press can reveal the marker. ▶ dismisses it
+        only when `accepting`; before that the screen asks for nothing at all.
         """
         self._set_scale(scale, text, training)
+        self.training_accepting = accepting
         self._held = None
         self._repeat.stop()
         self.state.reset()
-        self._training_ready_s = self.state.clock.elapsed_s() + min_display_s
         self.update()
 
     def _set_scale(self, scale: str, text: dict, training: str) -> None:
@@ -278,6 +277,7 @@ class VasWidget(QWidget):
         self.statement = text.get("statement", "")
         self.anchors = list(text["anchors"])
         self.training = training
+        self.training_accepting = False
 
     # -- input -------------------------------------------------------------------------
 
@@ -295,12 +295,9 @@ class VasWidget(QWidget):
         if action is Action.EMERGENCY_STOP:
             self.emergency_stop.emit()
         elif self.training:
-            # Nothing but the play button means anything here, and only once the sentence has
-            # had time to be read; the marker stays hidden.
-            if (
-                action is Action.CONFIRM
-                and self.state.clock.elapsed_s() >= self._training_ready_s
-            ):
+            # Nothing but the play button means anything here, and only once the screen is
+            # accepting it; the marker stays hidden.
+            if action is Action.CONFIRM and self.training_accepting:
                 self.training_confirmed.emit()
         elif action is Action.CONFIRM:
             self._confirm()
