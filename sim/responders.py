@@ -266,7 +266,6 @@ class VirtualParticipant(QObject):
         self.brush_felt = False
         self.seen_text: set[str] = set()
         self.ratings: list[tuple[str, float]] = []
-        self.trainings_seen: list[str] = []
         self.adjustments_seen = 0
 
         self._token: tuple | None = None
@@ -412,14 +411,14 @@ class VirtualParticipant(QObject):
         """A different screen is up. Per-screen state an adversary keeps is reset here."""
 
     def on_vas(self) -> None:
+        if self.window.vas.training:
+            # The proportionality training (SPEC.md 10.6): read, then ▶, pressed again on each
+            # look until the screen has been up long enough to accept it. Nothing is rated.
+            self.tap(Action.CONFIRM)
+            return
         if self._handled:
             return
         self._handled = True
-        if self.window.vas.training:
-            # The proportionality training (SPEC.md 10.6): read, then ▶. Nothing is rated.
-            self.trainings_seen.append(self.window.vas.scale)
-            self.tap(Action.CONFIRM)
-            return
         scale = self.window.vas.scale
         self.answer_vas(scale, self.rating_for(scale))
 

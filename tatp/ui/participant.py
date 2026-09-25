@@ -68,9 +68,9 @@ EMERGENCY_STOP_SCREEN = "emergency_stop"
 # The one screen that draws the stop button, because pointing at it is its purpose (SPEC.md
 # 10.9). A key in the participant text file, not wording.
 STOP_REHEARSAL_SCREEN = "stop_rehearsal"
-# The `training` key that is the continue line rather than a scale's sentence, and the blank
-# line that sets it apart as the message screens set theirs.
-TRAINING_CONTINUE = "continue"
+# The participant text key of the training screen's continue line, and the blank line that
+# sets it apart as the message screens set theirs.
+TRAINING_CONTINUE = "training_continue"
 TRAINING_PARAGRAPH_BREAK = "\n\n"
 
 MESSAGE_POINT_SIZE = 26
@@ -503,6 +503,7 @@ class ParticipantWindow(QWidget):
     ):
         super().__init__(parent)
         self.text = config.participant_text
+        self.training_min_display_s = float(config.study1["training"]["vas_min_display_s"])
         self.responder = responder
         self.clock = clock
         # Real seconds at the start of the latest key press, before anything else runs. The
@@ -662,13 +663,15 @@ class ParticipantWindow(QWidget):
 
     def show_vas_training(self, scale: str) -> None:
         """The proportionality training for `scale` (SPEC.md 10.6): the scale as it is rated,
-        `training.<scale>` below it, then `training.continue`. Answered by the play button,
-        which emits `vas_training_confirmed`."""
-        training = self.text["training"]
+        `training.<scale>` below it, then `training_continue`. Answered by the play button once
+        `training.vas_min_display_s` has passed, which emits `vas_training_confirmed`."""
         self.vas.show_training(
             scale,
             self.text["vas"][scale],
-            TRAINING_PARAGRAPH_BREAK.join((training[scale], training[TRAINING_CONTINUE])),
+            TRAINING_PARAGRAPH_BREAK.join(
+                (self.text["training"][scale], self.text[TRAINING_CONTINUE])
+            ),
+            self.training_min_display_s,
         )
         self._show(self.vas)
 

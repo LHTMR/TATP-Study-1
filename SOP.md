@@ -331,8 +331,8 @@ on their own screen. You watch, and answer only when the software asks you to.
    - **Touch calibration: the participant is asked whether the movement feels even.**
    - **Touch calibration, step 6: the participant chooses a kind of touch.**
 
-   Step 6 happens at every visit. Before step 2's first touch, the participant is shown how
-   to use the intensity scale (VAS training, section 6).
+   Step 6 happens at every visit. Before step 1, with the garment off, the participant is
+   trained on the intensity scale and then the pleasantness scale (VAS training, section 6).
 
 2. **When the software asks you to decide:**
 
@@ -378,22 +378,24 @@ Each measure begins with **Ready. Press Next step when the participant is ready.
 **Next step** when you and the participant are ready.
 
 **VAS training** (Bilaga 1 §3.6.1, §3.9; SPEC.md §10.6). The software gives it, in every
-session, once per scale, just before that scale is first used:
+session, once per scale, before that scale is first used:
 
-- the **intensity** scale at the start of the touch calibration's rating run (section 5),
-  after the adjustments and before the first rated touch;
-- the **pain** scale here, after you start the long protocol and before the first filament;
-- the **pleasantness** scale at the start of the first touch-rating block of the intervention.
+- the **intensity** scale, then the **pleasantness** scale, at the start of the touch
+  calibration (section 5), before step 1, with the garment off;
+- the **pain** scale here, after you start the long protocol and before the first filament.
+
+The intervention never contains training.
 
 The participant sees the scale as it will be rated, with no marker, and a sentence below it:
 *a mark twice as far along the line means it was twice as painful* (or *intense*, or
-*pleasant*), then **Press ▶ to continue**. The two large buttons do nothing on this screen.
-Your screen shows **The participant is reading how to use the rating scale. Wait until they
-press ▶.** Wait; do not apply a filament until the screen shows the application instruction.
-Bilaga 1 also asks for instructions on the anchors: explain them verbally while the scale is
-on the participant's screen, if the participant has questions. The relaxation and alertness
-questions have no training. After a crash, a resumed session does not repeat training already
-given in that session.
+*pleasant*), then **Press ▶ to continue**. The two large buttons do nothing on this screen,
+and ▶ is ignored for the first 3 seconds (`training.vas_min_display_s`), so a press meant for
+the screen before cannot skip it. Your screen shows **Rating scale training: explain the labels
+along the line aloud, then wait for the participant to press ▶.** Every time, read out each
+label on the participant's screen and where it sits on the line (Bilaga 1 §3.6.1, §3.9 ask
+for instructions on the anchors), then wait. Do not apply a filament until your screen shows
+the application instruction. The relaxation and alertness questions have no training. After a
+crash, a resumed session does not repeat training already given in that session.
 
 ---
 

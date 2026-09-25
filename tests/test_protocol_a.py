@@ -204,7 +204,15 @@ def test_the_pain_training_comes_before_the_first_application(app, loaded, tmp_p
         _spin(lambda: participant.stack.currentWidget() is participant.vas)
         assert participant.vas.training and participant.vas.scale == "pain"
         assert "warning_cue" not in _events(made.session), "no stimulus before the training"
-        _press(participant.vas, "period")
+
+        def dismissed() -> bool:
+            # ▶ is ignored until the minimum reading time has passed, so pressed until it is.
+            _press(participant.vas, "period")
+            return not participant.vas.training or (
+                participant.stack.currentWidget() is not participant.vas
+            )
+
+        _spin(dismissed)
         _drive(protocol, done)
         events = _events(made.session)
         assert events.count("vas_training_confirmed") == 1

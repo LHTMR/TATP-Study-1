@@ -239,8 +239,13 @@ training:
   # first use" -- a screen before each trained scale's first rating in a session (the scales
   # with a sentence under `training` in config/text/participant_*.yaml). The session numbers
   # it is given in: every session, once per scale per session, at its first use
-  # (docs/research/R34). An empty list gives none.
+  # (docs/research/R34).
   vas_proportionality_sessions: [1, 2, 3]
+  # Seconds a training screen is up before ▶ dismisses it, so the press that ended the step
+  # before, or one straight after, cannot skip it unread. A build decision about reading time,
+  # not a safety value; pilot-tunable. Session time, which is real time in the lab and only
+  # accelerated in the validator's simulated sessions.
+  vas_min_display_s: 3.0
 
 cues:
   # A visual warning cue precedes every stimulus (SPEC.md 10.5).

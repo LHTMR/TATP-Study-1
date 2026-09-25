@@ -59,11 +59,13 @@ training:
   pain: Ett märke dubbelt så långt ut på linjen betyder att det gjorde dubbelt så ont.
   intensity: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så intensiv.
   pleasantness: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så behaglig.
-  # DRAFT (LOG N7.T1): written by the build, not ethics-sourced
-  # Ingen skala: raden under varje skalas mening på övningsskärmen, som visar skalan som den
-  # skattas med meningen under (SPEC.md 10.6). Samma ord som den godkända "Tryck på ▶ för att
-  # fortsätta." i `stop_rehearsal_done` och `audio_setup.settled`.
-  continue: Tryck på ▶ för att fortsätta.
+
+# DRAFT (LOG N7.T1): written by the build, not ethics-sourced
+# Raden under varje skalas `training`-mening på övningsskärmen, som visar skalan som den skattas
+# med meningen under (SPEC.md 10.6). Utanför `training`, där varje nyckel måste vara en skala.
+# Samma ord som den godkända "Tryck på ▶ för att fortsätta." i `stop_rehearsal_done` och
+# `audio_setup.settled`.
+training_continue: Tryck på ▶ för att fortsätta.
 
 screens:
   # Godkänd 23 aug 2026. Ordvalen följer Bilaga 3a, som beskriver hudmätningen som "tunna

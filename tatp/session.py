@@ -200,13 +200,13 @@ class Session:
         training_sessions = config.study1["training"]["vas_proportionality_sessions"]
         # Stage boundary (CLAUDE.md): a session number no session has would never train.
         n_sessions = int(config.study1["design"]["n_sessions"])
-        assert all(isinstance(n, int) and 1 <= n <= n_sessions for n in training_sessions), (
+        assert max(training_sessions) <= n_sessions, (
             f"study1.yaml: training.vas_proportionality_sessions {training_sessions} names a "
-            f"session outside 1..{n_sessions}"
+            f"session after the last, {n_sessions}"
         )
         self.vas_training_this_session = session_number in training_sessions
-        text = config.participant_text
-        self.trained_scales = frozenset(text["training"]) & frozenset(text["vas"])
+        # Every key is a scale: `config.load` refuses one that is not.
+        self.trained_scales = frozenset(config.participant_text["training"])
 
         self.data_folder = Path(config.hardware["data"]["folder"])
         if not self.data_folder.is_absolute():

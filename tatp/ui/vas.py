@@ -234,6 +234,8 @@ class VasWidget(QWidget):
         self.anchors: list[dict] = []
         # The training sentence while the training screen is up; empty on a rating.
         self.training = ""
+        # Session time from which ▶ dismisses the training screen.
+        self._training_ready_s = 0.0
 
         self._repeat_delay_ms = int(round(float(vas_config["hold_repeat_delay_s"]) * MS_PER_S))
         self._repeat_interval_ms = int(
@@ -249,29 +251,33 @@ class VasWidget(QWidget):
 
     def show_scale(self, scale: str, text: dict) -> None:
         """Present one scale. `text` is the `vas.<scale>` block of the participant text file."""
-        self.scale = scale
-        self.question = text["question"]
-        self.statement = text.get("statement", "")
-        self.anchors = list(text["anchors"])
-        self.training = ""
+        self._set_scale(scale, text, "")
         self.state.cue()
         self.update()
 
-    def show_training(self, scale: str, text: dict, training: str) -> None:
+    def show_training(
+        self, scale: str, text: dict, training: str, min_display_s: float
+    ) -> None:
         """The scale as `show_scale` draws it, uncued, with `training` below it (SPEC.md 10.6).
 
         Uncued, so no reaction time runs and no press can reveal the marker: this screen asks
-        for nothing but the play button.
+        for nothing but the play button, and ignores that until it has been up for
+        `min_display_s` of session time, so a press meant for the screen before cannot skip it.
         """
+        self._set_scale(scale, text, training)
+        self._held = None
+        self._repeat.stop()
+        self.state.reset()
+        self._training_ready_s = self.state.clock.elapsed_s() + min_display_s
+        self.update()
+
+    def _set_scale(self, scale: str, text: dict, training: str) -> None:
+        """One place that says what a scale is drawn from, so the training draws it as rated."""
         self.scale = scale
         self.question = text["question"]
         self.statement = text.get("statement", "")
         self.anchors = list(text["anchors"])
         self.training = training
-        self._held = None
-        self._repeat.stop()
-        self.state.reset()
-        self.update()
 
     # -- input -------------------------------------------------------------------------
 
@@ -289,8 +295,12 @@ class VasWidget(QWidget):
         if action is Action.EMERGENCY_STOP:
             self.emergency_stop.emit()
         elif self.training:
-            # Nothing but the play button means anything here; the marker stays hidden.
-            if action is Action.CONFIRM:
+            # Nothing but the play button means anything here, and only once the sentence has
+            # had time to be read; the marker stays hidden.
+            if (
+                action is Action.CONFIRM
+                and self.state.clock.elapsed_s() >= self._training_ready_s
+            ):
                 self.training_confirmed.emit()
         elif action is Action.CONFIRM:
             self._confirm()

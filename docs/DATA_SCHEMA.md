@@ -128,7 +128,8 @@ The VAS proportionality training (§10.6) is two events, each with the scale in 
 button. The training was given exactly when `vas_training_confirmed` exists; `phase` and
 `block_index` say where. A resume reads `vas_training_confirmed` back so a resumed session does
 not give it again. It is given in the sessions `training.vas_proportionality_sessions` lists,
-once per scale, before that scale's first rating.
+once per scale: intensity then pleasantness at the start of `touch_calibration`, and pain in
+`pre_sensitisation` before the long protocol's first application. Never in the intervention.
 
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|

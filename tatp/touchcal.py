@@ -51,6 +51,9 @@ from tatp.units import MS_PER_S
 
 # Config keys and controlled-vocabulary values, not wording.
 INTENSITY_SCALE = "intensity"
+PLEASANTNESS_SCALE = "pleasantness"
+# The touch scales trained at the start of the calibration, in the order they are trained.
+TRAINED_TOUCH_SCALES = (INTENSITY_SCALE, PLEASANTNESS_SCALE)
 ANCHOR_STAGE = "anchor"
 MATCH_STAGE = "channel_match"
 PLEASANTNESS_STAGE = "pleasantness"
@@ -1139,7 +1142,12 @@ class TouchCalibration(Procedure):
 
     def begin(self) -> None:
         self.session.set_phase(TOUCH_CALIBRATION)
-        self._start_run()
+        # SPEC.md 10.6, Bilaga 1 3.9: the training for both touch scales, during touch
+        # calibration, before step 1 -- whose adjustments already ask for the intensity scale's
+        # anchors, so that is the scale's first use. The garment is off for it. A re-run of
+        # steps 1 and 2 finds it already given.
+        self.session.garment.stop()
+        self.train_then(TRAINED_TOUCH_SCALES, self._start_run)
 
     def _start_run(self) -> None:
         self.run_index += 1
@@ -1198,18 +1206,10 @@ class TouchCalibration(Procedure):
         n_catch = maths.catch_trial_count(
             len(amplitudes), float(self.touch["catch_trial_fraction"])
         )
-        plans = list(maths.estimation_plans(amplitudes, n_catch, self.session.rng))
-
-        def present() -> None:
-            self.experimenter.set_instruction(
-                self.experimenter.text["instructions"]["touchcal_estimation"]
-            )
-            self._present(plans)
-
-        # The run's first intensity rating is the scale's first use in the session (SPEC.md
-        # 10.6), and the training goes before its first stimulus, never between a stimulus and
-        # its rating. A re-run of steps 1 and 2 finds it already given.
-        self.train_then((INTENSITY_SCALE,), present)
+        self.experimenter.set_instruction(
+            self.experimenter.text["instructions"]["touchcal_estimation"]
+        )
+        self._present(list(maths.estimation_plans(amplitudes, n_catch, self.session.rng)))
 
     def _device_range(self) -> tuple[float, float]:
         return (float(self.session.config.hardware["adjustment"]["tap_step_kpa"]),

@@ -224,9 +224,9 @@ class TouchBlock(Procedure):
             self.experimenter.set_instruction(self.experimenter.text["instructions"]["ready"])
             self.experimenter.refresh()
 
-        # Before the block's first rating, the training for any of its scales not yet used this
-        # session (SPEC.md 10.6): in the first touch block, that is pleasantness.
-        self.await_proceed(lambda: self.train_then(self.plan, self._next), prepare)
+        # No VAS training here: every touch scale was trained during the touch calibration
+        # (SPEC.md 10.6), so the intervention never contains it.
+        self.await_proceed(self._next, prepare)
 
     def _next(self) -> None:
         if self.done_count == len(self.plan):

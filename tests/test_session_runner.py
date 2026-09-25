@@ -268,19 +268,20 @@ def test_touch_blocks_and_the_baseline_write_touch_ratings(finished):
 
 
 def test_each_scale_is_trained_once_before_its_first_rating(finished):
-    """SPEC.md 10.6: intensity at touch calibration, pain at pre-S, pleasantness in the first
-    touch block; relaxation and alertness have no training."""
+    """SPEC.md 10.6, Bilaga 1 3.9: intensity then pleasantness at the start of touch
+    calibration, before step 1; pain at pre-S; none in the intervention; relaxation and
+    alertness have no training."""
     events = _events(finished.session)
     confirmed = [r for r in events if r["event"] == "vas_training_confirmed"]
-    assert [r["detail"] for r in confirmed] == ["intensity", "pain", "pleasantness"]
+    assert [r["detail"] for r in confirmed] == ["intensity", "pleasantness", "pain"]
     assert [r["phase"] for r in confirmed] == [
-        "touch_calibration", "pre_sensitisation", "intervention"
+        "touch_calibration", "touch_calibration", "pre_sensitisation"
     ]
-    first_touch_block = next(r["block_index"] for r in _rows(finished.session, "touch_ratings")
-                             if r["block_index"])
-    assert confirmed[2]["block_index"] == first_touch_block
     assert all(r["origin"] == "participant" for r in confirmed)
     names = [(r["event"], r["detail"]) for r in events]
+    first_adjustment = next(i for i, r in enumerate(events)
+                            if r["event"] == "touch_calibration_run")
+    assert names.index(("vas_training_confirmed", "pleasantness")) < first_adjustment
     for scale in ("intensity", "pain", "pleasantness"):
         shown = names.index(("vas_training_shown", scale))
         assert shown < names.index(("vas_training_confirmed", scale))
@@ -294,11 +295,17 @@ def test_training_is_given_only_in_the_configured_sessions(app, loaded, tmp_path
               "training": {**loaded.study1["training"], "vas_proportionality_sessions": [1]}}
     config = cfg.Config(**{**make_config(loaded, tmp_path).__dict__, "study1": study1})
     first = Session(config, "01", 1, "SM", EXAMPLES, rng_seed=7)
-    second = Session(config, "01", 2, "SM", EXAMPLES, rng_seed=7)
-    assert first.vas_training_due("pain") and not second.vas_training_due("pain")
-    assert not first.vas_training_due("relaxation"), "no training text, no training"
-    first.vas_trained.add("pain")
-    assert not first.vas_training_due("pain")
+    try:
+        second = Session(config, "01", 2, "SM", EXAMPLES, rng_seed=7)
+        try:
+            assert first.vas_training_due("pain") and not second.vas_training_due("pain")
+            assert not first.vas_training_due("relaxation"), "no training text, no training"
+            first.vas_trained.add("pain")
+            assert not first.vas_training_due("pain")
+        finally:
+            second.close()
+    finally:
+        first.close()
 
 
 def test_the_garment_is_off_for_the_rekindle_and_on_again_after(finished):

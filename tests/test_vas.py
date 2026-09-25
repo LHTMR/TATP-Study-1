@@ -6,7 +6,10 @@ QT_QPA_PLATFORM=offscreen, which is what SPEC.md 17.1 requires of the whole suit
 
 from __future__ import annotations
 
+import shutil
+
 import pytest
+import yaml
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QFontMetrics, QKeyEvent
 from PySide6.QtWidgets import QApplication
@@ -428,19 +431,53 @@ def test_the_text_block_clears_the_scale(by_language, scale, language):
 TRAINED_SCALES = ("pain", "intensity", "pleasantness")
 
 
-def _show_training(widget, config, scale):
+MIN_DISPLAY_S = 3.0
+
+
+def _show_training(widget, config, scale, min_display_s=0.0):
     text = config.participant_text
-    training = text["training"]
     widget.show_training(
-        scale, text["vas"][scale], f"{training[scale]}\n\n{training['continue']}"
+        scale,
+        text["vas"][scale],
+        f"{text['training'][scale]}\n\n{text['training_continue']}",
+        min_display_s,
     )
 
 
 def test_every_trained_scale_has_its_sentence_in_both_languages(configs):
     """The scales the spec names, and no others: relaxation and alertness have none."""
     for config in configs.values():
-        text = config.participant_text
-        assert set(text["training"]) & set(text["vas"]) == set(TRAINED_SCALES)
+        assert set(config.participant_text["training"]) == set(TRAINED_SCALES)
+
+
+def test_a_training_key_that_is_not_a_scale_is_refused(tmp_path):
+    """A misspelt key would be a scale silently never trained (SPEC.md 10.6)."""
+    shutil.copytree(cfg.CONFIG_DIR, tmp_path / "config")
+    for language in ("sv", "en"):  # both, so the languages still share their keys
+        path = tmp_path / "config" / "text" / f"participant_{language}.yaml"
+        text = yaml.safe_load(path.read_text(encoding="utf-8"))
+        text["training"]["painn"] = text["training"].pop("pain")
+        path.write_text(yaml.safe_dump(text, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(cfg.ConfigError, match="painn"):
+        cfg.load("en", "en", config_dir=tmp_path / "config")
+
+
+def test_play_is_ignored_until_the_training_has_been_up_long_enough(widget, loaded):
+    confirmed = []
+    widget.training_confirmed.connect(lambda: confirmed.append(1))
+    clock = widget.state.clock
+    _show_training(widget, loaded, "pain", MIN_DISPLAY_S)
+    _press(widget, "period")
+    clock.now += MIN_DISPLAY_S / 2
+    _press(widget, "period")
+    assert confirmed == [], "a press before the minimum reading time dismissed the training"
+    clock.now += MIN_DISPLAY_S / 2
+    _press(widget, "period")
+    assert confirmed == [1]
+
+
+def test_the_minimum_reading_time_is_configured(loaded):
+    assert float(loaded.study1["training"]["vas_min_display_s"]) > 0
 
 
 @pytest.mark.parametrize("scale", TRAINED_SCALES)
