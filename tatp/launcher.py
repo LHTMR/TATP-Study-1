@@ -183,9 +183,14 @@ class SessionDialog(QDialog):
         # No default (docs/LOG.md N6.14): defaulting to config/patterns/examples/ would quietly
         # run the provisional mockups in place of the real patterns (open item 5).
         self.pattern_folder = line_edit(SIZE_BODY)
-        self.pattern_folder.setPlaceholderText(words["no_pattern_folder"])
+        self.pattern_folder.setPlaceholderText(words["choose"])
+        # Why it is empty, under the form while it is: as a placeholder it was cut off by the
+        # field. Gone once a folder is chosen, as a placeholder would be.
+        self.pattern_folder_hint = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
+        self.pattern_folder_hint.setText(words["no_pattern_folder"])
+        self.pattern_folder.textChanged.connect(self._pattern_folder_changed)
 
-        form = QFormLayout()
+        self.form = form = QFormLayout()
         form.setVerticalSpacing(ITEM_GAP_PX)
         for key, widget in (
             ("participant_code", self.participant),
@@ -200,6 +205,7 @@ class SessionDialog(QDialog):
             caption = label(SIZE_SMALL, colour=SECONDARY)
             caption.setText(words[key])
             form.addRow(caption, widget)
+        form.addRow("", self.pattern_folder_hint)
 
         self.report = label(SIZE_BODY, wrap=True)
         self.check_button = button(words["check"], SIZE_BODY)
@@ -225,6 +231,8 @@ class SessionDialog(QDialog):
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         buttons.addWidget(self.close_button)
+        # Apart from the two that go forward, so Close is not pressed for Check.
+        buttons.addSpacing(GROUP_GAP_PX)
         buttons.addWidget(self.check_button)
         buttons.addWidget(self.start_button)
 
@@ -263,6 +271,10 @@ class SessionDialog(QDialog):
         chosen = QFileDialog.getExistingDirectory(self, "", field.text())
         if chosen:
             field.setText(chosen)
+
+    def _pattern_folder_changed(self, text: str) -> None:
+        # The whole row, not just the label, so no empty row and its gap is left behind.
+        self.form.setRowVisible(self.pattern_folder_hint, not text.strip())
 
     def _stale(self, *_) -> None:
         self.start_button.setEnabled(False)
@@ -527,7 +539,9 @@ class LauncherWindow(QWidget):
             self.designer.activateWindow()
             return self.designer
         self.designer = DesignerWindow(self.text, self.config.hardware)
-        self.designer.show()
+        # The whole screen: sized for a desktop, it opened on the lab laptop with its lower
+        # half off the screen (S, 24 Sep 2026).
+        self.designer.showMaximized()
         return self.designer
 
     def open_session_dialog(self) -> SessionDialog:
@@ -557,6 +571,12 @@ class LauncherWindow(QWidget):
         )
 
     def _start_session(self, config: cfg.Config, args: argparse.Namespace) -> None:
+        # Before the build, which connects the session's garment: a designer playing on the
+        # prototype sleeve holds its serial port, and Windows would refuse the session a
+        # second handle on it.
+        if self.designer is not None:
+            self.designer.stop()
+            self.designer.release_garment()
         self.runner = self._build(config, args)
         # A designer left open would show pattern names beside a running session (SPEC.md 16).
         if self.designer is not None:

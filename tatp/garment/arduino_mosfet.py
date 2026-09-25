@@ -34,6 +34,9 @@ HANDSHAKE = "hello"
 SET_STATE = "setstate:0x{mask:x}"  # lower-case hex; the firmware's parser refuses A-F
 LINE_END = "\n"
 ENCODING = "ascii"
+# Written into a lost link's fault row: the last mask the shift register latched may still be
+# on, and nothing in the data would otherwise say so.
+OUTPUTS_UNKNOWN = "Link lost, outputs unknown until reconnected"
 
 
 class ArduinoMosfetGarment(GarmentController):
@@ -50,17 +53,7 @@ class ArduinoMosfetGarment(GarmentController):
         self.baud = int(prototype["baud"])
         self.boot_s = float(prototype["boot_s"])
         self.timeout_s = float(self.hardware["garment"]["connect_timeout_s"])
-        bits = [int(bit) for bit in prototype["channel_bits"]]
-        # Stage boundary (CLAUDE.md): a channel with no bit, or two channels on one bit, would
-        # be a stimulus the software records but the sleeve never delivers.
-        assert len(bits) == self.n_channels, (
-            f"hardware.yaml: garment.prototype.channel_bits has {len(bits)} bits for "
-            f"{self.n_channels} channels"
-        )
-        assert len(set(bits)) == len(bits), (
-            f"hardware.yaml: garment.prototype.channel_bits repeats a bit: {bits}"
-        )
-        self.bit_for = dict(zip(self.channels(), bits, strict=True))
+        self.bit_for = channel_wiring(prototype["channel_bits"])
         self._port = None
         self._mask = 0
 
@@ -68,28 +61,31 @@ class ArduinoMosfetGarment(GarmentController):
 
     def _connect(self) -> None:
         self._port = self.serial_factory(self.port_name, self.baud, timeout=self.timeout_s)
-        # Opening the port resets the Arduino; anything sent while it boots is lost.
-        time.sleep(self.boot_s)
-        self._port.reset_input_buffer()
-        self._mask = 0
-        self._write_state()
-        self._send(HANDSHAKE)
-        reply = self._port.readline().decode(ENCODING, errors="replace").strip()
+        try:
+            # Opening the port resets the Arduino; anything sent while it boots is lost.
+            time.sleep(self.boot_s)
+            self._port.reset_input_buffer()
+            self._mask = 0
+            self._write_state()
+            self._send(HANDSHAKE)
+            reply = self._port.readline().decode(ENCODING, errors="replace").strip()
+        except (serial.SerialException, GarmentError):
+            # Let the port go before the failure travels on: a handle left open is a port
+            # Windows refuses to the next attempt, the designer's retry or the session's.
+            self._drop_port()
+            raise
         if reply != HANDSHAKE:
-            self._port.close()
-            self._port = None
+            self._drop_port()
             raise GarmentError(
                 f"{self.port_name} did not answer {HANDSHAKE!r} (replied {reply!r}); it is not "
                 f"the prototype's controller, or its firmware is older than the handshake"
             )
 
     def _disconnect(self) -> None:
-        if self._port is None:
-            return
-        self._mask = 0
-        self._write_state()
-        self._port.close()
-        self._port = None
+        # Every output off, then the port let go; a link already lost has nothing to zero
+        # and no port to close (`_stop`).
+        self._stop()
+        self._drop_port()
 
     def _set_pressure(self, channel: int, kpa: float) -> None:
         """Nothing to command: the regulator sets the pressure by hand (SPEC.md 12.4)."""
@@ -100,13 +96,36 @@ class ArduinoMosfetGarment(GarmentController):
         self._write_state()
 
     def _stop(self) -> None:
+        """Every output off -- or, once the link is gone, nothing left to command.
+
+        A stop must complete whatever the link: it is the emergency stop, the pause and the
+        session's close (SPEC.md 13), and a stop that raised would leave the stop screen down
+        and the session file unfinished. So a stop that finds the link lost, or is the write
+        that finds it, returns once `lost` has recorded the fault and the disconnect. What the
+        outputs then do is out of the software's reach, and the fault detail says so; a
+        reconnect zeroes them first (`_connect`), and the hardware stop remains.
+        """
         self._mask = 0
-        self._write_state()
+        if self._port is None:
+            return
+        try:
+            self._write_state()
+        except GarmentError:
+            if self.connected:
+                # Not the link lost: an error of some other kind, which fails fast as ever.
+                raise
 
     # -- plumbing ----------------------------------------------------------------------
 
     def _write_state(self) -> None:
         self._send(SET_STATE.format(mask=self._mask))
+
+    def _drop_port(self) -> None:
+        """Close the port without a last write, which is what failed. Reconnecting then opens
+        it afresh rather than being refused a handle this driver still holds."""
+        port, self._port = self._port, None
+        if port is not None:
+            port.close()
 
     def _send(self, command: str) -> None:
         if self._port is None:
@@ -117,5 +136,29 @@ class ArduinoMosfetGarment(GarmentController):
         except serial.SerialException as error:
             # Reported and raised, never swallowed: a sleeve that silently stops obeying is
             # worse than a session that stops (SPEC.md 13).
-            self.fault(f"serial write failed on {self.port_name}: {error}")
+            self._drop_port()
+            detail = f"serial write failed on {self.port_name}: {error}"
+            # A failure while connecting is the connect's to report (it never became
+            # connected); one after is the connection lost, with outputs left as they were.
+            # The warning leads, so the screen's bounded fault line never cuts it off.
+            if self.connected:
+                self.lost(f"{OUTPUTS_UNKNOWN}: {detail}")
+            else:
+                self.fault(detail)
             raise GarmentError(f"{self.driver_name}: {error}") from error
+
+
+def channel_wiring(channel_bits) -> dict[int, int]:
+    """Channel to bit, from `garment.prototype.channel_bits` (channels 1-5 in order). Shared by
+    the driver and the pattern designer's import and export, so they cannot drift apart."""
+    bits = [int(bit) for bit in channel_bits]
+    # Stage boundary (CLAUDE.md): a channel with no bit, or two channels on one bit, would be
+    # a stimulus the software records but the sleeve never delivers.
+    assert len(bits) == ArduinoMosfetGarment.n_channels, (
+        f"hardware.yaml: garment.prototype.channel_bits has {len(bits)} bits for "
+        f"{ArduinoMosfetGarment.n_channels} channels"
+    )
+    assert len(set(bits)) == len(bits), (
+        f"hardware.yaml: garment.prototype.channel_bits repeats a bit: {bits}"
+    )
+    return {channel: bit for channel, bit in enumerate(bits, start=1)}

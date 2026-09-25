@@ -576,12 +576,13 @@ def test_abort_marks_the_open_block_and_flags_missing_distances(app, loaded, tmp
 def test_with_the_fit_preview_on_an_f40_is_rerun_once_then_accepted(app, loaded, tmp_path,
                                                                     monkeypatch):
     """Against the real experimenter window: its preview is drawn, then taken down."""
-    shown, hidden = [], []
+    shown, hidden, instructions = [], [], []
     real_show = ExperimenterWindow.show_fit_preview
     real_hide = ExperimenterWindow.hide_fit_preview
 
     def spy_show(self, fit):
         shown.append(fit)
+        instructions.append(self._instruction_text)
         real_show(self, fit)
 
     def spy_hide(self):
@@ -600,6 +601,10 @@ def test_with_the_fit_preview_on_an_f40_is_rerun_once_then_accepted(app, loaded,
     assert rows[0]["rerun_reason"] == "the driver re-runs once"
     f40_fits = [fit for fit in shown if isinstance(fit, F40Fit)]
     assert len(f40_fits) == 2, "the preview is shown for each run"
+    review = loaded.experimenter_text["instructions"]["f40_fit_review"]
+    said = [text for text, fit in zip(instructions, shown, strict=True)
+            if isinstance(fit, F40Fit)]
+    assert said == [review, review], "the decision due is said, not the last trial's"
     assert len(shown) == 3, "and once for the touch calibration"
     assert len(hidden) >= len(shown), "and taken down after every decision"
     values = runner.session.fit_preview_reruns

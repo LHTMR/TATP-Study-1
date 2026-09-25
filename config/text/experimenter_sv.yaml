@@ -81,7 +81,8 @@ instructions:
   # Filamenten benämns med gramsiffran som står tryckt på dem (SPEC.md 8.1), kraften efter.
   apply_filament: Applicera filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen.
   # Ett drag på cirka 2 cm, aldrig upprepat: upprepning höjer smärtan (docs/research/RB2).
-  apply_brush: Borsta {region} zonen på plats {site} -- ett enda drag på cirka 2 cm.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  apply_brush: 'Borsta den {region} zonen på plats {site}: ett enda drag på cirka 2 cm.'
   mapping_path: Kartlägg bana {path}. Flytta 5 mm inåt vid varje signal och stanna när deltagaren markerar.
   # Läses högt före första banan. Kartläggningen instrueras muntligt och deltagaren svarar
   # muntligt, så det här är enda stället formuleringen finns -- det finns ingen deltagarskärm
@@ -117,6 +118,8 @@ instructions:
   touchcal_evenness: 'Beröringskalibrering: deltagaren får frågan om rörelsen känns jämn.'
   touchcal_preference: 'Beröringskalibrering, steg 6: deltagaren väljer en sorts beröring.'
   touchcal_fit_review: Skattningen i beröringskalibreringen är klar. Godkänn den, eller gör om proceduren.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  f40_fit_review: F40-beräkningen är klar. Godkänn den, eller gör om proceduren.
   touchcal_stage1_failed: >-
     Skattningen i beröringskalibreringen klarade inte kvalitetskontrollen ({value}). Gör om
     proceduren, eller godkänn den för att fortsätta med skattningen flaggad.
@@ -154,7 +157,8 @@ controls:
   start_block: Starta block
   pause: Pausa
   resume: Återuppta
-  discard_repeat: Kassera och upprepa senaste trial
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  discard_repeat: Kassera och upprepa senaste försöket
   abort: Avbryt sessionen
   note: Tidsstämplad anteckning
   connect: Anslut plagget
@@ -170,7 +174,9 @@ controls:
   distances: 'Kartläggningsavstånd (mm), mätta från mitten av den primära zonen:'
   enter_distances: Registrera avstånd
   open_distances: Kartläggningsavstånd…
-  cancel: Avbryt
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. Inte "Avbryt": bredvid
+  # "Avbryt sessionen" skulle de två knapparna börja med samma ord.
+  cancel: Tillbaka
 
 status:
   connected: Ansluten
@@ -191,9 +197,11 @@ status:
   # Visas så länge sessionen är avbruten (SPEC.md 13).
   interrupted_emergency_stop: NÖDSTOPP. Plagget är på noll. Tryck på Återuppta när deltagaren är redo.
   interrupted_pause: Pausad. Plagget är på noll. Tryck på Återuppta för att fortsätta.
-  discarded: Senaste trial kasserad. Den upprepas.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  discarded: Senaste försöket kasserat. Det upprepas.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   discarded_not_repeated: >-
-    Senaste trial kasserad. Gränsen för antal appliceringar är nådd, så den upprepas inte.
+    Senaste försöket kasserat. Gränsen för antal appliceringar är nådd, så det upprepas inte.
 
 warnings:
   experimenter_changed: >-
@@ -219,8 +227,9 @@ warnings:
   distance_implausible: >-
     Bana {path}: {value} mm ligger utanför det rimliga intervallet. Skriv samma värde igen för
     att bekräfta det, eller skriv det rättade värdet.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   catch_trials_felt: >-
-    Fler än tillåten andel av kontrolltrials utan tryck rapporterades som kända ({value}).
+    Fler än tillåten andel av kontrollförsöken utan tryck rapporterades som kända ({value}).
   schedule: 'Schemavarning, block {block}: {value}'
   no_response: Inget svar på {value} s.
   # SPEC.md 10.7 steg 5. Att höja bruset hjälper inte längre, så åtgärden är fysisk. Hörbar
@@ -237,9 +246,11 @@ warnings:
     och detta registreras.
 
 banners:
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. {value} är plaggets namn från
+  # terms.garments, som har egna parenteser.
   reduced_capability: >-
-    DENNA SESSION SAMLAR INTE IN GILTIG BERÖRINGSKALIBRERINGSDATA. Den anslutna enheten
-    ({value}) kan inte ställa tryck per kanal. Tiderna är verkliga; trycken är det inte.
+    DENNA SESSION SAMLAR INTE IN GILTIG BERÖRINGSKALIBRERINGSDATA. Den anslutna enheten kan
+    inte ställa tryck per kanal: {value}. Tiderna är verkliga; trycken är det inte.
   placeholder_text: >-
     DELTAGARSKÄRMARNA INNEHÅLLER FORTFARANDE PLATSHÅLLARTEXT. Kör inte en riktig deltagare.
   # SPEC.md 11.1. Omöjlig att missa, eftersom försöksledaren inte ska kunna slå på detta utan
@@ -253,13 +264,16 @@ dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.
   abort_reason: Orsak till avbrott
   # SPEC.md 15. Båda värdena formateras av sessionen från dess egen text.
-  resume_found: 'En oavslutad session hittades för denna deltagare. Genomfört: {completed}. Sensitiseringen började för {since_sensitisation} sedan. Återuppta den med den ursprungliga tidsplanen?'
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  resume_found: 'En oavslutad session hittades för denna deltagare. Genomfört: {completed}. {since_sensitisation} Återuppta den med den ursprungliga tidsplanen?'
   # De två värdena som fylls i resume_found: vad som genomförts, och hur länge sedan
   # sensitiseringen började (run_session.resume_summary). Fasnamnen kommer från `phases:` ovan.
   resume_blocks: block {value}
   resume_nothing_completed: inget ännu
-  resume_since_sensitisation: '{value} (timmar:minuter)'
-  resume_not_sensitised: '— den hade inte börjat än —'
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. Var och en en hel mening.
+  resume_since_sensitisation: 'Sensitiseringen började för {hours} h {minutes} min sedan.'
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  resume_not_sensitised: Sensitiseringen hade inte börjat.
   distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem nu, eller avsluta sessionen med dem flaggade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
@@ -300,6 +314,9 @@ hardware:
   # Under interventionen och återuppvärmningen nämner felets detalj en kanal, och vilka kanaler
   # ett mönster använder skiljer sig mellan betingelserna (SPEC.md 16). Själva felet visas.
   fault_withheld: 'Fel i plagget: {value} (detalj i data)'
+  # DRAFT (LOG N7.U6): written by the build, not ethics-sourced. Ovanför det senaste felet: hur
+  # många som kom före det. Hela listan finns i verktygstipset och i data.
+  faults_earlier: '{value} tidigare (detalj i data)'
 
 fit_preview:
   # SPEC.md 11.1. Visas bara när fit_preview.enabled är på. Det enda stället där deltagarens
@@ -364,21 +381,28 @@ instruments:
   # SPEC.md 8.1. Skriver de uppmätta krafterna och vägningsdatumet till config/filaments.yaml.
   title: Instrument och miljö
   filaments: Filamentkrafter
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced
+  filaments_hint: Skriv in det vågen visar, i gram. Kraften i mN som sparas visas bredvid.
   label: Märkning (g)
   size: Storlek
   nominal: Nominell (mN)
-  measured: Uppmätt (mN)
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced
+  measured: Vägt (g)
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced
+  measured_mn: Kraft (mN)
   weighing_date: 'Vägningsdatum (ÅÅÅÅ-MM-DD):'
-  weighing_balance: 'Våg som användes:'
   save_forces: Spara krafterna
   saved: 'Sparade {value} uppmätta krafter i filaments.yaml.'
-  invalid_force: 'Filament {filament} g: {value} är inte en kraft i mN över noll.'
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced
+  invalid_force: 'Filament {filament} g: {value} är inte en vikt i gram över noll.'
   invalid_date: '{value} är inte ett datum på formen ÅÅÅÅ-MM-DD.'
   date_required: Skriv in vägningsdatumet innan uppmätta krafter sparas.
   nothing_to_save: Inga uppmätta krafter har skrivits in.
   environment: Rumsmiljö (valfritt)
-  room_temperature: 'Rumstemperatur (°C):'
-  relative_humidity: 'Relativ luftfuktighet (%):'
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced. Kort, för att rymmas på en rad.
+  room_temperature: 'Temperatur (°C):'
+  # DRAFT (LOG N7.U1): written by the build, not ethics-sourced
+  relative_humidity: 'Luftfuktighet (% RF):'
   use_environment: Använd för nästa session
   invalid_number: '{value} är inte ett tal.'
 
@@ -394,14 +418,19 @@ designer:
   save: Spara
   save_as: Spara som…
   export: Exportera kommandofil…
-  parameters: Mönster
-  name: Namn (även filnamnet)
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  name: Namn (= filnamn)
   row_interval_ms: Radintervall (ms)
-  channel_ids: Kanal-id (bitindex)
-  loop: Upprepas medan det är aktivt
-  descriptive: Endast beskrivande, valfritt
-  nominal_velocity_cm_s: Nominell hastighet (cm/s)
-  assumed_channel_spacing_cm: Kanalavstånd (cm)
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  channel_ids: Kanaler (1 = distal)
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  loop: Upprepas
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  descriptive: 'Beskrivande, valfritt:'
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  nominal_velocity_cm_s: Hastighet (cm/s)
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  assumed_channel_spacing_cm: Avstånd (cm)
   overlap_rows: Överlapp (rader)
   tab_grid: Rutnät
   tab_ordered: Kanaler i ordning
@@ -417,24 +446,29 @@ designer:
   offset_ms: Slut (ms)
   add_channel: Lägg till kanal
   remove_channel: Ta bort kanal
-  mode: Läge
   # Prototypförrådets tre lägen (modular_approach/README.txt), och vad vart och ett gör.
   modes:
     sequential: I tur och ordning
     join_hold: Ansluter och håller
     join_stay: Ansluter och stannar
   mode_hints:
-    sequential: Varje kanal slås på och av i tur och ordning. Nästa startar fördröjningen efter att den förra slutat.
+    # DRAFT (LOG N7.U2): written by the build, not ethics-sourced. Kortad för att rymmas på en rad.
+    sequential: Kanalerna slås på och av en i taget. Nästa startar fördröjningen efter att den förra slutat.
     join_hold: Varje kanal startar fördröjningen efter att den förra startat, och håller sin egen tid.
     join_stay: Varje kanal startar fördröjningen efter att den förra startat, och alla slås av samtidigt.
   delay_ms: Fördröjning (ms)
   to_grid: Gör om till rutnät
   converted: 'Omgjort till {value} rader. Rutnätet ersattes.'
-  preview: Förhandsgranskning
   seconds: '{value} s'
-  play: Spela på det simulerade plagget
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  play_on: 'Spela på:'
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  play: Spela
   stop: Stoppa
-  playing: 'Spelas på det simulerade plagget. Kanaler på: {value}'
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  connecting: 'Ansluter: {garment}…'
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  playing: 'Spelas på: {garment}. Kanaler på: {value}'
   none_on: inga
   stopped: Stoppat. Alla kanaler är av.
   loads: 'Laddas: {rows} rader, en cykel {cycle} s, spelas en gång.'
@@ -442,7 +476,8 @@ designer:
   saved: 'Sparade {value} och dess sidofil.'
   exported: 'Exporterade {steps} steg till {value}. Prototypen spelar det en gång per exec och slår sedan av alla kanaler.'
   column_ms_title: Importera prototyp-CSV
-  column_ms: 'Kolumnlängd (ms). Prototypens CSV anger ingen:'
+  # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+  column_ms: 'Kolumnlängd (ms), som prototypens CSV inte anger. Dess bitar blir ärmens kanaler 1-5 enligt kopplingen i hardware.yaml:'
   import: Importera
   cancel: Avbryt
   overwrite_title: Ersätta mönstret?
@@ -471,7 +506,17 @@ designer:
     name_taken: 'Ett annat mönster i mappen, {value}, har redan det här namnet.'
     folder_unreadable: 'Ett mönster som redan finns i mappen går inte att ladda: {value}'
     ragged: 'Rad {line} har {value} celler, och första raden har {expected}.'
-    bit_range: 'Kanal {channel} är ingen bit i prototypens mask på {bits} bitar.'
+    # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+    bit_range: 'Kanal {channel} är kopplad till bit {bit}, som inte är en bit i prototypens mask på {bits} bitar.'
     not_whole_ms: 'Ett steg på {value} ms är inte ett helt antal millisekunder, vilket prototypen kräver.'
     too_many_steps: '{value} steg, och prototypen lagrar högst {limit}.'
-    mock_channels: 'Det simulerade plagget har kanalerna {have}, och det här mönstret använder {value}.'
+    # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+    garment_channels: '{garment}: har kanalerna {have}, och det här mönstret använder {value}.'
+    # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+    connect_failed: '{garment}: kunde inte ansluta ({value}). Inget spelades.'
+    # DRAFT (LOG N7.U5): written by the build, not ethics-sourced
+    garment_lost: '{garment}: anslutningen bröts ({value}). Uppspelningen stoppades. Tryck på Spela för att ansluta igen.'
+    # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+    unwired_bit: 'Bit {value} är inte kopplad till någon av ärmens kanaler. De kopplade bitarna är {wired} (hardware.yaml).'
+    # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
+    unwired_channel: 'Kanal {channel} är ingen av ärmens kanaler, som är {wired}.'

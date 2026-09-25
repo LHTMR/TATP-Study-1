@@ -40,8 +40,9 @@ from fnmatch import fnmatch
 
 import numpy as np
 import yaml
+from PySide6.QtCore import QEvent
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 
 from tatp import config as cfg
 from tatp import pattern_design as pd
@@ -51,6 +52,7 @@ from tatp.instruments import InstrumentsDialog
 from tatp.launcher import WARN, LauncherWindow
 from tatp.pinprick import F40Fit, LongResult
 from tatp.responder import Action, Responder
+from tatp.resume import offer_wording
 from tatp.touchcal import FitReady
 from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
@@ -68,6 +70,11 @@ DIFF_DIR = SCREENSHOT_DIR / "diff"
 # another machine from a screen that actually changed.
 WIDTH_PX = 1280
 HEIGHT_PX = 800
+# The lab laptop's usable screen, for the windows that open on it maximized or fitted to it
+# (the designer, the instruments dialog): a 1920 x 1080 panel at 150 % scaling, less the
+# taskbar and a title bar. Photographed there, S sees them as they will open.
+LAPTOP_WIDTH_PX = 1280
+LAPTOP_HEIGHT_PX = 640
 TOLERANCE_FRACTION = 0.002
 
 LANGUAGES = ("sv", "en")
@@ -114,8 +121,11 @@ SAMPLE_PARTICIPANT = "07"
 SAMPLE_INITIALS = "SM"
 SAMPLE_PATTERN_FOLDER = "config/patterns/examples"
 SAMPLE_DATA_FOLDER = "data"
-SAMPLE_RESUME = {"completed": "setup, touch calibration, blocks 1-4",
-                 "since_sensitisation": "1 h 12 min"}
+# The resume offer's completed phases and blocks, and how long ago sensitisation began,
+# worded by the same `resume.offer_wording` the real offer is.
+SAMPLE_RESUME_COMPLETED = ("setup", "touch_calibration", "pre_sensitisation", "sensitisation")
+SAMPLE_RESUME_BLOCKS = ("1", "2", "3", "4")
+SAMPLE_RESUME_AGO_MIN = 72
 SAMPLE_SESSION_NUMBER = 1
 SAMPLE_LANGUAGES = ("sv", "en")
 # The garment the checked session dialog shows chosen: the prototype, which the lab pilots on.
@@ -173,7 +183,7 @@ def _experimenter_view(**overrides) -> dict:
         "phase": "setup",
         "elapsed_s": 0.0,
         "garment_connected": True,
-        "garment_driver": "MockGarment",
+        "garment_driver": "mock",
         "placeholder_text": False,
         "reduced_capability_device": False,
         "unresolved_open_items": [],
@@ -400,15 +410,17 @@ def _experimenter_states(text: dict) -> dict:
             {"placeholder_text": True}, None,
         ),
         "reduced_capability_banner": (
-            "The reduced-capability banner naming the driver in use (SPEC.md 12.4).",
-            {"reduced_capability_device": True}, None,
+            "The reduced-capability banner naming the garment in use in words, as the "
+            "launcher does (SPEC.md 12.4).",
+            {"reduced_capability_device": True, "garment_driver": SAMPLE_GARMENT}, None,
         ),
         "all_banners": (
-            "All three banners at once: nothing below the reserved region has moved "
-            "(UI_PRINCIPLES.md 3.3). The fit-preview banner is amber like the "
+            "All three banners at once, in the space they need, which is fixed from the "
+            "session's start: no banner comes or goes during a session, so nothing below "
+            "moves (UI_PRINCIPLES.md 3.3). The fit-preview banner is amber like the "
             "reduced-capability one (SPEC.md 11.1).",
             {"placeholder_text": True, "reduced_capability_device": True,
-             "fit_preview_enabled": True}, None,
+             "garment_driver": SAMPLE_GARMENT, "fit_preview_enabled": True}, None,
         ),
         "open_items": (
             "Unresolved open items listed for the experimenter (SPEC.md 20).",
@@ -534,11 +546,15 @@ def _experimenter_states(text: dict) -> dict:
         ),
         "fit_preview_f40": (
             "The main window while the F40 fit preview (SPEC.md 11.1) is open, only with "
-            "fit_preview.enabled: the banner saying what it costs, Accept and Re-run enabled, "
-            "and no rating anywhere on this window -- they are in the preview window.",
+            "fit_preview.enabled: the banner saying what it costs, the instruction saying the "
+            "decision is due, Re-run and Accept enabled, and no rating anywhere on this "
+            "window -- they are in the preview window.",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
              "fit_preview_enabled": True},
-            lambda window: window.show_fit_preview(_sample_f40_fit()),
+            lambda window: (
+                window.set_instruction(instructions["f40_fit_review"]),
+                window.show_fit_preview(_sample_f40_fit()),
+            ),
         ),
         "fit_preview_touch": (
             "The main window while the touch-calibration fit preview is open: its instruction "
@@ -611,6 +627,16 @@ def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     yield from _launcher_shots(config, language)
 
 
+def _dispose(window: QWidget) -> None:
+    """Close a shown window and delete it now, in Qt's own time. Left to the garbage
+    collector, a window in a reference cycle is destroyed whenever a later allocation
+    triggers a collection -- possibly inside another window's construction, where a signal
+    it emits while dying reaches a half-deleted object (docs/LOG.md N7.I3)."""
+    window.close()
+    window.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+
+
 def _grab_dialog(dialog: QWidget) -> QPixmap:
     dialog.resize(DIALOG_WIDTH_PX, dialog.sizeHint().height())
     return dialog.grab()
@@ -664,7 +690,10 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"The resume question (SPEC.md 15): what was completed and how long ago "
         f"sensitisation began. Resume, or an explicit new session; closing it starts nothing "
         f"({language}).",
-        _grab_dialog(dialog.resume_dialog(SAMPLE_RESUME)),
+        _grab_dialog(dialog.resume_dialog(offer_wording(
+            config.experimenter_text, list(SAMPLE_RESUME_COMPLETED),
+            list(SAMPLE_RESUME_BLOCKS), SAMPLE_RESUME_AGO_MIN,
+        ))),
     )
 
     # The unweighed set, whatever filaments.yaml holds today, so weighing the kit does not
@@ -676,12 +705,14 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         "filaments": [{**f, "force_measured_mn": None} for f in config.filaments["filaments"]],
     }
     instruments = InstrumentsDialog(config.experimenter_text, unweighed, lambda *_: None)
-    instruments.resize(DIALOG_WIDTH_PX, HEIGHT_PX)
+    instruments.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
     yield Shot(
         f"experimenter_{language}_launcher_instruments",
-        f"Instruments and environment (SPEC.md 8.1): every filament with its label, size, "
-        f"nominal force and a measured-force field; the weighing date and balance; the "
-        f"optional room temperature and humidity ({language}).",
+        f"Instruments and environment (SPEC.md 8.1), at the lab laptop's size: all twenty "
+        f"filaments in view at once, in two halves, each with its label, size and nominal "
+        f"force, a field for the weighing in grams and the force in mN it will save; the "
+        f"weighing date and Save on one line; the optional room temperature and humidity on "
+        f"another. No balance field ({language}).",
         instruments.grab(),
     )
     preview = launcher.preview_dialog(SAMPLE_T_ZERO)
@@ -702,7 +733,7 @@ def _designer_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     """
     def designer() -> DesignerWindow:
         window = DesignerWindow(config.experimenter_text, config.hardware)
-        window.resize(WIDTH_PX, HEIGHT_PX)
+        window.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
         return window
 
     states: list[tuple[str, str, DesignerWindow]] = []
@@ -711,9 +742,11 @@ def _designer_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     window.open_file(SAMPLE_DESIGN_PATTERN)
     states.append((
         "grid",
-        "An example pattern opened on the Grid tab: one row per row interval with its time, "
-        "one column per channel id, on cells filled. The timeline below draws two cycles "
-        "because it loops, the repeat fainter, and the line under it says it loads.",
+        "An example pattern opened on the Grid tab, at the lab laptop's size: the pattern's "
+        "fields in two strips across the top; the grid across the whole width, one compact "
+        "row per row interval with its time, one column per channel, on cells filled and no "
+        "digits. The timeline below draws two cycles because it loops, the repeat fainter; "
+        "the line under it says it loads, beside the garment chosen for Play.",
         window,
     ))
 
@@ -728,13 +761,14 @@ def _designer_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     window.set_entries(window.ordered, [(cid, SAMPLE_DESIGN_HOLD_MS) for cid in
                                         SAMPLE_DESIGN_IDS])
     window.delay_field.setText(f"{SAMPLE_DESIGN_INTERVAL_MS:g}")
-    window.mode.setCurrentIndex(window.mode.findData(pd.JOIN_HOLD))
+    window.set_mode(pd.JOIN_HOLD)
     window.convert_ordered()
     states.append((
         "ordered",
-        "Ordered channels: five channels with their hold times, the join-and-hold mode and "
-        "the delay, converted. The message says the grid was replaced, and the timeline "
-        "shows the overlapping sweep.",
+        "Ordered channels: five channels with their hold times; all three modes listed, "
+        "each with what it does, join-and-hold chosen; the delay beside Convert, converted. "
+        "The message says the grid was replaced, and the timeline shows the overlapping "
+        "sweep.",
         window,
     ))
 
@@ -782,24 +816,32 @@ def _designer_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
 
     window = designer()
     window.open_file(SAMPLE_DESIGN_PATTERN)
+    # Chosen, never connected: the picture opens no serial port.
+    window.garment_choice.setCurrentIndex(window.garment_choice.findData(SAMPLE_GARMENT))
     window.show_playback(SAMPLE_PLAYBACK_S, set(SAMPLE_PLAYBACK_ON))
     window.stop_button.setEnabled(True)
     states.append((
         "playing",
-        "Playback on the mock garment: the cursor in amber on the timeline and the channels "
-        "on now named, their labels amber. Set directly rather than played, because a "
-        "running pattern would never be photographed at the same moment twice.",
+        "Playback on the prototype sleeve, chosen beside Play: the cursor in amber on the "
+        "timeline and the channels on now named, their labels amber. Set directly rather "
+        "than played, because a running pattern would never be photographed at the same "
+        "moment twice, and the sleeve is never woken for a picture.",
         window,
     ))
 
     for name, description, window in states:
-        pixmap = _grab(window)
-        assert pixmap.height() == HEIGHT_PX, (
+        window.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+        # Shown before the grab: the tab bar places its corner widget, the playback
+        # controls, only once it has been shown. Offscreen, so nothing appears.
+        window.show()
+        QApplication.processEvents()
+        pixmap = window.grab()
+        assert pixmap.height() == LAPTOP_HEIGHT_PX, (
             f"experimenter_{language}_designer_{name} needs {pixmap.height()} px"
         )
         yield Shot(f"experimenter_{language}_designer_{name}", f"{description} ({language})",
                    pixmap)
-        window.close()
+        _dispose(window)
 
 
 def shots(languages: tuple[str, ...] = LANGUAGES) -> Iterator[Shot]:

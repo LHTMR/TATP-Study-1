@@ -7,6 +7,8 @@ driver does.
 
 from __future__ import annotations
 
+import csv
+
 import pytest
 import serial
 
@@ -174,6 +176,117 @@ def test_a_failed_write_is_a_recorded_fault_not_a_silence(made):
     with pytest.raises(GarmentError, match="unplugged"):
         garment.set_channel(1, True)
     assert garment.faults and "unplugged" in garment.faults[-1]
+    assert ports[0].closed, "a dead port is let go, so a reconnect can open it afresh"
+    # Disconnected, as the session's status, Connect button and guarded stops must see it.
+    assert not garment.connected and garment.status()["channels_on"] == []
+    garment.connect()
+    assert len(ports) == 2 and not ports[1].closed and garment.connected
+
+
+def test_a_session_whose_sleeve_is_lost_shows_it_reconnects_and_closes(
+    loaded, tmp_path, monkeypatch
+):
+    """Re-review: with the port dropped but `connected` still true, the session showed the
+    sleeve as connected, its Disconnect raised before disconnecting, and close() raised
+    before the closing provenance was written."""
+    from tatp.session import Session, with_session_choices
+
+    ports: list[FakePort] = []
+
+    def factory(*args, **kwargs):
+        ports.append(FakePort(*args, **kwargs))
+        return ports[-1]
+
+    monkeypatch.setattr(ArduinoMosfetGarment, "serial_factory", staticmethod(factory))
+    monkeypatch.setattr("tatp.garment.arduino_mosfet.time.sleep", lambda s: None)
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data")}}
+    config = with_session_choices(cfg.Config(**{**loaded.__dict__, "hardware": hardware}),
+                                  garment="arduino_mosfet")
+    session = Session(config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=60.0), rng_seed=7)
+    session.start()
+    try:
+        ports[0].fail_writes = True
+        with pytest.raises(GarmentError):
+            session.garment.set_channel(1, True)
+        assert session.experimenter_view()["garment_connected"] is False
+        session.garment.connect()
+        assert session.experimenter_view()["garment_connected"] is True
+        ports[1].fail_writes = True
+        with pytest.raises(GarmentError):
+            session.garment.set_channel(2, True)
+    finally:
+        session.close()
+    assert session.closed, "closing after a lost sleeve writes its provenance and ends"
+
+
+def test_a_stop_that_finds_the_link_lost_still_completes_and_the_session_closes(
+    loaded, tmp_path, monkeypatch
+):
+    """Re-review: the emergency stop, the pause and close() were the write that found the
+    loss, and raised -- no stop screen, and a session file never finished (SPEC.md 13)."""
+    from tatp.session import Session, with_session_choices
+
+    ports: list[FakePort] = []
+
+    def factory(*args, **kwargs):
+        ports.append(FakePort(*args, **kwargs))
+        return ports[-1]
+
+    monkeypatch.setattr(ArduinoMosfetGarment, "serial_factory", staticmethod(factory))
+    monkeypatch.setattr("tatp.garment.arduino_mosfet.time.sleep", lambda s: None)
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data")}}
+    config = with_session_choices(cfg.Config(**{**loaded.__dict__, "hardware": hardware}),
+                                  garment="arduino_mosfet")
+    session = Session(config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=60.0), rng_seed=7)
+    session.start()
+    from tatp.garment import patterns
+
+    session.garment.play_pattern(patterns.load_pattern(EXAMPLES / "static_sham.csv"))
+    session.garment.advance()
+    ports[0].fail_writes = True
+    session.garment.stop()  # the emergency stop's own write finds the loss, and completes
+    assert not session.garment.connected
+    assert session.garment.faults[-1].startswith("Link lost, outputs unknown")
+    session.close()
+    assert session.closed
+    with session.files.path("garment").open(encoding="utf-8", newline="") as table:
+        events = [row["event"] for row in csv.DictReader(table)]
+    after_start = events[events.index("pattern_start"):]
+    # Only what happened: the fault and one disconnect, nothing claimed as sent after it.
+    assert after_start[-2:] == ["fault", "disconnect"], after_start
+    assert "pattern_stop" not in after_start and "stop" not in after_start
+
+
+def test_a_connection_lost_mid_pattern_ends_the_pattern_quietly(made, loaded):
+    """The session's timer keeps calling advance() after the loss: it must not raise again."""
+    from tatp.garment import patterns
+
+    garment, ports = made
+    garment.connect()
+    garment.play_pattern(patterns.load_pattern(EXAMPLES / "sweep_20cms.csv"))
+    ports[0].fail_writes = True
+    with pytest.raises(GarmentError):
+        garment.advance()  # the pattern's first event is due at once
+    garment.advance()
+    assert not garment.connected
+
+
+def test_a_connect_that_fails_after_opening_lets_the_port_go(made):
+    """Pre-merge review: the designer retries a failed connect, and the session follows it."""
+    garment, ports = made
+
+    class Unplugged(FakePort):
+        def write(self, data: bytes):
+            raise serial.SerialException("device unplugged")
+
+    type(garment).serial_factory = staticmethod(
+        lambda *a, **k: ports.append(Unplugged(*a, **k)) or ports[-1]
+    )
+    with pytest.raises(GarmentError):
+        garment.connect()
+    assert ports[-1].closed and not garment.connected
 
 
 def test_the_wiring_must_give_every_channel_its_own_bit(loaded):

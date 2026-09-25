@@ -215,3 +215,17 @@ items:
          not the build's to decide. Record the decision (and any cap) under audio:, then add
          `cue_ceiling_decided: <date>`."
     blocks_use: true
+
+  - item: "L14"
+    summary: What the experimenter does when the prototype sleeve's serial link is lost
+    resolved_when: {file: hardware.yaml, path: "garment.prototype.lost_link_procedure_decided"}
+    fix: "S, before a participant is run on the prototype. When the sleeve stops answering
+         (a pulled USB cable, say), the software records the loss, shows the garment
+         disconnected with the fault and 'outputs unknown until reconnected', and completes
+         every stop without commanding the device (docs/LOG.md N7.U8). The shift register may
+         still hold its last mask, so channels can stay on until the sleeve is reconnected,
+         which zeroes it first, or stopped by hand. Whether the screen should also say what to
+         do, and what that is (reconnect, cut the supply, the hardware stop), is a safety
+         procedure and not the build's to decide. Write it into SOP.md, add any screen wording
+         it needs, then add `lost_link_procedure_decided: <date>` under garment.prototype."
+    blocks_use: true
