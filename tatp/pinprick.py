@@ -602,6 +602,7 @@ class _RatedTrial(QObject):
         # after it has cost the participant a delivery even though no row is written.
         self.stimulus_delivered = False
         self._cue_onset_t_session_s: float | None = None
+        self._cue_onset_elapsed_s: float | None = None
         self._pending = None
 
         self._timer = QTimer(self)
@@ -644,6 +645,7 @@ class _RatedTrial(QObject):
         clock = self.session.clock
         self.cue_onset_iso = clock.wall_iso()
         self._cue_onset_t_session_s = clock.t_session_s()
+        self._cue_onset_elapsed_s = clock.elapsed_s()
         self.participant.show_warning_cue()
         self.session.log("warning_cue", detail=f"trial {self.trial_index}")
 
@@ -657,16 +659,16 @@ class _RatedTrial(QObject):
         )
         self.experimenter.set_status("")
         self.experimenter.refresh()
-        self._after(self.warning_duration_s, self._end_cue)
+        self._after_onset(self.warning_duration_s, self._end_cue)
 
     def _end_cue(self) -> None:
         self.participant.show_blank()
-        self._after(self.warning_lead_s - self.warning_duration_s, self._stimulus_due)
+        self._after_onset(self.warning_lead_s, self._stimulus_due)
 
     def _stimulus_due(self) -> None:
         self.stimulus_delivered = True
         self.session.log("stimulus_due", detail=self._stimulus_detail())
-        self._after(self.rating_cue_delay_s, self._cue_rating)
+        self._after_onset(self.warning_lead_s + self.rating_cue_delay_s, self._cue_rating)
 
     def _cue_rating(self) -> None:
         self.rating_cue_iso = self.session.clock.wall_iso()
@@ -709,6 +711,18 @@ class _RatedTrial(QObject):
     def _after(self, seconds: float, method) -> None:
         self._pending = method
         self._timer.start(self.session.clock.scaled_ms(seconds))
+
+    def _after_onset(self, offset_s: float, method) -> None:
+        """Run `method` at `offset_s` after the warning cue's onset, not after now.
+
+        Every step of the cue, stimulus and rating cue is timed from the one onset the row
+        records, so what runs between the steps -- a data row appended to its file, the
+        experimenter screen redrawn -- cannot add to the next interval. Timed from now, those
+        milliseconds added up across the steps (docs/LOG.md N7.U11). The clock's elapsed time,
+        not session time, which does not exist before sensitisation.
+        """
+        now_s = self.session.clock.elapsed_s()
+        self._after(self._cue_onset_elapsed_s + offset_s - now_s, method)
 
     def _fire(self) -> None:
         method, self._pending = self._pending, None

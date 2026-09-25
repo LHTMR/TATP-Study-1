@@ -30,6 +30,8 @@ EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 # interval still comes from config; only the clock's speed differs from a real session.
 CLOCK_SPEED = 100.0
 SPIN_TIMEOUT_S = 10.0
+# Wall seconds a data write takes in the slow-write test: a busy disk, or a virus scanner.
+SLOW_WRITE_S = 0.02
 
 # The 26 g filament is size 5.46, 255 mN -- the one Bilaga 1 3.6.1 calls "260 mN" (SPEC.md 8.1).
 APPLICATION = Application(
@@ -154,6 +156,34 @@ def test_the_cue_and_rating_cue_times_are_recorded(running):
     assert row["timestamp_iso"] == trial.cue_onset_iso
     assert row["rating_cue_iso"] == trial.rating_cue_iso
     assert row["rating_cue_iso"] > row["cue_onset_iso"]
+
+
+def test_slow_writes_between_the_steps_do_not_delay_the_rating_cue(running, monkeypatch):
+    """docs/LOG.md N7.U11: every step is timed from the cue onset, so time spent writing the
+    log between steps is not added to the next interval. Each write here takes 20 ms, which at
+    this clock speed is 2 s of session time per write if it were added."""
+    session, participant, _ = running
+    real_log = session.log
+
+    def slow_log(*args, **kwargs):
+        time.sleep(SLOW_WRITE_S)
+        real_log(*args, **kwargs)
+
+    monkeypatch.setattr(session, "log", slow_log)
+    cued_at = []
+    real_show_vas = participant.show_vas
+    monkeypatch.setattr(participant, "show_vas",
+                        lambda scale: (cued_at.append(session.clock.elapsed_s()),
+                                       real_show_vas(scale)))
+    trial = PinprickTrial(session, participant, running[2], APPLICATION)
+    trial.start()
+    _spin(lambda: cued_at)
+    expected_s = trial.warning_lead_s + trial.rating_cue_delay_s
+    added_s = SLOW_WRITE_S * CLOCK_SPEED
+    assert cued_at[0] - trial._cue_onset_elapsed_s < expected_s + added_s, (
+        "the writes between the steps were added to the intervals"
+    )
+    trial.cancel()
 
 
 def test_the_label_force_is_fitted_while_the_set_is_unweighed(running):
