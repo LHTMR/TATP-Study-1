@@ -104,6 +104,7 @@ STATUS_LINES = 2
 STATUS_SIZES = (SIZE_BODY, SIZE_SMALL)
 OPEN_ITEMS_LINES = 2
 SIDE_COLUMN_PX = 300
+FAULT_LINES = 4
 ZONE_MIN_HEIGHT_PX = 100
 SUBSTITUTION_FIELD_PX = 300
 DISTANCE_FIELD_PX = 110
@@ -323,11 +324,15 @@ class ExperimenterWindow(QWidget):
         self.hardware_title.setText(self.text["hardware"]["title"])
         self.garment = label(SIZE_BODY)
         self.pressures = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
-        # Wrapped and never clipped: the newest fault is read in full, and a tooltip is not
-        # somewhere a safety message can live. Earlier ones are a count, so the line is only
-        # ever as tall as one fault, however many accumulate (UI_PRINCIPLES.md 3.3).
+        # Bounded, so accumulating faults never move the side column mid-session or push the
+        # window off a laptop screen (UI_PRINCIPLES.md 3.3): at most FAULT_LINES lines. The
+        # short counts come first and the text is top-aligned, so what a bound cuts is only
+        # the tail of the newest fault; its start, which says what failed, always shows. The
+        # whole text is in the tooltip and the data.
         self.faults = label(SIZE_SMALL, wrap=True, colour=DISCONNECTED_COLOUR)
         self.faults.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.faults.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.faults.setMaximumHeight(self.faults.fontMetrics().lineSpacing() * FAULT_LINES)
         # One disconnect/reconnect button (SPEC.md 11) that says what it will do now.
         self.garment_button = button("")
         self.garment_button.clicked.connect(self._garment_clicked)
@@ -786,13 +791,15 @@ class ExperimenterWindow(QWidget):
         withheld = [fault for fault in hardware["faults"] if fault in self._withheld_faults]
         shown = [fault for fault in hardware["faults"] if fault not in self._withheld_faults]
         lines = []
-        if shown:
-            lines.append(words["fault"].format(value=shown[-1]))
-            if len(shown) > 1:
-                lines.append(words["faults_earlier"].format(value=len(shown) - 1))
         if withheld:
             lines.append(words["fault_withheld"].format(value=len(withheld)))
+        if len(shown) > 1:
+            lines.append(words["faults_earlier"].format(value=len(shown) - 1))
+        if shown:
+            lines.append(words["fault"].format(value=shown[-1]))
         self.faults.setText(LINE_SEPARATOR.join(lines))
+        self.faults.setToolTip(LINE_SEPARATOR.join(words["fault"].format(value=fault)
+                                                   for fault in shown))
         self.faults.setVisible(bool(lines))
 
     def _apply_enabled(self) -> None:

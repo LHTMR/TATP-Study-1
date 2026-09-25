@@ -218,6 +218,38 @@ def test_a_session_whose_sleeve_is_lost_shows_it_reconnects_and_closes(
     assert session.closed, "closing after a lost sleeve writes its provenance and ends"
 
 
+def test_a_stop_that_finds_the_link_lost_still_completes_and_the_session_closes(
+    loaded, tmp_path, monkeypatch
+):
+    """Re-review: the emergency stop, the pause and close() were the write that found the
+    loss, and raised -- no stop screen, and a session file never finished (SPEC.md 13)."""
+    from tatp.session import Session, with_session_choices
+
+    ports: list[FakePort] = []
+
+    def factory(*args, **kwargs):
+        ports.append(FakePort(*args, **kwargs))
+        return ports[-1]
+
+    monkeypatch.setattr(ArduinoMosfetGarment, "serial_factory", staticmethod(factory))
+    monkeypatch.setattr("tatp.garment.arduino_mosfet.time.sleep", lambda s: None)
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data")}}
+    config = with_session_choices(cfg.Config(**{**loaded.__dict__, "hardware": hardware}),
+                                  garment="arduino_mosfet")
+    session = Session(config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=60.0), rng_seed=7)
+    session.start()
+    ports[0].fail_writes = True
+    session.garment.stop()  # the emergency stop's own write finds the loss, and completes
+    assert not session.garment.connected
+    assert "outputs unknown" in session.garment.faults[-1]
+    session.close()
+    assert session.closed
+    with session.files.path("garment").open(encoding="utf-8") as table:
+        events = [line.split(",") for line in table]
+    assert not any("pattern_stop" in row for row in events), "no stop that was never sent"
+
+
 def test_a_connection_lost_mid_pattern_ends_the_pattern_quietly(made, loaded):
     """The session's timer keeps calling advance() after the loss: it must not raise again."""
     from tatp.garment import patterns

@@ -828,28 +828,30 @@ def test_a_fault_from_the_intervention_stays_withheld_afterwards(drawn):
 
 
 def test_accumulating_faults_do_not_grow_the_side_column(drawn):
-    """Pre-merge review: faults accumulate for the session, and a wrapped line that grew with
-    each would move everything in the side column (UI_PRINCIPLES.md 3.3)."""
+    """Pre-merge reviews: faults accumulate for the session, and a line that grew with each
+    would move the side column (UI_PRINCIPLES.md 3.3) and push the window off a laptop."""
     window, held = drawn
     window.resize(1280, 800)
     window.show()
     # What the prototype driver actually reports, at full length.
     faults = [f"serial write failed on COM{n}: WriteFile failed (PermissionError(13, 'The "
-              f"device does not recognize the command.', None, 22))" for n in range(1, 9)]
+              f"device does not recognize the command.', None, 22)); outputs unknown until "
+              f"reconnected" for n in range(1, 9)]
     app = QApplication.instance()
-    heights = []
+    limit = window.faults.fontMetrics().lineSpacing() * experimenter_ui.FAULT_LINES
     for count in (1, len(faults)):
         held["view"] = _all_keys(phase="setup", hardware=_hardware(faults=faults[:count]))
         window.refresh()
         app.processEvents()
-        needed = window.faults.heightForWidth(window.faults.width())
-        assert window.faults.height() >= needed, "the newest fault is never clipped"
-        heights.append(window.faults.height())
-    assert faults[-1] in window.faults.text() and faults[0] not in window.faults.text()
-    earlier = window.text["hardware"]["faults_earlier"].format(value=len(faults) - 1)
-    assert earlier in window.faults.text()
-    line = window.faults.fontMetrics().lineSpacing()
-    assert heights[1] <= heights[0] + line, "seven more faults add one short line, no more"
+        assert window.faults.height() <= limit
+    words = window.text["hardware"]
+    earlier = words["faults_earlier"].format(value=len(faults) - 1)
+    newest = words["fault"].format(value=faults[-1])
+    # The short count first, then the newest fault: a bound cuts only that fault's tail.
+    assert window.faults.text() == f"{earlier}\n{newest}"
+    assert faults[0] in window.faults.toolTip(), "every fault in full, off the screen too"
+    hint = window.minimumSizeHint()
+    assert hint.height() <= LAPTOP_HEIGHT_PX, "still fits the laptop with faults showing"
 
 
 def test_refresh_does_not_refit_unchanged_text(drawn, monkeypatch):

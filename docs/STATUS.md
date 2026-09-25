@@ -14,7 +14,7 @@ fixed (N7.U5, N7.U6).
 **The build runs a whole session**, against the mock garment or the prototype sleeve. The garment
 is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.1).
 
-**The UI review branch (`docs/LOG.md` N7.U1–N7.U7)** fixes what S found on the lab laptop, and
+**The UI review branch (`docs/LOG.md` N7.U1–N7.U8)** fixes what S found on the lab laptop, and
 what a full review of the other screens then found:
 - **Instruments:** entry in grams, no balance field, all twenty filaments in view.
 - **Pattern designer:**
@@ -42,14 +42,15 @@ and still unexplained (N7.U7): if a run fails only on a crashed worker, run it a
 - **Drafted wording:** the rows N7.U1, N7.U2 and N7.U4, and N7.C1.
 - **Blinding choices:** N7.E4 and N7.D17. **Low-confidence decisions:** N7.C2, N7.B2 and N7.D8.
 - **Open items still S's:** L11 (rehearsal pressure), L13 (noise ceiling and the cue), L3
-  (alert metering).
+  (alert metering), and new **L14**: what the experimenter does when the prototype sleeve's
+  link is lost, since its outputs may stay on until it is reconnected (N7.U8).
 
 ---
 
 ## Next steps
 
 1. **Merge `accel/ui-review` into `accel/integration`,** then run `make check` there. The
-   reviews and their fixes are done (N7.U5, N7.U6).
+   reviews and their fixes are done (N7.U5, N7.U6, N7.U8).
 2. **Find the pre-existing test-worker crash** (N7.U7). It is a heap corruption that surfaces in
    whichever test next builds a window, and it strikes the clean commit too.
 3. **S's decisions from the UI review** that change how a session runs or what the participant

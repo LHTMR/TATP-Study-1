@@ -34,6 +34,9 @@ HANDSHAKE = "hello"
 SET_STATE = "setstate:0x{mask:x}"  # lower-case hex; the firmware's parser refuses A-F
 LINE_END = "\n"
 ENCODING = "ascii"
+# Written into a lost link's fault row: the last mask the shift register latched may still be
+# on, and nothing in the data would otherwise say so.
+OUTPUTS_UNKNOWN = "outputs unknown until reconnected"
 
 
 class ArduinoMosfetGarment(GarmentController):
@@ -79,12 +82,10 @@ class ArduinoMosfetGarment(GarmentController):
             )
 
     def _disconnect(self) -> None:
-        if self._port is None:
-            return
-        self._mask = 0
-        self._write_state()
-        self._port.close()
-        self._port = None
+        # Every output off, then the port let go; a link already lost has nothing to zero
+        # and no port to close (`_stop`).
+        self._stop()
+        self._drop_port()
 
     def _set_pressure(self, channel: int, kpa: float) -> None:
         """Nothing to command: the regulator sets the pressure by hand (SPEC.md 12.4)."""
@@ -95,16 +96,29 @@ class ArduinoMosfetGarment(GarmentController):
         self._write_state()
 
     def _stop(self) -> None:
+        """Every output off -- or, once the link is gone, nothing left to command.
+
+        A stop must complete whatever the link: it is the emergency stop, the pause and the
+        session's close (SPEC.md 13), and a stop that raised would leave the stop screen down
+        and the session file unfinished. So a stop that finds the link lost, or is the write
+        that finds it, returns once `lost` has recorded the fault and the disconnect. What the
+        outputs then do is out of the software's reach, and the fault detail says so; a
+        reconnect zeroes them first (`_connect`), and the hardware stop remains.
+        """
         self._mask = 0
-        self._write_state()
+        if self._port is None:
+            return
+        try:
+            self._write_state()
+        except GarmentError:
+            if self.connected:
+                # Not the link lost: an error of some other kind, which fails fast as ever.
+                raise
 
     # -- plumbing ----------------------------------------------------------------------
 
     def _write_state(self) -> None:
         self._send(SET_STATE.format(mask=self._mask))
-
-    def _abandon(self) -> None:
-        self._drop_port()
 
     def _drop_port(self) -> None:
         """Close the port without a last write, which is what failed. Reconnecting then opens
@@ -125,9 +139,9 @@ class ArduinoMosfetGarment(GarmentController):
             self._drop_port()
             detail = f"serial write failed on {self.port_name}: {error}"
             # A failure while connecting is the connect's to report (it never became
-            # connected); one after is the connection lost.
+            # connected); one after is the connection lost, with outputs left as they were.
             if self.connected:
-                self.lost(detail)
+                self.lost(f"{detail}; {OUTPUTS_UNKNOWN}")
             else:
                 self.fault(detail)
             raise GarmentError(f"{self.driver_name}: {error}") from error

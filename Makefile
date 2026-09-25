@@ -28,13 +28,13 @@ check:
 	"$(MAKE)" -k -j4 test lint validate shots
 
 # In parallel (pytest-xdist). Tests must not share state through files or globals -- a test
-# that passes alone and fails here is the bug, not the parallelism. Six workers, not one per
-# core: the whole-session tests are timed, and with a worker on every core of the lab laptop,
-# beside the validator and the screenshots, they stalled at random. Six ran clean every time
-# (docs/LOG.md N7.U7).
+# that passes alone and fails here is the bug, not the parallelism. At most six workers, not
+# one per core: the whole-session tests are timed, and with a worker on every core of the lab
+# laptop, beside the validator and the screenshots, they stalled at random. Six ran clean
+# every time (docs/LOG.md N7.U7); a machine with fewer cores gets one per core.
 TEST_WORKERS = 6
 test:
-	$(CONDA_RUN) python -m pytest -q -n $(TEST_WORKERS)
+	$(CONDA_RUN) python -m pytest -q -n auto --maxprocesses=$(TEST_WORKERS)
 
 # One file, one test, or any other pytest arguments, without leaving the environment:
 #   make test-one ARGS="tests/test_touchcal.py -x --timeout=30"

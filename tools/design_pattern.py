@@ -301,7 +301,10 @@ class DesignerWindow(QWidget):
         # is woken on the first Play, not on opening, and let go on switching or closing, and
         # by the launcher before a session connects its own (`launcher._start_session`).
         self.clock = Clock()
-        self.garment: GarmentController = self._make_garment(DEFAULT_GARMENT)
+        # The driver of the garment in use, which the choice leads while switching.
+        self.driver = DEFAULT_GARMENT
+        self.garment: GarmentController = self._make_garment(self.driver)
+        self._loss_reported = False
         self.timer = QTimer(self)
         tick_s = hardware["garment"]["pattern_tick_interval_s"]
         self.timer.setInterval(self.clock.scaled_ms(tick_s))
@@ -983,29 +986,28 @@ class DesignerWindow(QWidget):
 
     @property
     def garment_name(self) -> str:
-        return self.garment_names[self.garment_choice.currentData()]
+        """The garment in use, not the one the choice shows, which leads it while switching."""
+        return self.garment_names[self.driver]
 
     def _garment_chosen(self, _index: int) -> None:
         self.choose_garment(self.garment_choice.currentData())
 
     def choose_garment(self, driver: str) -> None:
-        """Play on another garment from now on. The one in use is stopped and let go first."""
+        """Play on another garment from now on. The one in use is stopped and let go first,
+        and if that finds it lost, the loss is what the message keeps saying."""
+        self._loss_reported = False
         self.stop()
         self.release_garment()
+        self.driver = driver
         self.garment = self._make_garment(driver)
-        self.message.clear()
+        if not self._loss_reported:
+            self.message.clear()
 
     def release_garment(self) -> None:
-        """Let the garment go. A sleeve that has stopped answering is let go all the same:
-        its driver closes the port and records the loss (`GarmentController.lost`) before
-        the error reaches here, and letting go is all that was asked -- by Close, by another
-        garment chosen, or by the launcher before a session connects its own."""
-        if not self.garment.connected:
-            return
-        try:
+        """Let the garment go, by Close, by another garment chosen, or by the launcher before
+        a session connects its own. A lost sleeve's driver has already let its port go."""
+        if self.garment.connected:
             self.garment.disconnect()
-        except GarmentError as error:
-            self._garment_lost(error)
 
     def play(self) -> bool:
         if self.revalidate() is None:
@@ -1080,10 +1082,11 @@ class DesignerWindow(QWidget):
         garment of the same kind takes its place, so the next Play reconnects rather than
         ticking an error into a dead port."""
         self._end_playback()
-        # Whatever raised, the old garment must not keep a port: a failed write has already
-        # closed it, and this closes it otherwise, with no last write to fail again.
-        self.garment.abandon()
-        self.garment = self._make_garment(self.garment_choice.currentData())
+        # Whatever raised, the old garment must not keep a port. A lost link has already let
+        # it go; any other error leaves it connected, and disconnecting zeroes and closes it.
+        self.release_garment()
+        self.garment = self._make_garment(self.driver)
+        self._loss_reported = True
         self.tell(self.explain(DesignError(
             "garment_lost", garment=self.garment_name, value=str(error),
         )), problem=True)
