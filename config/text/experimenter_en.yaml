@@ -102,6 +102,9 @@ instructions:
   mapping_ready: Path {path} of {value}. Press Start block to start the pacing cue, and again to stop it at the border.
   await_participant: Waiting for the participant's response.
   response_received: Response received.
+  # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. The VAS proportionality
+  # training (SPEC.md 10.6), before a scale's first rating; the same in every condition.
+  vas_training: The participant is reading how to use the rating scale. Wait until they press ▶.
   # Setup and touch calibration (SPEC.md 9, 10.7, 10.9). None names a pattern or a condition.
   masking_check: 'Audio setup: the participant is setting the noise level against the garment.'
   earplugs: Fit the earplugs under the headphones, then press Start block.

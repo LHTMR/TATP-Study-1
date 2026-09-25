@@ -193,6 +193,21 @@ class Session:
         self.stop_rehearsal_ran: bool | None = None
         self.stop_rehearsal_press_detected: bool | None = None
 
+        # SPEC.md 10.6: the scales whose proportionality training has been given this session.
+        # Filled by `VasTraining` as each is confirmed, and by a resume from the crashed
+        # session's log, so a resumed session does not give it twice.
+        self.vas_trained: set[str] = set()
+        training_sessions = config.study1["training"]["vas_proportionality_sessions"]
+        # Stage boundary (CLAUDE.md): a session number no session has would never train.
+        n_sessions = int(config.study1["design"]["n_sessions"])
+        assert all(isinstance(n, int) and 1 <= n <= n_sessions for n in training_sessions), (
+            f"study1.yaml: training.vas_proportionality_sessions {training_sessions} names a "
+            f"session outside 1..{n_sessions}"
+        )
+        self.vas_training_this_session = session_number in training_sessions
+        text = config.participant_text
+        self.trained_scales = frozenset(text["training"]) & frozenset(text["vas"])
+
         self.data_folder = Path(config.hardware["data"]["folder"])
         if not self.data_folder.is_absolute():
             self.data_folder = REPO_ROOT / self.data_folder
@@ -346,6 +361,14 @@ class Session:
             origin=origin,
             severity=severity,
             detail=detail,
+        )
+
+    def vas_training_due(self, scale: str) -> bool:
+        """Whether `scale`'s proportionality training is still to be given (SPEC.md 10.6)."""
+        return (
+            self.vas_training_this_session
+            and scale in self.trained_scales
+            and scale not in self.vas_trained
         )
 
     def set_phase(self, phase: str) -> None:

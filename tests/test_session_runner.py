@@ -267,6 +267,40 @@ def test_touch_blocks_and_the_baseline_write_touch_ratings(finished):
     assert block == ["intensity", "pleasantness", "relaxation", "alertness"]
 
 
+def test_each_scale_is_trained_once_before_its_first_rating(finished):
+    """SPEC.md 10.6: intensity at touch calibration, pain at pre-S, pleasantness in the first
+    touch block; relaxation and alertness have no training."""
+    events = _events(finished.session)
+    confirmed = [r for r in events if r["event"] == "vas_training_confirmed"]
+    assert [r["detail"] for r in confirmed] == ["intensity", "pain", "pleasantness"]
+    assert [r["phase"] for r in confirmed] == [
+        "touch_calibration", "pre_sensitisation", "intervention"
+    ]
+    first_touch_block = next(r["block_index"] for r in _rows(finished.session, "touch_ratings")
+                             if r["block_index"])
+    assert confirmed[2]["block_index"] == first_touch_block
+    assert all(r["origin"] == "participant" for r in confirmed)
+    names = [(r["event"], r["detail"]) for r in events]
+    for scale in ("intensity", "pain", "pleasantness"):
+        shown = names.index(("vas_training_shown", scale))
+        assert shown < names.index(("vas_training_confirmed", scale))
+        assert names.index(("vas_training_confirmed", scale)) < names.index(
+            ("rating_cued", scale)
+        ), f"{scale} was rated before its training"
+
+
+def test_training_is_given_only_in_the_configured_sessions(app, loaded, tmp_path):
+    study1 = {**loaded.study1,
+              "training": {**loaded.study1["training"], "vas_proportionality_sessions": [1]}}
+    config = cfg.Config(**{**make_config(loaded, tmp_path).__dict__, "study1": study1})
+    first = Session(config, "01", 1, "SM", EXAMPLES, rng_seed=7)
+    second = Session(config, "01", 2, "SM", EXAMPLES, rng_seed=7)
+    assert first.vas_training_due("pain") and not second.vas_training_due("pain")
+    assert not first.vas_training_due("relaxation"), "no training text, no training"
+    first.vas_trained.add("pain")
+    assert not first.vas_training_due("pain")
+
+
 def test_the_garment_is_off_for_the_rekindle_and_on_again_after(finished):
     events = _events(finished.session)
     names = [r["event"] for r in events]
@@ -521,12 +555,15 @@ def test_after_a_resume_every_stage_draws_what_it_would_have(app, loaded, tmp_pa
     block after the crash are those of the uninterrupted session with the same seed."""
     crashed = _crash_after(app, loaded, tmp_path, "block.2")
     runner = _resumed(loaded, tmp_path, crashed)
+    # SPEC.md 10.6: every scale was trained before the crash, and is not trained again.
+    assert runner.resume.vas_trained == {"intensity", "pain", "pleasantness"}
     Driver(runner.rig, runner, stop_when=lambda: any(
         r["event"] == "stage_completed" and r["detail"] == "block.3"
         for r in _events(runner.session)
     )).run()
     assert _intervals(runner.session, "3") == _intervals(finished.session, "3")
     assert _intervals(runner.session, "3"), "block 3 is a pinprick block, with intervals"
+    assert not any(r["event"] == "vas_training_shown" for r in _events(runner.session))
     runner.cancel()
     runner.session.close()
 

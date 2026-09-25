@@ -259,6 +259,16 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             _grab(window),
         )
 
+    for scale in sorted(set(text["training"]) & set(text["vas"])):
+        window.show_vas_training(scale)
+        yield Shot(
+            f"participant_{language}_vas_training_{scale}",
+            f"The proportionality training for `{scale}` (SPEC.md 10.6): the scale exactly as "
+            f"it is rated, with no marker, and `training.{scale}` and `training.continue` "
+            f"below it, {language}.",
+            _grab(window),
+        )
+
     yield from _vas_variant_shots(window, language)
 
 

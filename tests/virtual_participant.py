@@ -27,7 +27,7 @@ from tatp.procedure import Procedure, Rig
 from tatp.responder import Responder
 from tatp.session import Session
 from tatp.setup_checks import AwaitStop, NoiseAdjustment
-from tatp.trials import ExperimenterChoice, MessageConfirm
+from tatp.trials import ExperimenterChoice, MessageConfirm, VasTraining
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 from tatp.ui.vas import QT_KEYS
@@ -152,6 +152,8 @@ class Virtual:
             window.stack.currentWidget() is window.message and trial._connections
         ):
             press(window, "period")
+        elif isinstance(trial, VasTraining) and trial._connections:
+            press(window.vas, "period")
         elif isinstance(trial, ExperimenterChoice):
             name, args = self.decide(trial)
             trial.actions[name].emit(*args)

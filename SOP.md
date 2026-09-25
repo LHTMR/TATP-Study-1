@@ -328,7 +328,8 @@ on their own screen. You watch, and answer only when the software asks you to.
    - **Touch calibration: the participant is asked whether the movement feels even.**
    - **Touch calibration, step 6: the participant chooses a kind of touch.**
 
-   Step 6 happens at every visit.
+   Step 6 happens at every visit. Before step 2's first touch, the participant is shown how
+   to use the intensity scale (VAS training, section 6).
 
 2. **When the software asks you to decide:**
 
@@ -373,8 +374,23 @@ The phase shows **Pre-sensitisation**. The measures run in this order:
 Each measure begins with **Ready. Press Start block when the participant is ready.** Press
 **Start block** when you and the participant are ready.
 
-**[TBC: VAS training. Bilaga 1 §3.6.1 asks for it at pre-sensitisation. The software does
-not present the training screens yet (STATUS.md), so how it is done until then is S's call.]**
+**VAS training** (Bilaga 1 §3.6.1, §3.9; SPEC.md §10.6). The software gives it, in every
+session, once per scale, just before that scale is first used:
+
+- the **intensity** scale at the start of the touch calibration's rating run (section 5),
+  after the adjustments and before the first rated touch;
+- the **pain** scale here, after you start the long protocol and before the first filament;
+- the **pleasantness** scale at the start of the first touch-rating block of the intervention.
+
+The participant sees the scale as it will be rated, with no marker, and a sentence below it:
+*a mark twice as far along the line means it was twice as painful* (or *intense*, or
+*pleasant*), then **Press ▶ to continue**. The two large buttons do nothing on this screen.
+Your screen shows **The participant is reading how to use the rating scale. Wait until they
+press ▶.** Wait; do not apply a filament until the screen shows the application instruction.
+Bilaga 1 also asks for instructions on the anchors: explain them verbally while the scale is
+on the participant's screen, if the participant has questions. The relaxation and alertness
+questions have no training. After a crash, a resumed session does not repeat training already
+given in that session.
 
 ---
 

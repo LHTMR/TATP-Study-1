@@ -423,6 +423,74 @@ def test_the_text_block_clears_the_scale(by_language, scale, language):
     )
 
 
+# -- the proportionality training (SPEC.md 10.6) ------------------------------------------
+
+TRAINED_SCALES = ("pain", "intensity", "pleasantness")
+
+
+def _show_training(widget, config, scale):
+    text = config.participant_text
+    training = text["training"]
+    widget.show_training(
+        scale, text["vas"][scale], f"{training[scale]}\n\n{training['continue']}"
+    )
+
+
+def test_every_trained_scale_has_its_sentence_in_both_languages(configs):
+    """The scales the spec names, and no others: relaxation and alertness have none."""
+    for config in configs.values():
+        text = config.participant_text
+        assert set(text["training"]) & set(text["vas"]) == set(TRAINED_SCALES)
+
+
+@pytest.mark.parametrize("scale", TRAINED_SCALES)
+@pytest.mark.parametrize("language", ("sv", "en"))
+def test_the_training_text_clears_the_scale_and_the_screen_edge(by_language, scale, language):
+    widget, config = by_language[language]
+    _show_training(widget, config, scale)
+    below_labels, above_edge = widget.training_clearance()
+    assert below_labels >= TEXT_TO_SCALE_GAP_PX, (
+        f"{language} {scale}: {below_labels:.0f} px between the lowest anchor label and the "
+        f"training text, where {TEXT_TO_SCALE_GAP_PX} px are required"
+    )
+    assert above_edge >= 0, f"{language} {scale}: the training text runs off the screen"
+    # The scale above it is drawn as it is rated (UI_PRINCIPLES.md 1.6).
+    assert widget.heading_clearance() >= TEXT_TO_SCALE_GAP_PX
+
+
+def test_the_training_screen_asks_only_for_the_play_button(widget, loaded):
+    confirmed, empty, responses = [], [], []
+    widget.training_confirmed.connect(lambda: confirmed.append(1))
+    widget.pressed_without_marker.connect(lambda: empty.append(1))
+    widget.confirmed.connect(responses.append)
+    _show_training(widget, loaded, "pain")
+    _press(widget, "pagedown")
+    _press(widget, "pageup")
+    assert not widget.state.visible, "the training screen must never show a marker"
+    _press(widget, "period")
+    assert confirmed == [1]
+    assert empty == [] and responses == []
+
+
+def test_the_emergency_stop_works_on_the_training_screen(widget, loaded):
+    stops = []
+    widget.emergency_stop.connect(lambda: stops.append(1))
+    _show_training(widget, loaded, "pain")
+    _press(widget, "f5")
+    assert stops == [1]
+
+
+def test_a_rating_after_the_training_is_an_ordinary_rating(widget, loaded):
+    _show_training(widget, loaded, "pain")
+    widget.show_scale("pain", loaded.participant_text["vas"]["pain"])
+    assert widget.training == ""
+    got = []
+    widget.confirmed.connect(got.append)
+    _press(widget, "pagedown")
+    _press(widget, "period")
+    assert len(got) == 1
+
+
 def test_confirming_emits_the_response(widget):
     got = []
     widget.confirmed.connect(got.append)

@@ -309,6 +309,15 @@ screens:
     and anchors and NO marker -- the state before the first press, en.
   participant_en_vas_relaxation_uncued: The `relaxation` scale with its question and
     anchors and NO marker -- the state before the first press, en.
+  participant_en_vas_training_intensity: 'The proportionality training for `intensity`
+    (SPEC.md 10.6): the scale exactly as it is rated, with no marker, and `training.intensity`
+    and `training.continue` below it, en.'
+  participant_en_vas_training_pain: 'The proportionality training for `pain` (SPEC.md
+    10.6): the scale exactly as it is rated, with no marker, and `training.pain` and
+    `training.continue` below it, en.'
+  participant_en_vas_training_pleasantness: 'The proportionality training for `pleasantness`
+    (SPEC.md 10.6): the scale exactly as it is rated, with no marker, and `training.pleasantness`
+    and `training.continue` below it, en.'
   participant_sv_adjust_just_noticeable: 'The adjustment screen for `just_noticeable`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     sv.'
@@ -396,3 +405,12 @@ screens:
     and anchors and NO marker -- the state before the first press, sv.
   participant_sv_vas_relaxation_uncued: The `relaxation` scale with its question and
     anchors and NO marker -- the state before the first press, sv.
+  participant_sv_vas_training_intensity: 'The proportionality training for `intensity`
+    (SPEC.md 10.6): the scale exactly as it is rated, with no marker, and `training.intensity`
+    and `training.continue` below it, sv.'
+  participant_sv_vas_training_pain: 'The proportionality training for `pain` (SPEC.md
+    10.6): the scale exactly as it is rated, with no marker, and `training.pain` and
+    `training.continue` below it, sv.'
+  participant_sv_vas_training_pleasantness: 'The proportionality training for `pleasantness`
+    (SPEC.md 10.6): the scale exactly as it is rated, with no marker, and `training.pleasantness`
+    and `training.continue` below it, sv.'

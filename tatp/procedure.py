@@ -22,6 +22,8 @@ that must be identical everywhere -- what an interruption does to a sequence:
   interruption during an inter-stimulus interval restarts the interval.
 - `await_proceed(then, prepare)` is a step that waits for the experimenter's
   `proceed_requested`, the one way every procedure is launched (SPEC.md 7.4).
+- `train_then(scales, then)` gives the VAS proportionality training still due for those scales
+  (SPEC.md 10.6), one step per screen, then runs `then`.
 - `finish(result)` ends the procedure and emits `finished(result)`.
 
 On `Interruptions.interrupted` the innermost procedure cancels its trial and its timer. On
@@ -50,6 +52,7 @@ from PySide6.QtWidgets import QApplication
 
 from tatp.interruption import Interruptions
 from tatp.session import Session
+from tatp.trials import VasTraining
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow, RemoteKeyRouter
 from tatp.units import MS_PER_S
@@ -209,6 +212,23 @@ class Procedure(QObject):
         self._child = child
         child.finished.connect(lambda result: self._child_done(child, result, on_done))
         child.start()
+
+    def train_then(self, scales, then: Callable[[], None]) -> None:
+        """The proportionality training for each of `scales` still due, then `then` (10.6).
+
+        Called by a procedure before the first stimulus of a run that rates on those scales, so
+        a training screen never falls between a stimulus and its rating. Each screen is a step,
+        so an interruption during one shows it again; once confirmed it is not shown again this
+        session (`Session.vas_training_due`).
+        """
+        due = [scale for scale in dict.fromkeys(scales) if self.session.vas_training_due(scale)]
+        if not due:
+            then()
+            return
+        self.run_trial(
+            lambda: VasTraining(self.session, self.participant, self.experimenter, due[0]),
+            lambda _: self.train_then(due[1:], then),
+        )
 
     def wait(self, seconds: float, then: Callable[[], None]) -> None:
         """Session-paced time: scaled by the clock, and restarted if interrupted."""

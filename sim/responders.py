@@ -23,9 +23,10 @@ touch's pleasantness, relaxation and alertness -- are a fixed level plus the sam
 
 **The whole session** (SPEC.md 2). Every screen a session shows is answered: the welcome and
 the other "press ▶" screens, the noise level, the stop rehearsal, the adjustments, the choices,
-the preference selection, the self-start and every VAS. An adjustment is made **by taps**, one
-step each, not by holding: the validator runs at a speed where a hold, which moves on real
-seconds, would take longer than the session's scaled time-out (`tatp/touchcal.py`).
+the preference selection, the self-start, the VAS training and every VAS. An adjustment is
+made **by taps**, one step each, not by holding: the validator runs at a speed where a hold,
+which moves on real seconds, would take longer than the session's scaled time-out
+(`tatp/touchcal.py`).
 
 **Adversarial participants** are subclasses, one per error path that exists to fire (SPEC.md
 17.3). Each overrides one hook and counts what it did, so the validator can check the software's
@@ -265,6 +266,7 @@ class VirtualParticipant(QObject):
         self.brush_felt = False
         self.seen_text: set[str] = set()
         self.ratings: list[tuple[str, float]] = []
+        self.trainings_seen: list[str] = []
         self.adjustments_seen = 0
 
         self._token: tuple | None = None
@@ -342,7 +344,7 @@ class VirtualParticipant(QObject):
     def _token_for(self, screen: QWidget) -> tuple:
         window = self.window
         if screen is window.vas:
-            return (screen, window.vas.scale, window.vas.state.cue_iso)
+            return (screen, window.vas.scale, window.vas.training, window.vas.state.cue_iso)
         if screen is window.control:
             return (screen, window.control.target, id(window.control))
         if screen is window.choice:
@@ -365,7 +367,9 @@ class VirtualParticipant(QObject):
         self.on_new_screen()
         if screen is window.vas:
             vas = window.vas
-            self._see(vas.question, vas.statement, *(a["label"] for a in vas.anchors))
+            self._see(
+                vas.question, vas.statement, vas.training, *(a["label"] for a in vas.anchors)
+            )
         elif screen is window.control:
             control = window.control
             self.adjustments_seen += 1
@@ -411,6 +415,11 @@ class VirtualParticipant(QObject):
         if self._handled:
             return
         self._handled = True
+        if self.window.vas.training:
+            # The proportionality training (SPEC.md 10.6): read, then ▶. Nothing is rated.
+            self.trainings_seen.append(self.window.vas.scale)
+            self.tap(Action.CONFIRM)
+            return
         scale = self.window.vas.scale
         self.answer_vas(scale, self.rating_for(scale))
 
@@ -585,7 +594,8 @@ class ConfirmsWithoutMarker(VirtualParticipant):
         self.empty_confirms = 0
 
     def on_vas(self) -> None:
-        if not self._handled:
+        # Not on the training screen, where a confirm is the answer rather than a mistake.
+        if not self._handled and not self.window.vas.training:
             for _ in range(self.EMPTY_CONFIRMS):
                 self.tap(Action.CONFIRM)
                 self.empty_confirms += 1

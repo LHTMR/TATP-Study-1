@@ -235,6 +235,12 @@ training:
   # commands NO pressure -- the pattern switches channels at whatever they hold, which on the
   # valve garment is nothing -- and logs a warning every session.
   stop_rehearsal_pressure_kpa: null
+  # SPEC.md 10.6: the VAS proportionality training (Price et al. 1983), "given once per scale at
+  # first use" -- a screen before each trained scale's first rating in a session (the scales
+  # with a sentence under `training` in config/text/participant_*.yaml). The session numbers
+  # it is given in: every session, once per scale per session, at its first use
+  # (docs/research/R34). An empty list gives none.
+  vas_proportionality_sessions: [1, 2, 3]
 
 cues:
   # A visual warning cue precedes every stimulus (SPEC.md 10.5).

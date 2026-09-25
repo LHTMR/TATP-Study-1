@@ -228,7 +228,7 @@ def test_the_rehearsal_fires_the_real_stop_and_shows_the_resume(rig, loaded, tmp
 
 def test_with_no_pressure_set_the_rehearsal_commands_none_and_says_so(app, loaded, tmp_path):
     """Local item L11: the pressure is S's. Nothing is commanded that nobody chose."""
-    training = {"stop_rehearsal_pressure_kpa": None}
+    training = {**loaded.study1["training"], "stop_rehearsal_pressure_kpa": None}
     rig = make_rig(make_config(loaded, tmp_path, training=training))
     try:
         session = rig.session
@@ -243,7 +243,7 @@ def test_with_no_pressure_set_the_rehearsal_commands_none_and_says_so(app, loade
 
 
 def test_with_a_pressure_set_the_rehearsal_runs_at_it(app, loaded, tmp_path):
-    training = {"stop_rehearsal_pressure_kpa": 55.0}
+    training = {**loaded.study1["training"], "stop_rehearsal_pressure_kpa": 55.0}
     rig = make_rig(make_config(loaded, tmp_path, training=training))
     try:
         Virtual(rig, StopRehearsal(rig)).run()

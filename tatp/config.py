@@ -74,6 +74,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "touch_block.repeated_scales[*]", str, None, None),
     ("study1.yaml", "touch_block.once_scales[*]", str, None, None),
     ("study1.yaml", "touch_block.baseline_scales[*]", str, None, None),
+    ("study1.yaml", "training.vas_proportionality_sessions", list, None, None),
     ("study1.yaml", "brush.n_trials", int, 1, None),
     ("study1.yaml", "brush.n_sites", int, 1, None),
     ("study1.yaml", "pinprick.expected_offset_steps_post_s_to_post_i", NUMBER, None, None),

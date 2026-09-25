@@ -1198,10 +1198,18 @@ class TouchCalibration(Procedure):
         n_catch = maths.catch_trial_count(
             len(amplitudes), float(self.touch["catch_trial_fraction"])
         )
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touchcal_estimation"]
-        )
-        self._present(list(maths.estimation_plans(amplitudes, n_catch, self.session.rng)))
+        plans = list(maths.estimation_plans(amplitudes, n_catch, self.session.rng))
+
+        def present() -> None:
+            self.experimenter.set_instruction(
+                self.experimenter.text["instructions"]["touchcal_estimation"]
+            )
+            self._present(plans)
+
+        # The run's first intensity rating is the scale's first use in the session (SPEC.md
+        # 10.6), and the training goes before its first stimulus, never between a stimulus and
+        # its rating. A re-run of steps 1 and 2 finds it already given.
+        self.train_then((INTENSITY_SCALE,), present)
 
     def _device_range(self) -> tuple[float, float]:
         return (float(self.session.config.hardware["adjustment"]["tap_step_kpa"]),
