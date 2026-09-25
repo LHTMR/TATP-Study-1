@@ -27,7 +27,8 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
   - The **participant screen draws at the approved 1280×800** on the 1920×1200 HP
     (`screens.scale_factors`).
   - The **schedule preview** is in the experimenter's language.
-  - The **SOP** tells the experimenter to turn the participant's display away.
+  - The **SOP** tells the experimenter to sit where they cannot see past the curtain to the
+    participant's display (N7.U14).
 - **The validator's timing check passes again.** A trial's steps are now timed from the moment
   they follow, so slow file writes no longer add to the intervals (N7.U11).
 
