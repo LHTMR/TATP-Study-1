@@ -1139,7 +1139,18 @@ class TouchCalibration(Procedure):
 
     def begin(self) -> None:
         self.session.set_phase(TOUCH_CALIBRATION)
-        self._start_run()
+        # SPEC.md 10.6, Bilaga 1 3.9: the training for the touch scales, during touch
+        # calibration, before step 1 -- whose adjustments already ask for the intensity scale's
+        # anchors, so that is the scale's first use. The touch scales are the touch block's
+        # repeated ones, in their order, that have a training sentence; `TouchBlock` asserts
+        # none is left untrained. The garment is off for it. A re-run of steps 1 and 2 finds it
+        # already given.
+        touch_scales = [
+            scale for scale in self.session.config.study1["touch_block"]["repeated_scales"]
+            if scale in self.session.trained_scales
+        ]
+        self.session.garment.stop()
+        self.train_then(touch_scales, self._start_run)
 
     def _start_run(self) -> None:
         self.run_index += 1

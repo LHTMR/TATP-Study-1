@@ -217,6 +217,12 @@ class TouchBlock(Procedure):
         )
         self.channel = channel
         self.done_count = 0
+        # Stage boundary (CLAUDE.md). No VAS training here: every touch scale was trained
+        # during the touch calibration (SPEC.md 10.6), so the intervention never contains it.
+        # A scale added to the block without being trained there is a defect, stopped here
+        # before the block begins rather than rated untrained.
+        untrained = [s for s in self.plan if self.session.vas_training_due(s)]
+        assert not untrained, f"touch block scales {untrained} were never trained"
 
     def begin(self) -> None:
         def prepare() -> None:
@@ -465,10 +471,6 @@ class SessionRunner(Procedure):
         """Bilaga 1 Table 2's baseline relaxation and alertness, with the garment off."""
         self.session.garment.stop()
         scales = list(self.session.config.study1["touch_block"]["baseline_scales"])
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["baseline_ratings"]
-        )
-        self.experimenter.refresh()
 
         def rate(index: int) -> None:
             if index == len(scales):
@@ -482,7 +484,16 @@ class SessionRunner(Procedure):
                 lambda _: rate(index + 1),
             )
 
-        rate(0)
+        def begin() -> None:
+            self.experimenter.set_instruction(
+                self.experimenter.text["instructions"]["baseline_ratings"]
+            )
+            self.experimenter.refresh()
+            rate(0)
+
+        # Relaxation and alertness have no training sentence today, so this gives none; it is
+        # here so a scale given one later is trained at its first use like every other.
+        self.train_then(scales, begin)
 
     # == the pain measures =====================================================================
 
@@ -999,6 +1010,8 @@ class SessionRunner(Procedure):
             self.session.audio.start_noise(state.masking[0])
         if "setup.stop_rehearsal" in done and state.stop_rehearsal_press_detected is not None:
             self.session.record_stop_rehearsal(state.stop_rehearsal_press_detected)
+        # SPEC.md 10.6: training already given in this session is not given again.
+        self.session.vas_trained.update(state.vas_trained)
         if "touch_calibration" in done:
             assert state.deliveries is not None, "a completed calibration wrote its channels"
             self.deliveries = dict(state.deliveries)

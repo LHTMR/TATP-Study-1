@@ -61,6 +61,13 @@ training:
   intensity: A mark twice as far along the line means the touch felt twice as intense.
   pleasantness: A mark twice as far along the line means the touch felt twice as pleasant.
 
+# DRAFT (LOG N7.T1): written by the build, not ethics-sourced
+# The line under each scale's `training` sentence on the training screen, which shows the scale
+# as it is rated with the sentence below it (SPEC.md 10.6). Kept out of `training`, whose every
+# key must be a scale. The same words as the approved "Press ▶ to continue." closing
+# `stop_rehearsal_done` and `audio_setup.settled`.
+training_continue: Press ▶ to continue.
+
 screens:
   # Approved 23 Aug 2026. Vocabulary follows Bilaga 3a, which describes the skin testing as
   # "tunna plastfilament" and "en mjuk pensel" and never as pinpricks -- a participant screen

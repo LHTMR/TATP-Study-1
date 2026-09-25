@@ -321,6 +321,21 @@ screens:
     and anchors and NO marker -- the state before the first press, en.
   participant_en_vas_relaxation_uncued: The `relaxation` scale with its question and
     anchors and NO marker -- the state before the first press, en.
+  participant_en_vas_training_intensity: 'The proportionality training for `intensity`
+    (SPEC.md 10.6) while the experimenter explains the anchors: the scale exactly
+    as it is rated, with no marker, and `training.intensity` below it; no continue
+    line, and ▶ does nothing, en.'
+  participant_en_vas_training_pain: 'The proportionality training for `pain` (SPEC.md
+    10.6) while the experimenter explains the anchors: the scale exactly as it is
+    rated, with no marker, and `training.pain` below it; no continue line, and ▶ does
+    nothing, en.'
+  participant_en_vas_training_pain_accepting: 'The `pain` training once the experimenter
+    has pressed Next step: `training_continue` under the sentence, and ▶ now dismisses
+    it, en.'
+  participant_en_vas_training_pleasantness: 'The proportionality training for `pleasantness`
+    (SPEC.md 10.6) while the experimenter explains the anchors: the scale exactly
+    as it is rated, with no marker, and `training.pleasantness` below it; no continue
+    line, and ▶ does nothing, en.'
   participant_sv_adjust_just_noticeable: 'The adjustment screen for `just_noticeable`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     sv.'
@@ -408,3 +423,18 @@ screens:
     and anchors and NO marker -- the state before the first press, sv.
   participant_sv_vas_relaxation_uncued: The `relaxation` scale with its question and
     anchors and NO marker -- the state before the first press, sv.
+  participant_sv_vas_training_intensity: 'The proportionality training for `intensity`
+    (SPEC.md 10.6) while the experimenter explains the anchors: the scale exactly
+    as it is rated, with no marker, and `training.intensity` below it; no continue
+    line, and ▶ does nothing, sv.'
+  participant_sv_vas_training_pain: 'The proportionality training for `pain` (SPEC.md
+    10.6) while the experimenter explains the anchors: the scale exactly as it is
+    rated, with no marker, and `training.pain` below it; no continue line, and ▶ does
+    nothing, sv.'
+  participant_sv_vas_training_pain_accepting: 'The `pain` training once the experimenter
+    has pressed Next step: `training_continue` under the sentence, and ▶ now dismisses
+    it, sv.'
+  participant_sv_vas_training_pleasantness: 'The proportionality training for `pleasantness`
+    (SPEC.md 10.6) while the experimenter explains the anchors: the scale exactly
+    as it is rated, with no marker, and `training.pleasantness` below it; no continue
+    line, and ▶ does nothing, sv.'

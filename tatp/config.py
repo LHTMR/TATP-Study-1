@@ -74,6 +74,9 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "touch_block.repeated_scales[*]", str, None, None),
     ("study1.yaml", "touch_block.once_scales[*]", str, None, None),
     ("study1.yaml", "touch_block.baseline_scales[*]", str, None, None),
+    # Its entries are checked by `Session`: `[*]` here would refuse the empty list, which is a
+    # valid value meaning no training.
+    ("study1.yaml", "training.vas_proportionality_sessions", list, None, None),
     ("study1.yaml", "brush.n_trials", int, 1, None),
     ("study1.yaml", "brush.n_sites", int, 1, None),
     ("study1.yaml", "pinprick.expected_offset_steps_post_s_to_post_i", NUMBER, None, None),
@@ -438,6 +441,15 @@ def load(
     for role in ("participant", "experimenter"):
         first, second = (TEXT_FILES[(role, lang)] for lang in languages)
         _assert_same_keys(loaded[first], loaded[second], first, second)
+
+    # SPEC.md 10.6: every `training` key names the scale it trains. A misspelt one would be a
+    # scale silently never trained.
+    for lang in languages:
+        name = TEXT_FILES[("participant", lang)]
+        text = loaded[name]
+        strays = sorted(set(text["training"]) - set(text["vas"]))
+        if strays:
+            raise ConfigError(f"{name}: training keys {strays} are not scales under `vas`")
 
     config = Config(
         study1=loaded["study1.yaml"],

@@ -27,7 +27,7 @@ from tatp.procedure import Procedure, Rig
 from tatp.responder import Responder
 from tatp.session import Session
 from tatp.setup_checks import AwaitStop, NoiseAdjustment
-from tatp.trials import ExperimenterChoice, MessageConfirm
+from tatp.trials import ExperimenterChoice, MessageConfirm, VasTraining
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 from tatp.ui.vas import QT_KEYS
@@ -123,6 +123,11 @@ class Virtual:
             return
         trial = self.current()
         if trial is None:
+            vas = window.vas
+            explaining = vas.training and not vas.training_accepting
+            if window.stack.currentWidget() is vas and explaining:
+                # The experimenter has explained the anchors: their go (SPEC.md 10.6).
+                rig.experimenter.proceed_requested.emit()
             return
         self.before_step(trial)
         if interruptions.active is not None or trial is not self.current():
@@ -152,6 +157,8 @@ class Virtual:
             window.stack.currentWidget() is window.message and trial._connections
         ):
             press(window, "period")
+        elif isinstance(trial, VasTraining) and trial._connections:
+            press(window.vas, "period")
         elif isinstance(trial, ExperimenterChoice):
             name, args = self.decide(trial)
             trial.actions[name].emit(*args)

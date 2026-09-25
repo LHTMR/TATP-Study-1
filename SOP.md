@@ -331,7 +331,8 @@ on their own screen. You watch, and answer only when the software asks you to.
    - **Touch calibration: the participant is asked whether the movement feels even.**
    - **Touch calibration, step 6: the participant chooses a kind of touch.**
 
-   Step 6 happens at every visit.
+   Step 6 happens at every visit. Before step 1, with the garment off, the participant is
+   trained on the intensity scale and then the pleasantness scale (VAS training, section 6).
 
 2. **When the software asks you to decide:**
 
@@ -376,8 +377,28 @@ The phase shows **Pre-sensitisation**. The measures run in this order:
 Each measure begins with **Ready. Press Next step when the participant is ready.** Press
 **Next step** when you and the participant are ready.
 
-**[TBC: VAS training. Bilaga 1 §3.6.1 asks for it at pre-sensitisation. The software does
-not present the training screens yet (STATUS.md), so how it is done until then is S's call.]**
+**VAS training** (Bilaga 1 §3.6.1, §3.9; SPEC.md §10.6). The software gives it, in every
+session, once per scale, before that scale is first used:
+
+- the **intensity** scale, then the **pleasantness** scale, at the start of the touch
+  calibration (section 5), before step 1, with the garment off;
+- the **pain** scale here, after you start the long protocol and before the first filament.
+
+The intervention never contains training.
+
+For each scale:
+
+1. The participant sees the scale as it will be rated, with no marker, and a sentence below
+   it: *a mark twice as far along the line means it was twice as painful* (or *intense*, or
+   *pleasant*). No button does anything on it yet. Your screen shows **Rating scale training:
+   explain the labels along the line aloud, then press Next step.**
+2. Every time, read out each label on the participant's screen and where it sits on the line
+   (Bilaga 1 §3.6.1, §3.9 ask for instructions on the anchors). Then press **Next step**.
+3. **Press ▶ to continue** appears under the sentence, and your screen shows **Rating scale
+   training: waiting for the participant to press ▶.** The participant presses ▶.
+
+Do not apply a filament until your screen shows the application instruction. The relaxation and alertness questions have no training. After a
+crash, a resumed session does not repeat training already given in that session.
 
 ---
 

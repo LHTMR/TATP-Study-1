@@ -22,6 +22,8 @@ that must be identical everywhere -- what an interruption does to a sequence:
   interruption during an inter-stimulus interval restarts the interval.
 - `await_proceed(then, prepare)` is a step that waits for the experimenter's
   `proceed_requested`, the one way every procedure is launched (SPEC.md 7.4).
+- `train_then(scales, then)` gives the VAS proportionality training still due for those scales
+  (SPEC.md 10.6), one step per screen, then runs `then`.
 - `finish(result)` ends the procedure and emits `finished(result)`.
 
 On `Interruptions.interrupted` the innermost procedure cancels its trial and its timer. On
@@ -50,9 +52,15 @@ from PySide6.QtWidgets import QApplication
 
 from tatp.interruption import Interruptions
 from tatp.session import Session
+from tatp.trials import VasTraining
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow, RemoteKeyRouter
 from tatp.units import MS_PER_S
+
+# `log` event names (docs/DATA_SCHEMA.md) and an experimenter text key, not wording.
+VAS_TRAINING_SHOWN = "vas_training_shown"
+VAS_TRAINING_EXPLAINED = "vas_training_explained"
+VAS_TRAINING_INSTRUCTION = "vas_training"
 
 
 class Rig(QObject):
@@ -209,6 +217,43 @@ class Procedure(QObject):
         self._child = child
         child.finished.connect(lambda result: self._child_done(child, result, on_done))
         child.start()
+
+    def train_then(self, scales, then: Callable[[], None]) -> None:
+        """The proportionality training for each of `scales` still due, then `then` (10.6).
+
+        Called by a procedure before the first stimulus of a run that rates on those scales, so
+        a training screen never falls between a stimulus and its rating. Each scale is two
+        steps, so an interruption repeats the one it was in:
+
+        1. The scale and its sentence, with ▶ doing nothing, while the experimenter explains
+           the anchors aloud (Bilaga 1 3.6.1, 3.9); their go is logged `vas_training_explained`.
+        2. `VasTraining`: the continue line appears and ▶ dismisses the screen.
+
+        Once confirmed it is not shown again this session (`Session.vas_training_due`).
+        """
+        due = [scale for scale in dict.fromkeys(scales) if self.session.vas_training_due(scale)]
+        if not due:
+            then()
+            return
+        scale = due[0]
+
+        def show() -> None:
+            self.participant.show_vas_training(scale, accepting=False)
+            self.experimenter.set_instruction(
+                self.experimenter.text["instructions"][VAS_TRAINING_INSTRUCTION]
+            )
+            self.experimenter.set_status("")
+            self.experimenter.refresh()
+            self.session.log(VAS_TRAINING_SHOWN, detail=scale)
+
+        def explained() -> None:
+            self.session.log(VAS_TRAINING_EXPLAINED, origin="experimenter", detail=scale)
+            self.run_trial(
+                lambda: VasTraining(self.session, self.participant, self.experimenter, scale),
+                lambda _: self.train_then(due[1:], then),
+            )
+
+        self.await_proceed(explained, show)
 
     def wait(self, seconds: float, then: Callable[[], None]) -> None:
         """Session-paced time: scaled by the clock, and restarted if interrupted."""

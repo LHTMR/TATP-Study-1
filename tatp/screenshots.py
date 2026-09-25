@@ -259,6 +259,26 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             _grab(window),
         )
 
+    for scale in sorted(text["training"]):
+        window.show_vas_training(scale, accepting=False)
+        yield Shot(
+            f"participant_{language}_vas_training_{scale}",
+            f"The proportionality training for `{scale}` (SPEC.md 10.6) while the experimenter "
+            f"explains the anchors: the scale exactly as it is rated, with no marker, and "
+            f"`training.{scale}` below it; no continue line, and ▶ does nothing, {language}.",
+            _grab(window),
+        )
+
+    # One scale is enough for the second state: the continue line is drawn by the same code
+    # under every scale's sentence.
+    window.show_vas_training(VARIANT_SCALE, accepting=True)
+    yield Shot(
+        f"participant_{language}_vas_training_{VARIANT_SCALE}_accepting",
+        f"The `{VARIANT_SCALE}` training once the experimenter has pressed Next step: "
+        f"`training_continue` under the sentence, and ▶ now dismisses it, {language}.",
+        _grab(window),
+    )
+
     yield from _vas_variant_shots(window, language)
 
 

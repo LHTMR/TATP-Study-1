@@ -25,7 +25,7 @@ from tatp.pinprick import BrushTrial, F40Fit, LongProtocol, PinprickTrial, ladde
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import Session
-from tatp.session_runner import SessionRunner, Upcoming
+from tatp.session_runner import SessionRunner, TouchBlock, Upcoming
 from tatp.touchcal_maths import Delivery
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -265,6 +265,70 @@ def test_touch_blocks_and_the_baseline_write_touch_ratings(finished):
     assert baseline == ["relaxation", "alertness"]
     block = [r["scale"] for r in rows if r["block_index"] == "2"]
     assert block == ["intensity", "pleasantness", "relaxation", "alertness"]
+
+
+def test_each_scale_is_trained_once_before_its_first_rating(finished):
+    """SPEC.md 10.6, Bilaga 1 3.9: intensity then pleasantness at the start of touch
+    calibration, before step 1; pain at pre-S; none in the intervention; relaxation and
+    alertness have no training."""
+    events = _events(finished.session)
+    confirmed = [r for r in events if r["event"] == "vas_training_confirmed"]
+    assert [r["detail"] for r in confirmed] == ["intensity", "pleasantness", "pain"]
+    assert [r["phase"] for r in confirmed] == [
+        "touch_calibration", "touch_calibration", "pre_sensitisation"
+    ]
+    assert all(r["origin"] == "participant" for r in confirmed)
+    names = [(r["event"], r["detail"]) for r in events]
+    first_adjustment = next(i for i, r in enumerate(events)
+                            if r["event"] == "touch_calibration_run")
+    assert names.index(("vas_training_confirmed", "pleasantness")) < first_adjustment
+    for scale in ("intensity", "pain", "pleasantness"):
+        shown = names.index(("vas_training_shown", scale))
+        explained = names.index(("vas_training_explained", scale))
+        assert events[explained]["origin"] == "experimenter"
+        assert shown < explained < names.index(("vas_training_confirmed", scale))
+        assert names.index(("vas_training_confirmed", scale)) < names.index(
+            ("rating_cued", scale)
+        ), f"{scale} was rated before its training"
+
+
+def test_training_is_given_only_in_the_configured_sessions(app, loaded, tmp_path):
+    study1 = {**loaded.study1,
+              "training": {**loaded.study1["training"], "vas_proportionality_sessions": [1]}}
+    config = cfg.Config(**{**make_config(loaded, tmp_path).__dict__, "study1": study1})
+    first = Session(config, "01", 1, "SM", EXAMPLES, rng_seed=7)
+    try:
+        second = Session(config, "01", 2, "SM", EXAMPLES, rng_seed=7)
+        try:
+            assert first.vas_training_due("pain") and not second.vas_training_due("pain")
+            assert not first.vas_training_due("relaxation"), "no training text, no training"
+            first.vas_trained.add("pain")
+            assert not first.vas_training_due("pain")
+        finally:
+            second.close()
+    finally:
+        first.close()
+
+
+def test_an_empty_session_list_means_no_training(app, loaded, tmp_path):
+    study1 = {**loaded.study1,
+              "training": {**loaded.study1["training"], "vas_proportionality_sessions": []}}
+    config = cfg.Config(**{**make_config(loaded, tmp_path).__dict__, "study1": study1})
+    session = Session(config, "01", 1, "SM", EXAMPLES, rng_seed=7)
+    try:
+        assert not any(session.vas_training_due(s) for s in session.trained_scales)
+    finally:
+        session.close()
+
+
+def test_a_touch_block_refuses_to_run_a_scale_never_trained(app, loaded, tmp_path):
+    """SPEC.md 10.6: a touch scale the calibration did not train is a defect, not a rating."""
+    runner = make_runner(loaded, tmp_path)
+    try:
+        with pytest.raises(AssertionError, match="never trained"):
+            TouchBlock(runner.rig, runner.reference_channel)
+    finally:
+        runner.session.close()
 
 
 def test_the_garment_is_off_for_the_rekindle_and_on_again_after(finished):
@@ -521,12 +585,15 @@ def test_after_a_resume_every_stage_draws_what_it_would_have(app, loaded, tmp_pa
     block after the crash are those of the uninterrupted session with the same seed."""
     crashed = _crash_after(app, loaded, tmp_path, "block.2")
     runner = _resumed(loaded, tmp_path, crashed)
+    # SPEC.md 10.6: every scale was trained before the crash, and is not trained again.
+    assert runner.resume.vas_trained == {"intensity", "pain", "pleasantness"}
     Driver(runner.rig, runner, stop_when=lambda: any(
         r["event"] == "stage_completed" and r["detail"] == "block.3"
         for r in _events(runner.session)
     )).run()
     assert _intervals(runner.session, "3") == _intervals(finished.session, "3")
     assert _intervals(runner.session, "3"), "block 3 is a pinprick block, with intervals"
+    assert not any(r["event"] == "vas_training_shown" for r in _events(runner.session))
     runner.cancel()
     runner.session.close()
 

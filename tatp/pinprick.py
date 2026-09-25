@@ -957,22 +957,32 @@ class _Series(Procedure):
         self._discardable = discardable
         self.experimenter.set_actions_enabled(discard=discardable is not None)
 
+    def rating_scale(self) -> str:
+        """The scale this protocol's applications are rated on."""
+        return PAIN_SCALE
+
     def wait_to_start(self, then: Callable[[], None]) -> None:
-        """The experimenter confirms the start of the block (SPEC.md 8.3)."""
+        """The experimenter confirms the start of the block (SPEC.md 8.3).
+
+        Then, before the first application, the scale's proportionality training if this is
+        its first use in the session (SPEC.md 10.6) -- in pre-sensitisation's long protocol,
+        which is where the pain scale is first used.
+        """
 
         def prepare() -> None:
             self.participant.show_blank()
             self.experimenter.set_instruction(self.experimenter.text["instructions"]["ready"])
             self.experimenter.refresh()
 
-        self.await_proceed(then, prepare)
+        self.await_proceed(lambda: self.train_then((self.rating_scale(),), then), prepare)
 
     # -- interruptions ------------------------------------------------------------------
 
     def on_interrupted(self, kind: str) -> None:
         trial = self._trial
         super().on_interrupted(kind)
-        if trial is None:
+        # Only an application can lose a delivery; the training screen is repeated as it was.
+        if not isinstance(trial, _RatedTrial):
             return
         if trial.stimulus_delivered:
             self._count_lost_delivery()
@@ -1571,6 +1581,9 @@ class BrushProtocol(_RatingSeries):
 
     def _stimulus(self) -> str:
         return BRUSH_TABLE
+
+    def rating_scale(self) -> str:
+        return self.session.config.study1["brush"]["rating_scale"]
 
     def _apply_next(self) -> None:
         site = self.rotation.order()[0]

@@ -48,6 +48,8 @@ REKINDLE = "rekindle"
 SENSITISATION_STARTED = "sensitisation_started"
 MAPPING_PATH_STARTED = "mapping_path_started"
 PATH_MARKER = ", path "
+# Written by `tatp/trials.py`'s `VasTraining`, which takes the name from here.
+VAS_TRAINING_CONFIRMED = "vas_training_confirmed"
 CONDITIONS = ("sham", "ct_targeted", "participant_preferred")
 
 
@@ -138,6 +140,8 @@ class ResumeState:
     # Session time the rekindle's heat was launched, if it was (LOG N7.D14).
     rekindle_heat_t_s: float | None = None
     current_file: str = ""
+    # The scales whose VAS training the participant had already confirmed (SPEC.md 10.6).
+    vas_trained: frozenset[str] = frozenset()
 
     @property
     def after_t_zero(self) -> bool:
@@ -190,6 +194,10 @@ def load(open_session: OpenSession, config, per_channel_pressure: bool) -> Resum
             if row["intolerable"] == "true"
         ),
         mapping=_mapping(chain, list(config.study1["mapping"]["path_ids"])),
+        vas_trained=frozenset(
+            row["detail"] for row in _rows(chain, "log")
+            if row["event"] == VAS_TRAINING_CONFIRMED
+        ),
     )
 
 

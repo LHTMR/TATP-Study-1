@@ -122,6 +122,17 @@ its `stage_completed` row exists. `sensitisation_started` has the exact session 
 session logs `sensitisation_resumed` with the same value instead, and `session_resumed` naming
 the file it resumed from.
 
+The VAS proportionality training (§10.6) is three events, each with the scale in `detail`
+(`pain`, `intensity`, `pleasantness`): `vas_training_shown` when the screen goes up (again
+after an interruption repeats it), `vas_training_explained` (origin `experimenter`) at the
+experimenter's Next step once they have explained the anchors aloud, and
+`vas_training_confirmed` (origin `participant`) when the participant then dismisses it with the
+play button, which does nothing before the explanation. The training was given exactly when `vas_training_confirmed` exists; `phase` and
+`block_index` say where. A resume reads `vas_training_confirmed` back so a resumed session does
+not give it again. It is given in the sessions `training.vas_proportionality_sessions` lists,
+once per scale: intensity then pleasantness at the start of `touch_calibration`, and pain in
+`pre_sensitisation` before the long protocol's first application. Never in the intervention.
+
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|
 | timestamp_iso | iso8601 | - | yes | Wall clock |
