@@ -11,6 +11,7 @@ experimenter may see is decided, and a test asserts the condition is not in it.
 
 from __future__ import annotations
 
+import dataclasses
 import random
 import time
 from collections.abc import Callable
@@ -24,6 +25,7 @@ from tatp.audio import Audio
 from tatp.clock import ISO_FORMAT, Clock
 from tatp.config import REPO_ROOT, Config, hash_files
 from tatp.datafiles import DataFileCollection
+from tatp.garment.arduino_mosfet import ArduinoMosfetGarment
 from tatp.garment.base import GarmentController, Limits
 from tatp.garment.mock import MockGarment
 from tatp.garment.patterns import load_folder
@@ -62,7 +64,30 @@ UPCOMING_KINDS = ("block", "phase", "rekindle")
 ORIGINS = ("software", "experimenter", "participant")
 SEVERITIES = ("info", "warning", "error")
 
-DRIVERS: dict[str, type[GarmentController]] = {"mock": MockGarment}
+DRIVERS: dict[str, type[GarmentController]] = {
+    "mock": MockGarment,
+    "arduino_mosfet": ArduinoMosfetGarment,
+}
+
+
+def with_session_choices(
+    config: Config, data_folder: Path | None = None, garment: str | None = None
+) -> Config:
+    """`config` with the choices made at launch rather than in hardware.yaml.
+
+    The launcher and `run_session.py --garment` both come through here, so a session's garment
+    is chosen the same way from either. hardware.yaml keeps `driver: mock`, so the test gate
+    never opens a serial port. The driver actually used is written to the session file
+    (`garment_driver`) either way.
+    """
+    hardware = dict(config.hardware)
+    if data_folder is not None:
+        hardware["data"] = {**hardware["data"], "folder": str(data_folder)}
+    if garment is not None:
+        if garment not in DRIVERS:
+            raise SessionError(f"garment {garment!r} is not one of {sorted(DRIVERS)}")
+        hardware["garment"] = {**hardware["garment"], "driver": garment}
+    return dataclasses.replace(config, hardware=hardware)
 
 
 class SessionError(Exception):
@@ -188,7 +213,10 @@ class Session:
                 f"garment.driver is {driver_name!r}. Available drivers: {sorted(DRIVERS)}."
             )
         self.garment = DRIVERS[driver_name](
-            Limits.from_config(config.hardware), self.clock, on_command=self._record_garment
+            Limits.from_config(config.hardware),
+            self.clock,
+            on_command=self._record_garment,
+            hardware=config.hardware,
         )
         # SPEC.md 10.5, 10.7. Owned here beside the garment for the same reason: every phase
         # needs it and none of them does it.
@@ -232,7 +260,9 @@ class Session:
             "elapsed_s": self.clock.elapsed_s(),
             "t_session_s": self.clock.t_session_s(),
             "garment_connected": self.garment.connected,
-            "garment_driver": self.garment.driver_name,
+            # The hardware.yaml key, which the window names in words (`terms.garments`); the
+            # session file records the class, `driver_name`.
+            "garment_driver": self.config.hardware["garment"]["driver"],
             "unresolved_open_items": [str(item) for item in self.config.unresolved],
             "placeholder_text": self.config.has_placeholder_text(),
             "reduced_capability_device": not self.garment.per_channel_pressure,

@@ -23,9 +23,27 @@ with no protocol in it.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRect, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QFontMetrics, QGuiApplication, QPainter, QPen
-from PySide6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
+import shiboken6
+from PySide6.QtCore import QEvent, QObject, QRect, Qt, QTimer, Signal
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetrics,
+    QGuiApplication,
+    QKeyEvent,
+    QPainter,
+    QPen,
+)
+from PySide6.QtWidgets import (
+    QAbstractSpinBox,
+    QApplication,
+    QLineEdit,
+    QPlainTextEdit,
+    QStackedWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from tatp.clock import Clock
 from tatp.config import Config
@@ -66,6 +84,8 @@ BUTTON_LINE_WIDTH_PX = 3
 # "this is what you are feeling now", and anything brighter starts to read as a recommendation.
 BUTTON_EMPHASIS_WIDTH_PX = 9
 BUTTON_SYMBOL_POINT_SIZE = 52
+# The stop button's sticker disc, as a fraction of the button's shorter side.
+STOP_DISC_FRACTION = 0.8
 BUTTON_LABEL_POINT_SIZE = 20
 BUTTON_LABEL_GAP_PX = 22
 # The label may be wider than its button -- it is a phrase, the button is a symbol -- but not so
@@ -101,6 +121,10 @@ class _MessageScreen(QWidget):
         self.emphasised = False
         # The stop button's printed symbol, on the stop rehearsal only (SPEC.md 10.9).
         self.stop_symbol: str | None = None
+        # The colour printed on that button (`responder.button_symbol_colours`), set by the
+        # window from hardware.yaml.
+        self.stop_colour = FOREGROUND
+        self.stop_disc: QColor | None = None
 
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
@@ -116,7 +140,14 @@ class _MessageScreen(QWidget):
         painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.text)
         if self.stop_symbol is not None:
             painter.setRenderHint(QPainter.Antialiasing)
-            _draw_symbol_button(painter, self, _stop_button_rect(self), self.stop_symbol)
+            _draw_symbol_button(
+                painter,
+                self,
+                _stop_button_rect(self),
+                self.stop_symbol,
+                self.stop_colour,
+                self.stop_disc,
+            )
         painter.end()
 
 
@@ -360,20 +391,39 @@ def _stop_button_rect(widget: QWidget) -> QRect:
     )
 
 
-def _draw_symbol_button(painter: QPainter, widget: QWidget, rect: QRect, symbol: str) -> None:
-    """A button outline carrying its printed symbol, with no label: the text above names it."""
+def _draw_symbol_button(
+    painter: QPainter,
+    widget: QWidget,
+    rect: QRect,
+    symbol: str,
+    colour: QColor,
+    disc: QColor | None = None,
+) -> None:
+    """A button outline carrying its printed symbol, with no label: the text above names it.
+
+    `disc` is the filled circle the symbol sits on, where the physical button has one -- the
+    lab remote's stop is a black "!" on a yellow sticker, and it should look like that.
+    """
     painter.setPen(QPen(FOREGROUND, BUTTON_LINE_WIDTH_PX))
     painter.setBrush(Qt.NoBrush)
     painter.drawRoundedRect(rect, BUTTON_RADIUS_PX, BUTTON_RADIUS_PX)
+    if disc is not None:
+        diameter = int(min(rect.width(), rect.height()) * STOP_DISC_FRACTION)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(disc)
+        painter.drawEllipse(rect.center(), diameter // 2, diameter // 2)
+        painter.setBrush(Qt.NoBrush)
     symbol_font = QFont(widget.font())
     symbol_font.setPointSize(BUTTON_SYMBOL_POINT_SIZE)
+    symbol_font.setBold(disc is not None)
     # Shrunk to fit if it is wider than the button: a symbol cut off at both edges stops
-    # being the symbol, and while it is a placeholder (local item L12) it must read as one.
+    # being the symbol.
     room = rect.width() - 2 * BUTTON_RADIUS_PX
     width = QFontMetrics(symbol_font).horizontalAdvance(symbol)
     if width > room:
         symbol_font.setPointSizeF(BUTTON_SYMBOL_POINT_SIZE * room / width)
     painter.setFont(symbol_font)
+    painter.setPen(colour)
     painter.drawText(rect, Qt.AlignCenter, symbol)
 
 
@@ -456,6 +506,13 @@ class ParticipantWindow(QWidget):
         self._names = {key: name for name, key in QT_KEYS.items()}
 
         self.message = _MessageScreen()
+        responder_config = config.hardware["responder"]
+        self.message.stop_colour = QColor(
+            responder_config["button_symbol_colours"]["emergency_stop"]
+        )
+        self.message.stop_disc = QColor(
+            responder_config["button_symbol_discs"]["emergency_stop"]
+        )
         self.cue = _CueScreen()
         self.vas = VasWidget(config.study1["vas"], responder, clock)
         self.vas.confirmed.connect(self.confirmed)
@@ -659,3 +716,71 @@ class ParticipantWindow(QWidget):
         if name is None or self.responder.is_ignored(name):
             return None
         return self.responder.action_for(name)
+
+    def is_remote_key(self, event) -> bool:
+        """A key the response device emits, bound or deliberately ignored (SPEC.md 10.1)."""
+        name = self._names.get(Qt.Key(event.key()))
+        if name is None:
+            return False
+        return name in self.responder.keys or self.responder.is_ignored(name)
+
+
+# Widgets the experimenter types into. A key reaching one of these is the experimenter typing,
+# not the participant pressing -- the remote's confirm is the full stop, which is also typed.
+TEXT_ENTRY_WIDGETS = (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
+
+
+class RemoteKeyRouter(QObject):
+    """Delivers the response device's keys to the participant window, whichever has focus.
+
+    The remote is a keyboard as far as the operating system is concerned, so its presses go to
+    the active window -- and the experimenter makes their own window active every time they
+    click Start block. Without this, the participant's next rating, and their emergency stop,
+    would land on the experimenter's screen and do nothing (SPEC.md 10.1, 13).
+
+    Installed on the application by the `Rig`. The one exception is a key typed into a text
+    field on the experimenter's side: that is the experimenter writing a note or a distance, and
+    the device's confirm key is a full stop. A participant press made while the experimenter is
+    typing therefore reaches the field, not the participant window (docs/LOG.md N7.I1).
+    """
+
+    def __init__(self, participant: ParticipantWindow, parent: QObject | None = None):
+        super().__init__(parent)
+        self.participant = participant
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802 -- Qt's name
+        if event.type() not in (QEvent.KeyPress, QEvent.KeyRelease):
+            return False
+        participant = self.participant
+        # Parented to its window, so it dies with it; this guards the moment in between, when
+        # the window's C++ object is gone but a queued event still reaches the filter.
+        if not shiboken6.isValid(participant):
+            return False
+        # A key already addressed to a participant window -- this one, or the one another
+        # router has just forwarded it to -- is left alone. Without that, two routers alive at
+        # once would forward each other's events back and forth without end.
+        if (
+            not isinstance(watched, QWidget)
+            or isinstance(watched.window(), ParticipantWindow)
+            or not participant.isVisible()
+            or isinstance(watched, TEXT_ENTRY_WIDGETS)
+            or not participant.is_remote_key(event)
+        ):
+            return False
+        target = (
+            participant.vas
+            if participant.stack.currentWidget() is participant.vas
+            else participant
+        )
+        QApplication.sendEvent(
+            target,
+            QKeyEvent(
+                event.type(),
+                event.key(),
+                event.modifiers(),
+                event.text(),
+                event.isAutoRepeat(),
+                event.count(),
+            ),
+        )
+        return True

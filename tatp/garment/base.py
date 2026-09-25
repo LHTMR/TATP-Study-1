@@ -70,9 +70,12 @@ class GarmentController(ABC):
         limits: Limits,
         clock: Clock,
         on_command: Callable[[dict], None] | None = None,
+        hardware: dict | None = None,
     ):
         self.limits = limits
         self.clock = clock
+        # `hardware.yaml`, for a driver that needs its port and wiring. The mock needs neither.
+        self.hardware = hardware
         # The session supplies this to write the `garment` table. The driver does not know the
         # phase or the block, so it reports what it did and the session adds the context.
         self.on_command = on_command
@@ -118,9 +121,15 @@ class GarmentController(ABC):
         self._record("connect")
 
     def disconnect(self) -> None:
+        # Already disconnected -- by hand, or by a lost link (`lost`) -- is nothing to do and
+        # nothing to record a second time.
+        if not self.connected:
+            return
         self._disconnect()
-        self.connected = False
-        self._record("disconnect")
+        # The zeroing write inside may itself have found the link lost; `lost` recorded it.
+        if self.connected:
+            self.connected = False
+            self._record("disconnect")
 
     def channels(self) -> tuple[int, ...]:
         """Channel ids, 1-based. Pattern files address channels by these ids."""
@@ -169,15 +178,23 @@ class GarmentController(ABC):
 
         The rate limit is deliberately not applied: it exists to stop a pressure rising quickly,
         and applying it to a stop would slow down the one command that must never be slowed.
+
+        A disconnected garment is sent nothing, and no `stop` row is written for a command
+        that was not sent -- the procedures call this unguarded. Nor is one written when the
+        stop's own write found the link lost: `lost` has recorded that instead. Either way the
+        software's own state is zeroed, so nothing it plays resumes by itself.
         """
-        self._stop()
+        commanded = self.connected
+        if commanded:
+            self._stop()
         for channel in self.channels():
             self.pressure_kpa[channel] = 0.0
             self._last_command_s[channel] = self.clock.elapsed_s()
         self._channels_on.clear()
         self._pattern = None
         self._pattern_start_s = None
-        self._record("stop")
+        if commanded and self.connected:
+            self._record("stop")
 
     # -- patterns ----------------------------------------------------------------------
 
@@ -287,6 +304,23 @@ class GarmentController(ABC):
         """Record a device fault. Faults are reported, never swallowed."""
         self.faults.append(detail)
         self._record("fault", detail=detail)
+
+    def lost(self, detail: str) -> None:
+        """The device stopped answering and its driver has let the connection go: a fault,
+        then disconnected, as a disconnect by hand leaves it, so the session's connected
+        state, its Connect button and every `connected`-guarded stop see the truth.
+
+        No `pattern_stop` or `channel_off` is written: none was commanded, and the outputs
+        may still hold their last state. The fault row says so, and the `disconnect` row
+        ends the pattern in the data. A playing pattern is dropped, so the session's timer
+        does not keep delivering into a dead link.
+        """
+        self.fault(detail)
+        self._pattern = None
+        self._pattern_start_s = None
+        self._channels_on.clear()
+        self.connected = False
+        self._record("disconnect")
 
     def _require_connected(self) -> None:
         if not self.connected:

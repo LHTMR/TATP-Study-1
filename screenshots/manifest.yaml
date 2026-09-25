@@ -28,6 +28,25 @@ screens:
     ellipse outlined. (en)'
   experimenter_en_countdown: 'Waiting for the next block: ''Next: block 3 (touch)
     in 04:05'', grey. (en)'
+  experimenter_en_designer_grid: 'An example pattern opened on the Grid tab: one row
+    per row interval with its time, one column per channel id, on cells filled. The
+    timeline below draws two cycles because it loops, the repeat fainter, and the
+    line under it says it loads. (en)'
+  experimenter_en_designer_new: 'A new pattern: nothing filled in and nothing assumed.
+    The line in red says why it does not load yet, and Save, Export and Play are disabled.
+    (en)'
+  experimenter_en_designer_off_grid: A timing off the row grid, refused in red with
+    the reason and never rounded. The grid converted before it is kept, unchanged,
+    and still previewed. (en)
+  experimenter_en_designer_ordered: 'Ordered channels: five channels with their hold
+    times, the join-and-hold mode and the delay, converted. The message says the grid
+    was replaced, and the timeline shows the overlapping sweep. (en)'
+  experimenter_en_designer_playing: 'Playback on the mock garment: the cursor in amber
+    on the timeline and the channels on now named, their labels amber. Set directly
+    rather than played, because a running pattern would never be photographed at the
+    same moment twice. (en)'
+  experimenter_en_designer_timed: 'Timed channels: onset and offset per channel in
+    ms, converted. Played once, so the timeline draws one cycle. (en)'
   experimenter_en_disconnected: 'The garment reported disconnected: red and bold in
     the hardware panel, Connect enabled and Disconnect not. (en)'
   experimenter_en_distances_dialog: 'The mapping distances window (SPEC.md 8.4): the
@@ -56,8 +75,9 @@ screens:
   experimenter_en_intervention_fault: 'A garment fault during the intervention: shown
     in red, counted, and without the channel, which could say which pattern is running
     (SPEC.md 16). (en)'
-  experimenter_en_launcher: The launcher's four entries (SPEC.md 4.1), Design a pattern
-    disabled with its reason (en).
+  experimenter_en_launcher: The launcher's four entries (SPEC.md 4.1), all enabled.
+    Design a pattern says it is for S only, because it shows pattern names and shapes
+    (en).
   experimenter_en_launcher_instruments: 'Instruments and environment (SPEC.md 8.1):
     every filament with its label, size, nominal force and a measured-force field;
     the weighing date and balance; the optional room temperature and humidity (en).'
@@ -116,6 +136,25 @@ screens:
     ellipse outlined. (sv)'
   experimenter_sv_countdown: 'Waiting for the next block: ''Next: block 3 (touch)
     in 04:05'', grey. (sv)'
+  experimenter_sv_designer_grid: 'An example pattern opened on the Grid tab: one row
+    per row interval with its time, one column per channel id, on cells filled. The
+    timeline below draws two cycles because it loops, the repeat fainter, and the
+    line under it says it loads. (sv)'
+  experimenter_sv_designer_new: 'A new pattern: nothing filled in and nothing assumed.
+    The line in red says why it does not load yet, and Save, Export and Play are disabled.
+    (sv)'
+  experimenter_sv_designer_off_grid: A timing off the row grid, refused in red with
+    the reason and never rounded. The grid converted before it is kept, unchanged,
+    and still previewed. (sv)
+  experimenter_sv_designer_ordered: 'Ordered channels: five channels with their hold
+    times, the join-and-hold mode and the delay, converted. The message says the grid
+    was replaced, and the timeline shows the overlapping sweep. (sv)'
+  experimenter_sv_designer_playing: 'Playback on the mock garment: the cursor in amber
+    on the timeline and the channels on now named, their labels amber. Set directly
+    rather than played, because a running pattern would never be photographed at the
+    same moment twice. (sv)'
+  experimenter_sv_designer_timed: 'Timed channels: onset and offset per channel in
+    ms, converted. Played once, so the timeline draws one cycle. (sv)'
   experimenter_sv_disconnected: 'The garment reported disconnected: red and bold in
     the hardware panel, Connect enabled and Disconnect not. (sv)'
   experimenter_sv_distances_dialog: 'The mapping distances window (SPEC.md 8.4): the
@@ -144,8 +183,9 @@ screens:
   experimenter_sv_intervention_fault: 'A garment fault during the intervention: shown
     in red, counted, and without the channel, which could say which pattern is running
     (SPEC.md 16). (sv)'
-  experimenter_sv_launcher: The launcher's four entries (SPEC.md 4.1), Design a pattern
-    disabled with its reason (sv).
+  experimenter_sv_launcher: The launcher's four entries (SPEC.md 4.1), all enabled.
+    Design a pattern says it is for S only, because it shows pattern names and shapes
+    (sv).
   experimenter_sv_launcher_instruments: 'Instruments and environment (SPEC.md 8.1):
     every filament with its label, size, nominal force and a measured-force field;
     the weighing date and balance; the optional room temperature and humidity (sv).'

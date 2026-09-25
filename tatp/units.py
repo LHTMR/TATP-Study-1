@@ -21,3 +21,6 @@ S_PER_MIN = 60.0
 DECADE = 10.0
 # Decibels are twenty times the log of an amplitude ratio.
 DB_PER_AMPLITUDE_DECADE = 20.0
+# The weight of one gram at standard gravity, in millinewtons: a balance reads grams, and a
+# filament is a force. The factor the Aesthesio chart itself uses (config/filaments.yaml).
+MN_PER_G = 9.80665

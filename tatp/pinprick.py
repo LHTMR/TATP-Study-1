@@ -1259,6 +1259,11 @@ class LongProtocol(_Series):
         def begin() -> None:
             self.participant.show_blank()
             self._awaiting_fit = result
+            # What is due now, in place of the last trial's instruction and site (which this
+            # clears), left up as if another application were wanted.
+            self.experimenter.set_instruction(
+                self.experimenter.text["instructions"]["f40_fit_review"]
+            )
             # Accept and Re-run are live exactly while this waits on them (SPEC.md 11.1).
             self.experimenter.set_actions_enabled(fit_decision=True)
             self.fit_ready.emit(fit)

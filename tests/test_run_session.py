@@ -44,6 +44,12 @@ def config(loaded, tmp_path):
         **loaded.hardware,
         "data": {"folder": str(tmp_path / "data"), "cloud_sync_markers": []},
         "audio": {**loaded.hardware["audio"], "backend": "recording"},
+        # One offscreen screen, not the lab's two.
+        "screens": {
+            **loaded.hardware["screens"],
+            "participant_screen_index": None,
+            "experimenter_screen_index": None,
+        },
     }
     return cfg.Config(**{**loaded.__dict__, "hardware": hardware})
 
@@ -145,7 +151,9 @@ def test_the_resume_summary_names_finished_phases_and_blocks(config):
         phases["sensitisation"], phases["capsaicin"], phases["post_sensitisation"],
         dialogs["resume_blocks"].format(value="1, 2"),
     ])
-    assert "0:00" in upto["since_sensitisation"]
+    assert upto["since_sensitisation"] == dialogs["resume_since_sensitisation"].format(
+        hours=0, minutes=0
+    )
     # A phase is completed only when its last stage is: pre-S's long protocol alone is not.
     partial = summary(ids[: ids.index("pre_sensitisation.long") + 1])
     assert phases["pre_sensitisation"] not in partial["completed"]

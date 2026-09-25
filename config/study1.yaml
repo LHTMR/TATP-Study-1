@@ -207,7 +207,11 @@ delivery:
   # instruction that stayed up until the press would tell the experimenter which condition
   # this is. Long enough to be read. The participant's own start screen stays up on their side
   # for as long as it takes them, and the garment never starts without their press.
-  touch_start_display_s: 5.0
+  # It must also outlast the slowest possible touch start -- a full ramp to the pressure
+  # ceiling under the rate limit, then the warning cue: 250 / 60 + 1 = 5.2 s today -- or when
+  # the session moves on would depend on the condition's pressure. The session runner refuses
+  # a value shorter than that. Raise it if the ceiling rises or the rate limit (L2) falls.
+  touch_start_display_s: 6.0
 
 touch_block:
   # A touch-rating block of the intervention, and the touch-calibration baseline (Bilaga 1 3.9,

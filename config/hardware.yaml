@@ -18,9 +18,33 @@ garment:
   pressure_rate_max_kpa_s: 60.0      # independent rate limit (SPEC.md 13). Local item L2.
   pressure_resolution_kpa: null      # SPEC.md 20 item 2
   inflation_rate_kpa_s: null         # per channel, from bring-up. SPEC.md 20 item 3
+  # The current prototype, driver `arduino_mosfet` (SPEC.md 12.4): on/off per channel over the
+  # MOSFET array, pressure set by hand at the regulator. Its protocol is the prototype
+  # sketch's: newline-terminated `setstate:0x<mask>`, lower-case hex, and `hello` answered by
+  # `hello`, which the flashed firmware does though the sketches in its repository do not.
+  prototype:
+    port: COM3                       # the lab laptop, 25 Sep 2026 (USB VID 2341, Arduino)
+    baud: 115200                     # the sketch's Serial.begin
+    boot_s: 2.5                      # opening the port resets the Arduino; wait for it to boot
+    # The shift-register bit driving each channel, for channels 1-5 in order from distal (1) to
+    # proximal (5). Found on 25 Sep 2026 with S watching the sleeve: tools/garment_bits.py
+    # pulsed every bit, which fired the channels in the order 1, 2, 5, 4, 3. The bits are those
+    # of the prototype's own motion_stim_vertical.csv (31, 27, 14, 7, 3), and a second run of 3,
+    # 7, 31, 27, 14 swept distal to proximal as expected.
+    channel_bits: [3, 7, 31, 27, 14]
   pattern_tick_interval_s: 0.005     # how often pattern events are delivered (SPEC.md 12.2).
                                      # Onset jitter is up to one tick, so this sits well under
                                      # the fastest pattern's 75 ms row interval.
+
+prototype_command_file:
+  # What the current prototype's Arduino sketch accepts (SPEC.md 12.4), read from
+  # ttpa_touch_the_pain_away/Arduino/4_mosfet_array_controller*.ino. The pattern designer's
+  # export refuses a pattern that would exceed either, because the sketch does not refuse it:
+  # a step past the store is dropped with a serial message, and a longer delay wraps.
+  max_steps: 199                     # `6 * (len_code + 1) < 6 * seq_size`, seq_size 200
+  max_step_ms: 65535                 # each step's delay is stored as a uint16_t
+  mask_bits: 32                      # `write32bits`: four shift-register bytes, so channel
+                                     # ids 0-31
 
 adjustment:
   # Accelerating two-button control (SPEC.md 10.3, comparison doc 7.5). All pilot-tunable.
@@ -59,16 +83,28 @@ responder:
     increase: "›"
     confirm: "▶"
     # Drawn on ONE screen only, `screens.stop_rehearsal`, whose purpose is pointing at it
-    # (SPEC.md 10.9). Never drawn as an option on a response screen. What is physically on the
-    # R400's blank-screen button is not known to the build, and S may relabel it (docs/LOG.md
-    # N5.11), so this is a marked placeholder until S confirms it. Local item L12.
-    emergency_stop: "PLACEHOLDER"
+    # (SPEC.md 10.9). Never drawn as an option on a response screen. The lab's R400 carries a
+    # sticker on its blank-screen button: a black "!" on a yellow disc (S's photo, 25 Sep
+    # 2026), which closes local item L12. The play button's sticker is a blue disc with an
+    # outline triangle, which the wording's "▶" approximates (docs/LOG.md N5.11).
+    emergency_stop: "!"
+  # For a button whose printed symbol is coloured: the symbol's colour, and the filled disc it
+  # sits on. Only the stop is drawn with one. The yellow is matched by eye to the photo.
+  button_symbol_colours:
+    emergency_stop: "#141414"
+  button_symbol_discs:
+    emergency_stop: "#f2b21b"
+  emergency_stop_symbol_confirmed: 2026-09-25   # closes local item L12
 
 screens:
   # SPEC.md 20 item 9. Null means "primary screen, windowed", which is right for a
   # development machine and wrong for the lab PC, so startup warns while they are null.
-  participant_screen_index: null
-  experimenter_screen_index: null
+  # Set 25 Sep 2026 on the lab laptop, with S: screen 0 is the laptop's own display (1280x800
+  # at 150 %), screen 1 the HP Z24i (1920x1200) behind the curtain. The approved participant
+  # screenshots are 1280x800, so on the HP the participant's text wraps differently from them
+  # (docs/LOG.md N5.19).
+  participant_screen_index: 1
+  experimenter_screen_index: 0
   participant_fullscreen: true
   # How often the experimenter screen redraws its clock, countdown and hardware panel
   # (SPEC.md 7.4, 11; docs/LOG.md N6.20). A display rate, not a study timing: the countdown
@@ -95,11 +131,18 @@ audio:
                                      # it plays nothing and records what it was asked to play,
                                      # as MockGarment does. Never a silent fallback -- a real
                                      # session whose device fails raises (tatp/audio.py).
-  participant_device: null           # the participant's headphones; null = system default
-  experimenter_device: null          # lab-side alerts. Null = system default, which on the lab
-                                     # PC may BE the participant's headphones. Local item L10.
+  # Devices are named by words that must ALL appear in "<device name>, <host API>" (sounddevice's
+  # matching), so each resolves to exactly one output. Set 25 Sep 2026 on the lab laptop, with
+  # S present. WASAPI, not MME or DirectSound, which add 90-120 ms of latency. Bluetooth adds
+  # its own delay on top, unreported. And never the headset's "Hands-Free" output, which is mono
+  # 16 kHz and which Windows switches to if anything opens the headset microphone.
+  participant_device: Bose QC Headphones WASAPI   # the participant's headphones
+  experimenter_device: Speakers Realtek WASAPI    # lab-side alerts: the laptop's own speakers.
+                                     # Local item L10 -- whether they are inaudible to the
+                                     # participant over the noise is still to meter (L3).
   output_channels: 2                 # the same noise to both ears
-  sample_rate_hz: 44100
+  sample_rate_hz: 48000              # WASAPI shared mode refuses anything but the device's own
+                                     # rate, which is 48 kHz for both devices on the lab laptop
   tone_ramp_s: 0.01                  # raised-cosine onset/offset on every tone, so a cue does
                                      # not start with a click -- a second, louder cue
   # The two-button control of SPEC.md 10.3, applied to the noise level. The tap and hold

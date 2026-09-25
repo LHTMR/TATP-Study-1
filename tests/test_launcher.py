@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
@@ -66,23 +67,143 @@ def _filled(window, tmp_path):
     _choose(dialog.session_number, 1)
     _choose(dialog.participant_language, "sv")
     _choose(dialog.experimenter_language, "en")
+    _choose(dialog.garment, "mock")
     dialog.data_folder.setText(str(tmp_path / "data"))
     dialog.pattern_folder.setText(str(cfg.CONFIG_DIR / "patterns" / "examples"))
     return dialog
 
 
-RESUME = {"completed": "blocks 1-4", "since_sensitisation": "1 h 12 min"}
+def test_the_garment_starts_unchosen_and_is_required(app, loaded, tmp_path):
+    """Chosen at launch, never defaulted: a pilot on the wrong rig is wrong data."""
+    fakes = Fakes()
+    dialog = _filled(LauncherWindow(loaded, fakes.preflight, fakes.build), tmp_path)
+    dialog.garment.setCurrentIndex(0)
+    assert dialog.garment.currentData() is None
+    words = loaded.experimenter_text["launcher"]
+    assert words["garment"] in dialog.missing()
 
 
-def test_the_four_entries_and_the_one_not_built(app, loaded):
-    """SPEC.md 4.1. Design a pattern is shown, disabled, and says why (Milestone 6)."""
+def test_the_chosen_garment_is_the_session_driver(app, loaded, tmp_path):
+    """hardware.yaml stays on the mock; the dialog's choice reaches the session's config."""
+    fakes = Fakes()
+    dialog = _filled(LauncherWindow(loaded, fakes.preflight, fakes.build), tmp_path)
+    configured = loaded.hardware["garment"]["driver"]
+    _choose(dialog.garment, "arduino_mosfet")
+    args = dialog.args()
+    assert args.garment == "arduino_mosfet"
+    assert dialog.config(args).hardware["garment"]["driver"] == "arduino_mosfet"
+    assert loaded.hardware["garment"]["driver"] == configured, "the loaded config is untouched"
+
+
+RESUME ={"completed": "blocks 1-4", "since_sensitisation": "1 h 12 min"}
+
+
+def test_the_four_entries_are_all_enabled(app, loaded):
+    """SPEC.md 4.1."""
     window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
     assert list(window.entries) == [
         "run_session", "instruments", "design_pattern", "preview_schedule"
     ]
-    assert not window.entries["design_pattern"].isEnabled()
-    for key in ("run_session", "instruments", "preview_schedule"):
-        assert window.entries[key].isEnabled()
+    for entry in window.entries.values():
+        assert entry.isEnabled()
+
+
+def test_entry_3_opens_the_pattern_designer(app, loaded):
+    """SPEC.md 12.2: launcher entry 3 is tools/design_pattern.py."""
+    from tools.design_pattern import DesignerWindow
+
+    window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
+    window.entries["design_pattern"].click()
+    assert isinstance(window.designer, DesignerWindow)
+    assert window.designer.isVisible()
+    assert window.designer.windowTitle() == loaded.experimenter_text["designer"]["title"]
+    window.designer.close()
+
+
+def test_a_second_click_raises_the_open_designer_and_keeps_its_work(app, loaded):
+    """Review item 3: a new window each click discarded the unsaved work in the old one."""
+    window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
+    first = window.open_designer()
+    first.name_field.setText("unsaved")
+    window.entries["design_pattern"].click()
+    assert window.designer is first
+    assert first.name_field.text() == "unsaved"
+    first.close()
+    assert window.open_designer() is not first
+    window.designer.close()
+
+
+def test_starting_a_session_closes_the_designer(app, loaded, tmp_path):
+    """A designer left open would show pattern names beside a running session (SPEC.md 16)."""
+    fakes = Fakes()
+    window = LauncherWindow(loaded, fakes.preflight, fakes.build)
+    designer = window.open_designer()
+    dialog = _filled(window, tmp_path)
+    dialog.start()
+    assert fakes.started
+    assert not designer.isVisible()
+
+
+def test_a_designer_playing_on_the_sleeve_lets_its_port_go_before_the_session_connects(
+    app, loaded, tmp_path, monkeypatch
+):
+    """Pre-merge review: the build connects the session's garment, so the designer's hold on
+    the prototype's serial port must end before it, not after (Windows refuses a second)."""
+    from tatp.garment.arduino_mosfet import ArduinoMosfetGarment
+
+    closed = []
+
+    class Port:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def reset_input_buffer(self):
+            pass
+
+        def write(self, data):
+            pass
+
+        def flush(self):
+            pass
+
+        def readline(self):
+            return b"hello\r\n"
+
+        def close(self):
+            closed.append(True)
+
+    monkeypatch.setattr(ArduinoMosfetGarment, "serial_factory", staticmethod(Port))
+    monkeypatch.setattr("tatp.garment.arduino_mosfet.time.sleep", lambda s: None)
+    fakes = Fakes()
+    at_build = []
+
+    def build(config, args):
+        at_build.append(list(closed))
+        return fakes.build(config, args)
+
+    window = LauncherWindow(loaded, fakes.preflight, build)
+    designer = window.open_designer()
+    designer.open_file(cfg.CONFIG_DIR / "patterns" / "examples" / "sweep_20cms.csv")
+    designer.garment_choice.setCurrentIndex(designer.garment_choice.findData("arduino_mosfet"))
+    assert designer.play()
+    dialog = _filled(window, tmp_path)
+    dialog.start()
+    assert at_build == [[True]], "the port was closed before the session was built"
+    assert not designer.playing
+    # Deleted now, not at the garbage collector's timing inside a later test (LOG N7.I3).
+    for made in (dialog, designer, window):
+        made.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+
+
+def test_the_pattern_folder_hint_goes_once_a_folder_is_chosen(app, loaded, tmp_path):
+    window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
+    dialog = window.session_dialog()
+    assert dialog.form.isRowVisible(dialog.pattern_folder_hint)
+    dialog.pattern_folder.setText(str(tmp_path))
+    assert not dialog.form.isRowVisible(dialog.pattern_folder_hint), "the whole row goes"
+    dialog.pattern_folder.clear()
+    assert dialog.form.isRowVisible(dialog.pattern_folder_hint)
 
 
 def test_the_dialog_asks_for_exactly_what_spec_6_lists(app, loaded, tmp_path):

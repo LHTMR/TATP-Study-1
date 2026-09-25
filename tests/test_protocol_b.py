@@ -21,6 +21,7 @@ from virtual_participant import (
 
 from tatp import config as cfg
 from tatp import touchcal
+from tatp.garment.mock import MockGarment
 from tatp.touchcal_maths import REFERENCE_STRONGER, TEST_STRONGER
 
 
@@ -412,16 +413,23 @@ def test_a_pause_during_a_comparison_repeats_it(rig):
 # -- timing-only mode, SPEC.md 12.4 -----------------------------------------------------
 
 
-def test_timing_only_mode_runs_every_step_and_marks_nothing_valid(rig, monkeypatch):
+def test_timing_only_mode_runs_every_step_and_marks_nothing_valid(app, loaded, tmp_path,
+                                                                  monkeypatch):
+    # Before the rig exists, as a real timing-only driver is from the start: the window shows
+    # its banner from the first refresh and refuses one that arrives later.
+    monkeypatch.setattr(MockGarment, "per_channel_pressure", False)
+    rig = make_rig(make_config(loaded, tmp_path))
     session = rig.session
-    monkeypatch.setattr(type(session.garment), "per_channel_pressure", False)
     decisions = []
     procedure = touchcal.TouchCalibration(rig)
     virtual = Virtual(rig, procedure)
     virtual.decide = lambda trial: decisions.append(trial) or ("accept", ())
     # Ratings that no fit survives: the gate must not stop a timing-only session.
     virtual.before_step = _flat(rig)
-    result = virtual.run()
+    try:
+        result = virtual.run()
+    finally:
+        session.close()
     assert decisions == []
     assert not result.valid_for_analysis
     assert result.sham.pressure_kpa is None

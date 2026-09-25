@@ -9,7 +9,9 @@ Four entries, so the auxiliary tools are reachable without the command line:
    refuses. An unfinished session found by the preflight is put to the experimenter as a
    question (SPEC.md 15).
 2. **Instruments and environment** (`tatp/instruments.py`).
-3. **Design a pattern.** Not built: shown, disabled, with the reason (Milestone 6).
+3. **Design a pattern.** `tools/design_pattern.py`, in its own window. For S only: it shows
+   pattern names and shapes, which a blinded experimenter must not see (SPEC.md 16), and its
+   entry says so.
 4. **Preview schedule.** `tools/preview_schedule.py`'s report, in a window.
 
 **The session is started by `run_session`'s `preflight` and `build`, not here.** Both are
@@ -31,7 +33,6 @@ been picked (SPEC.md 6: nothing supplied by the experimenter is defaulted).
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import sys
 from collections.abc import Callable
 from datetime import datetime
@@ -55,6 +56,7 @@ from PySide6.QtWidgets import (
 from tatp import config as cfg
 from tatp import schedule as sched
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
+from tatp.session import DRIVERS, with_session_choices
 from tatp.ui.application import application
 from tatp.ui.widgets import (
     DISCONNECTED_COLOUR,
@@ -169,14 +171,26 @@ class SessionDialog(QDialog):
         languages = [(text["terms"]["languages"][code], code) for code in LANGUAGES]
         self.participant_language = self._choice(languages)
         self.experimenter_language = self._choice(languages)
+        # Which garment the session drives, chosen here rather than by editing hardware.yaml,
+        # which stays on the mock so the test gate never opens a serial port. Unchosen for the
+        # same reason as the languages: running a real participant on the mock, or a pilot on
+        # the wrong rig, is a whole session of the wrong data.
+        self.garment = self._choice(
+            [(text["terms"]["garments"][name], name) for name in sorted(DRIVERS)]
+        )
         self.data_folder = line_edit(SIZE_BODY)
         self.data_folder.setText(str(_resolve(hardware["data"]["folder"])))
         # No default (docs/LOG.md N6.14): defaulting to config/patterns/examples/ would quietly
         # run the provisional mockups in place of the real patterns (open item 5).
         self.pattern_folder = line_edit(SIZE_BODY)
-        self.pattern_folder.setPlaceholderText(words["no_pattern_folder"])
+        self.pattern_folder.setPlaceholderText(words["choose"])
+        # Why it is empty, under the form while it is: as a placeholder it was cut off by the
+        # field. Gone once a folder is chosen, as a placeholder would be.
+        self.pattern_folder_hint = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
+        self.pattern_folder_hint.setText(words["no_pattern_folder"])
+        self.pattern_folder.textChanged.connect(self._pattern_folder_changed)
 
-        form = QFormLayout()
+        self.form = form = QFormLayout()
         form.setVerticalSpacing(ITEM_GAP_PX)
         for key, widget in (
             ("participant_code", self.participant),
@@ -184,12 +198,14 @@ class SessionDialog(QDialog):
             ("experimenter_initials", self.experimenter),
             ("participant_language", self.participant_language),
             ("experimenter_language", self.experimenter_language),
+            ("garment", self.garment),
             ("data_folder", self._with_browse(self.data_folder)),
             ("pattern_folder", self._with_browse(self.pattern_folder)),
         ):
             caption = label(SIZE_SMALL, colour=SECONDARY)
             caption.setText(words[key])
             form.addRow(caption, widget)
+        form.addRow("", self.pattern_folder_hint)
 
         self.report = label(SIZE_BODY, wrap=True)
         self.check_button = button(words["check"], SIZE_BODY)
@@ -203,13 +219,20 @@ class SessionDialog(QDialog):
         typed = (self.participant, self.experimenter, self.data_folder, self.pattern_folder)
         for field in typed:
             field.textChanged.connect(self._stale)
-        chosen = (self.session_number, self.participant_language, self.experimenter_language)
+        chosen = (
+            self.session_number,
+            self.participant_language,
+            self.experimenter_language,
+            self.garment,
+        )
         for combo in chosen:
             combo.currentIndexChanged.connect(self._stale)
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         buttons.addWidget(self.close_button)
+        # Apart from the two that go forward, so Close is not pressed for Check.
+        buttons.addSpacing(GROUP_GAP_PX)
         buttons.addWidget(self.check_button)
         buttons.addWidget(self.start_button)
 
@@ -249,6 +272,10 @@ class SessionDialog(QDialog):
         if chosen:
             field.setText(chosen)
 
+    def _pattern_folder_changed(self, text: str) -> None:
+        # The whole row, not just the label, so no empty row and its gap is left behind.
+        self.form.setRowVisible(self.pattern_folder_hint, not text.strip())
+
     def _stale(self, *_) -> None:
         self.start_button.setEnabled(False)
 
@@ -272,6 +299,7 @@ class SessionDialog(QDialog):
                 ("session_number", self.session_number),
                 ("participant_language", self.participant_language),
                 ("experimenter_language", self.experimenter_language),
+                ("garment", self.garment),
             )
             if combo.currentData() is None
         ]
@@ -286,6 +314,7 @@ class SessionDialog(QDialog):
             patterns=Path(self.pattern_folder.text().strip()),
             participant_language=self.participant_language.currentData(),
             experimenter_language=self.experimenter_language.currentData(),
+            garment=self.garment.currentData(),
             data_folder=Path(self.data_folder.text().strip()),
             clock_speed=1.0,
             seed=None,
@@ -295,10 +324,9 @@ class SessionDialog(QDialog):
         )
 
     def config(self, args: argparse.Namespace) -> cfg.Config:
-        """The configuration for these languages, with the data folder the dialog chose."""
+        """The configuration for these languages, with the data folder and garment chosen."""
         loaded = self._load(args.participant_language, args.experimenter_language)
-        data = {**loaded.hardware["data"], "folder": str(args.data_folder)}
-        return dataclasses.replace(loaded, hardware={**loaded.hardware, "data": data})
+        return with_session_choices(loaded, args.data_folder, args.garment)
 
     # -- check, then start ------------------------------------------------------------
 
@@ -437,6 +465,7 @@ class LauncherWindow(QWidget):
         self._build = build
         self.filaments_path = filaments_path
         self.runner = None
+        self.designer = None
         # Handed from the instruments entry to the next session start (SPEC.md 8.1).
         self.environment = {"room_temperature_c": None, "relative_humidity_pct": None}
         words = self.text["launcher"]
@@ -454,17 +483,13 @@ class LauncherWindow(QWidget):
         for key, action in (
             ("run_session", self.open_session_dialog),
             ("instruments", self.open_instruments),
-            ("design_pattern", None),
+            ("design_pattern", self.open_designer),
             ("preview_schedule", self.open_preview),
         ):
             entry = button(words[key], SIZE_LARGE)
             detail = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
             detail.setText(words[f"{key}_detail"])
-            if action is None:
-                # SPEC.md 4.1 lists it, so it is shown; it does nothing yet, so it says why.
-                entry.setEnabled(False)
-            else:
-                entry.clicked.connect(action)
+            entry.clicked.connect(action)
             self.entries[key] = entry
             layout.addWidget(entry)
             layout.addWidget(detail)
@@ -499,6 +524,26 @@ class LauncherWindow(QWidget):
     def preview_dialog(self, t_zero: datetime | None = None) -> PreviewDialog:
         return PreviewDialog(self.text, self.config, t_zero or datetime.now(), parent=self)
 
+    def open_designer(self):
+        """`tools/design_pattern.py`, in a window of its own (SPEC.md 12.2).
+
+        Imported when opened, as the preview's tool is. Held on the launcher, because a
+        top-level window nothing references is collected and vanishes (docs/LOG.md N6.30).
+        One that is already open is raised rather than replaced, since replacing it would
+        discard whatever is unsaved in it.
+        """
+        from tools.design_pattern import DesignerWindow
+
+        if self.designer is not None and self.designer.isVisible():
+            self.designer.raise_()
+            self.designer.activateWindow()
+            return self.designer
+        self.designer = DesignerWindow(self.text, self.config.hardware)
+        # The whole screen: sized for a desktop, it opened on the lab laptop with its lower
+        # half off the screen (S, 24 Sep 2026).
+        self.designer.showMaximized()
+        return self.designer
+
     def open_session_dialog(self) -> SessionDialog:
         dialog = self.session_dialog()
         dialog.open()
@@ -526,7 +571,16 @@ class LauncherWindow(QWidget):
         )
 
     def _start_session(self, config: cfg.Config, args: argparse.Namespace) -> None:
+        # Before the build, which connects the session's garment: a designer playing on the
+        # prototype sleeve holds its serial port, and Windows would refuse the session a
+        # second handle on it.
+        if self.designer is not None:
+            self.designer.stop()
+            self.designer.release_garment()
         self.runner = self._build(config, args)
+        # A designer left open would show pattern names beside a running session (SPEC.md 16).
+        if self.designer is not None:
+            self.designer.close()
         self.hide()
         self.runner.start()
 
