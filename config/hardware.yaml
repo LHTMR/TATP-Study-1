@@ -186,6 +186,9 @@ audio:
 
 data:
   folder: data                       # relative to the repository root; gitignored (SPEC.md 14.1)
+  # Where the experimenter uploads each session's files (SOP.md 14.2), a LiU samarbetsmapp.
+  # The software never writes there; only tools/check_upload.py reads it.
+  upload_folder: '\\fillager.liu.se\coop\t\tatp\01_raw'
   # Warn and record, never refuse, if the folder resolves inside a cloud-synced tree.
   cloud_sync_markers:
     - OneDrive
