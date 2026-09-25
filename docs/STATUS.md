@@ -3,9 +3,9 @@
 **Last updated:** 24 September 2026.
 **Milestone:** 6 (pilotable), in progress. Milestones 2–5 are merged and in `main`. Acceleration
 push under way (`CLAUDE.md`).
-**Branch:** `accel/ui-review`, cut from `accel/integration` for S's lab UI review. **Not merged
-yet.** Both pre-merge reviews have run twice, the second time on the fixes. Their findings are
-fixed (N7.U5, N7.U6).
+**Branch:** `accel/integration`. The UI review (`accel/ui-review`) is merged into it, after
+both pre-merge reviews at every step, with their findings fixed (N7.U5, N7.U6, N7.U8).
+`main` does not have it yet.
 
 ---
 
@@ -49,8 +49,8 @@ and still unexplained (N7.U7): if a run fails only on a crashed worker, run it a
 
 ## Next steps
 
-1. **Merge `accel/ui-review` into `accel/integration`,** then run `make check` there. The
-   reviews and their fixes are done (N7.U5, N7.U6, N7.U8).
+1. **S reviews the re-approved screens and the drafted wording** (N7.U1, N7.U2, N7.U4), then
+   `accel/integration` can go to `main`.
 2. **Find the pre-existing test-worker crash** (N7.U7). It is a heap corruption that surfaces in
    whichever test next builds a window, and it strikes the clean commit too.
 3. **S's decisions from the UI review** that change how a session runs or what the participant
