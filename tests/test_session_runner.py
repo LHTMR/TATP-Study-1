@@ -42,7 +42,10 @@ DISTANCES_MM = (40.0, 35.0, 45.0, 30.0)
 # tolerance below is 80 ms of real time, which a loaded machine's timers stay inside.
 TIMING_CLOCK_SPEED = 50.0
 TIMING_TOLERANCE_S = 4.0
-ROUNDING_S = 0.1  # two rounded milliseconds at TIMING_CLOCK_SPEED
+# How early the session may move on: one Windows timer tick (15.6 ms) of real time. Under the
+# parallel test load it has moved on up to 6.9 ms early, which a bare timer in a probe never
+# did (docs/LOG.md N7.U9). At real speed that is milliseconds of a six-second display.
+EARLY_S = 0.016 * TIMING_CLOCK_SPEED
 
 
 def compressed_schedule(loaded: cfg.Config) -> dict:
@@ -181,7 +184,10 @@ def _events(session):
 
 @pytest.fixture(scope="module")
 def finished(app, loaded, tmp_path_factory):
-    """One whole session, shared by the tests that only read what it wrote."""
+    """One whole session, shared by the tests that only read what it wrote.
+
+    Only what it wrote: its windows are deleted when the first test using it ends
+    (tests/conftest.py)."""
     runner = make_runner(loaded, tmp_path_factory.mktemp("full"))
     Driver(runner.rig, runner).run()
     return runner
@@ -720,5 +726,4 @@ def test_the_touch_start_looks_the_same_to_the_experimenter_in_every_condition(
     assert texts[0] == texts[1] == texts[2]
     for sequence in sequences:
         moved_s = sequence[-1][1] - sequence[0][1]
-        # A timer's milliseconds are rounded, so it can fire a hair early.
-        assert display_s - ROUNDING_S <= moved_s < display_s + TIMING_TOLERANCE_S
+        assert display_s - EARLY_S <= moved_s < display_s + TIMING_TOLERANCE_S

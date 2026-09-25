@@ -923,12 +923,12 @@ def rig_trial(app, session, participant):
         filament_label_g=session.config.study1["pinprick"]["start_filament_label_g_session1_pre_s"],
         site_index=1,
     )
-    trial = PinprickTrial(session, participant, window, application)
+    # A child of the window it draws on, so its timers die with that window when the test ends
+    # (tests/conftest.py). Parentless, it fired into a deleted window in a later test.
+    trial = PinprickTrial(session, participant, window, application, parent=participant)
     done = []
     trial.finished.connect(done.append)
     trial.start()
-    # The trial is held here too: a parentless QObject nobody references is collected, and its
-    # connections with it.
     return window, (participant, done, trial)
 
 
