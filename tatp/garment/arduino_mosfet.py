@@ -36,7 +36,7 @@ LINE_END = "\n"
 ENCODING = "ascii"
 # Written into a lost link's fault row: the last mask the shift register latched may still be
 # on, and nothing in the data would otherwise say so.
-OUTPUTS_UNKNOWN = "outputs unknown until reconnected"
+OUTPUTS_UNKNOWN = "Link lost, outputs unknown until reconnected"
 
 
 class ArduinoMosfetGarment(GarmentController):
@@ -140,8 +140,9 @@ class ArduinoMosfetGarment(GarmentController):
             detail = f"serial write failed on {self.port_name}: {error}"
             # A failure while connecting is the connect's to report (it never became
             # connected); one after is the connection lost, with outputs left as they were.
+            # The warning leads, so the screen's bounded fault line never cuts it off.
             if self.connected:
-                self.lost(f"{detail}; {OUTPUTS_UNKNOWN}")
+                self.lost(f"{OUTPUTS_UNKNOWN}: {detail}")
             else:
                 self.fault(detail)
             raise GarmentError(f"{self.driver_name}: {error}") from error

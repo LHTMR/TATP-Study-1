@@ -7,6 +7,8 @@ driver does.
 
 from __future__ import annotations
 
+import csv
+
 import pytest
 import serial
 
@@ -239,15 +241,22 @@ def test_a_stop_that_finds_the_link_lost_still_completes_and_the_session_closes(
                                   garment="arduino_mosfet")
     session = Session(config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=60.0), rng_seed=7)
     session.start()
+    from tatp.garment import patterns
+
+    session.garment.play_pattern(patterns.load_pattern(EXAMPLES / "static_sham.csv"))
+    session.garment.advance()
     ports[0].fail_writes = True
     session.garment.stop()  # the emergency stop's own write finds the loss, and completes
     assert not session.garment.connected
-    assert "outputs unknown" in session.garment.faults[-1]
+    assert session.garment.faults[-1].startswith("Link lost, outputs unknown")
     session.close()
     assert session.closed
-    with session.files.path("garment").open(encoding="utf-8") as table:
-        events = [line.split(",") for line in table]
-    assert not any("pattern_stop" in row for row in events), "no stop that was never sent"
+    with session.files.path("garment").open(encoding="utf-8", newline="") as table:
+        events = [row["event"] for row in csv.DictReader(table)]
+    after_start = events[events.index("pattern_start"):]
+    # Only what happened: the fault and one disconnect, nothing claimed as sent after it.
+    assert after_start[-2:] == ["fault", "disconnect"], after_start
+    assert "pattern_stop" not in after_start and "stop" not in after_start
 
 
 def test_a_connection_lost_mid_pattern_ends_the_pattern_quietly(made, loaded):

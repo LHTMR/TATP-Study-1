@@ -192,8 +192,10 @@ class Interruptions(QObject):
         )
 
     def _zero_garment(self) -> None:
-        # A disconnected garment is already delivering nothing, and commanding it would raise
-        # on the one path that must never fail.
+        # A disconnected garment is not commanded: this is the one path that must never fail.
+        # Disconnected by hand, it is delivering nothing. Disconnected by a lost link, its
+        # outputs may still hold their last state, which no command can now reach; the fault
+        # says so, and what the experimenter then does is open item L14.
         if self.session.garment.connected:
             self.session.garment.stop()
 

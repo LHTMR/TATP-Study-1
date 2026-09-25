@@ -1005,9 +1005,14 @@ class DesignerWindow(QWidget):
 
     def release_garment(self) -> None:
         """Let the garment go, by Close, by another garment chosen, or by the launcher before
-        a session connects its own. A lost sleeve's driver has already let its port go."""
-        if self.garment.connected:
-            self.garment.disconnect()
+        a session connects its own. If the zeroing write finds the link lost, the driver lets
+        the port go and records it (`GarmentController.lost`), and the loss is said here."""
+        if not self.garment.connected:
+            return
+        faults_before = len(self.garment.faults)
+        self.garment.disconnect()
+        if len(self.garment.faults) > faults_before:
+            self._report_loss(self.garment.faults[-1])
 
     def play(self) -> bool:
         if self.revalidate() is None:
@@ -1086,9 +1091,12 @@ class DesignerWindow(QWidget):
         # it go; any other error leaves it connected, and disconnecting zeroes and closes it.
         self.release_garment()
         self.garment = self._make_garment(self.driver)
+        self._report_loss(str(error))
+
+    def _report_loss(self, detail: str) -> None:
         self._loss_reported = True
         self.tell(self.explain(DesignError(
-            "garment_lost", garment=self.garment_name, value=str(error),
+            "garment_lost", garment=self.garment_name, value=detail,
         )), problem=True)
 
     def closeEvent(self, event) -> None:

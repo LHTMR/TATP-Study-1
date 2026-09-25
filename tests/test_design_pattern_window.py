@@ -336,6 +336,27 @@ def test_a_sleeve_lost_mid_play_stops_playback_and_can_reconnect(window, app, sl
     assert len(sleeve) == 2
 
 
+def test_a_loss_found_while_switching_garment_is_said_and_names_the_sleeve(window, sleeve,
+                                                                           loaded):
+    """Re-review: the switch's zeroing write found the loss, and it went unsaid."""
+    window.open_file(EXAMPLES / "sweep_20cms.csv")
+    _choose(window, "arduino_mosfet")
+    assert window.play()
+    window.stop()
+
+    def unplugged(data):
+        raise serial.SerialException("device unplugged")
+
+    sleeve[0].write = unplugged
+    _choose(window, "mock")
+    words = loaded.experimenter_text
+    sleeve_name = words["terms"]["garments"]["arduino_mosfet"]
+    template = words["designer"]["errors"]["garment_lost"]
+    opening = template.split("{value}")[0].format(garment=sleeve_name)
+    assert window.message.text().startswith(opening), "the sleeve's loss, kept after the switch"
+    assert window.play(), "the mock plays afterwards"
+
+
 def test_a_sleeve_that_cannot_be_reached_is_reported(window, loaded, monkeypatch):
     def missing(*args, **kwargs):
         raise serial.SerialException("could not open port 'COM3'")
