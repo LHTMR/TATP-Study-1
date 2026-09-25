@@ -357,8 +357,9 @@ def test_the_preview_shows_the_tools_report(app, loaded):
     """SPEC.md 7.2: the same report as tools/preview_schedule.py, every block in it."""
     schedule = sched.generate(loaded.schedule)
     shown = launcher.preview_lines(loaded, T_ZERO)
-    assert shown == preview_schedule.render(schedule, T_ZERO, separator="\t")
-    padded = preview_schedule.render(schedule, T_ZERO)
+    text = loaded.experimenter_text
+    assert shown == preview_schedule.render(schedule, T_ZERO, text, separator="\t")
+    padded = preview_schedule.render(schedule, T_ZERO, text)
     assert len(shown) == len(padded), "the same report, only the separator differs"
     assert [line.split() for line in shown] == [line.split() for line in padded]
     for row in schedule.preview_rows(T_ZERO):

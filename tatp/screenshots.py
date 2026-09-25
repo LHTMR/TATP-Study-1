@@ -545,7 +545,7 @@ def _experimenter_states(text: dict) -> dict:
             ),
         ),
         "awaiting_rebalance": (
-            "The evenness question answered 'uneven': Rebalance and Start block both "
+            "The evenness question answered 'uneven': Rebalance and Next step both "
             "enabled, because the procedure waits on either.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA}},

@@ -98,8 +98,8 @@ instructions:
   thermode_rekindle: Rekindle now. The garment has been deactivated and will be reactivated afterwards.
   capsaicin_apply: Apply 0.075 % capsaicin.
   # SPEC.md 7.4, 8.3: the software times, the experimenter launches.
-  ready: Ready. Press Start block when the participant is ready.
-  mapping_ready: Path {path} of {value}. Press Start block to start the pacing cue, and again to stop it at the border.
+  ready: Ready. Press Next step when the participant is ready.
+  mapping_ready: Path {path} of {value}. Press Next step to start the pacing cue, and again to stop it at the border.
   await_participant: Waiting for the participant's response.
   response_received: Response received.
   # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. The VAS proportionality
@@ -107,10 +107,10 @@ instructions:
   vas_training: The participant is reading how to use the rating scale. Wait until they press ▶.
   # Setup and touch calibration (SPEC.md 9, 10.7, 10.9). None names a pattern or a condition.
   masking_check: 'Audio setup: the participant is setting the noise level against the garment.'
-  earplugs: Fit the earplugs under the headphones, then press Start block.
+  earplugs: Fit the earplugs under the headphones, then press Next step.
   stop_rehearsal: >-
     Stop rehearsal: the participant will now press the stop button. When the stop screen shows,
-    press Resume. Press Start block only if they cannot press it.
+    press Resume. Press Next step only if they cannot press it.
   stop_rehearsal_resume: The stop was detected. Press Resume to carry on in front of the participant.
   touchcal_bracket: 'Touch calibration, step 1: the participant sets the touch on the middle channel.'
   touchcal_estimation: 'Touch calibration, step 2: the participant rates a series of touches.'
@@ -146,20 +146,20 @@ instructions:
   # The session sequencer (SPEC.md 2, 7.4). The software times and the experimenter launches;
   # none of these names a condition, a pattern or anything about the touch that differs.
   waiting: Waiting for the next scheduled step. The countdown shows when it is due.
-  capsaicin_remove: Remove the capsaicin, then press Start block to begin the post-sensitisation measures.
-  intervention_start: The intervention starts now. Press Start block to start the touch.
+  capsaicin_remove: Remove the capsaicin, then press Next step to begin the post-sensitisation measures.
+  intervention_start: The intervention starts now. Press Next step to start the touch.
   touch_block: 'Touch-rating block: the participant rates the touch.'
   baseline_ratings: 'Baseline: the participant rates how they feel right now.'
   intervention_end: The intervention has ended and the garment has been switched off.
   # SPEC.md 15: a session resumed during the rekindle never prompts the heat a second time.
   rekindle_resumed: >-
     The session resumed during the rekindle. The heat was started before the interruption and
-    is not prompted again; the rekindle is timed from then. Press Start block to confirm. If the
+    is not prompted again; the rekindle is timed from then. Press Next step to confirm. If the
     heat was not in fact applied, apply it now and enter a note. The garment stays off until the
     rekindle is over.
 
 controls:
-  start_block: Start block
+  proceed: Next step
   pause: Pause
   resume: Resume
   discard_repeat: Discard and repeat last trial
@@ -519,3 +519,53 @@ designer:
     unwired_bit: 'Bit {value} is not wired to a channel of the sleeve. The wired bits are {wired} (hardware.yaml).'
     # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
     unwired_channel: 'Channel {channel} is not a channel of the sleeve, which has channels {wired}.'
+
+# The schedule preview (SPEC.md 7.2), in the launcher and from `make preview`
+# (tools/preview_schedule.py). Block types come from terms.block_types, window names from
+# phases. Drafted by the build, docs/LOG.md N7.U10.
+schedule_preview:
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  t_zero: 'Session t=0 (start of sensitisation) at {time}'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  columns:
+    index: Block
+    type: Type
+    planned_offset_min: Offset
+    planned_wall_clock: Clock
+    expected_duration_min: Duration
+    overridden: Source
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  override: override
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  generated: generated
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  windows: 'Timed windows, minutes from t=0'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  runs_to: 'Schedule runs to {value} min from t=0'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  no_warnings: No warnings.
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  warnings: '{value} warning(s). None prevents the schedule running:'
+
+# SPEC.md 7.3: the scheduling rules a grid breaks. They warn and never block. {window} is a
+# phase name and {type} a block type (tatp/schedule.py, ScheduleWarning).
+schedule_warnings:
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  durations_unset: >-
+    Expected block durations are not set, so a block can only be checked against the moment it
+    starts, not the time it occupies. Overlapping blocks are not detected at all (open item 4).
+    Blocks affected: {blocks}.
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  out_of_order: 'Block {block} is planned for {offset} min, before block {previous} at {previous_offset} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  overlap: 'Block {block} starts at {offset} min, while block {other} is still running until {until} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  in_window: 'Block {block} at {offset} min falls in the {window} window, {start}-{end} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  outside_intervention: 'Block {block} at {offset} min lies outside the intervention, {start}-{end} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  not_alternating: 'Blocks {first} and {second} are both {type} blocks, so the grid does not alternate.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  uneven_spacing: 'The {type} block {block} is {gap} min after the previous one, where the others are {spacing} min apart.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  too_long: 'The schedule runs to {total} min from t=0, over the configured maximum of {maximum} min.'

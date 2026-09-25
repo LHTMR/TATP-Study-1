@@ -34,7 +34,7 @@ from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import DRIVERS, Session, SessionError, with_session_choices
 from tatp.session_runner import SessionRunner, stage_layout, summary_phase
-from tatp.ui.application import application
+from tatp.ui.application import application, scale_screens
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 from tatp.units import S_PER_MIN
@@ -278,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     if any(key == RESUME_OFFER for _, key, _ in findings) and args.resume is None:
         return EXIT_OPEN_SESSION  # the terminal's answer is --resume or --new
 
+    scale_screens(config.hardware)
     app = application(config.hardware)
     runner = build(config, args)
     runner.start()

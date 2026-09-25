@@ -495,7 +495,7 @@ class Session:
         # SPEC.md 7.3: the schedule warns and never blocks, so the warnings have to be somewhere
         # a session can be audited from afterwards rather than only in the preview.
         for warning in self.schedule.warnings():
-            self.log("schedule_warning", severity="warning", detail=warning)
+            self.log("schedule_warning", severity="warning", detail=str(warning))
         if self.config.has_placeholder_text():
             self.log(
                 "placeholder_participant_text",

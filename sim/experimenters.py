@@ -10,7 +10,7 @@ The normal experimenter runs a whole session from the experimenter screen, and o
   would be applied wrongly here, as it would be in the lab. The cue is noticed as it goes up
   (`warning_cue_shown`), not by looking now and then: at the validator's speed a cue is on
   screen for well under a millisecond.
-- **It presses Start block whenever the screen says the software is waiting for it** -- the
+- **It presses Next step whenever the screen says the software is waiting for it** -- the
   garment fitted, the thermode started, the capsaicin, the next block, the next mapping path,
   the rekindle -- and presses it again to stop each mapping path. The software decides when a
   press counts (SPEC.md 7.4); a press it is not waiting for is ignored, as the lab's would be.
@@ -49,7 +49,7 @@ RESUME_AFTER_S = 5.0
 NORMAL_DISTANCES_MM = (40.0, 35.0, 45.0, 30.0)
 # The reason an ended scenario's session file records.
 SCENARIO_ENDED = "validator: the scenario's error path is over"
-# Instructions after which the software waits for Start block.
+# Instructions after which the software waits for Next step.
 PROCEED_INSTRUCTIONS = (
     "fit_garment", "thermode_start", "capsaicin_apply", "capsaicin_remove",
     "intervention_start", "thermode_rekindle", "ready", "touchcal_uneven", "earplugs",

@@ -98,8 +98,8 @@ instructions:
   thermode_rekindle: Återuppvärm nu. Plagget har avaktiverats och återaktiveras efteråt.
   capsaicin_apply: Applicera 0,075 % capsaicin.
   # SPEC.md 7.4, 8.3: programmet tar tid, försöksledaren startar.
-  ready: Redo. Tryck på Starta block när deltagaren är redo.
-  mapping_ready: Bana {path} av {value}. Tryck på Starta block för att starta taktsignalen, och igen för att stoppa den vid gränsen.
+  ready: Redo. Tryck på Nästa steg när deltagaren är redo.
+  mapping_ready: Bana {path} av {value}. Tryck på Nästa steg för att starta taktsignalen, och igen för att stoppa den vid gränsen.
   await_participant: Väntar på deltagarens svar.
   response_received: Svar mottaget.
   # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. Övningen i proportionalitet på
@@ -108,10 +108,10 @@ instructions:
   # Förberedelser och beröringskalibrering (SPEC.md 9, 10.7, 10.9). Ingen nämner ett mönster
   # eller en betingelse.
   masking_check: 'Ljudinställning: deltagaren ställer in brusnivån mot plagget.'
-  earplugs: Sätt öronpropparna under hörlurarna och tryck sedan på Starta block.
+  earplugs: Sätt öronpropparna under hörlurarna och tryck sedan på Nästa steg.
   stop_rehearsal: >-
     Övning med stoppknappen: deltagaren trycker nu på stoppknappen. När stoppskärmen visas,
-    tryck på Återuppta. Tryck på Starta block bara om deltagaren inte kan trycka.
+    tryck på Återuppta. Tryck på Nästa steg bara om deltagaren inte kan trycka.
   stop_rehearsal_resume: Stoppet registrerades. Tryck på Återuppta för att fortsätta inför deltagaren.
   touchcal_bracket: 'Beröringskalibrering, steg 1: deltagaren ställer in beröringen på mittkanalen.'
   touchcal_estimation: 'Beröringskalibrering, steg 2: deltagaren skattar en serie beröringar.'
@@ -144,20 +144,20 @@ instructions:
   # Sessionsförloppet (SPEC.md 2, 7.4). Programmet tar tid och försöksledaren startar; ingen
   # av dessa nämner en betingelse, ett mönster eller något med beröringen som skiljer sig.
   waiting: Väntar på nästa schemalagda steg. Nedräkningen visar när det ska starta.
-  capsaicin_remove: Ta bort capsaicinet och tryck sedan på Starta block för att börja mätningarna efter sensitiseringen.
-  intervention_start: Interventionen börjar nu. Tryck på Starta block för att starta beröringen.
+  capsaicin_remove: Ta bort capsaicinet och tryck sedan på Nästa steg för att börja mätningarna efter sensitiseringen.
+  intervention_start: Interventionen börjar nu. Tryck på Nästa steg för att starta beröringen.
   touch_block: 'Skattningsblock för beröring: deltagaren skattar beröringen.'
   baseline_ratings: 'Utgångsläge: deltagaren skattar hur hen känner sig just nu.'
   intervention_end: Interventionen är slut och plagget har stängts av.
   # SPEC.md 15: en session som återupptas under återuppvärmningen ber aldrig om värmen igen.
   rekindle_resumed: >-
     Sessionen återupptogs under återuppvärmningen. Värmen startades före avbrottet och efterfrågas
-    inte igen; återuppvärmningen räknas därifrån. Tryck på Starta block för att bekräfta. Om
+    inte igen; återuppvärmningen räknas därifrån. Tryck på Nästa steg för att bekräfta. Om
     värmen i själva verket inte gavs, ge den nu och skriv en anteckning. Plagget förblir avstängt
     tills återuppvärmningen är klar.
 
 controls:
-  start_block: Starta block
+  proceed: Nästa steg
   pause: Pausa
   resume: Återuppta
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
@@ -523,3 +523,53 @@ designer:
     unwired_bit: 'Bit {value} är inte kopplad till någon av ärmens kanaler. De kopplade bitarna är {wired} (hardware.yaml).'
     # DRAFT (LOG N7.U2): written by the build, not ethics-sourced
     unwired_channel: 'Kanal {channel} är ingen av ärmens kanaler, som är {wired}.'
+
+# Schemaförhandsvisningen (SPEC.md 7.2), i startfönstret och från `make preview`
+# (tools/preview_schedule.py). Blocktyperna kommer från terms.block_types, fönstrens namn från
+# phases. Skrivet av bygget, docs/LOG.md N7.U10.
+schedule_preview:
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  t_zero: 'Sessionens t=0 (sensitiseringens start) kl. {time}'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  columns:
+    index: Block
+    type: Typ
+    planned_offset_min: Start
+    planned_wall_clock: Klockan
+    expected_duration_min: Längd
+    overridden: Källa
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  override: ändrad
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  generated: genererad
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  windows: 'Tidsatta fönster, minuter från t=0'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  runs_to: 'Schemat sträcker sig till {value} min från t=0'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  no_warnings: Inga varningar.
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  warnings: '{value} varning(ar). Ingen av dem hindrar schemat från att köras:'
+
+# SPEC.md 7.3: schemaregler som ett rutnät bryter mot. De varnar och stoppar aldrig. {window} är
+# en fas och {type} en blocktyp (tatp/schedule.py, ScheduleWarning).
+schedule_warnings:
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  durations_unset: >-
+    Blockens förväntade längd är inte satt, så ett block kan bara kontrolleras mot när det
+    börjar, inte mot tiden det tar. Block som överlappar upptäcks inte alls (öppen punkt 4).
+    Berörda block: {blocks}.
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  out_of_order: 'Block {block} är planerat till {offset} min, före block {previous} vid {previous_offset} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  overlap: 'Block {block} börjar vid {offset} min, medan block {other} pågår till {until} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  in_window: 'Block {block} vid {offset} min hamnar i fönstret {window}, {start}–{end} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  outside_intervention: 'Block {block} vid {offset} min ligger utanför interventionen, {start}–{end} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  not_alternating: 'Block {first} och {second} är båda av typen {type}, så rutnätet växlar inte.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  uneven_spacing: 'Block {block} ({type}) kommer {gap} min efter det förra av samma typ, medan de andra ligger {spacing} min isär.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
+  too_long: 'Schemat sträcker sig till {total} min från t=0, över det inställda maxvärdet {maximum} min.'

@@ -57,7 +57,7 @@ from tatp import config as cfg
 from tatp import schedule as sched
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
 from tatp.session import DRIVERS, with_session_choices
-from tatp.ui.application import application
+from tatp.ui.application import application, scale_screens
 from tatp.ui.widgets import (
     DISCONNECTED_COLOUR,
     GROUP_GAP_PX,
@@ -420,7 +420,9 @@ def preview_lines(config: cfg.Config, t_zero: datetime) -> list[str]:
     """
     from tools import preview_schedule
 
-    return preview_schedule.render(sched.generate(config.schedule), t_zero, separator=TAB)
+    return preview_schedule.render(
+        sched.generate(config.schedule), t_zero, config.experimenter_text, separator=TAB
+    )
 
 
 class PreviewDialog(QDialog):
@@ -606,6 +608,7 @@ def run_launcher(argv: list[str] | None = None) -> int:
                         help="the launcher's own language; the session's are chosen in it")
     args = parser.parse_args(argv)
     config = cfg.load(DEFAULT_PARTICIPANT_LANGUAGE, args.language)
+    scale_screens(config.hardware)
     app = QApplication.instance() or application(config.hardware)
     launcher = LauncherWindow(config)
     launcher.show()

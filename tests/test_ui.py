@@ -567,7 +567,7 @@ def _emitted(signal) -> list:
 def test_every_action_signal_has_a_control_that_emits_it(drawn):
     """SPEC.md 11: each action the experimenter has is a control on the screen."""
     window, _ = drawn
-    window.set_actions_enabled(rebalance=True, fit_decision=True)
+    window.set_actions_enabled(rebalance=True, fit_decision=True, discard=True)
     for widget, signal in (
         (window.proceed_button, window.proceed_requested),
         (window.pause_button, window.pause_requested),

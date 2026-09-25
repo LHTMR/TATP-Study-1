@@ -754,7 +754,7 @@ class RemoteKeyRouter(QObject):
 
     The remote is a keyboard as far as the operating system is concerned, so its presses go to
     the active window -- and the experimenter makes their own window active every time they
-    click Start block. Without this, the participant's next rating, and their emergency stop,
+    click Next step. Without this, the participant's next rating, and their emergency stop,
     would land on the experimenter's screen and do nothing (SPEC.md 10.1, 13).
 
     Installed on the application by the `Rig`. The one exception is a key typed into a text

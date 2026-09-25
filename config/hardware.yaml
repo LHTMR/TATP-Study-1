@@ -100,12 +100,16 @@ screens:
   # SPEC.md 20 item 9. Null means "primary screen, windowed", which is right for a
   # development machine and wrong for the lab PC, so startup warns while they are null.
   # Set 25 Sep 2026 on the lab laptop, with S: screen 0 is the laptop's own display (1280x800
-  # at 150 %), screen 1 the HP Z24i (1920x1200) behind the curtain. The approved participant
-  # screenshots are 1280x800, so on the HP the participant's text wraps differently from them
-  # (docs/LOG.md N5.19).
+  # at 150 %), screen 1 the HP Z24i (1920x1200) behind the curtain. `scale_factors` below makes
+  # the HP draw at the approved screenshots' 1280x800 (docs/LOG.md N5.19, N7.U10).
   participant_screen_index: 1
   experimenter_screen_index: 0
   participant_fullscreen: true
+  # How much larger each screen draws, by screen index, in place of the Windows setting
+  # (docs/LOG.md N7.U10). 1920x1200 at 1.5 is 1280x800, the size every screen is laid out and
+  # approved at, so the participant sees the approved screenshots enlarged. The laptop is 1.5
+  # in Windows already. Null leaves each screen as the platform sets it.
+  scale_factors: [1.5, 1.5]
   # How often the experimenter screen redraws its clock, countdown and hardware panel
   # (SPEC.md 7.4, 11; docs/LOG.md N6.20). A display rate, not a study timing: the countdown
   # reads the session clock, so a slower tick shows the same times less often, never wrong ones.
