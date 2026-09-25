@@ -782,13 +782,19 @@ It has three folders:
 | `02_anonymised` | Not yours. Leave it alone. |
 | `03_processed` | Not yours. Leave it alone. |
 
+**You upload at the end of every session**, once the software is closed.
+
 1. Copy every file of the session from the data folder into `01_raw`. That is every file whose
    name contains `P<code>_S<session>_`, including a resumed session's second set. Copy the files;
    do not move them.
-2. Do not rename, edit or reorganise them, in the data folder or in `01_raw`.
-
-**[TBC: who uploads, and when; how the upload is checked; and whether the lab PC's copy is then
-deleted (LOG N4.1).]**
+2. If Windows says a file already exists in `01_raw`, choose **Skip**, never **Replace**, and tell
+   S.
+3. **Check the upload.** Show both folders in the **Details** view. For this session's files,
+   `01_raw` must have the same number of files as the data folder, with the same names and the
+   same sizes. If anything differs, copy the missing or different file again, check again, and
+   tell S if it still differs.
+4. Do not rename, edit or reorganise the files, in the data folder or in `01_raw`.
+5. **Never delete the lab PC's copy.** The data folder keeps every session.
 
 ### 14.3 What never leaves the lab PC except by that upload
 
