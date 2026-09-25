@@ -125,6 +125,14 @@ class GarmentController(ABC):
         self.connected = False
         self._record("disconnect")
 
+    def abandon(self) -> None:
+        """Let the device go without commanding it, for one no longer trusted to answer:
+        `disconnect` zeroes the outputs first, and a write to a dead link fails again."""
+        self._abandon()
+        if self.connected:
+            self.connected = False
+            self._record("disconnect")
+
     def channels(self) -> tuple[int, ...]:
         """Channel ids, 1-based. Pattern files address channels by these ids."""
         return tuple(range(1, self.n_channels + 1))
@@ -291,6 +299,21 @@ class GarmentController(ABC):
         self.faults.append(detail)
         self._record("fault", detail=detail)
 
+    def lost(self, detail: str) -> None:
+        """The device stopped answering and its driver has let the connection go: a fault,
+        then disconnected, as a disconnect by hand leaves it, so the session's connected
+        state, its Connect button and every `connected`-guarded stop see the truth. A pattern
+        playing is over; what the outputs did as the link failed is unknown, and the fault
+        row says so."""
+        self.fault(detail)
+        if self._pattern is not None:
+            self._record("pattern_stop", pattern_name=self._pattern.name)
+        self._pattern = None
+        self._pattern_start_s = None
+        self._channels_on.clear()
+        self.connected = False
+        self._record("disconnect")
+
     def _require_connected(self) -> None:
         if not self.connected:
             raise GarmentError(f"{self.driver_name} is not connected")
@@ -306,6 +329,10 @@ class GarmentController(ABC):
 
     @abstractmethod
     def _connect(self) -> None: ...
+
+    @abstractmethod
+    def _abandon(self) -> None:
+        """Release the link without sending a command."""
 
     @abstractmethod
     def _disconnect(self) -> None: ...

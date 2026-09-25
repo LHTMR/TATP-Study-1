@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
@@ -185,17 +186,24 @@ def test_a_designer_playing_on_the_sleeve_lets_its_port_go_before_the_session_co
     designer.open_file(cfg.CONFIG_DIR / "patterns" / "examples" / "sweep_20cms.csv")
     designer.garment_choice.setCurrentIndex(designer.garment_choice.findData("arduino_mosfet"))
     assert designer.play()
-    _filled(window, tmp_path).start()
+    dialog = _filled(window, tmp_path)
+    dialog.start()
     assert at_build == [[True]], "the port was closed before the session was built"
     assert not designer.playing
+    # Deleted now, not at the garbage collector's timing inside a later test (LOG N7.I3).
+    for made in (dialog, designer, window):
+        made.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 def test_the_pattern_folder_hint_goes_once_a_folder_is_chosen(app, loaded, tmp_path):
     window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
     dialog = window.session_dialog()
-    assert dialog.pattern_folder_hint.isVisibleTo(dialog)
+    assert dialog.form.isRowVisible(dialog.pattern_folder_hint)
     dialog.pattern_folder.setText(str(tmp_path))
-    assert not dialog.pattern_folder_hint.isVisibleTo(dialog)
+    assert not dialog.form.isRowVisible(dialog.pattern_folder_hint), "the whole row goes"
+    dialog.pattern_folder.clear()
+    assert dialog.form.isRowVisible(dialog.pattern_folder_hint)
 
 
 def test_the_dialog_asks_for_exactly_what_spec_6_lists(app, loaded, tmp_path):

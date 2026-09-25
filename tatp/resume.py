@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from tatp.touchcal_maths import Delivery
+from tatp.units import S_PER_MIN
 
 SESSION_SUFFIX = "session.csv"
 STAGE_COMPLETED = "stage_completed"
@@ -293,4 +294,25 @@ def _mapping(chain: list[Path], path_ids: list[str]) -> dict[str, MappingPoint]:
     return {
         phase: MappingPoint(point.starts, point.distances, phase in written)
         for phase, point in points.items()
+    }
+
+
+def offer_wording(text: dict, phases: list[str], blocks: list[str],
+                  ago_min: int | None) -> dict:
+    """The resume offer's two values, worded (SPEC.md 15): the phases and intervention blocks
+    completed, and how long ago sensitisation began, in minutes, or None if it had not.
+    `run_session.resume_summary` reads them from the data; the screenshots pass samples, so
+    the approved picture is worded by this same code."""
+    dialogs = text["dialogs"]
+    parts = [text["phases"][phase] for phase in phases if phase in text["phases"]]
+    if blocks:
+        parts.append(dialogs["resume_blocks"].format(value=", ".join(blocks)))
+    if ago_min is None:
+        since = dialogs["resume_not_sensitised"]
+    else:
+        hours, minutes = divmod(ago_min, int(S_PER_MIN))
+        since = dialogs["resume_since_sensitisation"].format(hours=hours, minutes=minutes)
+    return {
+        "completed": ", ".join(parts) or dialogs["resume_nothing_completed"],
+        "since_sensitisation": since,
     }

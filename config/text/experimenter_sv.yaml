@@ -314,6 +314,9 @@ hardware:
   # Under interventionen och återuppvärmningen nämner felets detalj en kanal, och vilka kanaler
   # ett mönster använder skiljer sig mellan betingelserna (SPEC.md 16). Själva felet visas.
   fault_withheld: 'Fel i plagget: {value} (detalj i data)'
+  # DRAFT (LOG N7.U6): written by the build, not ethics-sourced. Under det senaste felet, som
+  # visas i sin helhet: hur många som kom före det.
+  faults_earlier: '{value} tidigare (detalj i data)'
 
 fit_preview:
   # SPEC.md 11.1. Visas bara när fit_preview.enabled är på. Det enda stället där deltagarens

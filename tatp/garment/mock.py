@@ -46,6 +46,9 @@ class MockGarment(GarmentController):
     def _disconnect(self) -> None:
         self._device("disconnect")
 
+    def _abandon(self) -> None:
+        self._device("abandon")
+
     def _set_pressure(self, channel: int, kpa: float) -> None:
         self._device("set_pressure")
 

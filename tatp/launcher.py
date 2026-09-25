@@ -76,7 +76,6 @@ from tatp.ui.widgets import (
     sized,
     stylesheet,
 )
-from tatp.units import S_PER_MIN
 
 LANGUAGES = ("sv", "en")
 # The launcher's own screens open before anyone has chosen a language, so they are drawn in the
@@ -118,26 +117,6 @@ def build(config: cfg.Config, args: argparse.Namespace):
     import run_session
 
     return run_session.build(config, args)
-
-
-def resume_offer(text: dict, phases: list[str], blocks: list[str],
-                 ago_min: int | None) -> dict:
-    """The resume offer's two values, worded (SPEC.md 15): the phases and intervention blocks
-    completed, and how long ago sensitisation began, in minutes, or None if it had not.
-    `run_session.resume_summary` reads them from the data; the screenshots pass samples."""
-    dialogs = text["dialogs"]
-    parts = [text["phases"][phase] for phase in phases if phase in text["phases"]]
-    if blocks:
-        parts.append(dialogs["resume_blocks"].format(value=", ".join(blocks)))
-    if ago_min is None:
-        since = dialogs["resume_not_sensitised"]
-    else:
-        hours, minutes = divmod(ago_min, int(S_PER_MIN))
-        since = dialogs["resume_since_sensitisation"].format(hours=hours, minutes=minutes)
-    return {
-        "completed": ", ".join(parts) or dialogs["resume_nothing_completed"],
-        "since_sensitisation": since,
-    }
 
 
 def formatted(template: str, value: object) -> str:
@@ -211,7 +190,7 @@ class SessionDialog(QDialog):
         self.pattern_folder_hint.setText(words["no_pattern_folder"])
         self.pattern_folder.textChanged.connect(self._pattern_folder_changed)
 
-        form = QFormLayout()
+        self.form = form = QFormLayout()
         form.setVerticalSpacing(ITEM_GAP_PX)
         for key, widget in (
             ("participant_code", self.participant),
@@ -294,7 +273,8 @@ class SessionDialog(QDialog):
             field.setText(chosen)
 
     def _pattern_folder_changed(self, text: str) -> None:
-        self.pattern_folder_hint.setVisible(not text.strip())
+        # The whole row, not just the label, so no empty row and its gap is left behind.
+        self.form.setRowVisible(self.pattern_folder_hint, not text.strip())
 
     def _stale(self, *_) -> None:
         self.start_button.setEnabled(False)

@@ -49,9 +49,10 @@ from tatp import pattern_design as pd
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
 from tatp.instruments import InstrumentsDialog
-from tatp.launcher import WARN, LauncherWindow, resume_offer
+from tatp.launcher import WARN, LauncherWindow
 from tatp.pinprick import F40Fit, LongResult
 from tatp.responder import Action, Responder
+from tatp.resume import offer_wording
 from tatp.touchcal import FitReady
 from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
@@ -121,7 +122,7 @@ SAMPLE_INITIALS = "SM"
 SAMPLE_PATTERN_FOLDER = "config/patterns/examples"
 SAMPLE_DATA_FOLDER = "data"
 # The resume offer's completed phases and blocks, and how long ago sensitisation began,
-# worded by the same `launcher.resume_offer` the real offer is.
+# worded by the same `resume.offer_wording` the real offer is.
 SAMPLE_RESUME_COMPLETED = ("setup", "touch_calibration", "pre_sensitisation", "sensitisation")
 SAMPLE_RESUME_BLOCKS = ("1", "2", "3", "4")
 SAMPLE_RESUME_AGO_MIN = 72
@@ -689,7 +690,7 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"The resume question (SPEC.md 15): what was completed and how long ago "
         f"sensitisation began. Resume, or an explicit new session; closing it starts nothing "
         f"({language}).",
-        _grab_dialog(dialog.resume_dialog(resume_offer(
+        _grab_dialog(dialog.resume_dialog(offer_wording(
             config.experimenter_text, list(SAMPLE_RESUME_COMPLETED),
             list(SAMPLE_RESUME_BLOCKS), SAMPLE_RESUME_AGO_MIN,
         ))),

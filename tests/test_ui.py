@@ -831,20 +831,25 @@ def test_accumulating_faults_do_not_grow_the_side_column(drawn):
     """Pre-merge review: faults accumulate for the session, and a wrapped line that grew with
     each would move everything in the side column (UI_PRINCIPLES.md 3.3)."""
     window, held = drawn
+    window.resize(1280, 800)
     window.show()
-    faults = [f"channel {n}: a fault reported with enough words to wrap" for n in range(1, 9)]
-    held["view"] = _all_keys(phase="setup", hardware=_hardware(faults=faults[:1]))
-    window.refresh()
+    # What the prototype driver actually reports, at full length.
+    faults = [f"serial write failed on COM{n}: WriteFile failed (PermissionError(13, 'The "
+              f"device does not recognize the command.', None, 22))" for n in range(1, 9)]
     app = QApplication.instance()
-    app.processEvents()
-    one = window.faults.height()
-    held["view"] = _all_keys(phase="setup", hardware=_hardware(faults=faults))
-    window.refresh()
-    app.processEvents()
-    limit = window.faults.fontMetrics().lineSpacing() * experimenter_ui.FAULT_LINES
-    assert window.faults.height() <= limit and one <= limit
+    heights = []
+    for count in (1, len(faults)):
+        held["view"] = _all_keys(phase="setup", hardware=_hardware(faults=faults[:count]))
+        window.refresh()
+        app.processEvents()
+        needed = window.faults.heightForWidth(window.faults.width())
+        assert window.faults.height() >= needed, "the newest fault is never clipped"
+        heights.append(window.faults.height())
     assert faults[-1] in window.faults.text() and faults[0] not in window.faults.text()
-    assert faults[0] in window.faults.toolTip()
+    earlier = window.text["hardware"]["faults_earlier"].format(value=len(faults) - 1)
+    assert earlier in window.faults.text()
+    line = window.faults.fontMetrics().lineSpacing()
+    assert heights[1] <= heights[0] + line, "seven more faults add one short line, no more"
 
 
 def test_refresh_does_not_refit_unchanged_text(drawn, monkeypatch):

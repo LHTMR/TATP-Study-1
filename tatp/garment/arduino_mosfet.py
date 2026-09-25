@@ -103,6 +103,9 @@ class ArduinoMosfetGarment(GarmentController):
     def _write_state(self) -> None:
         self._send(SET_STATE.format(mask=self._mask))
 
+    def _abandon(self) -> None:
+        self._drop_port()
+
     def _drop_port(self) -> None:
         """Close the port without a last write, which is what failed. Reconnecting then opens
         it afresh rather than being refused a handle this driver still holds."""
@@ -120,7 +123,13 @@ class ArduinoMosfetGarment(GarmentController):
             # Reported and raised, never swallowed: a sleeve that silently stops obeying is
             # worse than a session that stops (SPEC.md 13).
             self._drop_port()
-            self.fault(f"serial write failed on {self.port_name}: {error}")
+            detail = f"serial write failed on {self.port_name}: {error}"
+            # A failure while connecting is the connect's to report (it never became
+            # connected); one after is the connection lost.
+            if self.connected:
+                self.lost(detail)
+            else:
+                self.fault(detail)
             raise GarmentError(f"{self.driver_name}: {error}") from error
 
 

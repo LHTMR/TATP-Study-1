@@ -311,6 +311,9 @@ hardware:
   # During the intervention and the rekindle a fault's detail names a channel, and which
   # channels a pattern uses differs by condition (SPEC.md 16). The fault itself is still shown.
   fault_withheld: 'Garment faults: {value} (detail in the data)'
+  # DRAFT (LOG N7.U6): written by the build, not ethics-sourced. Under the newest fault, which
+  # is shown in full: how many came before it.
+  faults_earlier: '{value} earlier (detail in the data)'
 
 fit_preview:
   # SPEC.md 11.1. Shown only when fit_preview.enabled is true. The one place a participant's

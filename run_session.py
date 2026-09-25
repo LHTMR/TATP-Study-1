@@ -30,7 +30,6 @@ from tatp import preflight as pre
 from tatp import resume as resumption
 from tatp import schedule
 from tatp.clock import ISO_FORMAT, Clock
-from tatp.launcher import resume_offer
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import DRIVERS, Session, SessionError, with_session_choices
@@ -143,7 +142,7 @@ def resume_summary(config: cfg.Config, open_session: resumption.OpenSession) -> 
     if started is not None:
         ago_s = (datetime.now() - datetime.strptime(started, ISO_FORMAT)).total_seconds()
         ago_min = int(ago_s // S_PER_MIN)
-    return resume_offer(text, phases, blocks, ago_min)
+    return resumption.offer_wording(text, phases, blocks, ago_min)
 
 
 def build(

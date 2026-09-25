@@ -692,7 +692,9 @@ class DesignerWindow(QWidget):
         self._rebuild_grid()
         self.revalidate()
 
-    def _rebuild_grid(self) -> None:
+    def _rebuild_grid(self, current: int | None = None) -> None:
+        """Redraw the grid from `rows`, with row `current` current if given. `clear` forgets
+        the current row, which Add, Duplicate and Remove act on, so it is set again here."""
         self.grid.clear()
         self.grid.setColumnCount(len(self.channel_ids))
         self.grid.setRowCount(len(self.rows))
@@ -700,6 +702,8 @@ class DesignerWindow(QWidget):
         for row_index, row in enumerate(self.rows):
             for column, value in enumerate(row):
                 self.grid.setItem(row_index, column, self._cell(value))
+        if current is not None and 0 <= current < len(self.rows) and self.channel_ids:
+            self.grid.setCurrentCell(current, 0)
         self._label_rows()
 
     def _label_rows(self) -> None:
@@ -724,6 +728,9 @@ class DesignerWindow(QWidget):
     def _mark_current_row(self, row: int, *_) -> None:
         for index in range(self.grid.rowCount()):
             item = self.grid.verticalHeaderItem(index)
+            # Mid-rebuild the times are not labelled yet; `_label_rows` marks them after.
+            if item is None:
+                continue
             font = item.font()
             font.setBold(index == row)
             item.setFont(font)
@@ -744,8 +751,9 @@ class DesignerWindow(QWidget):
         return current if current >= 0 else len(self.rows) - 1
 
     def add_row(self) -> None:
-        self.rows.insert(self._current_row() + 1, [0] * len(self.channel_ids))
-        self._rebuild_grid()
+        at = self._current_row() + 1
+        self.rows.insert(at, [0] * len(self.channel_ids))
+        self._rebuild_grid(current=at)
         self.revalidate()
 
     def duplicate_row(self) -> None:
@@ -753,14 +761,15 @@ class DesignerWindow(QWidget):
             return
         at = self._current_row()
         self.rows.insert(at + 1, list(self.rows[at]))
-        self._rebuild_grid()
+        self._rebuild_grid(current=at + 1)
         self.revalidate()
 
     def remove_row(self) -> None:
         if not self.rows:
             return
-        del self.rows[self._current_row()]
-        self._rebuild_grid()
+        at = self._current_row()
+        del self.rows[at]
+        self._rebuild_grid(current=min(at, len(self.rows) - 1))
         self.revalidate()
 
     # -- ordered and timed channels -----------------------------------------------------
@@ -987,8 +996,16 @@ class DesignerWindow(QWidget):
         self.message.clear()
 
     def release_garment(self) -> None:
-        if self.garment.connected:
+        """Let the garment go. A sleeve that has stopped answering is let go all the same:
+        its driver closes the port and records the loss (`GarmentController.lost`) before
+        the error reaches here, and letting go is all that was asked -- by Close, by another
+        garment chosen, or by the launcher before a session connects its own."""
+        if not self.garment.connected:
+            return
+        try:
             self.garment.disconnect()
+        except GarmentError as error:
+            self._garment_lost(error)
 
     def play(self) -> bool:
         if self.revalidate() is None:
@@ -1018,7 +1035,8 @@ class DesignerWindow(QWidget):
         self.stop_button.setEnabled(True)
         self.timer.start()
         self._tick()
-        return True
+        # False if the first tick already found the sleeve gone (`_garment_lost`).
+        return self.playing
 
     def _tick(self) -> None:
         if not self.playing:
@@ -1062,6 +1080,9 @@ class DesignerWindow(QWidget):
         garment of the same kind takes its place, so the next Play reconnects rather than
         ticking an error into a dead port."""
         self._end_playback()
+        # Whatever raised, the old garment must not keep a port: a failed write has already
+        # closed it, and this closes it otherwise, with no last write to fail again.
+        self.garment.abandon()
         self.garment = self._make_garment(self.garment_choice.currentData())
         self.tell(self.explain(DesignError(
             "garment_lost", garment=self.garment_name, value=str(error),

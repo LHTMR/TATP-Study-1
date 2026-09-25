@@ -175,9 +175,61 @@ def test_a_failed_write_is_a_recorded_fault_not_a_silence(made):
         garment.set_channel(1, True)
     assert garment.faults and "unplugged" in garment.faults[-1]
     assert ports[0].closed, "a dead port is let go, so a reconnect can open it afresh"
-    garment.disconnect()
+    # Disconnected, as the session's status, Connect button and guarded stops must see it.
+    assert not garment.connected and garment.status()["channels_on"] == []
     garment.connect()
-    assert len(ports) == 2 and not ports[1].closed
+    assert len(ports) == 2 and not ports[1].closed and garment.connected
+
+
+def test_a_session_whose_sleeve_is_lost_shows_it_reconnects_and_closes(
+    loaded, tmp_path, monkeypatch
+):
+    """Re-review: with the port dropped but `connected` still true, the session showed the
+    sleeve as connected, its Disconnect raised before disconnecting, and close() raised
+    before the closing provenance was written."""
+    from tatp.session import Session, with_session_choices
+
+    ports: list[FakePort] = []
+
+    def factory(*args, **kwargs):
+        ports.append(FakePort(*args, **kwargs))
+        return ports[-1]
+
+    monkeypatch.setattr(ArduinoMosfetGarment, "serial_factory", staticmethod(factory))
+    monkeypatch.setattr("tatp.garment.arduino_mosfet.time.sleep", lambda s: None)
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data")}}
+    config = with_session_choices(cfg.Config(**{**loaded.__dict__, "hardware": hardware}),
+                                  garment="arduino_mosfet")
+    session = Session(config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=60.0), rng_seed=7)
+    session.start()
+    try:
+        ports[0].fail_writes = True
+        with pytest.raises(GarmentError):
+            session.garment.set_channel(1, True)
+        assert session.experimenter_view()["garment_connected"] is False
+        session.garment.connect()
+        assert session.experimenter_view()["garment_connected"] is True
+        ports[1].fail_writes = True
+        with pytest.raises(GarmentError):
+            session.garment.set_channel(2, True)
+    finally:
+        session.close()
+    assert session.closed, "closing after a lost sleeve writes its provenance and ends"
+
+
+def test_a_connection_lost_mid_pattern_ends_the_pattern_quietly(made, loaded):
+    """The session's timer keeps calling advance() after the loss: it must not raise again."""
+    from tatp.garment import patterns
+
+    garment, ports = made
+    garment.connect()
+    garment.play_pattern(patterns.load_pattern(EXAMPLES / "sweep_20cms.csv"))
+    ports[0].fail_writes = True
+    with pytest.raises(GarmentError):
+        garment.advance()  # the pattern's first event is due at once
+    garment.advance()
+    assert not garment.connected
 
 
 def test_a_connect_that_fails_after_opening_lets_the_port_go(made):

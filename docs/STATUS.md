@@ -4,7 +4,8 @@
 **Milestone:** 6 (pilotable), in progress. Milestones 2–5 are merged and in `main`. Acceleration
 push under way (`CLAUDE.md`).
 **Branch:** `accel/ui-review`, cut from `accel/integration` for S's lab UI review. **Not merged
-yet.** Both pre-merge reviews have run, and their findings are fixed (N7.U5).
+yet.** Both pre-merge reviews have run twice, the second time on the fixes. Their findings are
+fixed (N7.U5, N7.U6).
 
 ---
 
@@ -13,7 +14,7 @@ yet.** Both pre-merge reviews have run, and their findings are fixed (N7.U5).
 **The build runs a whole session**, against the mock garment or the prototype sleeve. The garment
 is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.1).
 
-**The UI review branch (`docs/LOG.md` N7.U1–N7.U5)** fixes what S found on the lab laptop, and
+**The UI review branch (`docs/LOG.md` N7.U1–N7.U7)** fixes what S found on the lab laptop, and
 what a full review of the other screens then found:
 - **Instruments:** entry in grams, no balance field, all twenty filaments in view.
 - **Pattern designer:**
@@ -28,9 +29,10 @@ what a full review of the other screens then found:
   - the F40 review says what is due, and the resume question reads correctly;
   - Swedish fixes, including Cancel as "Tillbaka" beside "Avbryt sessionen".
 
-**`make check` passes on the branch:** 951 tests, ruff, the validator (34 checks) and 158 screens.
-The session-runner tests can stall under the gate's load on this laptop, on `accel/integration`
-too (N7.U3). Close other programs, including a launcher left open, before running it.
+**`make check` passes on the branch:** 960 tests, ruff, the validator (34 checks) and 158
+screens. The unit tests now run on 6 workers, not one per core, because 12 workers made the
+timed session tests stall at random (N7.U7). An intermittent test-worker crash is pre-existing
+and still unexplained (N7.U7): if a run fails only on a crashed worker, run it again.
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
 - **Screens re-approved on this branch:** the designer, Instruments, and every experimenter
@@ -46,9 +48,11 @@ too (N7.U3). Close other programs, including a launcher left open, before runnin
 
 ## Next steps
 
-1. **Merge `accel/ui-review` into `accel/integration`,** then run `make check` there. Both
-   reviews are done and fixed (N7.U5).
-2. **S's decisions from the UI review** that change how a session runs or what the participant
+1. **Merge `accel/ui-review` into `accel/integration`,** then run `make check` there. The
+   reviews and their fixes are done (N7.U5, N7.U6).
+2. **Find the pre-existing test-worker crash** (N7.U7). It is a heap corruption that surfaces in
+   whichever test next builds a window, and it strikes the clean commit too.
+3. **S's decisions from the UI review** that change how a session runs or what the participant
    sees, so the build did not take them:
    - **"Start block" is the go button for every step** and is always enabled, and a press
      during a countdown does nothing. Rename it to a neutral "Proceed" / "Fortsätt", and enable
@@ -62,12 +66,12 @@ too (N7.U3). Close other programs, including a launcher left open, before runnin
    - **Blinding (lab layout):** the self-start screen appears only in the participant-preferred
      condition. The participant monitor must face away from the experimenter.
    - The schedule preview is in English in both languages (`tools/preview_schedule.py`).
-3. **Pilot a session on the sleeve by hand**, and fix what a person finds that the validator
+4. **Pilot a session on the sleeve by hand**, and fix what a person finds that the validator
    cannot. In particular, try Play on the sleeve in the designer, the remote routing (N7.I1),
    and whether the alerts are audible over the noise.
-4. **The VAS training screens** (§10.6, `training.*`), which nothing presents yet (SOP TBC 12).
-5. **Freeze the screenshots** (`make shots ARGS="--freeze"`), once S has reviewed them.
-6. **Run the adversarial review** (spec-review, §17.6) over the whole build, then merge to
+5. **The VAS training screens** (§10.6, `training.*`), which nothing presents yet (SOP TBC 12).
+6. **Freeze the screenshots** (`make shots ARGS="--freeze"`), once S has reviewed them.
+7. **Run the adversarial review** (spec-review, §17.6) over the whole build, then merge to
    `main`.
 
 ---

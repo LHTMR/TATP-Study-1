@@ -97,6 +97,23 @@ def test_the_current_row_is_marked_without_hiding_its_cells(window):
     assert not window.grid.verticalHeaderItem(0).font().bold()
 
 
+def test_the_row_picked_stays_current_through_add_duplicate_and_remove(window):
+    """Re-review: rebuilding the grid forgot the current row, so a second Duplicate copied the
+    last row instead of the one picked."""
+    _parameters(window)
+    for _ in range(4):
+        window.add_row()
+    window.toggle(1, 0)
+    window.grid.setCurrentCell(1, 0)
+    window.duplicate_row()
+    window.duplicate_row()
+    assert [row[0] for row in window.rows] == [0, 1, 1, 1, 0, 0]
+    assert window.grid.currentRow() == 3
+    assert window.grid.verticalHeaderItem(3).font().bold()
+    window.remove_row()
+    assert window.grid.currentRow() == 3 and len(window.rows) == 5
+
+
 def test_changing_the_channels_keeps_the_columns_kept(window):
     _parameters(window)
     window.add_row()
