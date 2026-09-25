@@ -57,6 +57,15 @@ NO_REKINDLE = 999.0
 T_ZERO = datetime(2026, 8, 23, 9, 30, 0)
 
 
+ENGLISH = cfg.load("sv", "en").experimenter_text
+
+
+def said(schedule: sched.Schedule) -> list[str]:
+    """The warnings as the experimenter reads them in English, lower-cased so a test can match
+    a phrase wherever it falls in the sentence."""
+    return [warning.describe(ENGLISH).lower() for warning in schedule.warnings()]
+
+
 def make(**generate) -> sched.Schedule:
     """The base grid with `generate:` keys replaced. Validation keys via `validation=`."""
     validation = {**BASE["validation"], **generate.pop("validation", {})}
@@ -112,7 +121,7 @@ def test_unequal_pools_place_the_remainder_at_the_end_and_warn_rather_than_drop_
     assert [b.type for b in schedule.blocks] == [
         "pinprick", "touch", "pinprick", "pinprick"
     ]
-    assert any("does not alternate" in w for w in schedule.warnings())
+    assert any("does not alternate" in w for w in said(schedule))
 
 
 def test_the_rekindle_takes_its_own_place_in_the_sequence():
@@ -176,7 +185,7 @@ def test_blocks_that_do_not_fit_overrun_the_end_rather_than_backing_into_the_rek
     assert not any(
         rekindle.start_min <= b.planned_offset_min < rekindle.end_min for b in schedule.blocks
     )
-    assert any("lies outside the intervention" in w for w in schedule.warnings())
+    assert any("lies outside the intervention" in w for w in said(schedule))
 
 
 # -- overrides ------------------------------------------------------------------------------
@@ -239,12 +248,12 @@ def test_every_rule_warns_and_none_raises():
         validation={"max_session_duration_min": 10.0},
     )
     assert isinstance(schedule, sched.Schedule)
-    assert len(schedule.warnings()) > 1
+    assert len(said(schedule)) > 1
 
 
 def test_a_block_inside_the_capsaicin_window_is_named_with_the_rule():
     schedule = make(overrides=[{"index": 1, "offset_min": 5.0}])
-    warning = next(w for w in schedule.warnings() if "capsaicin" in w)
+    warning = next(w for w in said(schedule) if "capsaicin" in w)
     assert "block 1" in warning
     assert "2-12 min" in warning
 
@@ -252,30 +261,30 @@ def test_a_block_inside_the_capsaicin_window_is_named_with_the_rule():
 def test_a_block_overlapping_the_rekindle_is_named_with_the_rule():
     """The generator never does this; an override can, which is what the rule is for."""
     schedule = make(overrides=[{"index": 2, "offset_min": 42.0}])
-    warning = next(w for w in schedule.warnings() if "rekindle" in w)
+    warning = next(w for w in said(schedule) if "rekindle" in w)
     assert "block 2" in warning
 
 
 def test_a_block_ending_exactly_at_a_window_start_does_not_warn():
     """A block that finishes as the rekindle begins does not overlap it."""
     schedule = make(overrides=[{"index": 2, "offset_min": 36.0}])
-    assert not any("rekindle" in w for w in schedule.warnings())
+    assert not any("rekindle" in w for w in said(schedule))
 
 
 def test_overlapping_blocks_are_reported_when_the_durations_are_known():
     schedule = make(overrides=[{"index": 2, "offset_min": 29.0}])
-    assert any("still running until 31 min" in w for w in schedule.warnings())
+    assert any("still running until 31 min" in w for w in said(schedule))
 
 
 def test_a_block_moved_before_its_predecessor_is_reported_as_out_of_order():
     schedule = make(overrides=[{"index": 3, "offset_min": 30.0}])
-    assert any("before block 2" in w for w in schedule.warnings())
+    assert any("before block 2" in w for w in said(schedule))
 
 
 def test_an_overlap_is_found_between_blocks_that_are_not_adjacent_in_the_numbering():
     """Overlap is a question about time. Block 1 moved to 53 runs 53-57, into block 4 at 55."""
     schedule = make(overrides=[{"index": 1, "offset_min": 53.0}])
-    warnings = schedule.warnings()
+    warnings = said(schedule)
     assert any("block 4 starts at 55 min" in w and "block 1" in w for w in warnings)
     assert any("before block 1" in w for w in warnings), "and it is still out of order"
 
@@ -293,7 +302,7 @@ def test_a_long_block_catches_a_short_one_nested_inside_it():
         }
     )
     # Block 1 runs 27-57; block 2 is a 1 min touch at 32, block 4 another at 36.
-    assert any("block 4 starts at 36 min" in w and "block 1" in w for w in schedule.warnings())
+    assert any("block 4 starts at 36 min" in w and "block 1" in w for w in said(schedule))
 
 
 def test_the_total_is_the_end_of_the_latest_thing_scheduled():
@@ -310,7 +319,7 @@ def test_unknown_durations_disable_the_overlap_check_and_say_so():
         expected_duration_min={"pinprick": None, "touch": None},
         overrides=[{"index": 2, "offset_min": 22.0}],
     )
-    warnings = schedule.warnings()
+    warnings = said(schedule)
     assert any("durations are not set" in w and "open item 4" in w for w in warnings)
     assert not any("still running" in w for w in warnings)
 
@@ -318,7 +327,7 @@ def test_unknown_durations_disable_the_overlap_check_and_say_so():
 def test_unequal_spacing_between_same_type_blocks_is_reported():
     """Pinprick blocks 1, 3, 5 sit 20 min apart; moving block 5 from 65 to 70 makes one 25."""
     schedule = evenly(overrides=[{"index": 5, "offset_min": 70.0}])
-    assert any("where the others are" in w for w in schedule.warnings())
+    assert any("where the others are" in w for w in said(schedule))
 
 
 def test_spacing_within_the_configured_tolerance_does_not_warn():
@@ -327,7 +336,7 @@ def test_spacing_within_the_configured_tolerance_does_not_warn():
         overrides=[{"index": 5, "offset_min": 65.4}],
         validation={"equal_spacing_tolerance_s": 30.0},
     )
-    assert not any("where the others are" in w for w in schedule.warnings())
+    assert not any("where the others are" in w for w in said(schedule))
 
 
 def test_the_gap_holding_the_rekindle_is_not_counted_as_uneven_spacing():
@@ -336,18 +345,18 @@ def test_the_gap_holding_the_rekindle_is_not_counted_as_uneven_spacing():
     pinprick = [b.planned_offset_min for b in schedule.blocks if b.type == "pinprick"]
     gaps = {round(b - a, 6) for a, b in zip(pinprick, pinprick[1:], strict=False)}
     assert len(gaps) > 1, "the gap holding the rekindle really is wider in wall-clock terms"
-    assert not any("where the others are" in w for w in schedule.warnings())
+    assert not any("where the others are" in w for w in said(schedule))
 
 
 def test_a_session_over_the_configured_maximum_is_reported():
     schedule = make(validation={"max_session_duration_min": 30.0})
-    warning = next(w for w in schedule.warnings() if "over the configured maximum" in w)
+    warning = next(w for w in said(schedule) if "over the configured maximum" in w)
     assert "60" in warning  # the intervention closes at 60, after the last block ends
 
 
 def test_a_block_outside_the_intervention_window_is_reported():
     schedule = make(overrides=[{"index": 4, "offset_min": 90.0}])
-    assert any("lies outside the intervention" in w for w in schedule.warnings())
+    assert any("lies outside the intervention" in w for w in said(schedule))
 
 
 def test_a_regular_grid_produces_no_warnings():
@@ -428,4 +437,4 @@ def test_the_configured_grid_does_not_put_a_block_on_the_rekindle():
     assert not any(
         rekindle.contains(b.planned_offset_min, b.planned_end_min) for b in schedule.blocks
     )
-    assert not any("rekindle" in w for w in schedule.warnings())
+    assert not any("rekindle" in w for w in said(schedule))

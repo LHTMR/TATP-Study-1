@@ -105,7 +105,8 @@ STATUS_SIZES = (SIZE_BODY, SIZE_SMALL)
 OPEN_ITEMS_LINES = 2
 SIDE_COLUMN_PX = 300
 FAULT_LINES = 4
-ZONE_MIN_HEIGHT_PX = 100
+# Fixed, so the diagram does not resize when the pressures or faults appear (LOG N7.U10).
+ZONE_HEIGHT_PX = 180
 SUBSTITUTION_FIELD_PX = 300
 DISTANCE_FIELD_PX = 110
 CONTROL_COLUMNS = 4
@@ -154,9 +155,9 @@ class ExperimenterWindow(QWidget):
     """The lab-side screen. Never shows a rating and never shows the condition (SPEC.md 16)."""
 
     # -- the experimenter's actions, SPEC.md 11 -----------------------------------------
-    # "Start block", and every other point where the software waits for the experimenter to say
-    # go: the next phase, the next path, "earplugs fitted". The software times; the
-    # experimenter launches (SPEC.md 7.4).
+    # "Next step": every point where the software waits for the experimenter to say go -- the
+    # next block, the next phase, the next path, "earplugs fitted". The software times; the
+    # experimenter launches (SPEC.md 7.4). Always enabled (docs/LOG.md N7.U10).
     proceed_requested = Signal()
     pause_requested = Signal()
     resume_requested = Signal()
@@ -192,7 +193,7 @@ class ExperimenterWindow(QWidget):
         self.setStyleSheet(stylesheet())
 
         # What the running procedure is waiting for, beyond what the view says (SPEC.md 11).
-        self._awaiting = {"rebalance": False, "fit_decision": False}
+        self._awaiting = {"rebalance": False, "fit_decision": False, "discard": False}
         self._interruption: str | None = None
         self._connected = False
         self._mapping_phases: list[str] = []
@@ -317,7 +318,7 @@ class ExperimenterWindow(QWidget):
         # Where the stimulus goes, then the garment: both answer "where", and neither is read
         # as often as the instruction.
         self.zone = ZoneDiagram()
-        self.zone.setMinimumHeight(ZONE_MIN_HEIGHT_PX)
+        self.zone.setFixedHeight(ZONE_HEIGHT_PX)
         self.target = label(SIZE_BODY)
         self.target.setAlignment(Qt.AlignHCenter)
         self.hardware_title = label(SIZE_SMALL, colour=SECONDARY)
@@ -346,12 +347,13 @@ class ExperimenterWindow(QWidget):
         column = QVBoxLayout(side)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(ITEM_GAP_PX)
-        column.addWidget(self.zone, 1)
+        column.addWidget(self.zone)
         column.addWidget(self.target)
         column.addLayout(state)
         column.addWidget(self.pressures)
         column.addWidget(self.faults)
         column.addWidget(self.garment_button)
+        column.addStretch(1)
 
         self.centre = QHBoxLayout()
         self.centre.addLayout(left, 1)
@@ -360,7 +362,7 @@ class ExperimenterWindow(QWidget):
 
     def _build_controls(self) -> None:
         controls = self.text["controls"]
-        self.proceed_button = button(controls["start_block"])
+        self.proceed_button = button(controls["proceed"])
         self.pause_button = button(controls["pause"])
         self.resume_button = button(controls["resume"])
         self.discard_button = button(controls["discard_repeat"])
@@ -488,18 +490,25 @@ class ExperimenterWindow(QWidget):
         )
 
     def set_actions_enabled(
-        self, *, rebalance: bool | None = None, fit_decision: bool | None = None
+        self,
+        *,
+        rebalance: bool | None = None,
+        fit_decision: bool | None = None,
+        discard: bool | None = None,
     ) -> None:
-        """What the running procedure is waiting for (SPEC.md 9, 11.1). None leaves it as is.
+        """What the running procedure waits for (SPEC.md 9, 11, 11.1). None leaves it as is.
 
-        `rebalance` enables Rebalance channels; `fit_decision` enables Accept and Re-run. Both
-        are otherwise disabled, because a control that does nothing when pressed is one the
-        experimenter learns to distrust (UI_PRINCIPLES.md 5.1).
+        `rebalance` enables Rebalance channels; `fit_decision` enables Accept and Re-run;
+        `discard` enables Discard and repeat. All are otherwise disabled, because a control that
+        does nothing when pressed is one the experimenter learns to distrust (UI_PRINCIPLES.md
+        5.1).
         """
         if rebalance is not None:
             self._awaiting["rebalance"] = bool(rebalance)
         if fit_decision is not None:
             self._awaiting["fit_decision"] = bool(fit_decision)
+        if discard is not None:
+            self._awaiting["discard"] = bool(discard)
         self._apply_enabled()
 
     def set_mapping_phases(self, phases: Sequence[str]) -> None:
@@ -812,7 +821,7 @@ class ExperimenterWindow(QWidget):
         self.proceed_button.setEnabled(running)
         self.pause_button.setEnabled(running)
         self.resume_button.setEnabled(not running)
-        self.discard_button.setEnabled(running)
+        self.discard_button.setEnabled(running and self._awaiting["discard"])
         self.rebalance_button.setEnabled(running and self._awaiting["rebalance"])
         deciding = running and self._awaiting["fit_decision"]
         self.fit_accept_button.setEnabled(deciding)

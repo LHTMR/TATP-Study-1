@@ -6,7 +6,7 @@ and `overrides:` replaces the offset or the type of any individual block. The gr
 rather than code because it is not settled and will change during piloting (SPEC.md 20 item 4).
 
 **Validation warns and never blocks (SPEC.md 7.3).** Piloting will legitimately want irregular
-schedules, so every rule here produces a sentence naming the block and the rule, and nothing
+schedules, so every rule here produces a warning naming the block and the rule, and nothing
 raises. That exception covers scheduling decisions only -- a malformed `overrides:` entry is a
 configuration error and still stops the program, as SPEC.md 6 requires.
 
@@ -15,10 +15,10 @@ the experimenter launches each block, and no block is ever skipped automatically
 therefore a plan, and the gap between `planned_offset_min` and the moment the experimenter
 actually launched it is recorded rather than prevented -- `Session.start_block` writes it.
 
-The warning strings are English literals rather than `config/text/` entries. They are operator
-diagnostics on the same footing as the `detail` column of the log and the terminal warnings of
-`run_session.py`, not screen text; SPEC.md 10.4 governs what is presented to a participant or
-drawn on the experimenter window.
+The warnings' wording is in `config/text/experimenter_{sv,en}.yaml` under `schedule_warnings`
+(`ScheduleWarning`). It was English literals here while only a terminal showed it; the
+launcher's schedule preview draws it on the experimenter's screen, where SPEC.md 10.4 applies
+(docs/LOG.md N7.U10).
 """
 
 from __future__ import annotations
@@ -86,6 +86,36 @@ class Window:
 
 
 @dataclass(frozen=True)
+class ScheduleWarning:
+    """One scheduling rule the grid breaks (SPEC.md 7.3).
+
+    `key` names its wording under `schedule_warnings` in the experimenter text, and `values`
+    fill it in, so the wording is in the experimenter's language and lives in config/ (SPEC.md
+    4.2, 10.4). A value named `window` is a phase name and `type` a block type, both translated
+    by `describe`. The session log records the key and the values, which read the same whatever
+    the language.
+    """
+
+    key: str
+    values: dict[str, str]
+
+    def describe(self, text: dict) -> str:
+        values = dict(self.values)
+        if "window" in values:
+            values["window"] = text["phases"][values["window"]]
+        if "type" in values:
+            values["type"] = text["terms"]["block_types"][values["type"]]
+        return text["schedule_warnings"][self.key].format(**values)
+
+    def __str__(self) -> str:
+        return f"{self.key} {self.values}"
+
+
+def _min(value: float) -> str:
+    return f"{value:g}"
+
+
+@dataclass(frozen=True)
 class Schedule:
     """The generated grid, the windows around it, and the rules that check them."""
 
@@ -122,9 +152,9 @@ class Schedule:
 
     # -- SPEC.md 7.3 -------------------------------------------------------------------
 
-    def warnings(self) -> tuple[str, ...]:
+    def warnings(self) -> tuple[ScheduleWarning, ...]:
         """Every scheduling rule this grid breaks. Never raises: warn, do not block."""
-        found: list[str] = []
+        found: list[ScheduleWarning] = []
         found.extend(self._order_warnings())
         found.extend(self._window_warnings())
         found.extend(self._alternation_warnings())
@@ -132,25 +162,22 @@ class Schedule:
         found.extend(self._length_warnings())
         return tuple(found)
 
-    def _order_warnings(self) -> list[str]:
+    def _order_warnings(self) -> list[ScheduleWarning]:
         found = []
         unknown = [b.index for b in self.blocks if b.expected_duration_min is None]
         if unknown:
-            found.append(
-                "expected block durations are not set, so a block can only be checked against "
-                "the moment it starts, not the time it occupies -- overlapping blocks are not "
-                f"detected at all (open item 4); blocks affected: {_indices(unknown)}"
-            )
+            found.append(ScheduleWarning("durations_unset", {"blocks": _indices(unknown)}))
         for previous, block in zip(self.blocks, self.blocks[1:], strict=False):
             if block.planned_offset_min < previous.planned_offset_min:
-                found.append(
-                    f"block {block.index} is planned for {block.planned_offset_min:g} min, "
-                    f"before block {previous.index} at {previous.planned_offset_min:g} min"
-                )
+                found.append(ScheduleWarning("out_of_order", {
+                    "block": str(block.index), "offset": _min(block.planned_offset_min),
+                    "previous": str(previous.index),
+                    "previous_offset": _min(previous.planned_offset_min),
+                }))
         found.extend(self._overlap_warnings())
         return found
 
-    def _overlap_warnings(self) -> list[str]:
+    def _overlap_warnings(self) -> list[ScheduleWarning]:
         """Blocks that run into each other.
 
         Asked of the blocks in the order they actually run, not in index order: an override can
@@ -158,31 +185,31 @@ class Schedule:
         numbering. `reaches` is the block extending furthest into the session so far rather than
         simply the previous one, so a long block still catches a short one nested inside it.
         """
-        found: list[str] = []
+        found: list[ScheduleWarning] = []
         reaches: Block | None = None
         for block in sorted(self.blocks, key=lambda b: (b.planned_offset_min, b.index)):
             if reaches is not None and block.planned_offset_min < reaches.planned_end_min:
-                found.append(
-                    f"block {block.index} starts at {block.planned_offset_min:g} min, while "
-                    f"block {reaches.index} is still running until "
-                    f"{reaches.planned_end_min:g} min"
-                )
+                found.append(ScheduleWarning("overlap", {
+                    "block": str(block.index), "offset": _min(block.planned_offset_min),
+                    "other": str(reaches.index), "until": _min(reaches.planned_end_min),
+                }))
             end = block.planned_end_min
             if end is not None and (reaches is None or end > reaches.planned_end_min):
                 reaches = block
         return found
 
-    def _window_warnings(self) -> list[str]:
+    def _window_warnings(self) -> list[ScheduleWarning]:
         found = []
         for window in self.windows:
             if window.name == "intervention":
                 continue
             for block in self.blocks:
                 if window.contains(block.planned_offset_min, block.planned_end_min):
-                    found.append(
-                        f"block {block.index} at {block.planned_offset_min:g} min falls in the "
-                        f"{window.name} window, {window.start_min:g}-{window.end_min:g} min"
-                    )
+                    found.append(ScheduleWarning("in_window", {
+                        "block": str(block.index), "offset": _min(block.planned_offset_min),
+                        "window": window.name, "start": _min(window.start_min),
+                        "end": _min(window.end_min),
+                    }))
         # The intervention window bounds when a block may be *launched*, not when the last
         # rating must be in: the experimenter starts each block (SPEC.md 7.4) and the grid puts
         # the last one on the closing minute, so testing its end would warn on every grid.
@@ -190,24 +217,24 @@ class Schedule:
         for block in self.blocks:
             offset = block.planned_offset_min
             if offset < intervention.start_min or offset > intervention.end_min:
-                found.append(
-                    f"block {block.index} at {offset:g} min lies outside the intervention, "
-                    f"{intervention.start_min:g}-{intervention.end_min:g} min"
-                )
+                found.append(ScheduleWarning("outside_intervention", {
+                    "block": str(block.index), "offset": _min(offset),
+                    "start": _min(intervention.start_min), "end": _min(intervention.end_min),
+                }))
         return found
 
-    def _alternation_warnings(self) -> list[str]:
+    def _alternation_warnings(self) -> list[ScheduleWarning]:
         """SPEC.md 7.1: the grid alternates and blocks are never back-to-back by type."""
         found = []
         for previous, block in zip(self.blocks, self.blocks[1:], strict=False):
             if block.type == previous.type:
-                found.append(
-                    f"blocks {previous.index} and {block.index} are both {block.type} blocks, "
-                    f"so the grid does not alternate"
-                )
+                found.append(ScheduleWarning("not_alternating", {
+                    "first": str(previous.index), "second": str(block.index),
+                    "type": block.type,
+                }))
         return found
 
-    def _spacing_warnings(self) -> list[str]:
+    def _spacing_warnings(self) -> list[ScheduleWarning]:
         found = []
         tolerance_min = self.equal_spacing_tolerance_s / S_PER_MIN
         for block_type in BLOCK_TYPES:
@@ -222,10 +249,10 @@ class Schedule:
             first = gaps[0][2]
             for _, block, gap in gaps[1:]:
                 if abs(gap - first) > tolerance_min:
-                    found.append(
-                        f"{block_type} block {block.index} is {gap:g} min after the previous "
-                        f"{block_type} block, where the others are {first:g} min apart"
-                    )
+                    found.append(ScheduleWarning("uneven_spacing", {
+                        "type": block_type, "block": str(block.index), "gap": _min(gap),
+                        "spacing": _min(first),
+                    }))
         return found
 
     def _straddles_rekindle(self, earlier: Block, later: Block) -> bool:
@@ -243,13 +270,12 @@ class Schedule:
             and rekindle.end_min <= later.planned_offset_min
         )
 
-    def _length_warnings(self) -> list[str]:
+    def _length_warnings(self) -> list[ScheduleWarning]:
         total = self.total_duration_min
         if total > self.max_session_duration_min:
-            return [
-                f"the schedule runs to {total:g} min from t=0, over the configured maximum of "
-                f"{self.max_session_duration_min:g} min"
-            ]
+            return [ScheduleWarning("too_long", {
+                "total": _min(total), "maximum": _min(self.max_session_duration_min),
+            })]
         return []
 
     # -- SPEC.md 7.2 -------------------------------------------------------------------

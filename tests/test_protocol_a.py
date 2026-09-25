@@ -331,6 +331,24 @@ def test_a_discard_writes_a_discards_row_and_repeats(rig):
     assert done[0].applications_total == len(rows)
 
 
+def test_discard_is_enabled_only_while_there_is_something_to_discard(rig):
+    """docs/LOG.md N7.U10: during the interval after a completed application, and not before,
+    during the next one, or once the protocol has ended."""
+    experimenter, participant = rig.experimenter, rig.participant
+    protocol = _long(rig)
+    protocol.start()
+    assert not experimenter.discard_button.isEnabled(), "nothing has been applied yet"
+    experimenter.proceed_requested.emit()
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    assert not experimenter.discard_button.isEnabled(), "the application is not complete"
+    _answer(participant, _observer(protocol._trial))
+    assert experimenter.discard_button.isEnabled(), "the interval after a rated application"
+    experimenter.discard_requested.emit()
+    assert not experimenter.discard_button.isEnabled(), "discarded, nothing is left to discard"
+    protocol.cancel()
+    assert not experimenter.discard_button.isEnabled(), "the protocol has ended"
+
+
 def test_a_discard_with_nothing_to_discard_is_ignored_and_logged(rig):
     protocol = _long(rig)
     protocol.start()

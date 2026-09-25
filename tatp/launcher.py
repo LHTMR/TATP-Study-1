@@ -420,7 +420,9 @@ def preview_lines(config: cfg.Config, t_zero: datetime) -> list[str]:
     """
     from tools import preview_schedule
 
-    return preview_schedule.render(sched.generate(config.schedule), t_zero, separator=TAB)
+    return preview_schedule.render(
+        sched.generate(config.schedule), t_zero, config.experimenter_text, separator=TAB
+    )
 
 
 class PreviewDialog(QDialog):

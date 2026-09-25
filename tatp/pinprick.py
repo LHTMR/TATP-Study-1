@@ -934,6 +934,12 @@ class _Series(Procedure):
 
     def disconnect_actions(self) -> None:
         self.experimenter.discard_requested.disconnect(self._on_discard)
+        self._set_discardable(None)
+
+    def _set_discardable(self, discardable: tuple[str, str, int] | None) -> None:
+        # The button is enabled only while there is something to discard (docs/LOG.md N7.U10).
+        self._discardable = discardable
+        self.experimenter.set_actions_enabled(discard=discardable is not None)
 
     def wait_to_start(self, then: Callable[[], None]) -> None:
         """The experimenter confirms the start of the block (SPEC.md 8.3)."""
@@ -973,7 +979,7 @@ class _Series(Procedure):
 
     def apply(self, make_trial: Callable[[], _RatedTrial], on_rated) -> None:
         """Run one application; `on_rated(trial, response)` receives it."""
-        self._discardable = None
+        self._set_discardable(None)
         self.applications += 1
         made: list[_RatedTrial] = []
 
@@ -985,7 +991,7 @@ class _Series(Procedure):
 
     def interval(self, table: str, trial: _RatedTrial) -> None:
         """The jittered wait after an application, during which it may be discarded."""
-        self._discardable = (table, trial.cue_onset_iso, trial.trial_index)
+        self._set_discardable((table, trial.cue_onset_iso, trial.trial_index))
         self._wait_then_next()
 
     def _wait_then_next(self) -> None:
@@ -1000,7 +1006,7 @@ class _Series(Procedure):
         self.step(begin)
 
     def _advance(self) -> None:
-        self._discardable = None
+        self._set_discardable(None)
         self._next()
 
     def _next(self) -> None:
@@ -1021,7 +1027,7 @@ class _Series(Procedure):
             )
             return
         table, trial_timestamp_iso, trial_index = self._discardable
-        self._discardable = None
+        self._set_discardable(None)
         clock = self.session.clock
         self.session.files.write(
             "discards",

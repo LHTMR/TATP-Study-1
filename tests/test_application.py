@@ -1,12 +1,19 @@
 """The study fonts are the ones Qt draws, and a font Qt cannot match stops the program."""
 
 import copy
+import subprocess
+import sys
 
 import pytest
 from PySide6.QtGui import QFont, QFontInfo, QRawFont
 
 from tatp import config as cfg
-from tatp.ui.application import application
+from tatp.config import REPO_ROOT
+from tatp.screenshots import HEIGHT_PX, WIDTH_PX
+from tatp.ui.application import application, scale_screens
+
+# Both lab screens, the laptop's own and the HP Z24i (docs/LOG.md N7.H3).
+LAB_SCREEN_PX = (1920, 1200)
 
 
 def _strings(node: object) -> list[str]:
@@ -55,3 +62,39 @@ def test_a_family_no_font_file_supplies_fails_fast():
     hardware["screens"]["font_families"] = ["Not The Study Font"]
     with pytest.raises(AssertionError, match="Not The Study Font"):
         application(hardware)
+
+
+# A fresh process, because the factors are read only when Qt starts. The offscreen screen is
+# 800x800, so at 2 it is 400x400 in Qt's pixels.
+SCALED_PROBE = """
+import os, sys
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
+sys.path.insert(0, sys.argv[1])
+from tatp.ui.application import scale_screens
+scale_screens({"screens": {"scale_factors": [2]}})
+from PySide6.QtWidgets import QApplication
+app = QApplication([])
+size = app.screens()[0].geometry()
+print(size.width(), size.height(), app.screens()[0].devicePixelRatio())
+"""
+
+
+def test_the_configured_scale_factor_is_the_one_qt_draws_at():
+    """docs/LOG.md N7.U10: the lab's 1920x1200 screens are drawn at the approved 1280x800."""
+    result = subprocess.run(
+        [sys.executable, "-c", SCALED_PROBE, str(REPO_ROOT)],
+        capture_output=True, text=True, check=True,
+    )
+    assert result.stdout.split() == ["400", "400", "2.0"]
+
+
+def test_the_scale_factors_cannot_be_set_once_qt_is_running():
+    with pytest.raises(AssertionError, match="read when Qt starts"):
+        scale_screens({"screens": {"scale_factors": [1.5]}})
+
+
+def test_the_lab_draws_both_screens_at_the_design_size():
+    """1920x1200 at the configured factor is the 1280x800 every screen is approved at."""
+    hardware = cfg.load("sv", "sv").hardware
+    for factor in hardware["screens"]["scale_factors"]:
+        assert (LAB_SCREEN_PX[0] / factor, LAB_SCREEN_PX[1] / factor) == (WIDTH_PX, HEIGHT_PX)

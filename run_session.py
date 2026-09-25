@@ -34,7 +34,7 @@ from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import DRIVERS, Session, SessionError, with_session_choices
 from tatp.session_runner import SessionRunner, stage_layout, summary_phase
-from tatp.ui.application import application
+from tatp.ui.application import application, scale_screens
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 from tatp.units import S_PER_MIN
@@ -288,4 +288,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    from tatp.launcher import DEFAULT_LANGUAGE, DEFAULT_PARTICIPANT_LANGUAGE
+
+    # Here, not in main(): before Qt starts, for the launcher and a named session alike, and
+    # never in the tests, which call main() with Qt running. hardware.yaml is the same in every
+    # language, so the launcher's defaults serve.
+    scale_screens(cfg.load(DEFAULT_PARTICIPANT_LANGUAGE, DEFAULT_LANGUAGE).hardware)
     sys.exit(main())
