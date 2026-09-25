@@ -1,11 +1,11 @@
 # STATUS
 
-**Last updated:** 24 September 2026.
-**Milestone:** 6 (pilotable), in progress. Milestones 2–5 are merged and in `main`. Acceleration
+**Last updated:** 25 September 2026.
+**Milestone:** 6 (pilotable), in progress. Milestones 2–5 and the Milestone 6 work so far,
+including the UI review, are in `main` (merged at S's request, 25 Sep 2026). Acceleration
 push under way (`CLAUDE.md`).
-**Branch:** `accel/integration`. The UI review (`accel/ui-review`) is merged into it, after
-both pre-merge reviews at every step, with their findings fixed (N7.U5, N7.U6, N7.U8).
-`main` does not have it yet.
+**Branch:** `accel/integration`, level with `main`. The UI review had both pre-merge reviews at
+every step, with their findings fixed (N7.U5, N7.U6, N7.U8).
 
 ---
 
@@ -29,10 +29,11 @@ what a full review of the other screens then found:
   - the F40 review says what is due, and the resume question reads correctly;
   - Swedish fixes, including Cancel as "Tillbaka" beside "Avbryt sessionen".
 
-**`make check` passes on the branch:** 960 tests, ruff, the validator (34 checks) and 158
-screens. The unit tests now run on 6 workers, not one per core, because 12 workers made the
-timed session tests stall at random (N7.U7). An intermittent test-worker crash is pre-existing
-and still unexplained (N7.U7): if a run fails only on a crashed worker, run it again.
+**`make check` passes:** 962 tests, ruff, the validator (34 checks) and 158 screens. The unit
+tests run on at most 6 workers, because one per core made the timed session tests stall at
+random (N7.U7). **An intermittent test-worker crash is pre-existing and unexplained** (N7.U7).
+It struck the old `main` in 2 of 4 runs and the commit before the UI review in 3 of 9. If a run
+fails only on a crashed worker, run it again.
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
 - **Screens re-approved on this branch:** the designer, Instruments, and every experimenter
@@ -49,10 +50,13 @@ and still unexplained (N7.U7): if a run fails only on a crashed worker, run it a
 
 ## Next steps
 
-1. **S reviews the re-approved screens and the drafted wording** (N7.U1, N7.U2, N7.U4), then
-   `accel/integration` can go to `main`.
-2. **Find the pre-existing test-worker crash** (N7.U7). It is a heap corruption that surfaces in
-   whichever test next builds a window, and it strikes the clean commit too.
+1. **Find the pre-existing test-worker crash** (N7.U7), in a fresh session. It is a heap
+   corruption (`0xc0000374`) that surfaces in whichever test next builds a window, often in
+   `tests/test_protocol_a.py` or `tests/test_session_runner.py`. It strikes the old `main` too.
+   A between-tests `gc.collect()` made it worse. Start from the N7.I3 class of bug: Qt objects
+   outliving their windows.
+2. **S reviews the re-approved screens and the drafted wording** (N7.U1, N7.U2, N7.U4). They
+   are already in `main`, so a wording or layout change is an ordinary fix.
 3. **S's decisions from the UI review** that change how a session runs or what the participant
    sees, so the build did not take them:
    - **"Start block" is the go button for every step** and is always enabled, and a press
