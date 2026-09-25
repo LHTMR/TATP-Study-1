@@ -1,11 +1,11 @@
 # STATUS
 
 **Last updated:** 25 September 2026.
-**Milestone:** 6 (pilotable), in progress. Milestones 2–5 and the Milestone 6 work so far,
-including the UI review, are in `main` (merged at S's request, 25 Sep 2026). Acceleration
-push under way (`CLAUDE.md`).
-**Branch:** `accel/integration`, level with `main`. The UI review had both pre-merge reviews at
-every step, with their findings fixed (N7.U5, N7.U6, N7.U8).
+**Milestone:** 6 (pilotable), in progress. Milestones 2–5 and the Milestone 6 work up to the
+UI review, plus the test-worker crash fix, are in `main`. Acceleration push under way
+(`CLAUDE.md`).
+**Branch:** `accel/integration`, ahead of `main` by the work below. Each piece had
+`/code-review high` and spec-review before it was merged, and their findings are fixed.
 
 ---
 
@@ -14,69 +14,65 @@ every step, with their findings fixed (N7.U5, N7.U6, N7.U8).
 **The build runs a whole session**, against the mock garment or the prototype sleeve. The garment
 is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.1).
 
-**The UI review branch (`docs/LOG.md` N7.U1–N7.U8)** fixes what S found on the lab laptop, and
-what a full review of the other screens then found:
-- **Instruments:** entry in grams, no balance field, all twenty filaments in view.
-- **Pattern designer:**
-  - bits are translated to the sleeve's channels on import and export (the export used to fire
-    the wrong bits);
-  - **Play on the real sleeve**;
-  - it opens maximized and fits the laptop;
-  - a clear, full-width grid, and all three modes described on screen.
-- **Experimenter window:**
-  - no empty 220 px banner band, so it fits a 1280×640 laptop screen (tested);
-  - disabled red buttons greyed, and faults wrapped;
-  - the F40 review says what is due, and the resume question reads correctly;
-  - Swedish fixes, including Cancel as "Tillbaka" beside "Avbryt sessionen".
+**New on `accel/integration` since `main`** (`docs/LOG.md` N7.U10–N7.U12, N7.T1–N7.T4):
+- **VAS proportionality training (§10.6)**, which nothing presented before, is built. It runs
+  once per scale in every session (R34). Intensity and pleasantness come at the start of touch
+  calibration, and pain at pre-sensitisation. The participant sees the scale as rated. The
+  experimenter explains the labels aloud and presses Next step, and only then can the
+  participant dismiss it with ▶.
+- **The UI-review questions, decided by the build as S asked:**
+  - "Start block" is **"Next step" / "Nästa steg"**, and it stays enabled.
+  - **Discard** is enabled only when there is a trial to discard.
+  - The **zone diagram** has a fixed height of 180 px.
+  - The **participant screen draws at the approved 1280×800** on the 1920×1200 HP
+    (`screens.scale_factors`).
+  - The **schedule preview** is in the experimenter's language.
+  - The **SOP** tells the experimenter to turn the participant's display away.
+- **The validator's timing check passes again.** A trial's steps are now timed from the moment
+  they follow, so slow file writes no longer add to the intervals (N7.U11).
 
-**`make check`:** 962 tests, ruff and 158 screens pass. The unit tests run on at most 6
-workers (N7.U7). **The intermittent test-worker crash is fixed** (N7.U9). Tests left their
-windows to the garbage collector, and destroying them that way corrupted the heap. Every
-window is now deleted by Qt when its test ends. **The validator failed one timing check on
-25 Sep** (`rating_cue_interval_within_tolerance`, +0.3 s against ±0.25 s). The committed tree
-failed it too, so it is not from the fix (N7.U9).
+**`make check` passes:** 986 tests, ruff, the validator (35 checks) and 166 screens.
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
-- **Screens re-approved on this branch:** the designer, Instruments, and every experimenter
-  main-window state and dialog (N7.U1, N7.U2, N7.U4). Also still unreviewed: the earlier
-  N7.C24 and N7.E9 sets.
-- **The participant screen is 1920×1200, but its screenshots are 1280×800** (N7.H3).
-- **Drafted wording:** the rows N7.U1, N7.U2 and N7.U4, and N7.C1.
-- **Blinding choices:** N7.E4 and N7.D17. **Low-confidence decisions:** N7.C2, N7.B2 and N7.D8.
-- **Open items still S's:** L11 (rehearsal pressure), L13 (noise ceiling and the cue), L3
-  (alert metering), and new **L14**: what the experimenter does when the prototype sleeve's
-  link is lost, since its outputs may stay on until it is reconnected (N7.U8).
+- **Screens to review:**
+  - re-approved: every experimenter main-window state and both schedule previews (N7.U10);
+  - new: the eight VAS training screens (N7.T3);
+  - still unreviewed from earlier: N7.U1, N7.U2, N7.U4, N7.C24 and N7.E9.
+- **Drafted wording:**
+  - the training's continue line and experimenter instructions (N7.T1, N7.T2);
+  - the schedule preview and its warnings in both languages (N7.U10), each key marked DRAFT;
+  - still unreviewed from earlier: N7.U1, N7.U2, N7.U4 and N7.C1.
+- **Decisions to check:**
+  - the UI-review calls (N7.U10);
+  - VAS training in every session, and where (N7.T4, R34, medium confidence);
+  - blinding choices N7.E4 and N7.D17;
+  - low-confidence decisions N7.C2, N7.B2 and N7.D8.
+- **Open items still S's:**
+  - L11: the rehearsal pressure;
+  - L13: the noise ceiling and the cue;
+  - L3: alert metering;
+  - L14: what to do when the prototype sleeve's link is lost.
 
 ---
 
 ## Next steps
 
-1. **The validator's rating-cue timing on the lab laptop** (N7.U9). Run `make validate` on a
-   quiet machine. If it still fails, find whether the laptop is slow or the ±0.25 s
-   tolerance is tight at 1000×. Its 18 sessions took about 305 s on 25 Sep.
-2. **S reviews the re-approved screens and the drafted wording** (N7.U1, N7.U2, N7.U4). They
-   are already in `main`, so a wording or layout change is an ordinary fix.
-3. **S's decisions from the UI review** that change how a session runs or what the participant
-   sees, so the build did not take them:
-   - **"Start block" is the go button for every step** and is always enabled, and a press
-     during a countdown does nothing. Rename it to a neutral "Proceed" / "Fortsätt", and enable
-     it only while something waits for it?
-   - **"Discard and repeat last trial" is always enabled** but does something only in a
-     pinprick block. Enable it only when there is something to discard?
-   - **The zone diagram** is small (about 90×150 px) and changes size when the pressures or
-     faults appear. Give it a fixed, larger height?
-   - **Participant screens at 1920×1200:** text, marker and line sizes are fixed, not scaled
-     to the screen. Scale them to screen height, or add a 1920×1200 screenshot run?
-   - **Blinding (lab layout):** the self-start screen appears only in the participant-preferred
-     condition. The participant monitor must face away from the experimenter.
-   - The schedule preview is in English in both languages (`tools/preview_schedule.py`).
-4. **Pilot a session on the sleeve by hand**, and fix what a person finds that the validator
-   cannot. In particular, try Play on the sleeve in the designer, the remote routing (N7.I1),
-   and whether the alerts are audible over the noise.
-5. **The VAS training screens** (§10.6, `training.*`), which nothing presents yet (SOP TBC 12).
-6. **Freeze the screenshots** (`make shots ARGS="--freeze"`), once S has reviewed them.
-7. **Run the adversarial review** (spec-review, §17.6) over the whole build, then merge to
-   `main`.
+1. **S reviews and merges `accel/integration` into `main`.** `make check` passes on it.
+2. **Pilot a session on the sleeve by hand**, and fix what a person finds that the validator
+   cannot. In particular:
+   - the participant screen on the HP at 1.5 scale;
+   - the VAS training flow, with the anchors read aloud;
+   - Play on the sleeve in the designer;
+   - the remote routing (N7.I1);
+   - whether the alerts are audible over the noise.
+3. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
+4. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
+   Milestone 6 done.
+5. **Small items left open**, none blocking:
+   - the resume cue and the mapping pacing still start their timers after their own writes
+     (N7.U12);
+   - the other ▶-dismissed message screens have no guard against a carried-over press
+     (N7.T3).
 
 ---
 
