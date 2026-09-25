@@ -68,11 +68,8 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
 3. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
 4. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
    Milestone 6 done.
-5. **Small items left open**, none blocking:
-   - the resume cue and the mapping pacing still start their timers after their own writes
-     (N7.U12);
-   - the other ▶-dismissed message screens have no guard against a carried-over press
-     (N7.T3).
+5. **Small item left open**, not blocking: the ▶-dismissed message screens other than the
+   training have no guard against a press carried over from the screen before (N7.T3).
 
 ---
 

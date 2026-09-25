@@ -23,6 +23,8 @@ from tatp.ui.participant import ParticipantWindow
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 CLOCK_SPEED = 1000.0
+# Real seconds a pacing cue's log write takes in the cadence test: half a cue interval.
+SLOW_WRITE_S = 0.0005
 SPIN_TIMEOUT_S = 20.0
 PHASE = "post_sensitisation"
 
@@ -131,6 +133,34 @@ def test_the_cue_train_stops_itself_at_max_steps(rig, ledger, loaded):
     rig.experimenter.proceed_requested.emit()
     _spin(lambda: _events(rig.session).count("mapping_path_ended") == 1)
     assert cues == [(1, cue) for cue in range(1, max_steps + 1)]
+    mapping.cancel()
+
+
+def test_a_slow_cue_write_does_not_lengthen_the_cadence(rig, ledger, loaded, monkeypatch):
+    """docs/LOG.md N7.U13: each cue is due a whole number of intervals after the path's first,
+    so the time a cue's log row takes is taken off the wait for the next, not added to it."""
+    interval_s = loaded.study1["mapping"]["step_interval_s"]
+    real_log = rig.session.log
+
+    def slow_log(event, *args, **kwargs):
+        if event == "pacing_cue":
+            time.sleep(SLOW_WRITE_S)
+        real_log(event, *args, **kwargs)
+
+    monkeypatch.setattr(rig.session, "log", slow_log)
+    mapping = AreaMapping(rig, ledger)
+    waits = []
+    real_after = mapping._after
+    def recording_after(seconds, method):
+        waits.append(seconds)
+        real_after(seconds, method)
+
+    monkeypatch.setattr(mapping, "_after", recording_after)
+    mapping.start()
+    rig.experimenter.proceed_requested.emit()
+    _spin(lambda: len(waits) >= 3)
+    written_s = SLOW_WRITE_S * CLOCK_SPEED
+    assert all(wait <= interval_s - written_s for wait in waits[:3]), waits
     mapping.cancel()
 
 

@@ -724,7 +724,7 @@ class _RatedTrial(QObject):
         those milliseconds added up across the steps (docs/LOG.md N7.U11). On the clock's
         elapsed time, not session time, which does not exist before sensitisation.
         """
-        self._after(anchor_s + offset_s - self.session.clock.elapsed_s(), method)
+        self._after(self.session.clock.remaining_s(anchor_s, offset_s), method)
 
     def _fire(self) -> None:
         method, self._pending = self._pending, None

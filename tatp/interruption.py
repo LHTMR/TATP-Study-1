@@ -69,6 +69,7 @@ class Interruptions(QObject):
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._fire)
         self._pending = None
+        self._cue_onset_s: float | None = None
 
         participant.emergency_stop.connect(self.emergency_stop)
         experimenter.pause_requested.connect(self.pause)
@@ -120,16 +121,20 @@ class Interruptions(QObject):
             return  # already resuming; a second press of the button changes nothing
         self.session.log("resumed", origin="experimenter", detail=self.active)
         if self._snapshot_is_running():
-            # SPEC.md 10.5, 10.9: the garment start is preceded by the warning cue.
+            # SPEC.md 10.5, 10.9: the garment start is preceded by the warning cue. Both steps
+            # are timed from its onset, so the log write is not added to the lead (N7.U13).
+            self._cue_onset_s = self.session.clock.elapsed_s()
             self.participant.show_warning_cue()
             self.session.log("warning_cue", detail="before restoring the garment")
-            self._after(self.warning_duration_s, self._end_cue)
+            self._after(self.session.clock.remaining_s(self._cue_onset_s,
+                                                       self.warning_duration_s), self._end_cue)
         else:
             self._finish_resume()
 
     def _end_cue(self) -> None:
         self.participant.show_blank()
-        self._after(self.warning_lead_s - self.warning_duration_s, self._restore)
+        self._after(self.session.clock.remaining_s(self._cue_onset_s, self.warning_lead_s),
+                    self._restore)
 
     def _restore(self) -> None:
         garment = self.session.garment

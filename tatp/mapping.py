@@ -304,6 +304,7 @@ class AreaMapping(Procedure):
         self.step_interval_s = float(self.mapping["step_interval_s"])
         self.path = 0
         self.cue = 0
+        self._first_cue_s: float | None = None
 
     def begin(self) -> None:
         self.session.log("mapping_started", detail=self.session.phase)
@@ -348,14 +349,21 @@ class AreaMapping(Procedure):
         self._pace()
 
     def _pace(self) -> None:
+        # Cue n is due (n - 1) step intervals after the path's first cue, so the cadence is
+        # the configured one, not one lengthened by each cue's own log write (N7.U13).
+        if self.cue == 0:
+            self._first_cue_s = self.session.clock.elapsed_s()
         self.cue += 1
         # SPEC.md 10.5: timestamp every cue onset.
         self.session.log("pacing_cue", detail=f"{self._detail()}, cue {self.cue}")
         self.pacing_cue.emit(self.path, self.cue)
+        next_s = self.session.clock.remaining_s(
+            self._first_cue_s, self.cue * self.step_interval_s
+        )
         if self.cue >= self.max_steps:
-            self._after(self.step_interval_s, lambda: self._end_path("cue limit reached"))
+            self._after(next_s, lambda: self._end_path("cue limit reached"))
         else:
-            self._after(self.step_interval_s, self._pace)
+            self._after(next_s, self._pace)
 
     def _stop_path(self) -> None:
         self._end_path("stopped by the experimenter")
