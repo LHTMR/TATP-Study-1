@@ -108,7 +108,9 @@ class ScheduleWarning:
         return text["schedule_warnings"][self.key].format(**values)
 
     def __str__(self) -> str:
-        return f"{self.key} {self.values}"
+        """What the session log records: `in_window: block=1, offset=5, window=capsaicin`."""
+        named = ", ".join(f"{name}={value}" for name, value in self.values.items())
+        return f"{self.key}: {named}"
 
 
 def _min(value: float) -> str:

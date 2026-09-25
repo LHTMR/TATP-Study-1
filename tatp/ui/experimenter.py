@@ -157,7 +157,7 @@ class ExperimenterWindow(QWidget):
     # -- the experimenter's actions, SPEC.md 11 -----------------------------------------
     # "Next step": every point where the software waits for the experimenter to say go -- the
     # next block, the next phase, the next path, "earplugs fitted". The software times; the
-    # experimenter launches (SPEC.md 7.4). Always enabled (docs/LOG.md N7.U10).
+    # experimenter launches (SPEC.md 7.4). Enabled except while interrupted (LOG N7.U10).
     proceed_requested = Signal()
     pause_requested = Signal()
     resume_requested = Signal()

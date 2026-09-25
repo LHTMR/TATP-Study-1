@@ -525,7 +525,9 @@ designer:
 # (tools/preview_schedule.py). Blocktyperna kommer från terms.block_types, fönstrens namn från
 # phases. Skrivet av bygget, docs/LOG.md N7.U10.
 schedule_preview:
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   t_zero: 'Sessionens t=0 (sensitiseringens start) kl. {time}'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   columns:
     index: Block
     type: Typ
@@ -533,24 +535,38 @@ schedule_preview:
     planned_wall_clock: Klockan
     expected_duration_min: Längd
     overridden: Källa
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   override: ändrad
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   generated: genererad
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   windows: 'Tidsatta fönster, minuter från t=0'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   runs_to: 'Schemat sträcker sig till {value} min från t=0'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   no_warnings: Inga varningar.
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   warnings: '{value} varning(ar). Ingen av dem hindrar schemat från att köras:'
 
 # SPEC.md 7.3: schemaregler som ett rutnät bryter mot. De varnar och stoppar aldrig. {window} är
 # en fas och {type} en blocktyp (tatp/schedule.py, ScheduleWarning).
 schedule_warnings:
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   durations_unset: >-
     Blockens förväntade längd är inte satt, så ett block kan bara kontrolleras mot när det
     börjar, inte mot tiden det tar. Block som överlappar upptäcks inte alls (öppen punkt 4).
     Berörda block: {blocks}.
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   out_of_order: 'Block {block} är planerat till {offset} min, före block {previous} vid {previous_offset} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   overlap: 'Block {block} börjar vid {offset} min, medan block {other} pågår till {until} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   in_window: 'Block {block} vid {offset} min hamnar i fönstret {window}, {start}–{end} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   outside_intervention: 'Block {block} vid {offset} min ligger utanför interventionen, {start}–{end} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   not_alternating: 'Block {first} och {second} är båda av typen {type}, så rutnätet växlar inte.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   uneven_spacing: 'Block {block} ({type}) kommer {gap} min efter det förra av samma typ, medan de andra ligger {spacing} min isär.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   too_long: 'Schemat sträcker sig till {total} min från t=0, över det inställda maxvärdet {maximum} min.'

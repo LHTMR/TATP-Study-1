@@ -278,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     if any(key == RESUME_OFFER for _, key, _ in findings) and args.resume is None:
         return EXIT_OPEN_SESSION  # the terminal's answer is --resume or --new
 
+    scale_screens(config.hardware)
     app = application(config.hardware)
     runner = build(config, args)
     runner.start()
@@ -288,10 +289,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    from tatp.launcher import DEFAULT_LANGUAGE, DEFAULT_PARTICIPANT_LANGUAGE
-
-    # Here, not in main(): before Qt starts, for the launcher and a named session alike, and
-    # never in the tests, which call main() with Qt running. hardware.yaml is the same in every
-    # language, so the launcher's defaults serve.
-    scale_screens(cfg.load(DEFAULT_PARTICIPANT_LANGUAGE, DEFAULT_LANGUAGE).hardware)
     sys.exit(main())

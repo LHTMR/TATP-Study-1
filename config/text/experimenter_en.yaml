@@ -521,7 +521,9 @@ designer:
 # (tools/preview_schedule.py). Block types come from terms.block_types, window names from
 # phases. Drafted by the build, docs/LOG.md N7.U10.
 schedule_preview:
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   t_zero: 'Session t=0 (start of sensitisation) at {time}'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   columns:
     index: Block
     type: Type
@@ -529,24 +531,38 @@ schedule_preview:
     planned_wall_clock: Clock
     expected_duration_min: Duration
     overridden: Source
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   override: override
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   generated: generated
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   windows: 'Timed windows, minutes from t=0'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   runs_to: 'Schedule runs to {value} min from t=0'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   no_warnings: No warnings.
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   warnings: '{value} warning(s). None prevents the schedule running:'
 
 # SPEC.md 7.3: the scheduling rules a grid breaks. They warn and never block. {window} is a
 # phase name and {type} a block type (tatp/schedule.py, ScheduleWarning).
 schedule_warnings:
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   durations_unset: >-
     Expected block durations are not set, so a block can only be checked against the moment it
     starts, not the time it occupies. Overlapping blocks are not detected at all (open item 4).
     Blocks affected: {blocks}.
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   out_of_order: 'Block {block} is planned for {offset} min, before block {previous} at {previous_offset} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   overlap: 'Block {block} starts at {offset} min, while block {other} is still running until {until} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   in_window: 'Block {block} at {offset} min falls in the {window} window, {start}-{end} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   outside_intervention: 'Block {block} at {offset} min lies outside the intervention, {start}-{end} min.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   not_alternating: 'Blocks {first} and {second} are both {type} blocks, so the grid does not alternate.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   uneven_spacing: 'The {type} block {block} is {gap} min after the previous one, where the others are {spacing} min apart.'
+  # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   too_long: 'The schedule runs to {total} min from t=0, over the configured maximum of {maximum} min.'

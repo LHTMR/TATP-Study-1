@@ -52,10 +52,10 @@ To keep the blind:
 2. Check that both displays are connected: the participant's display (the HP) behind the
    curtain, and the laptop's own display for you. The participant's window opens full screen on
    the HP.
-   **Turn the participant's display so that you cannot see it from your seat.** Some of what
-   it shows differs between sessions, and you must not learn which session this is from it.
-   This is part of keeping you blind to the condition. If you can see the participant's screen,
-   move it or yourself before the session starts.
+   **Turn the participant's display so that you cannot see it from your seat.** The
+   participant rates on a screen you cannot see, so that nothing they report reaches you
+   during the session. If you can see the participant's screen, move it or yourself before
+   the session starts.
 3. Check that the participant's headphones (the Bose) and the laptop's speakers are connected.
    Your alerts play through the laptop's speakers, and the participant's sounds through the
    headphones.

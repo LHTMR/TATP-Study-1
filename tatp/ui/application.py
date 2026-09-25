@@ -27,13 +27,16 @@ SCALE_FACTORS_SEPARATOR = ";"
 def scale_screens(hardware: dict) -> None:
     """Draw each screen at `screens.scale_factors`, which must happen before Qt starts.
 
-    A real session calls it; the tests and the screenshot run do not, because they draw at the
-    design size already. The factors replace the platform's own for each screen, in the order
-    Qt numbers the screens, so a screen's size in Qt's pixels is its resolution divided by its
-    factor. The lab's two 1920x1200 screens at 1.5 are both 1280x800, which is the size every
-    screen is laid out, tested and approved at (docs/LOG.md N7.U10).
+    The launcher and a named session call it just before they start Qt. Once Qt is running it
+    does nothing, since the factors are read only at the start: that is the tests, which start
+    Qt themselves and draw at the design size already, like the screenshot run. The factors
+    replace the platform's own for each screen, in the order Qt numbers the screens, so a
+    screen's size in Qt's pixels is its resolution divided by its factor. The lab's two
+    1920x1200 screens at 1.5 are both 1280x800, which is the size every screen is laid out,
+    tested and approved at (docs/LOG.md N7.U10).
     """
-    assert QApplication.instance() is None, "screen scale factors are read when Qt starts"
+    if QApplication.instance() is not None:
+        return
     factors = hardware["screens"]["scale_factors"]
     if factors is not None:
         assert all(isinstance(f, (int, float)) and f > 0 for f in factors), (

@@ -1,6 +1,7 @@
 """The study fonts are the ones Qt draws, and a font Qt cannot match stops the program."""
 
 import copy
+import os
 import subprocess
 import sys
 
@@ -10,7 +11,7 @@ from PySide6.QtGui import QFont, QFontInfo, QRawFont
 from tatp import config as cfg
 from tatp.config import REPO_ROOT
 from tatp.screenshots import HEIGHT_PX, WIDTH_PX
-from tatp.ui.application import application, scale_screens
+from tatp.ui.application import SCALE_FACTORS_VARIABLE, application, scale_screens
 
 # Both lab screens, the laptop's own and the HP Z24i (docs/LOG.md N7.H3).
 LAB_SCREEN_PX = (1920, 1200)
@@ -88,13 +89,17 @@ def test_the_configured_scale_factor_is_the_one_qt_draws_at():
     assert result.stdout.split() == ["400", "400", "2.0"]
 
 
-def test_the_scale_factors_cannot_be_set_once_qt_is_running():
-    with pytest.raises(AssertionError, match="read when Qt starts"):
-        scale_screens({"screens": {"scale_factors": [1.5]}})
+def test_the_scale_factors_are_left_alone_once_qt_is_running(monkeypatch):
+    """The tests start Qt themselves, so a session or the launcher driven by one draws at the
+    design size, unscaled, whatever the lab's factors say."""
+    monkeypatch.delenv(SCALE_FACTORS_VARIABLE, raising=False)
+    scale_screens({"screens": {"scale_factors": [1.5]}})
+    assert SCALE_FACTORS_VARIABLE not in os.environ
 
 
 def test_the_lab_draws_both_screens_at_the_design_size():
     """1920x1200 at the configured factor is the 1280x800 every screen is approved at."""
-    hardware = cfg.load("sv", "sv").hardware
-    for factor in hardware["screens"]["scale_factors"]:
+    factors = cfg.load("sv", "sv").hardware["screens"]["scale_factors"]
+    assert factors is not None, "the lab PC's hardware.yaml scales both screens"
+    for factor in factors:
         assert (LAB_SCREEN_PX[0] / factor, LAB_SCREEN_PX[1] / factor) == (WIDTH_PX, HEIGHT_PX)
