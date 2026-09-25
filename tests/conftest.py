@@ -17,6 +17,7 @@ tree guarantees.
 `run_session.py` deliberately does NOT do this -- a real session needs a real display.
 """
 
+import gc
 import os
 import sys
 from pathlib import Path
@@ -28,6 +29,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pytest  # noqa: E402 -- the platform and the path must be set first
+from PySide6.QtCore import QEvent  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from tatp import config as cfg  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
@@ -42,3 +45,24 @@ def _study_font():
     headless Windows measured empty boxes.
     """
     application(cfg.load("sv", "sv").hardware)
+
+
+@pytest.fixture(autouse=True)
+def _windows_die_with_their_test():
+    """Every window a test built is deleted by Qt when the test ends (docs/LOG.md N7.U9).
+
+    A test's windows sit in reference cycles with its session and rig, so left alone they are
+    destroyed by the garbage collector, at whatever allocation next triggers it in a later
+    test. Destroyed that way they corrupted the heap (0xc0000374) and took the worker down,
+    in a different test each run. Deleted by Qt first, in its own order, they cannot; the
+    collection then finds only dead wrappers. It runs here, not at random, so a test that
+    leaves anything else dangerous behind crashes in its own teardown, where it is found.
+
+    Nothing wider than one test may keep a window, since this deletes it. `deleteLater`, not
+    `close`: a window's close handler may ask a question, and nobody is there to answer.
+    """
+    yield
+    for window in QApplication.topLevelWidgets():
+        window.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    gc.collect()

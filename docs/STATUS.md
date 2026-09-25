@@ -29,11 +29,12 @@ what a full review of the other screens then found:
   - the F40 review says what is due, and the resume question reads correctly;
   - Swedish fixes, including Cancel as "Tillbaka" beside "Avbryt sessionen".
 
-**`make check` passes:** 962 tests, ruff, the validator (34 checks) and 158 screens. The unit
-tests run on at most 6 workers, because one per core made the timed session tests stall at
-random (N7.U7). **An intermittent test-worker crash is pre-existing and unexplained** (N7.U7).
-It struck the old `main` in 2 of 4 runs and the commit before the UI review in 3 of 9. If a run
-fails only on a crashed worker, run it again.
+**`make check`:** 962 tests, ruff and 158 screens pass. The unit tests run on at most 6
+workers (N7.U7). **The intermittent test-worker crash is fixed** (N7.U9). Tests left their
+windows to the garbage collector, and destroying them that way corrupted the heap. Every
+window is now deleted by Qt when its test ends. **The validator failed one timing check on
+25 Sep** (`rating_cue_interval_within_tolerance`, +0.3 s against ±0.25 s). The committed tree
+failed it too, so it is not from the fix (N7.U9).
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
 - **Screens re-approved on this branch:** the designer, Instruments, and every experimenter
@@ -50,11 +51,9 @@ fails only on a crashed worker, run it again.
 
 ## Next steps
 
-1. **Find the pre-existing test-worker crash** (N7.U7), in a fresh session. It is a heap
-   corruption (`0xc0000374`) that surfaces in whichever test next builds a window, often in
-   `tests/test_protocol_a.py` or `tests/test_session_runner.py`. It strikes the old `main` too.
-   A between-tests `gc.collect()` made it worse. Start from the N7.I3 class of bug: Qt objects
-   outliving their windows.
+1. **The validator's rating-cue timing on the lab laptop** (N7.U9). Run `make validate` on a
+   quiet machine. If it still fails, find whether the laptop is slow or the ±0.25 s
+   tolerance is tight at 1000×. Its 18 sessions took about 305 s on 25 Sep.
 2. **S reviews the re-approved screens and the drafted wording** (N7.U1, N7.U2, N7.U4). They
    are already in `main`, so a wording or layout change is an ordinary fix.
 3. **S's decisions from the UI review** that change how a session runs or what the participant

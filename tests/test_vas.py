@@ -204,12 +204,18 @@ def _boxes(widget, scale, text):
 
 
 @pytest.fixture(scope="module")
-def by_language(app):
-    """One widget per language, built once. `cfg.load` hashes every config file it reads, so
-    calling it per parameter turned a 60-second suite into a three-minute one."""
+def configs():
+    """Loaded once. `cfg.load` hashes every config file it reads, so calling it per parameter
+    turned a 60-second suite into a three-minute one."""
+    return {language: cfg.load(language, language) for language in ("sv", "en")}
+
+
+@pytest.fixture
+def by_language(app, configs):
+    """One widget per language, built per test: every window is deleted when its test ends
+    (tests/conftest.py), so a module-wide widget would be gone by the second test."""
     made = {}
-    for language in ("sv", "en"):
-        config = cfg.load(language, language)
+    for language, config in configs.items():
         widget = VasWidget(config.study1["vas"], Responder(config.hardware), FakeClock())
         widget.resize(1280, 800)
         made[language] = (widget, config)

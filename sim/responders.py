@@ -220,7 +220,10 @@ class VirtualParticipant(QObject):
         model: ObserverModel | None = None,
         parent: QObject | None = None,
     ):
-        super().__init__(parent)
+        # A child of the window it answers unless told otherwise, so its tick dies with that
+        # window. Parentless, it outlived its test and ticked into a deleted window in a later
+        # one (docs/LOG.md N7.U9).
+        super().__init__(parent if parent is not None else window)
         self.window = window
         self.garment = garment
         self.model = model or ObserverModel(seed)
