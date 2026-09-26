@@ -101,13 +101,15 @@ class Rig(QObject):
         self._pattern_tick.timeout.connect(self._advance)
         self._pattern_tick.start()
 
-        # Two presses that are not responses, so no trial hears them: a confirm on the VAS
-        # before the marker is shown (docs/LOG.md N6.11), and a press on a choice screen before
-        # it accepts one (DATA_SCHEMA.md, `touchcal_compare`). Both are something the
+        # Three presses that are not responses, so no trial hears them: a confirm on the VAS
+        # before the marker is shown (docs/LOG.md N6.11), a press on a choice screen before it
+        # accepts one (DATA_SCHEMA.md, `touchcal_compare`), and a play-button press carried over
+        # from the screen before (N7.U15). Each is something the
         # participant did, and button events belong in the log (SPEC.md 14.2). Logged here,
         # once for every procedure, rather than in each protocol that shows those screens.
         participant.pressed_without_marker.connect(self._confirmed_without_marker)
         participant.pressed_before_accepting.connect(self._pressed_before_accepting)
+        participant.confirm_carried_over.connect(self._confirm_carried_over)
 
     def _advance(self) -> None:
         if self.session.garment.connected:
@@ -118,6 +120,9 @@ class Rig(QObject):
 
     def _pressed_before_accepting(self) -> None:
         self.session.log("choice_pressed_early", origin="participant")
+
+    def _confirm_carried_over(self) -> None:
+        self.session.log("confirm_carried_over", origin="participant")
 
 
 class Procedure(QObject):

@@ -26,7 +26,7 @@ from tatp.clock import ISO_FORMAT, Clock
 from tatp.config import REPO_ROOT, Config, hash_files
 from tatp.datafiles import DataFileCollection
 from tatp.garment.arduino_mosfet import ArduinoMosfetGarment
-from tatp.garment.base import GarmentController, Limits
+from tatp.garment.base import LINK_LOST, GarmentController, Limits
 from tatp.garment.mock import MockGarment
 from tatp.garment.patterns import load_folder
 from tatp.units import S_PER_MIN
@@ -290,6 +290,7 @@ class Session:
             "interruption": self._read_interruption(),
             "hardware": {
                 "connected": self.garment.connected,
+                "link_lost": self.garment.link_lost,
                 "faults": list(self.garment.faults),
                 # Hidden while the condition's touch is being delivered (docs/LOG.md N7.D1):
                 # the sham is static at a lower pressure, so per-channel pressure and activity
@@ -483,14 +484,24 @@ class Session:
             clamped=bool(command.pop("clamped", False)),
             **command,
         )
+        # A fault and a lost link are the device's, not a command, so no one else logs them.
+        # The log table carries them too (SPEC.md 14.2), so a later `garment_connected` there
+        # always has the disconnect before it (docs/LOG.md N7.U16).
+        if command["event"] == "fault":
+            self.log("garment_fault", severity="error", detail=command["detail"])
+        elif command["event"] == "disconnect" and command.get("detail") == LINK_LOST:
+            self.log("garment_disconnected", severity="error", detail=LINK_LOST)
 
     # -- lifecycle ---------------------------------------------------------------------
 
     def start(self, room_temperature_c: float | None = None,
-              relative_humidity_pct: float | None = None) -> None:
+              relative_humidity_pct: float | None = None,
+              redcap_session_form_completed: bool = False) -> None:
         """Write the session provenance and connect the garment."""
         self.garment.connect()
-        self.files.write_session(self._provenance(room_temperature_c, relative_humidity_pct))
+        self.files.write_session(self._provenance(
+            room_temperature_c, relative_humidity_pct, redcap_session_form_completed
+        ))
         self.log("session_started", detail=f"software {provenance.base()['software_version']}")
         if self.cloud_sync_warning:
             self.log("cloud_sync_folder", severity="warning", detail=self.cloud_sync_warning)
@@ -600,7 +611,10 @@ class Session:
         )
 
     def _provenance(
-        self, room_temperature_c: float | None, relative_humidity_pct: float | None
+        self,
+        room_temperature_c: float | None,
+        relative_humidity_pct: float | None,
+        redcap_session_form_completed: bool,
     ) -> dict:
         base = provenance.base()
         filaments = self.config.filaments["filaments"]
@@ -642,6 +656,9 @@ class Session:
             ],
             "room_temperature_c": room_temperature_c,
             "relative_humidity_pct": relative_humidity_pct,
+            # SPEC.md 1.2: the questionnaires are in REDCap, and the software records only
+            # that the per-visit session form was completed, as the experimenter says it was.
+            "redcap_session_form_completed": redcap_session_form_completed,
             # The masking and stop-rehearsal keys are not here: they are measured in setup and
             # written when each procedure ends (`record_masking`, `record_stop_rehearsal`). A
             # session closed before then gets them empty from `DataFileCollection.close`.

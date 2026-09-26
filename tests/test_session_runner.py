@@ -401,7 +401,7 @@ def test_the_experimenter_view_has_the_agreed_keys(app, loaded, tmp_path):
     view = runner.session.experimenter_view()
     assert view["next_event"] is None, "nothing is scheduled before t=0"
     assert view["interruption"] is None
-    assert set(view["hardware"]) == {"connected", "faults", "channel_pressure_kpa"}
+    assert set(view["hardware"]) == {"connected", "link_lost", "faults", "channel_pressure_kpa"}
     assert isinstance(view["hardware"]["channel_pressure_kpa"], dict)
     runner.rig.participant.emergency_stop.emit()
     assert runner.session.experimenter_view()["interruption"] == "emergency_stop"

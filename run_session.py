@@ -70,6 +70,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "provisional mockups in config/patterns/examples/ would substitute them silently "
         "(open item 5)",
     )
+    parser.add_argument(
+        "--redcap-form-completed", action="store_true",
+        help="the per-visit REDCap session form has been completed (SPEC.md 1.2); recorded "
+        "in the session file, and false when not given",
+    )
     parser.add_argument("--participant-language", default="sv", choices=("sv", "en"))
     parser.add_argument("--experimenter-language", default="en", choices=("sv", "en"))
     parser.add_argument(
@@ -213,6 +218,7 @@ def _build_holding(config, args, resume_decision, data_folder) -> SessionRunner:
     session.start(
         room_temperature_c=getattr(args, "room_temperature_c", None),
         relative_humidity_pct=getattr(args, "relative_humidity_pct", None),
+        redcap_session_form_completed=args.redcap_form_completed,
     )
     if open_session is not None and state is None:
         session.log(

@@ -83,6 +83,8 @@ PLOT_RATING_TICKS = (0.0, 50.0, 100.0)
 PLOT_RATING_MAX = 100.0
 PLOT_LINE_SAMPLES = 50
 LABEL_GAP_PX = 4
+# The tick box of a checkbox, and of the designer's radio buttons.
+CHECK_INDICATOR_PX = 14
 
 
 def stylesheet() -> str:
@@ -96,6 +98,11 @@ def stylesheet() -> str:
         f"background-color: {CONTROL_BACKGROUND}; color: {FOREGROUND}; "
         f"border: 1px solid {CONTROL_BORDER}; padding: {CONTROL_PADDING_PX // 2}px; }}"
         f"QLineEdit:disabled {{ color: {DISABLED}; }}"
+        # Qt's own indicator is near-invisible on the dark background when unchecked.
+        f"QCheckBox::indicator {{ width: {CHECK_INDICATOR_PX}px; "
+        f"height: {CHECK_INDICATOR_PX}px; border: 1px solid {SECONDARY}; "
+        f"background-color: {CONTROL_BACKGROUND}; }}"
+        f"QCheckBox::indicator:checked {{ background-color: {TARGET_COLOUR}; }}"
     )
 
 

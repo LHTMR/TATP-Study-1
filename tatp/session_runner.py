@@ -733,7 +733,15 @@ class SessionRunner(Procedure):
         pending = self._delivery is not None
         self._cancel_delivery()
         garment.stop()
+        # The stop's own write may have found the link lost, which the session has logged as
+        # the disconnect already (docs/LOG.md N7.U16): one event, one row.
+        if not garment.connected:
+            self.experimenter.refresh()
+            return
         garment.disconnect()
+        if garment.link_lost:  # the disconnect's own zeroing write found it lost
+            self.experimenter.refresh()
+            return
         self.session.log(
             "garment_disconnected", origin="experimenter", severity="warning",
             detail="touch was starting" if pending else "",

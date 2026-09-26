@@ -216,6 +216,18 @@ def test_the_dialog_asks_for_exactly_what_spec_6_lists(app, loaded, tmp_path):
     assert args.patterns == cfg.CONFIG_DIR / "patterns" / "examples"
 
 
+def test_ticking_the_redcap_form_reaches_the_session(app, loaded, tmp_path):
+    """SPEC.md 1.2 (docs/LOG.md N7.U17): the launcher is the lab's route, so the tick must
+    reach the args `build` receives, and `run_session` writes those to the session file."""
+    fakes = Fakes()
+    dialog = _filled(LauncherWindow(loaded, fakes.preflight, fakes.build), tmp_path)
+    assert dialog.args().redcap_form_completed is False
+    dialog.redcap_form.setChecked(True)
+    assert dialog.args().redcap_form_completed is True
+    dialog.start()
+    assert fakes.built[0][1].redcap_form_completed is True
+
+
 def test_there_is_no_default_pattern_folder(app, loaded):
     """LOG N6.14: a default would quietly run the provisional example patterns."""
     dialog = LauncherWindow(loaded, Fakes().preflight, Fakes().build).session_dialog()
@@ -293,6 +305,7 @@ def test_start_builds_with_the_chosen_folder_and_the_room(app, loaded, tmp_path)
     assert config.participant_language == "en"
     assert args.room_temperature_c == 21.5
     assert args.relative_humidity_pct is None
+    assert args.redcap_form_completed is False, "unticked unless the experimenter ticks it"
     assert args.resume is None, "no unfinished session, so no question was asked"
     assert "21.5" in window.environment_line.text()
 

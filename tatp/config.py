@@ -155,6 +155,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "responder.keys.decrease", list, None, None),
     ("hardware.yaml", "responder.keys.increase", list, None, None),
     ("hardware.yaml", "responder.keys.confirm", list, None, None),
+    ("hardware.yaml", "responder.repeat_confirm_lockout_s", NUMBER, 0, None),
     ("hardware.yaml", "responder.keys.emergency_stop", list, None, None),
     ("hardware.yaml", "responder.ignore_keys", list, None, None),
     ("hardware.yaml", "responder.button_symbols.decrease", str, None, None),

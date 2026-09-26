@@ -800,12 +800,23 @@ class ExperimenterWindow(QWidget):
         withheld = [fault for fault in hardware["faults"] if fault in self._withheld_faults]
         shown = [fault for fault in hardware["faults"] if fault not in self._withheld_faults]
         lines = []
-        if withheld:
-            lines.append(words["fault_withheld"].format(value=len(withheld)))
-        if len(shown) > 1:
-            lines.append(words["faults_earlier"].format(value=len(shown) - 1))
-        if shown:
-            lines.append(words["fault"].format(value=shown[-1]))
+        if hardware["link_lost"]:
+            # First, so the bound can never cut it off: the sleeve's outputs may still be on
+            # (docs/LOG.md N7.U16). It names no channel, so it shows in every phase. It wraps
+            # onto two lines, so the counts give way to leave the newest fault its start; they
+            # stay in the tooltip and the data.
+            lines.append(words["link_lost"])
+            if shown:
+                lines.append(words["fault"].format(value=shown[-1]))
+            elif withheld:
+                lines.append(words["fault_withheld"].format(value=len(withheld)))
+        else:
+            if withheld:
+                lines.append(words["fault_withheld"].format(value=len(withheld)))
+            if len(shown) > 1:
+                lines.append(words["faults_earlier"].format(value=len(shown) - 1))
+            if shown:
+                lines.append(words["fault"].format(value=shown[-1]))
         self.faults.setText(LINE_SEPARATOR.join(lines))
         self.faults.setToolTip(LINE_SEPARATOR.join(words["fault"].format(value=fault)
                                                    for fault in shown))

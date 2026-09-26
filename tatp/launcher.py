@@ -41,6 +41,7 @@ from pathlib import Path
 import yaml
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -189,6 +190,10 @@ class SessionDialog(QDialog):
         self.pattern_folder_hint = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
         self.pattern_folder_hint.setText(words["no_pattern_folder"])
         self.pattern_folder.textChanged.connect(self._pattern_folder_changed)
+        # SPEC.md 1.2: the session file records that the per-visit REDCap form was completed.
+        # Unticked to start, like every other choice here, and recorded either way.
+        self.redcap_form = QCheckBox(words["redcap_form_completed"])
+        sized(self.redcap_form, SIZE_BODY)
 
         self.form = form = QFormLayout()
         form.setVerticalSpacing(ITEM_GAP_PX)
@@ -206,6 +211,7 @@ class SessionDialog(QDialog):
             caption.setText(words[key])
             form.addRow(caption, widget)
         form.addRow("", self.pattern_folder_hint)
+        form.addRow("", self.redcap_form)
 
         self.report = label(SIZE_BODY, wrap=True)
         self.check_button = button(words["check"], SIZE_BODY)
@@ -320,6 +326,7 @@ class SessionDialog(QDialog):
             seed=None,
             room_temperature_c=self.environment["room_temperature_c"],
             relative_humidity_pct=self.environment["relative_humidity_pct"],
+            redcap_form_completed=self.redcap_form.isChecked(),
             resume=None,
         )
 

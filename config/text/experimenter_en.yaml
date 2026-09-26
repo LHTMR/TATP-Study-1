@@ -314,6 +314,8 @@ hardware:
   # intervention and the rekindle run, because it would differ by condition (SPEC.md 16).
   title: Garment
   fault: 'Fault: {value}'
+  # DRAFT (LOG N7.U16): written by the build, not ethics-sourced
+  link_lost: 'Connection lost. The garment may still be on until it is reconnected.'
   # During the intervention and the rekindle a fault's detail names a channel, and which
   # channels a pattern uses differs by condition (SPEC.md 16). The fault itself is still shown.
   fault_withheld: 'Garment faults: {value} (detail in the data)'
@@ -375,6 +377,8 @@ launcher:
   close: Close
   missing_field: 'Required: {value}'
   no_pattern_folder: Choose the pattern folder. There is no default, so the provisional example patterns are never used by accident.
+  # DRAFT (LOG N7.U17): written by the build, not ethics-sourced
+  redcap_form_completed: The REDCap session form has been completed for this visit
   refusals: 'The session cannot start:'
   warnings: 'Warnings. The session can start, and each is recorded:'
   no_findings: No problems found.

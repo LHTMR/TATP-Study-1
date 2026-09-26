@@ -317,6 +317,8 @@ hardware:
   # och återuppvärmningen, eftersom det skulle skilja sig mellan betingelserna (SPEC.md 16).
   title: Plagget
   fault: 'Fel: {value}'
+  # DRAFT (LOG N7.U16): written by the build, not ethics-sourced
+  link_lost: 'Anslutningen bröts. Plagget kan fortfarande vara på tills det ansluts igen.'
   # Under interventionen och återuppvärmningen nämner felets detalj en kanal, och vilka kanaler
   # ett mönster använder skiljer sig mellan betingelserna (SPEC.md 16). Själva felet visas.
   fault_withheld: 'Fel i plagget: {value} (detalj i data)'
@@ -378,6 +380,8 @@ launcher:
   close: Stäng
   missing_field: 'Obligatoriskt: {value}'
   no_pattern_folder: Välj mönstermappen. Det finns ingen standardmapp, så att exempelmönstren aldrig används av misstag.
+  # DRAFT (LOG N7.U17): written by the build, not ethics-sourced
+  redcap_form_completed: REDCap-formuläret för besöket är ifyllt
   refusals: 'Sessionen kan inte starta:'
   warnings: 'Varningar. Sessionen kan starta, och var och en registreras:'
   no_findings: Inga problem hittades.

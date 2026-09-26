@@ -100,9 +100,13 @@ SAMPLE_BLOCK = {"kind": "block", "label_key": "block", "block_index": 3, "block_
 SAMPLE_DUE_IN_S = 245.0
 SAMPLE_DUE_NOW_S = -5.0
 SAMPLE_OVERDUE_S = -420.0
-SAMPLE_HARDWARE = {"connected": True, "faults": [], "channel_pressure_kpa": None}
+SAMPLE_HARDWARE = {"connected": True, "link_lost": False, "faults": [],
+                   "channel_pressure_kpa": None}
 SAMPLE_PRESSURES_KPA = {1: 38.5, 2: 41.0, 3: 40.0, 4: 39.5, 5: 42.0}
 SAMPLE_FAULT = "channel 4: valve did not report"
+# What the prototype driver reports when its link goes, at full length (arduino_mosfet.py).
+SAMPLE_LINK_FAULT = ("serial write failed on COM3: WriteFile failed (PermissionError(13, "
+                     "'The device does not recognize the command.', None, 22))")
 SAMPLE_ERROR = "hardware.yaml: required key 'garment.driver' is missing"
 SAMPLE_F40 = {
     "run_index": 1, "filament": "26", "filament_mn": 255.0, "f40_mn": 321.4, "total": 14,
@@ -190,7 +194,8 @@ def _experimenter_view(**overrides) -> dict:
         "fit_preview_enabled": False,
         "next_event": None,
         "interruption": None,
-        "hardware": {"connected": True, "faults": [], "channel_pressure_kpa": None},
+        "hardware": {"connected": True, "link_lost": False, "faults": [],
+                     "channel_pressure_kpa": None},
     }
     view.update(overrides)
     return view
@@ -539,6 +544,18 @@ def _experimenter_states(text: dict) -> dict:
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA,
                           "faults": [SAMPLE_FAULT]}},
+            lambda window: window.set_instruction(
+                instructions["touchcal_match"].format(channel=SAMPLE_CHANNEL)
+            ),
+        ),
+        "link_lost": (
+            "The prototype sleeve's link lost mid-session (docs/LOG.md N7.U16): shown "
+            "disconnected, the warning that it may still be on first in the fault line, then "
+            "the newest fault's start; the earlier-fault count gives way to them.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
+             "garment_connected": False,
+             "hardware": {**SAMPLE_HARDWARE, "connected": False, "link_lost": True,
+                          "faults": [SAMPLE_FAULT, SAMPLE_LINK_FAULT]}},
             lambda window: window.set_instruction(
                 instructions["touchcal_match"].format(channel=SAMPLE_CHANNEL)
             ),

@@ -24,7 +24,7 @@ launcher's schedule preview draws it on the experimenter's screen, where SPEC.md
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from tatp.config import ConfigError
@@ -97,7 +97,8 @@ class ScheduleWarning:
     """
 
     key: str
-    values: dict[str, str]
+    # Out of the hash, being a dict; equal warnings still hash alike, by their key.
+    values: dict[str, str] = field(hash=False)
 
     def describe(self, text: dict) -> str:
         values = dict(self.values)

@@ -60,9 +60,20 @@ def _windows_die_with_their_test():
 
     Nothing wider than one test may keep a window, since this deletes it. `deleteLater`, not
     `close`: a window's close handler may ask a question, and nobody is there to answer.
+
+    The collector does not run on its own during a test at all (docs/LOG.md N7.U18). Between
+    the test body's end and this teardown, pytest-qt processes the events still queued, paint
+    events included, for windows the body has just dropped. A collection triggered by an
+    allocation inside one `paintEvent` destroyed the window being painted, an access violation.
+    Everything freed by reference counting still goes at once; only cycles wait, until here.
     """
+    gc.disable()
     yield
-    for window in QApplication.topLevelWidgets():
-        window.deleteLater()
-    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
-    gc.collect()
+    try:
+        for window in QApplication.topLevelWidgets():
+            window.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        gc.collect()
+    finally:
+        # A teardown that raised must not leave every later test in the worker uncollected.
+        gc.enable()

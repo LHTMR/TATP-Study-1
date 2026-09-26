@@ -373,6 +373,73 @@ def test_a_message_screen_reports_the_play_button(participant):
     assert seen == [True], "a confirm on the VAS is the VAS's, not a message's"
 
 
+class _StepClock(Clock):
+    """A clock whose elapsed time moves only when the test says, so the lockout is exact."""
+
+    def __init__(self):
+        super().__init__()
+        self.now_s = 0.0
+
+    def elapsed_s(self) -> float:
+        return self.now_s
+
+
+@pytest.fixture
+def stepped(app, session):
+    clock = _StepClock()
+    made = ParticipantWindow(session.config, Responder(session.config.hardware), clock)
+    made.resize(1280, 800)
+    return made, clock, session.config.hardware["responder"]["repeat_confirm_lockout_s"]
+
+
+def test_a_press_carried_over_cannot_dismiss_the_next_message_unread(stepped):
+    """docs/LOG.md N7.U15: a double tap on ▶ confirms one screen, not two."""
+    window, clock, lockout_s = stepped
+    confirmed, ignored = [], []
+    window.message_confirmed.connect(lambda: confirmed.append(True))
+    window.confirm_carried_over.connect(lambda: ignored.append(True))
+    window.show_message("welcome")
+    _press(window, "period")
+    window.show_message("stop_rehearsal_done")
+    clock.now_s += lockout_s / 2
+    _press(window, "period")
+    assert (confirmed, ignored) == ([True], [True]), "the second tap was the first's"
+    clock.now_s += lockout_s
+    _press(window, "period")
+    assert confirmed == [True, True], "a press after the lockout is the new screen's"
+
+
+def test_a_press_on_a_screen_that_asks_for_none_starts_no_lockout(stepped):
+    """A ▶ during a stimulus's blank screen is nobody's, so it is neither logged as carried
+    over nor able to swallow the next screen's press (docs/LOG.md N7.U15)."""
+    window, clock, lockout_s = stepped
+    confirmed, ignored = [], []
+    window.message_confirmed.connect(lambda: confirmed.append(True))
+    window.confirm_carried_over.connect(lambda: ignored.append(True))
+    window.show_blank()
+    _press(window, "period")
+    _press(window, "period")
+    window.show_message("stop_rehearsal_done")
+    _press(window, "period")
+    assert ignored == [], "nothing on a blank screen is carried over"
+    assert len(confirmed) == 3, "and the screen that asks takes its press at once"
+
+
+def test_a_press_carried_over_cannot_confirm_an_adjustment_at_its_start(stepped):
+    """Carried onto an adjustment, it would record the starting level as the answer."""
+    window, clock, lockout_s = stepped
+    confirmed = []
+    window.adjust_confirmed.connect(lambda: confirmed.append(True))
+    window.show_message("welcome")
+    _press(window, "period")
+    window.show_level_adjustment("find_level")
+    _press(window, "period")
+    assert confirmed == []
+    clock.now_s += lockout_s
+    _press(window, "period")
+    assert confirmed == [True]
+
+
 def test_the_stop_rehearsal_draws_the_stop_button_and_nothing_else_does(participant, session):
     symbols = session.config.hardware["responder"]["button_symbols"]
     participant.show_message("stop_rehearsal")
@@ -513,8 +580,9 @@ def test_the_unresolved_open_items_are_on_the_screen(experimenter, session):
     assert not window.open_items.isVisibleTo(window)
 
 
-def _hardware(connected=True, faults=(), pressures=None):
-    return {"connected": connected, "faults": list(faults), "channel_pressure_kpa": pressures}
+def _hardware(connected=True, faults=(), pressures=None, link_lost=False):
+    return {"connected": connected, "link_lost": link_lost, "faults": list(faults),
+            "channel_pressure_kpa": pressures}
 
 
 def test_the_garment_state_is_shown(experimenter, session):
@@ -827,6 +895,22 @@ def test_a_fault_from_the_intervention_stays_withheld_afterwards(drawn):
     assert "channel 2" in window.faults.text(), "a fault raised afterwards is shown, in full"
 
 
+def test_a_lost_link_is_warned_of_in_the_experimenters_language_first(drawn):
+    """docs/LOG.md N7.U16: the outputs may still be on, which the driver's own detail -- the
+    operating system's words -- does not say. The warning leads, so no bound can cut it."""
+    window, held = drawn
+    fault = "serial write failed on COM3: WriteFile failed"
+    held["view"] = _all_keys(phase="setup", hardware=_hardware(
+        connected=False, faults=[fault], link_lost=True))
+    window.refresh()
+    words = window.text["hardware"]
+    assert window.faults.text().split("\n") == [words["link_lost"],
+                                                words["fault"].format(value=fault)]
+    held["view"] = _all_keys(phase="setup", hardware=_hardware(faults=[fault]))
+    window.refresh()
+    assert words["link_lost"] not in window.faults.text(), "reconnected, it is gone"
+
+
 def test_accumulating_faults_do_not_grow_the_side_column(drawn):
     """Pre-merge reviews: faults accumulate for the session, and a line that grew with each
     would move the side column (UI_PRINCIPLES.md 3.3) and push the window off a laptop."""
@@ -835,8 +919,7 @@ def test_accumulating_faults_do_not_grow_the_side_column(drawn):
     window.show()
     # What the prototype driver actually reports, at full length.
     faults = [f"serial write failed on COM{n}: WriteFile failed (PermissionError(13, 'The "
-              f"device does not recognize the command.', None, 22)); outputs unknown until "
-              f"reconnected" for n in range(1, 9)]
+              f"device does not recognize the command.', None, 22))" for n in range(1, 9)]
     app = QApplication.instance()
     limit = window.faults.fontMetrics().lineSpacing() * experimenter_ui.FAULT_LINES
     for count in (1, len(faults)):

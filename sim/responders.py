@@ -85,6 +85,9 @@ NOISE_TAPS = {"find_level": 15, "mask_level": 15}
 # How often the participant looks at the screen, in real seconds. Short, because at the
 # validator's speed a person's reaction time is a large part of the session.
 TICK_S = 0.002
+# How long after the carried-over lockout ends a deferred ▶ is sent, in real milliseconds:
+# a timer can fire a hair early, and a press still inside the lockout would be deferred again.
+LOCKOUT_MARGIN_MS = 1
 # Taps in one look at the screen before looking again; the garment follows a tap at once.
 TAPS_PER_TICK = 60
 # Taps in a row that changed nothing: the end of the adjustable range has been reached.
@@ -556,6 +559,15 @@ class VirtualParticipant(QObject):
     # -- the remote --------------------------------------------------------------------
 
     def tap(self, action: Action) -> None:
+        # A person reads the screen before pressing ▶ on it, so a press never lands inside the
+        # window's carried-over lockout (docs/LOG.md N7.U15). One that would is sent when the
+        # lockout ends instead, on a timer, so the event loop -- and the garment's pattern
+        # ticks -- run on meanwhile. Sent inside it, the press would be dropped, and the
+        # session would wait for a second press that a person gives and this never would.
+        if action is Action.CONFIRM and self.window.confirm_would_carry_over():
+            wait_ms = self.window.clock.scaled_ms(self.window.confirm_lockout_remaining_s())
+            QTimer.singleShot(wait_ms + LOCKOUT_MARGIN_MS, self, lambda: self.tap(action))
+            return
         self._send(action, QEvent.KeyPress)
         self._send(action, QEvent.KeyRelease)
 

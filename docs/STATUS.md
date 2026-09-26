@@ -1,6 +1,6 @@
 # STATUS
 
-**Last updated:** 25 September 2026.
+**Last updated:** 26 September 2026.
 **Milestone:** 6 (pilotable), in progress. Milestones 2–5 and the Milestone 6 work up to the
 UI review, plus the test-worker crash fix, are in `main`. Acceleration push under way
 (`CLAUDE.md`).
@@ -14,7 +14,7 @@ UI review, plus the test-worker crash fix, are in `main`. Acceleration push unde
 **The build runs a whole session**, against the mock garment or the prototype sleeve. The garment
 is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.1).
 
-**New on `accel/integration` since `main`** (`docs/LOG.md` N7.U10–N7.U12, N7.T1–N7.T4):
+**New on `accel/integration` since `main`** (`docs/LOG.md` N7.U10–N7.U19, N7.T1–N7.T4):
 - **VAS proportionality training (§10.6)**, which nothing presented before, is built. It runs
   once per scale in every session (R34). Intensity and pleasantness come at the start of touch
   calibration, and pain at pre-sensitisation. The participant sees the scale as rated. The
@@ -34,17 +34,27 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
 - **The data upload:** SOP §14.2 has the experimenter upload each session to `01_raw` on LiU
   network storage and check it, and never delete the lab PC's copy. `tools/check_upload.py`
   lets S verify each upload by SHA-256 (N4.1).
+- **Fixes of 26 Sep:**
+  - a double tap on ▶ can no longer skip a screen unread or confirm an adjustment at its start
+    (N7.U15);
+  - a lost sleeve link is in the session log, and warned of in the experimenter's language
+    (N7.U16);
+  - the session file records whether the REDCap form was completed, from a checkbox in the
+    Run a session dialog (N7.U17, SPEC §1.2);
+  - a second test-worker crash is fixed (N7.U18).
 
-**`make check` passes:** 994 tests, ruff, the validator (35 checks) and 166 screens.
+**`make check` passes:** 1001 tests, ruff, the validator (35 checks) and 168 screens.
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
 - **Screens to review:**
   - re-approved: every experimenter main-window state and both schedule previews (N7.U10);
-  - new: the eight VAS training screens (N7.T3);
+  - new: the eight VAS training screens (N7.T3) and the two lost-link screens (N7.U19);
+  - re-approved: the four Run a session dialog screens, for the REDCap checkbox (N7.U17);
   - still unreviewed from earlier: N7.U1, N7.U2, N7.U4, N7.C24 and N7.E9.
 - **Drafted wording:**
   - the training's continue line and experimenter instructions (N7.T1, N7.T2);
   - the schedule preview and its warnings in both languages (N7.U10), each key marked DRAFT;
+  - the lost-link warning (N7.U16) and the REDCap checkbox (N7.U17);
   - still unreviewed from earlier: N7.U1, N7.U2, N7.U4 and N7.C1.
 - **Decisions to check:**
   - the UI-review calls (N7.U10);
@@ -72,8 +82,9 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
 3. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
 4. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
    Milestone 6 done.
-5. **Small item left open**, not blocking: the ▶-dismissed message screens other than the
-   training have no guard against a press carried over from the screen before (N7.T3).
+5. **Left open, not blocking:** the mock garment's injected faults never lose the link, so the
+   validator does not exercise the lost-link path. It is unit-tested on the prototype driver
+   (N7.U8 (2)).
 
 ---
 

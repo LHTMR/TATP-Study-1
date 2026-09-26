@@ -129,8 +129,8 @@ Do these with the participant, as Bilaga 1 §3.3 asks. They are recorded outside
    relevant). At the first visit, measure height and weight.
 3. Have the participant complete the paper pain drawing.
 
-**[TBC: SPEC.md §1.2 says the software records that the REDCap session form was
-completed. It does not do this yet. Write a note (section 11.4) until it does.]**
+When the REDCap session form is completed, you tick that it is in the Run a session dialog
+(section 2.4). The software records only that, not what the form says.
 
 ### 2.3 Room temperature and humidity (optional)
 
@@ -155,6 +155,7 @@ They are kept only until the launcher closes, and a session runs without them.
    | **Experimenter language** | The language you want your screen in. |
    | **Data folder** | Leave it as it is (`data`) unless S says otherwise. |
    | **Pattern folder** | The folder S has named for the study. There is no default. **[TBC: the pattern folder path for real sessions (open item 5).]** |
+   | **The REDCap session form has been completed for this visit** | Tick it once the participant's REDCap session form for this visit is complete (section 2.2). It is recorded either way, and it does not stop a session. |
 
 3. Press **Check**. The software checks the session before anything is written, and lists what it
    found under the buttons.

@@ -97,6 +97,10 @@ screens:
     unchosen, with no default; Start disabled until a check passes (en).'
   experimenter_en_launcher_session_checked: 'The session dialog after Check: a preflight
     warning listed in amber, Start enabled because nothing refuses (en).'
+  experimenter_en_link_lost: 'The prototype sleeve''s link lost mid-session (docs/LOG.md
+    N7.U16): shown disconnected, the warning that it may still be on first in the
+    fault line, then the newest fault''s start; the earlier-fault count gives way
+    to them. (en)'
   experimenter_en_long_instruction: 'The longest instruction the session gives, set
     down the type scale so it fits its region: nothing below it has moved, and the
     controls are where they always are. (en)'
@@ -211,6 +215,10 @@ screens:
     unchosen, with no default; Start disabled until a check passes (sv).'
   experimenter_sv_launcher_session_checked: 'The session dialog after Check: a preflight
     warning listed in amber, Start enabled because nothing refuses (sv).'
+  experimenter_sv_link_lost: 'The prototype sleeve''s link lost mid-session (docs/LOG.md
+    N7.U16): shown disconnected, the warning that it may still be on first in the
+    fault line, then the newest fault''s start; the earlier-fault count gives way
+    to them. (sv)'
   experimenter_sv_long_instruction: 'The longest instruction the session gives, set
     down the type scale so it fits its region: nothing below it has moved, and the
     controls are where they always are. (sv)'
