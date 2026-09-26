@@ -31,8 +31,11 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
     participant's display (N7.U14).
 - **The validator's timing check passes again.** A trial's steps are now timed from the moment
   they follow, so slow file writes no longer add to the intervals (N7.U11).
+- **The data upload:** SOP §14.2 has the experimenter upload each session to `01_raw` on LiU
+  network storage and check it, and never delete the lab PC's copy. `tools/check_upload.py`
+  lets S verify each upload by SHA-256 (N4.1).
 
-**`make check` passes:** 986 tests, ruff, the validator (35 checks) and 166 screens.
+**`make check` passes:** 994 tests, ruff, the validator (35 checks) and 166 screens.
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
 - **Screens to review:**
