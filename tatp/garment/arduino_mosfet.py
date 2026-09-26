@@ -34,9 +34,6 @@ HANDSHAKE = "hello"
 SET_STATE = "setstate:0x{mask:x}"  # lower-case hex; the firmware's parser refuses A-F
 LINE_END = "\n"
 ENCODING = "ascii"
-# Written into a lost link's fault row: the last mask the shift register latched may still be
-# on, and nothing in the data would otherwise say so.
-OUTPUTS_UNKNOWN = "Link lost, outputs unknown until reconnected"
 
 
 class ArduinoMosfetGarment(GarmentController):
@@ -102,7 +99,7 @@ class ArduinoMosfetGarment(GarmentController):
         session's close (SPEC.md 13), and a stop that raised would leave the stop screen down
         and the session file unfinished. So a stop that finds the link lost, or is the write
         that finds it, returns once `lost` has recorded the fault and the disconnect. What the
-        outputs then do is out of the software's reach, and the fault detail says so; a
+        outputs then do is out of the software's reach, and the experimenter screen says so; a
         reconnect zeroes them first (`_connect`), and the hardware stop remains.
         """
         self._mask = 0
@@ -140,9 +137,9 @@ class ArduinoMosfetGarment(GarmentController):
             detail = f"serial write failed on {self.port_name}: {error}"
             # A failure while connecting is the connect's to report (it never became
             # connected); one after is the connection lost, with outputs left as they were.
-            # The warning leads, so the screen's bounded fault line never cuts it off.
+            # The experimenter screen says so in words, from `link_lost` (docs/LOG.md N7.U16).
             if self.connected:
-                self.lost(f"{OUTPUTS_UNKNOWN}: {detail}")
+                self.lost(detail)
             else:
                 self.fault(detail)
             raise GarmentError(f"{self.driver_name}: {error}") from error

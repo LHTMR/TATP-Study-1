@@ -60,6 +60,7 @@ from tatp.session import DRIVERS  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
 from tatp.ui.widgets import (  # noqa: E402
     BACKGROUND,
+    CHECK_INDICATOR_PX,
     CONTROL_BACKGROUND,
     CONTROL_BORDER,
     CONTROL_PADDING_PX,
@@ -94,7 +95,6 @@ NAME_FIELD_PX = 180
 IDS_FIELD_PX = 140
 NUMBER_FIELD_PX = 80
 CHANNEL_TABLE_PX = 320
-CHECK_INDICATOR_PX = 14
 TIMELINE_HEIGHT_PX = 120
 TIMELINE_LABEL_PX = 48
 TIMELINE_AXIS_PX = 26
@@ -126,11 +126,7 @@ def designer_stylesheet() -> str:
         f"QTabBar::tab {{ background-color: {CONTROL_BACKGROUND}; color: {SECONDARY}; "
         f"padding: {ITEM_GAP_PX}px; border: 1px solid {CONTROL_BORDER}; }}"
         f"QTabBar::tab:selected {{ color: {FOREGROUND}; background-color: {BACKGROUND}; }}"
-        # Qt's own indicator is near-invisible on the dark background when unchecked.
-        f"QCheckBox::indicator {{ width: {CHECK_INDICATOR_PX}px; "
-        f"height: {CHECK_INDICATOR_PX}px; border: 1px solid {SECONDARY}; "
-        f"background-color: {CONTROL_BACKGROUND}; }}"
-        f"QCheckBox::indicator:checked {{ background-color: {TARGET_COLOUR}; }}"
+        # The checkbox's indicator is the shared stylesheet's; the radio button's matches it.
         f"QRadioButton::indicator {{ width: {CHECK_INDICATOR_PX}px; "
         f"height: {CHECK_INDICATOR_PX}px; border: 1px solid {SECONDARY}; "
         f"border-radius: {CHECK_INDICATOR_PX // 2}px; "

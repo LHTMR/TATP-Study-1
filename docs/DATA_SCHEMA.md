@@ -89,6 +89,7 @@ written, with an empty value — an absent row and an empty value must not be co
 | `slope_prior_vas_per_log10` | VAS·log₁₀⁻¹ | The fixed slope used by the estimator (§8.2) |
 | `room_temperature_c` | °C | Optional (§8.1) |
 | `relative_humidity_pct` | % | Optional (§8.1) |
+| `redcap_session_form_completed` | - | `true` when the experimenter ticked that the REDCap session form was completed, in the launcher or with `--redcap-form-completed` (§1.2). Not checked against REDCap |
 | `data_folder` | - | Resolved absolute path |
 | `cloud_sync_warning` | - | The warning text if the data folder is inside a synced tree, else empty (§14.1) |
 | `unresolved_open_items` | - | Semicolon-separated §20 item numbers still on placeholders |
@@ -121,6 +122,29 @@ its `stage_completed` row exists. `sensitisation_started` has the exact session 
 `detail`, because the session file receives `sensitisation_start_iso` only at close; a resumed
 session logs `sensitisation_resumed` with the same value instead, and `session_resumed` naming
 the file it resumed from.
+
+The VAS proportionality training (§10.6) is three events, each with the scale in `detail`
+(`pain`, `intensity`, `pleasantness`): `vas_training_shown` when the screen goes up (again
+after an interruption repeats it), `vas_training_explained` (origin `experimenter`) at the
+experimenter's Next step once they have explained the anchors aloud, and
+`vas_training_confirmed` (origin `participant`) when the participant then dismisses it with the
+play button, which does nothing before the explanation. The training was given exactly when `vas_training_confirmed` exists; `phase` and
+`block_index` say where. A resume reads `vas_training_confirmed` back so a resumed session does
+not give it again. It is given in the sessions `training.vas_proportionality_sessions` lists,
+once per scale: intensity then pleasantness at the start of `touch_calibration`, and pain in
+`pre_sensitisation` before the long protocol's first application. Never in the intervention.
+
+Three participant presses are logged that are not responses: `confirm_without_marker`, a
+confirm on the VAS before the marker is shown; `choice_pressed_early`, a press on a choice
+screen before it accepts one; and `confirm_carried_over`, a play-button press within
+`responder.repeat_confirm_lockout_s` of the last one the software accepted, which is ignored
+as a double tap or a bounce rather than taken as the new screen's (docs/LOG.md N7.U15).
+
+The garment's own events are logged too, because no command wrote them (§14.2): every
+`garment` table `fault` row is also a `garment_fault` row here (severity `error`, the fault in
+`detail`), and a lost link is a `garment_disconnected` row with `detail` `link lost`, the same
+event a disconnect by hand writes. After a lost link the prototype sleeve's outputs may still
+hold their last state until it is reconnected (docs/LOG.md N7.U16).
 
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|

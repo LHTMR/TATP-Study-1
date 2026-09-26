@@ -34,7 +34,7 @@ from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import DRIVERS, Session, SessionError, with_session_choices
 from tatp.session_runner import SessionRunner, stage_layout, summary_phase
-from tatp.ui.application import application
+from tatp.ui.application import application, scale_screens
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 from tatp.units import S_PER_MIN
@@ -69,6 +69,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="garment pattern folder; there is no default, because defaulting to the "
         "provisional mockups in config/patterns/examples/ would substitute them silently "
         "(open item 5)",
+    )
+    parser.add_argument(
+        "--redcap-form-completed", action="store_true",
+        help="the per-visit REDCap session form has been completed (SPEC.md 1.2); recorded "
+        "in the session file, and false when not given",
     )
     parser.add_argument("--participant-language", default="sv", choices=("sv", "en"))
     parser.add_argument("--experimenter-language", default="en", choices=("sv", "en"))
@@ -213,6 +218,7 @@ def _build_holding(config, args, resume_decision, data_folder) -> SessionRunner:
     session.start(
         room_temperature_c=getattr(args, "room_temperature_c", None),
         relative_humidity_pct=getattr(args, "relative_humidity_pct", None),
+        redcap_session_form_completed=args.redcap_form_completed,
     )
     if open_session is not None and state is None:
         session.log(
@@ -278,6 +284,7 @@ def main(argv: list[str] | None = None) -> int:
     if any(key == RESUME_OFFER for _, key, _ in findings) and args.resume is None:
         return EXIT_OPEN_SESSION  # the terminal's answer is --resume or --new
 
+    scale_screens(config.hardware)
     app = application(config.hardware)
     runner = build(config, args)
     runner.start()

@@ -602,6 +602,7 @@ class _RatedTrial(QObject):
         # after it has cost the participant a delivery even though no row is written.
         self.stimulus_delivered = False
         self._cue_onset_t_session_s: float | None = None
+        self._cue_onset_elapsed_s: float | None = None
         self._pending = None
 
         self._timer = QTimer(self)
@@ -644,6 +645,7 @@ class _RatedTrial(QObject):
         clock = self.session.clock
         self.cue_onset_iso = clock.wall_iso()
         self._cue_onset_t_session_s = clock.t_session_s()
+        self._cue_onset_elapsed_s = clock.elapsed_s()
         self.participant.show_warning_cue()
         self.session.log("warning_cue", detail=f"trial {self.trial_index}")
 
@@ -657,16 +659,19 @@ class _RatedTrial(QObject):
         )
         self.experimenter.set_status("")
         self.experimenter.refresh()
-        self._after(self.warning_duration_s, self._end_cue)
+        self._after_from(self._cue_onset_elapsed_s, self.warning_duration_s, self._end_cue)
 
     def _end_cue(self) -> None:
         self.participant.show_blank()
-        self._after(self.warning_lead_s - self.warning_duration_s, self._stimulus_due)
+        self._after_from(self._cue_onset_elapsed_s, self.warning_lead_s, self._stimulus_due)
 
     def _stimulus_due(self) -> None:
+        # The rating cue is timed from this moment, when the experimenter is told to apply the
+        # stimulus, not from the cue onset: a late prompt must not shorten the delay after it.
+        stimulus_due_s = self.session.clock.elapsed_s()
         self.stimulus_delivered = True
         self.session.log("stimulus_due", detail=self._stimulus_detail())
-        self._after(self.rating_cue_delay_s, self._cue_rating)
+        self._after_from(stimulus_due_s, self.rating_cue_delay_s, self._cue_rating)
 
     def _cue_rating(self) -> None:
         self.rating_cue_iso = self.session.clock.wall_iso()
@@ -709,6 +714,17 @@ class _RatedTrial(QObject):
     def _after(self, seconds: float, method) -> None:
         self._pending = method
         self._timer.start(self.session.clock.scaled_ms(seconds))
+
+    def _after_from(self, anchor_s: float, offset_s: float, method) -> None:
+        """Run `method` at `offset_s` after `anchor_s`, not after now.
+
+        The anchor is the moment the step it is timed from began: the cue onset the row records,
+        or the stimulus prompt. So what runs after that moment -- a data row appended to its
+        file, the experimenter screen redrawn -- cannot add to the interval. Timed from now,
+        those milliseconds added up across the steps (docs/LOG.md N7.U11). On the clock's
+        elapsed time, not session time, which does not exist before sensitisation.
+        """
+        self._after(self.session.clock.remaining_s(anchor_s, offset_s), method)
 
     def _fire(self) -> None:
         method, self._pending = self._pending, None
@@ -934,23 +950,39 @@ class _Series(Procedure):
 
     def disconnect_actions(self) -> None:
         self.experimenter.discard_requested.disconnect(self._on_discard)
+        self._set_discardable(None)
+
+    def _set_discardable(self, discardable: tuple[str, str, int] | None) -> None:
+        # The button is enabled only while there is something to discard (docs/LOG.md N7.U10).
+        self._discardable = discardable
+        self.experimenter.set_actions_enabled(discard=discardable is not None)
+
+    def rating_scale(self) -> str:
+        """The scale this protocol's applications are rated on."""
+        return PAIN_SCALE
 
     def wait_to_start(self, then: Callable[[], None]) -> None:
-        """The experimenter confirms the start of the block (SPEC.md 8.3)."""
+        """The experimenter confirms the start of the block (SPEC.md 8.3).
+
+        Then, before the first application, the scale's proportionality training if this is
+        its first use in the session (SPEC.md 10.6) -- in pre-sensitisation's long protocol,
+        which is where the pain scale is first used.
+        """
 
         def prepare() -> None:
             self.participant.show_blank()
             self.experimenter.set_instruction(self.experimenter.text["instructions"]["ready"])
             self.experimenter.refresh()
 
-        self.await_proceed(then, prepare)
+        self.await_proceed(lambda: self.train_then((self.rating_scale(),), then), prepare)
 
     # -- interruptions ------------------------------------------------------------------
 
     def on_interrupted(self, kind: str) -> None:
         trial = self._trial
         super().on_interrupted(kind)
-        if trial is None:
+        # Only an application can lose a delivery; the training screen is repeated as it was.
+        if not isinstance(trial, _RatedTrial):
             return
         if trial.stimulus_delivered:
             self._count_lost_delivery()
@@ -973,7 +1005,7 @@ class _Series(Procedure):
 
     def apply(self, make_trial: Callable[[], _RatedTrial], on_rated) -> None:
         """Run one application; `on_rated(trial, response)` receives it."""
-        self._discardable = None
+        self._set_discardable(None)
         self.applications += 1
         made: list[_RatedTrial] = []
 
@@ -985,7 +1017,7 @@ class _Series(Procedure):
 
     def interval(self, table: str, trial: _RatedTrial) -> None:
         """The jittered wait after an application, during which it may be discarded."""
-        self._discardable = (table, trial.cue_onset_iso, trial.trial_index)
+        self._set_discardable((table, trial.cue_onset_iso, trial.trial_index))
         self._wait_then_next()
 
     def _wait_then_next(self) -> None:
@@ -1000,7 +1032,7 @@ class _Series(Procedure):
         self.step(begin)
 
     def _advance(self) -> None:
-        self._discardable = None
+        self._set_discardable(None)
         self._next()
 
     def _next(self) -> None:
@@ -1021,7 +1053,7 @@ class _Series(Procedure):
             )
             return
         table, trial_timestamp_iso, trial_index = self._discardable
-        self._discardable = None
+        self._set_discardable(None)
         clock = self.session.clock
         self.session.files.write(
             "discards",
@@ -1549,6 +1581,9 @@ class BrushProtocol(_RatingSeries):
 
     def _stimulus(self) -> str:
         return BRUSH_TABLE
+
+    def rating_scale(self) -> str:
+        return self.session.config.study1["brush"]["rating_scale"]
 
     def _apply_next(self) -> None:
         site = self.rotation.order()[0]

@@ -68,6 +68,10 @@ EMERGENCY_STOP_SCREEN = "emergency_stop"
 # The one screen that draws the stop button, because pointing at it is its purpose (SPEC.md
 # 10.9). A key in the participant text file, not wording.
 STOP_REHEARSAL_SCREEN = "stop_rehearsal"
+# The participant text key of the training screen's continue line, and the blank line that
+# sets it apart as the message screens set theirs.
+TRAINING_CONTINUE = "training_continue"
+TRAINING_PARAGRAPH_BREAK = "\n\n"
 
 MESSAGE_POINT_SIZE = 26
 CUE_RADIUS_FRACTION = 0.09
@@ -484,6 +488,10 @@ class ParticipantWindow(QWidget):
     # asks for the self-start press (SPEC.md 12.3). Emitted on any message screen; what it
     # means is up to whoever is listening, and nothing listens on a screen that asks nothing.
     message_confirmed = Signal()
+    # The play button on the VAS proportionality training (SPEC.md 10.6).
+    vas_training_confirmed = Signal()
+    # A play-button press ignored as carried over from the screen before (docs/LOG.md N7.U15).
+    confirm_carried_over = Signal()
     # The visual warning cue has just gone up (SPEC.md 10.5). The rig sounds the audible cue
     # from this, so the two cannot come apart.
     warning_cue_shown = Signal()
@@ -504,9 +512,13 @@ class ParticipantWindow(QWidget):
         # own handling rather than starting after it.
         self.last_press_real_s: float | None = None
         self._names = {key: name for name, key in QT_KEYS.items()}
+        # When the play button last did something, on the clock's elapsed time: a press within
+        # `repeat_confirm_lockout_s` of it belongs to the screen before (docs/LOG.md N7.U15).
+        responder_config = config.hardware["responder"]
+        self._confirm_lockout_s = float(responder_config["repeat_confirm_lockout_s"])
+        self._confirm_accepted_s: float | None = None
 
         self.message = _MessageScreen()
-        responder_config = config.hardware["responder"]
         self.message.stop_colour = QColor(
             responder_config["button_symbol_colours"]["emergency_stop"]
         )
@@ -518,6 +530,10 @@ class ParticipantWindow(QWidget):
         self.vas.confirmed.connect(self.confirmed)
         self.vas.emergency_stop.connect(self.emergency_stop)
         self.vas.pressed_without_marker.connect(self.pressed_without_marker)
+        self.vas.training_confirmed.connect(self.vas_training_confirmed)
+        # A rating or a training confirmed on the VAS is a press the next screen must not take.
+        self.vas.confirmed.connect(self._confirm_accepted)
+        self.vas.training_confirmed.connect(self._confirm_accepted)
         self.control = _ControlScreen(responder)
         self.choice = _ChoiceScreen(config.study1["choice"], responder)
         self.choice.chosen.connect(self.chosen)
@@ -653,6 +669,20 @@ class ParticipantWindow(QWidget):
         self.vas.show_scale(scale, self.text["vas"][scale])
         self._show(self.vas)
 
+    def show_vas_training(self, scale: str, accepting: bool) -> None:
+        """The proportionality training for `scale` (SPEC.md 10.6): the scale as it is rated
+        with `training.<scale>` below it.
+
+        While the experimenter explains the anchors, that is all, and ▶ does nothing. Once they
+        have (`accepting`), `training_continue` follows the sentence and ▶ emits
+        `vas_training_confirmed`.
+        """
+        sentence = self.text["training"][scale]
+        if accepting:
+            sentence = TRAINING_PARAGRAPH_BREAK.join((sentence, self.text[TRAINING_CONTINUE]))
+        self.vas.show_training(scale, self.text["vas"][scale], sentence, accepting)
+        self._show(self.vas)
+
     def _show(self, screen: QWidget, adjusting: bool = False, choosing: bool = False) -> None:
         # Set here rather than in the caller so that leaving either interactive screen by any
         # route -- including a blank shown by an emergency stop -- stops the window reading
@@ -677,7 +707,15 @@ class ParticipantWindow(QWidget):
             and not event.isAutoRepeat()
             and self.stack.currentWidget() is self.message
         ):
-            self.message_confirmed.emit()
+            # Only a screen that asks for ▶ -- its approved wording spells the symbol -- takes a
+            # press, so only its presses start the lockout or are ignored by it. On a blank or
+            # standby screen nobody is listening, and a press there is nothing to log.
+            if self._message_asks_for_confirm() and self.confirm_would_carry_over():
+                self.confirm_carried_over.emit()
+            else:
+                if self._message_asks_for_confirm():
+                    self._confirm_accepted()
+                self.message_confirmed.emit()
         elif self._choosing and not event.isAutoRepeat():
             # Auto-repeat cannot make a second choice: the screen stops accepting on the first
             # press, and a held button is one press however long it is held.
@@ -692,13 +730,39 @@ class ParticipantWindow(QWidget):
             # hold itself, from the interval between the down and the up (SPEC.md 10.3), so a
             # repeat here would be a second press that never happened.
             if action is Action.CONFIRM:
-                self.adjust_confirmed.emit()
+                # Carried over, it would confirm the level the adjustment started at as the
+                # participant's answer.
+                if self.confirm_would_carry_over():
+                    self.confirm_carried_over.emit()
+                else:
+                    self._confirm_accepted()
+                    self.adjust_confirmed.emit()
             elif action is not None:
                 self.control.hold("left" if action is Action.DECREASE else "right")
                 self.adjust_pressed.emit(action.value)
         # Everything else is swallowed rather than passed on: off the VAS there is nothing a
         # press can mean, and Qt would close the window on `escape` (SPEC.md 10.1).
         event.accept()
+
+    def confirm_lockout_remaining_s(self) -> float:
+        """Session seconds until a play-button press would be taken as meant for the screen
+        now up rather than carried over from the one before (docs/LOG.md N7.U15). The lockout
+        is on the clock's elapsed time, not real time as the hand's own durations are: in a
+        session the two are the same, and in real time every accelerated validator run would
+        wait half a second at each ▶ that follows another."""
+        if self._confirm_accepted_s is None:
+            return 0.0
+        return self._confirm_accepted_s + self._confirm_lockout_s - self.clock.elapsed_s()
+
+    def confirm_would_carry_over(self) -> bool:
+        """Whether a play-button press now would be a double tap or a bounce."""
+        return self.confirm_lockout_remaining_s() > 0
+
+    def _message_asks_for_confirm(self) -> bool:
+        return self.responder.symbol_for(Action.CONFIRM) in self.message.text
+
+    def _confirm_accepted(self, *_response) -> None:
+        self._confirm_accepted_s = self.clock.elapsed_s()
 
     def keyReleaseEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         action = self._action(event)
@@ -735,7 +799,7 @@ class RemoteKeyRouter(QObject):
 
     The remote is a keyboard as far as the operating system is concerned, so its presses go to
     the active window -- and the experimenter makes their own window active every time they
-    click Start block. Without this, the participant's next rating, and their emergency stop,
+    click Next step. Without this, the participant's next rating, and their emergency stop,
     would land on the experimenter's screen and do nothing (SPEC.md 10.1, 13).
 
     Installed on the application by the `Rig`. The one exception is a key typed into a text

@@ -25,6 +25,10 @@ from tatp.clock import Clock
 from tatp.garment.patterns import ChannelEvent, Pattern, loop_events
 from tatp.units import MS_PER_S
 
+# The `detail` of the `disconnect` row a lost link writes, which the session also logs
+# (docs/LOG.md N7.U16). A controlled value of the data files, not wording.
+LINK_LOST = "link lost"
+
 
 class GarmentError(Exception):
     """The garment cannot do what was asked. Not caught: a silent stimulus failure is worse."""
@@ -81,6 +85,9 @@ class GarmentController(ABC):
         self.on_command = on_command
         self.connected = False
         self.faults: list[str] = []
+        # Set by `lost` and cleared by a connect: the outputs may still hold their last state
+        # (docs/LOG.md N7.U8, N7.U16), which the experimenter screen warns of in words.
+        self.link_lost = False
         self.pressure_kpa: dict[int, float] = {}
         self._last_command_s: dict[int, float] = {}
         self._pattern: Pattern | None = None
@@ -117,6 +124,7 @@ class GarmentController(ABC):
     def connect(self) -> None:
         self._connect()
         self.connected = True
+        self.link_lost = False
         self.pressure_kpa = {channel: 0.0 for channel in self.channels()}
         self._record("connect")
 
@@ -311,16 +319,17 @@ class GarmentController(ABC):
         state, its Connect button and every `connected`-guarded stop see the truth.
 
         No `pattern_stop` or `channel_off` is written: none was commanded, and the outputs
-        may still hold their last state. The fault row says so, and the `disconnect` row
-        ends the pattern in the data. A playing pattern is dropped, so the session's timer
-        does not keep delivering into a dead link.
+        may still hold their last state. The `disconnect` row says `link lost` and ends the
+        pattern in the data, and `link_lost` has the experimenter screen warn of it. A playing
+        pattern is dropped, so the session's timer does not keep delivering into a dead link.
         """
         self.fault(detail)
         self._pattern = None
         self._pattern_start_s = None
         self._channels_on.clear()
         self.connected = False
-        self._record("disconnect")
+        self.link_lost = True
+        self._record("disconnect", detail=LINK_LOST)
 
     def _require_connected(self) -> None:
         if not self.connected:

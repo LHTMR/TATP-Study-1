@@ -53,7 +53,7 @@ def loaded():
     return cfg.load("sv", "en")
 
 
-def _make_rig(loaded, tmp_path, study1=None, seed=7):
+def _make_rig(loaded, tmp_path, study1=None, seed=7, trained=True):
     hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "data"),
                                             "cloud_sync_markers": []}}
     config = cfg.Config(**{**loaded.__dict__, "hardware": hardware,
@@ -61,6 +61,10 @@ def _make_rig(loaded, tmp_path, study1=None, seed=7):
     session = Session(
         config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=CLOCK_SPEED), rng_seed=seed
     )
+    if trained:
+        # The VAS training (SPEC.md 10.6) as already given, so these tests see only the
+        # protocol; `test_the_pain_training_comes_before_the_first_application` sees it.
+        session.vas_trained.update(session.trained_scales)
     session.start()
     session.set_phase("pre_sensitisation")
     participant = ParticipantWindow(config, Responder(config.hardware), session.clock)
@@ -188,6 +192,35 @@ def test_the_long_protocol_searches_measures_and_estimates(rig):
     assert calibration["chosen_filament_label_g"] == result.chosen_filament_label_g
     assert calibration["ordinal_rho"] != ""
     assert "measure_plan" in _events(session)
+
+
+def test_the_pain_training_comes_before_the_first_application(app, loaded, tmp_path):
+    """SPEC.md 10.6: after the experimenter's start and before the first cue, once only."""
+    made = _make_rig(loaded, tmp_path, trained=False)
+    try:
+        participant = made.participant
+        protocol = _long(made)
+        done = _start(protocol)
+        _spin(lambda: participant.stack.currentWidget() is participant.vas)
+        vas = participant.vas
+        assert vas.training and vas.scale == "pain" and not vas.training_accepting
+        assert "warning_cue" not in _events(made.session), "no stimulus before the training"
+        _press(vas, "period")
+        assert "vas_training_confirmed" not in _events(made.session), (
+            "▶ dismissed the training before the experimenter's go"
+        )
+        # The anchors explained aloud; the experimenter's go.
+        made.experimenter.proceed_requested.emit()
+        assert vas.training_accepting
+        _press(vas, "period")
+        _drive(protocol, done)
+        events = _events(made.session)
+        assert events.count("vas_training_confirmed") == 1
+        assert events.index("vas_training_shown") < events.index("vas_training_explained")
+        assert events.index("vas_training_explained") < events.index("vas_training_confirmed")
+        assert events.index("vas_training_confirmed") < events.index("warning_cue")
+    finally:
+        made.session.close()
 
 
 def test_the_same_seed_gives_the_same_sequence(app, loaded, tmp_path):
@@ -329,6 +362,24 @@ def test_a_discard_writes_a_discards_row_and_repeats(rig):
     assert rows[1]["filament_label_g"] == rows[0]["filament_label_g"], "the same plan, repeated"
     assert rows[1]["trial_index"] == "2"
     assert done[0].applications_total == len(rows)
+
+
+def test_discard_is_enabled_only_while_there_is_something_to_discard(rig):
+    """docs/LOG.md N7.U10: during the interval after a completed application, and not before,
+    during the next one, or once the protocol has ended."""
+    experimenter, participant = rig.experimenter, rig.participant
+    protocol = _long(rig)
+    protocol.start()
+    assert not experimenter.discard_button.isEnabled(), "nothing has been applied yet"
+    experimenter.proceed_requested.emit()
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    assert not experimenter.discard_button.isEnabled(), "the application is not complete"
+    _answer(participant, _observer(protocol._trial))
+    assert experimenter.discard_button.isEnabled(), "the interval after a rated application"
+    experimenter.discard_requested.emit()
+    assert not experimenter.discard_button.isEnabled(), "discarded, nothing is left to discard"
+    protocol.cancel()
+    assert not experimenter.discard_button.isEnabled(), "the protocol has ended"
 
 
 def test_a_discard_with_nothing_to_discard_is_ignored_and_logged(rig):

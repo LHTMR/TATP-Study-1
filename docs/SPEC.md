@@ -1088,7 +1088,9 @@ way must be impossible to mistake for a real one afterwards.
 ### 14.1 Where
 
 Default `data/` inside the repository, **gitignored**. Configurable in `hardware.yaml`.
-Transferred manually to the LiU secure server afterwards.
+Uploaded manually afterwards, by the experimenter, into `01_raw` of the study's LiU network
+storage, `\\fillager.liu.se\coop\t\tatp` (a *samarbetsmapp*, collaboration folder). The software
+never writes there itself. The procedure is in `SOP.md` §14.2.
 
 If the configured data folder resolves inside a cloud-synced tree — OneDrive, Dropbox, iCloud —
 **warn clearly at startup and record the fact in the session file, but do not refuse to run.**

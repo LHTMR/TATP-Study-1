@@ -100,9 +100,13 @@ SAMPLE_BLOCK = {"kind": "block", "label_key": "block", "block_index": 3, "block_
 SAMPLE_DUE_IN_S = 245.0
 SAMPLE_DUE_NOW_S = -5.0
 SAMPLE_OVERDUE_S = -420.0
-SAMPLE_HARDWARE = {"connected": True, "faults": [], "channel_pressure_kpa": None}
+SAMPLE_HARDWARE = {"connected": True, "link_lost": False, "faults": [],
+                   "channel_pressure_kpa": None}
 SAMPLE_PRESSURES_KPA = {1: 38.5, 2: 41.0, 3: 40.0, 4: 39.5, 5: 42.0}
 SAMPLE_FAULT = "channel 4: valve did not report"
+# What the prototype driver reports when its link goes, at full length (arduino_mosfet.py).
+SAMPLE_LINK_FAULT = ("serial write failed on COM3: WriteFile failed (PermissionError(13, "
+                     "'The device does not recognize the command.', None, 22))")
 SAMPLE_ERROR = "hardware.yaml: required key 'garment.driver' is missing"
 SAMPLE_F40 = {
     "run_index": 1, "filament": "26", "filament_mn": 255.0, "f40_mn": 321.4, "total": 14,
@@ -190,7 +194,8 @@ def _experimenter_view(**overrides) -> dict:
         "fit_preview_enabled": False,
         "next_event": None,
         "interruption": None,
-        "hardware": {"connected": True, "faults": [], "channel_pressure_kpa": None},
+        "hardware": {"connected": True, "link_lost": False, "faults": [],
+                     "channel_pressure_kpa": None},
     }
     view.update(overrides)
     return view
@@ -258,6 +263,26 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             f"before the first press, {language}.",
             _grab(window),
         )
+
+    for scale in sorted(text["training"]):
+        window.show_vas_training(scale, accepting=False)
+        yield Shot(
+            f"participant_{language}_vas_training_{scale}",
+            f"The proportionality training for `{scale}` (SPEC.md 10.6) while the experimenter "
+            f"explains the anchors: the scale exactly as it is rated, with no marker, and "
+            f"`training.{scale}` below it; no continue line, and ▶ does nothing, {language}.",
+            _grab(window),
+        )
+
+    # One scale is enough for the second state: the continue line is drawn by the same code
+    # under every scale's sentence.
+    window.show_vas_training(VARIANT_SCALE, accepting=True)
+    yield Shot(
+        f"participant_{language}_vas_training_{VARIANT_SCALE}_accepting",
+        f"The `{VARIANT_SCALE}` training once the experimenter has pressed Next step: "
+        f"`training_continue` under the sentence, and ▶ now dismisses it, {language}.",
+        _grab(window),
+    )
 
     yield from _vas_variant_shots(window, language)
 
@@ -523,6 +548,18 @@ def _experimenter_states(text: dict) -> dict:
                 instructions["touchcal_match"].format(channel=SAMPLE_CHANNEL)
             ),
         ),
+        "link_lost": (
+            "The prototype sleeve's link lost mid-session (docs/LOG.md N7.U16): shown "
+            "disconnected, the warning that it may still be on first in the fault line, then "
+            "the newest fault's start; the earlier-fault count gives way to them.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
+             "garment_connected": False,
+             "hardware": {**SAMPLE_HARDWARE, "connected": False, "link_lost": True,
+                          "faults": [SAMPLE_FAULT, SAMPLE_LINK_FAULT]}},
+            lambda window: window.set_instruction(
+                instructions["touchcal_match"].format(channel=SAMPLE_CHANNEL)
+            ),
+        ),
         "long_instruction": (
             "The longest instruction the session gives, set down the type scale so it fits "
             "its region: nothing below it has moved, and the controls are where they always "
@@ -535,7 +572,7 @@ def _experimenter_states(text: dict) -> dict:
             ),
         ),
         "awaiting_rebalance": (
-            "The evenness question answered 'uneven': Rebalance and Start block both "
+            "The evenness question answered 'uneven': Rebalance and Next step both "
             "enabled, because the procedure waits on either.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA}},

@@ -6,7 +6,10 @@ QT_QPA_PLATFORM=offscreen, which is what SPEC.md 17.1 requires of the whole suit
 
 from __future__ import annotations
 
+import shutil
+
 import pytest
+import yaml
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QFontMetrics, QKeyEvent
 from PySide6.QtWidgets import QApplication
@@ -421,6 +424,99 @@ def test_the_text_block_clears_the_scale(by_language, scale, language):
         f"{language} {scale}: {clearance:.0f} px between the text and the scale, "
         f"where {TEXT_TO_SCALE_GAP_PX} px are required"
     )
+
+
+# -- the proportionality training (SPEC.md 10.6) ------------------------------------------
+
+TRAINED_SCALES = ("pain", "intensity", "pleasantness")
+
+
+def _show_training(widget, config, scale, accepting=True):
+    text = config.participant_text
+    sentence = text["training"][scale]
+    if accepting:
+        sentence = f"{sentence}\n\n{text['training_continue']}"
+    widget.show_training(scale, text["vas"][scale], sentence, accepting)
+
+
+def test_every_trained_scale_has_its_sentence_in_both_languages(configs):
+    """The scales the spec names, and no others: relaxation and alertness have none."""
+    for config in configs.values():
+        assert set(config.participant_text["training"]) == set(TRAINED_SCALES)
+
+
+def test_a_training_key_that_is_not_a_scale_is_refused(tmp_path):
+    """A misspelt key would be a scale silently never trained (SPEC.md 10.6)."""
+    shutil.copytree(cfg.CONFIG_DIR, tmp_path / "config")
+    for language in ("sv", "en"):  # both, so the languages still share their keys
+        path = tmp_path / "config" / "text" / f"participant_{language}.yaml"
+        text = yaml.safe_load(path.read_text(encoding="utf-8"))
+        text["training"]["painn"] = text["training"].pop("pain")
+        path.write_text(yaml.safe_dump(text, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(cfg.ConfigError, match="painn"):
+        cfg.load("en", "en", config_dir=tmp_path / "config")
+
+
+def test_play_is_ignored_until_the_anchors_have_been_explained(widget, loaded):
+    """While the experimenter explains, ▶ does nothing; after their go it dismisses."""
+    confirmed = []
+    widget.training_confirmed.connect(lambda: confirmed.append(1))
+    _show_training(widget, loaded, "pain", accepting=False)
+    assert loaded.participant_text["training_continue"] not in widget.training
+    _press(widget, "period")
+    assert confirmed == [], "▶ dismissed the training before the anchors were explained"
+    _show_training(widget, loaded, "pain", accepting=True)
+    assert widget.training.endswith(loaded.participant_text["training_continue"])
+    _press(widget, "period")
+    assert confirmed == [1]
+
+
+@pytest.mark.parametrize("scale", TRAINED_SCALES)
+@pytest.mark.parametrize("language", ("sv", "en"))
+def test_the_training_text_clears_the_scale_and_the_screen_edge(by_language, scale, language):
+    widget, config = by_language[language]
+    _show_training(widget, config, scale)
+    below_labels, above_edge = widget.training_clearance()
+    assert below_labels >= TEXT_TO_SCALE_GAP_PX, (
+        f"{language} {scale}: {below_labels:.0f} px between the lowest anchor label and the "
+        f"training text, where {TEXT_TO_SCALE_GAP_PX} px are required"
+    )
+    assert above_edge >= 0, f"{language} {scale}: the training text runs off the screen"
+    # The scale above it is drawn as it is rated (UI_PRINCIPLES.md 1.6).
+    assert widget.heading_clearance() >= TEXT_TO_SCALE_GAP_PX
+
+
+def test_the_training_screen_asks_only_for_the_play_button(widget, loaded):
+    confirmed, empty, responses = [], [], []
+    widget.training_confirmed.connect(lambda: confirmed.append(1))
+    widget.pressed_without_marker.connect(lambda: empty.append(1))
+    widget.confirmed.connect(responses.append)
+    _show_training(widget, loaded, "pain")
+    _press(widget, "pagedown")
+    _press(widget, "pageup")
+    assert not widget.state.visible, "the training screen must never show a marker"
+    _press(widget, "period")
+    assert confirmed == [1]
+    assert empty == [] and responses == []
+
+
+def test_the_emergency_stop_works_on_the_training_screen(widget, loaded):
+    stops = []
+    widget.emergency_stop.connect(lambda: stops.append(1))
+    _show_training(widget, loaded, "pain")
+    _press(widget, "f5")
+    assert stops == [1]
+
+
+def test_a_rating_after_the_training_is_an_ordinary_rating(widget, loaded):
+    _show_training(widget, loaded, "pain")
+    widget.show_scale("pain", loaded.participant_text["vas"]["pain"])
+    assert widget.training == ""
+    got = []
+    widget.confirmed.connect(got.append)
+    _press(widget, "pagedown")
+    _press(widget, "period")
+    assert len(got) == 1
 
 
 def test_confirming_emits_the_response(widget):

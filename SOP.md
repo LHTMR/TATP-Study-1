@@ -49,13 +49,15 @@ To keep the blind:
 
 1. Check that the software is installed and up to date (`docs/SETUP.md`, "Keeping it up to date").
    Pull any update S has announced.
-2. Check that both displays are connected: the participant's display behind the curtain, and the
-   lab display for you.
-   **[TBC: until open item 9 is set, both windows open on the main display, in a window,
-   and not full screen on the participant's display.]**
-3. Check that the participant's headphones and the lab-side speaker are connected.
-   **[TBC: which output is which (open item L10). Until it is set, the lab-side alerts may
-   play through the participant's headphones.]**
+2. Check that both displays are connected: the participant's display (the HP) behind the
+   curtain, and the laptop's own display for you. The participant's window opens full screen on
+   the HP.
+   **Sit so that you cannot see past the curtain to the participant's display.** The
+   participant rates on a screen you cannot see, so that nothing they report reaches you
+   during the session.
+3. Check that the participant's headphones (the Bose) and the laptop's speakers are connected.
+   Your alerts play through the laptop's speakers, and the participant's sounds through the
+   headphones.
 4. Open the launcher (section 2.1) and choose **Preview schedule**. Read the timeline and any
    warnings. This starts nothing.
 
@@ -127,8 +129,8 @@ Do these with the participant, as Bilaga 1 §3.3 asks. They are recorded outside
    relevant). At the first visit, measure height and weight.
 3. Have the participant complete the paper pain drawing.
 
-**[TBC: SPEC.md §1.2 says the software records that the REDCap session form was
-completed. It does not do this yet. Write a note (section 11.4) until it does.]**
+When the REDCap session form is completed, you tick that it is in the Run a session dialog
+(section 2.4). The software records only that, not what the form says.
 
 ### 2.3 Room temperature and humidity (optional)
 
@@ -153,6 +155,7 @@ They are kept only until the launcher closes, and a session runs without them.
    | **Experimenter language** | The language you want your screen in. |
    | **Data folder** | Leave it as it is (`data`) unless S says otherwise. |
    | **Pattern folder** | The folder S has named for the study. There is no default. **[TBC: the pattern folder path for real sessions (open item 5).]** |
+   | **The REDCap session form has been completed for this visit** | Tick it once the participant's REDCap session form for this visit is complete (section 2.2). It is recorded either way, and it does not stop a session. |
 
 3. Press **Check**. The software checks the session before anything is written, and lists what it
    found under the buttons.
@@ -223,8 +226,8 @@ Your window reads top to bottom:
    connection state and the **Disconnect garment** / **Connect garment** button.
 7. **The buttons** (section 11), then the note, substitution and mapping entries.
 
-**Start block** is the go button for everything, not only blocks. Press it whenever the
-instruction says to press Start block.
+**Next step** is the go button for everything, not only blocks. Press it whenever the
+instruction says to press Next step.
 
 **The remote always works, whichever window you last clicked.** Its presses go to the
 participant's screen even while your own window is active. The exception is while you are
@@ -246,7 +249,7 @@ The phase shows **Setup**. Nothing is being measured yet.
 4. Give the participant the remote and show them the buttons: the two large buttons move the
    marker left and right, and the play button confirms.
 5. Put the headphones on the participant.
-6. Press **Start block**.
+6. Press **Next step**.
 
 **[TBC: when and how the hardware stop button and the rapid depressurisation release are
 shown to the participant (Bilaga 1 §3.10). The software rehearses only the software stop.]**
@@ -275,8 +278,8 @@ minutes.
 
    1. The noise and the garment have stopped. The participant's screen says the session is paused.
    2. Offer the earplugs. Fit them under the headphones.
-   3. The instruction says **Fit the earplugs under the headphones, then press Start block.**
-      Press **Start block**.
+   3. The instruction says **Fit the earplugs under the headphones, then press Next step.**
+      Press **Next step**.
    4. The check starts again from the beginning.
 4. **If the status says Still audible with earplugs. The session will continue and is recorded as
    not fully masked.**: nothing to do. The session carries on and the data records it. Write a note
@@ -292,7 +295,7 @@ about a minute and a half.
 1. The screen shows:
 
    > Stop rehearsal: the participant will now press the stop button. When the stop screen shows,
-   > press Resume. Press Start block only if they cannot press it.
+   > press Resume. Press Next step only if they cannot press it.
 
 2. The participant's screen asks them to press the stop button. It is the remote's blank-screen
    button.
@@ -302,7 +305,7 @@ about a minute and a half.
 4. Press **Resume**. The garment restarts, after the warning cue, and the participant sees that
    the session has carried on.
 5. The participant reads the next screen and presses play.
-6. **If the participant cannot press it**, press **Start block**. The rehearsal ends and is
+6. **If the participant cannot press it**, press **Next step**. The rehearsal ends and is
    recorded as not pressed.
 
 **[TBC: open item L11. Until the rehearsal pressure is set, the garment is started with no
@@ -328,7 +331,8 @@ on their own screen. You watch, and answer only when the software asks you to.
    - **Touch calibration: the participant is asked whether the movement feels even.**
    - **Touch calibration, step 6: the participant chooses a kind of touch.**
 
-   Step 6 happens at every visit.
+   Step 6 happens at every visit. Before step 1, with the garment off, the participant is
+   trained on the intensity scale and then the pleasantness scale (VAS training, section 6).
 
 2. **When the software asks you to decide:**
 
@@ -337,8 +341,8 @@ on their own screen. You watch, and answer only when the software asks you to.
    | **The touch-calibration estimate failed its quality check (…). Re-run the procedure, or accept it to continue with the estimate flagged.** | Press **Re-run the procedure** to repeat steps 1 and 2, or **Accept this estimate** to carry on. A re-run asks for a reason, which is kept. **[TBC: when to re-run and when to accept.]** |
    | **The touch-calibration estimate cannot be used (…). Re-run the procedure, or abort the session.** | Press **Re-run the procedure**, or **Abort session** (section 11.3). **Accept this estimate** does nothing here. |
    | **The touch-calibration estimate cannot be used (…) and the re-run limit is reached. …** | Press **Accept this estimate** to carry on with the calibration recorded as not valid for analysis, or **Abort session**. |
-   | **Channel … was matched at 0 kPa again. Rebalance to repeat the match, or proceed …** | Press **Rebalance channels** to repeat the match, or **Start block** to carry on with that channel recorded as not valid for analysis. |
-   | **The participant reports the movement as uneven along the arm. Rebalance the channels, or proceed.** | Press **Rebalance channels** to go back to matching, or **Start block** to carry on. |
+   | **Channel … was matched at 0 kPa again. Rebalance to repeat the match, or proceed …** | Press **Rebalance channels** to repeat the match, or **Next step** to carry on with that channel recorded as not valid for analysis. |
+   | **The participant reports the movement as uneven along the arm. Rebalance the channels, or proceed.** | Press **Rebalance channels** to go back to matching, or **Next step** to carry on. |
    | **The touch-calibration estimate is ready. Accept it, or re-run the procedure.** | Only with the fit preview on (section 12.3). |
 
    The words in brackets say what kind of failure it was: **flat**, **not rising with pressure**,
@@ -370,11 +374,31 @@ The phase shows **Pre-sensitisation**. The measures run in this order:
 3. The brush, secondary zone: five strokes.
 4. The brush, primary zone: five strokes.
 
-Each measure begins with **Ready. Press Start block when the participant is ready.** Press
-**Start block** when you and the participant are ready.
+Each measure begins with **Ready. Press Next step when the participant is ready.** Press
+**Next step** when you and the participant are ready.
 
-**[TBC: VAS training. Bilaga 1 §3.6.1 asks for it at pre-sensitisation. The software does
-not present the training screens yet (STATUS.md), so how it is done until then is S's call.]**
+**VAS training** (Bilaga 1 §3.6.1, §3.9; SPEC.md §10.6). The software gives it, in every
+session, once per scale, before that scale is first used:
+
+- the **intensity** scale, then the **pleasantness** scale, at the start of the touch
+  calibration (section 5), before step 1, with the garment off;
+- the **pain** scale here, after you start the long protocol and before the first filament.
+
+The intervention never contains training.
+
+For each scale:
+
+1. The participant sees the scale as it will be rated, with no marker, and a sentence below
+   it: *a mark twice as far along the line means it was twice as painful* (or *intense*, or
+   *pleasant*). No button does anything on it yet. Your screen shows **Rating scale training:
+   explain the labels along the line aloud, then press Next step.**
+2. Every time, read out each label on the participant's screen and where it sits on the line
+   (Bilaga 1 §3.6.1, §3.9 ask for instructions on the anchors). Then press **Next step**.
+3. **Press ▶ to continue** appears under the sentence, and your screen shows **Rating scale
+   training: waiting for the participant to press ▶.** The participant presses ▶.
+
+Do not apply a filament until your screen shows the application instruction. The relaxation and alertness questions have no training. After a
+crash, a resumed session does not repeat training already given in that session.
 
 ---
 
@@ -385,7 +409,7 @@ not present the training screens yet (STATUS.md), so how it is done until then i
 2. Place the thermode on the dorsal hand of the target limb.
 3. Start the thermode programme (Bilaga 1 §3.5: 50 °C for 2 min, with brief drops to 32 °C every
    10.2 s).
-4. **Press Start block at the moment the thermode starts.** That press is session time zero:
+4. **Press Next step at the moment the thermode starts.** That press is session time zero:
    every later time is measured from it, and **Session elapsed** starts counting.
 5. Mark the sensitised skin area with the pen (Bilaga 1 §3.5).
 
@@ -394,12 +418,12 @@ not present the training screens yet (STATUS.md), so how it is done until then i
 1. At 2 minutes the countdown shows **Capsaicin is due.** An alert sounds on the lab side about
    30 s before and again 60 s after the time. Section 13.3 describes the countdown.
 2. The screen shows **Apply 0.075 % capsaicin.**
-3. Apply the cream to the sensitised area and rub it in (Bilaga 1 §3.5). Press **Start block**.
+3. Apply the cream to the sensitised area and rub it in (Bilaga 1 §3.5). Press **Next step**.
    The phase changes to **Capsaicin**.
 4. The countdown runs to 32 minutes. In between, the screen shows **Waiting for the next scheduled
    step. The countdown shows when it is due.**
-5. At 32 minutes: **Remove the capsaicin, then press Start block to begin the post-sensitisation
-   measures.** Remove it, then press **Start block**.
+5. At 32 minutes: **Remove the capsaicin, then press Next step to begin the post-sensitisation
+   measures.** Remove it, then press **Next step**.
 
 ---
 
@@ -427,16 +451,16 @@ It comes back on afterwards. The participant's screen shows the standby display.
    > sharper pricking."
 
    Read it to the participant.
-2. The screen then says **Path … of 4. Press Start block to start the pacing cue, and again to
+2. The screen then says **Path … of 4. Press Next step to start the pacing cue, and again to
    stop it at the border.** The paths are **proximal**, **lateral**, **distal** and **medial**,
    in that order.
 3. Place the 26 g filament (Bilaga 1 §3.6.2: 260 mN) on the path, well outside the sensitised
    area.
    **[TBC: how far out each path starts.]**
-4. Press **Start block**. The screen shows **Map path …. Step inward 5 mm on each cue and stop
+4. Press **Next step**. The screen shows **Map path …. Step inward 5 mm on each cue and stop
    when the participant signals.** A tick sounds once a second.
 5. On each tick, apply the filament 5 mm further in.
-6. When the participant says the feeling has clearly changed, press **Start block** again to stop
+6. When the participant says the feeling has clearly changed, press **Next step** again to stop
    the ticks.
 7. Mark the border on the skin with the pen.
 8. Repeat for the next path. After 40 ticks (200 mm), the path stops by itself.
@@ -470,7 +494,7 @@ whenever convenient. This never blocks the session.**
 Used in every pinprick and brush measure: pre-sensitisation, post-sensitisation, each pinprick
 block and post-intervention.
 
-1. Press **Start block** at **Ready. Press Start block when the participant is ready.**
+1. Press **Next step** at **Ready. Press Next step when the participant is ready.**
 2. For each application:
    1. The screen names the stimulus: **Apply the … g filament (… mN) at site …, … zone.** or
       **Brush the … zone at site … -- one single stroke of about 2 cm.** The zone diagram outlines
@@ -588,14 +612,14 @@ distraction in the room.
 The phase shows **Intervention**. It lasts 120 minutes: twelve blocks, pinprick and touch-rating
 alternately, with the rekindle in the middle.
 
-1. At 45 minutes: **The intervention starts now. Press Start block to start the touch.** Press
-   **Start block**.
+1. At 45 minutes: **The intervention starts now. Press Next step to start the touch.** Press
+   **Next step**.
 2. The screen shows **Touch: the garment is being started.** for a few seconds. This happens
    whenever the touch is started, at every visit. Then the session goes on.
 3. Between blocks: **Waiting for the next scheduled step. The countdown shows when it is due.**
    The countdown shows the next block, for example **Next: block 3 (touch) in 04:05**.
-4. **When a block is due** (section 13.3), the screen shows **Ready. Press Start block when the
-   participant is ready.** Press **Start block** once. That press launches the block and starts it.
+4. **When a block is due** (section 13.3), the screen shows **Ready. Press Next step when the
+   participant is ready.** Press **Next step** once. That press launches the block and starts it.
    - **A pinprick block** is the short protocol in the secondary zone with the filament the
      software chose at post-sensitisation: five applications (section 10).
    - **A touch-rating block** shows **Touch-rating block: the participant rates the touch.** The
@@ -607,7 +631,7 @@ alternately, with the rekindle in the middle.
    2. The screen shows **Rekindle now. The garment has been deactivated and will be reactivated
       afterwards.**
    3. Place the thermode and start the rekindle programme (Bilaga 1 §3.5: 45 °C for 2 min).
-      **Press Start block as the heat starts.**
+      **Press Next step as the heat starts.**
    4. The software times the rekindle window, then restarts the garment (**Touch: the garment is
       being started.**) and carries on with the next block.
 7. At 165 minutes: **The intervention has ended and the garment has been switched off.** The
@@ -619,8 +643,8 @@ alternately, with the rekindle in the middle.
    mapping (sections 9 and 10).
 2. **If mapping distances are still missing**, the screen says **Mapping distances are still
    outstanding. Enter them now, or close the session with them flagged missing.**
-   - Enter them with **Mapping distances…**, then press **Start block**.
-   - Or press **Start block** to close with the missing ones flagged.
+   - Enter them with **Mapping distances…**, then press **Next step**.
+   - Or press **Next step** to close with the missing ones flagged.
 
    You are asked only once.
 3. The participant's closing screen appears, and both windows close. The session is complete.
@@ -676,7 +700,7 @@ Resuming:
 - during the intervention, restarts the garment after the warning cue;
 - during the rekindle, never asks for the heat a second time. The screen says **The session
   resumed during the rekindle. The heat was started before the interruption and is not prompted
-  again; the rekindle is timed from then. Press Start block to confirm. If the heat was not in fact
+  again; the rekindle is timed from then. Press Next step to confirm. If the heat was not in fact
   applied, apply it now and enter a note. The garment stays off until the rekindle is over.**
 
 **Do not close the session window to restart it.** Closing the window records the session as
@@ -756,17 +780,44 @@ in config/open_items.yaml.]**
   and the table, for example `…_P07_S1_session.csv`, `…_P07_S1_log.csv` and
   `…_P07_S1_pinprick.csv`. A resumed session writes a second set, which names the first.
 - Every row is saved the moment it is collected. Nothing is ever overwritten.
-- **Do not open, rename, move or delete them** during the session or before they are transferred.
+- **Do not open, rename, move or delete them** during the session or before they are uploaded (section 14.2).
   They record which kind of touch was given.
 - The lock file in the data folder is the software's. Leave it.
 
-### 14.2 Transfer to the LiU secure server
+### 14.2 Upload to the study's network storage
 
-**[TBC: the manual transfer to the LiU secure server (LOG N4.1). The process is not defined
-yet. Needed: who does it, when, to where, how it is checked, and whether the local copy is then
-deleted.]**
+The study's data live on LiU network storage, in a *samarbetsmapp* (collaboration folder):
 
-### 14.3 What never leaves the lab PC except by that transfer
+```
+\\fillager.liu.se\coop\t\tatp
+```
+
+LiU IT's instructions for connecting to it:
+<https://liudesk.liu.se/tas/public/ssp/content/detail/knowledgeitem?unid=c857f79e-6dfb-4f93-8f81-0b31a5efa9a2>
+
+It has three folders:
+
+| Folder | What goes in it |
+|---|---|
+| `01_raw` | **The session's data files, exactly as the software wrote them.** This is where you upload. |
+| `02_anonymised` | Not yours. Leave it alone. |
+| `03_processed` | Not yours. Leave it alone. |
+
+**You upload at the end of every session**, once the software is closed.
+
+1. Copy every file of the session from the data folder into `01_raw`. That is every file whose
+   name contains `P<code>_S<session>_`, including a resumed session's second set. Copy the files;
+   do not move them.
+2. If Windows says a file already exists in `01_raw`, choose **Skip**, never **Replace**, and tell
+   S.
+3. **Check the upload.** Show both folders in the **Details** view. For this session's files,
+   `01_raw` must have the same number of files as the data folder, with the same names and the
+   same sizes. If anything differs, copy the missing or different file again, check again, and
+   tell S if it still differs.
+4. Do not rename, edit or reorganise the files, in the data folder or in `01_raw`.
+5. **Never delete the lab PC's copy.** The data folder keeps every session.
+
+### 14.3 What never leaves the lab PC except by that upload
 
 - The data files. Never by email, a USB stick, OneDrive or another cloud-synced folder, and never
   into git. The `data` folder is excluded from git on purpose.

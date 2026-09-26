@@ -216,6 +216,18 @@ def test_the_dialog_asks_for_exactly_what_spec_6_lists(app, loaded, tmp_path):
     assert args.patterns == cfg.CONFIG_DIR / "patterns" / "examples"
 
 
+def test_ticking_the_redcap_form_reaches_the_session(app, loaded, tmp_path):
+    """SPEC.md 1.2 (docs/LOG.md N7.U17): the launcher is the lab's route, so the tick must
+    reach the args `build` receives, and `run_session` writes those to the session file."""
+    fakes = Fakes()
+    dialog = _filled(LauncherWindow(loaded, fakes.preflight, fakes.build), tmp_path)
+    assert dialog.args().redcap_form_completed is False
+    dialog.redcap_form.setChecked(True)
+    assert dialog.args().redcap_form_completed is True
+    dialog.start()
+    assert fakes.built[0][1].redcap_form_completed is True
+
+
 def test_there_is_no_default_pattern_folder(app, loaded):
     """LOG N6.14: a default would quietly run the provisional example patterns."""
     dialog = LauncherWindow(loaded, Fakes().preflight, Fakes().build).session_dialog()
@@ -293,6 +305,7 @@ def test_start_builds_with_the_chosen_folder_and_the_room(app, loaded, tmp_path)
     assert config.participant_language == "en"
     assert args.room_temperature_c == 21.5
     assert args.relative_humidity_pct is None
+    assert args.redcap_form_completed is False, "unticked unless the experimenter ticks it"
     assert args.resume is None, "no unfinished session, so no question was asked"
     assert "21.5" in window.environment_line.text()
 
@@ -357,8 +370,9 @@ def test_the_preview_shows_the_tools_report(app, loaded):
     """SPEC.md 7.2: the same report as tools/preview_schedule.py, every block in it."""
     schedule = sched.generate(loaded.schedule)
     shown = launcher.preview_lines(loaded, T_ZERO)
-    assert shown == preview_schedule.render(schedule, T_ZERO, separator="\t")
-    padded = preview_schedule.render(schedule, T_ZERO)
+    text = loaded.experimenter_text
+    assert shown == preview_schedule.render(schedule, T_ZERO, text, separator="\t")
+    padded = preview_schedule.render(schedule, T_ZERO, text)
     assert len(shown) == len(padded), "the same report, only the separator differs"
     assert [line.split() for line in shown] == [line.split() for line in padded]
     for row in schedule.preview_rows(T_ZERO):

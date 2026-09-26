@@ -35,6 +35,16 @@ class Clock:
         """Seconds since the clock was created, scaled by `speed`."""
         return (time.perf_counter() - self._origin) * self.speed
 
+    def remaining_s(self, anchor_s: float, offset_s: float) -> float:
+        """How long until `offset_s` after `anchor_s`, an `elapsed_s()` reading taken earlier.
+
+        A step timed this way runs at a fixed time after the moment it follows, not after the
+        work done since -- a row appended to its file, a screen redrawn -- which timing from now
+        would add to every interval (docs/LOG.md N7.U11). Negative once that time has passed;
+        `scaled_ms` makes that zero.
+        """
+        return anchor_s + offset_s - self.elapsed_s()
+
     def real_elapsed_s(self) -> float:
         """Seconds since the clock was created, unscaled.
 

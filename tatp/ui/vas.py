@@ -50,6 +50,11 @@ STATEMENT_GAP_PX = 26
 # applied: a text block that reaches into it needs shorter wording or a smaller size, and
 # `heading_clearance` is where that is caught.
 TEXT_TO_SCALE_GAP_PX = 24
+# The proportionality training (SPEC.md 10.6) puts its sentence below the scale it is about,
+# top-aligned at this fraction, so the scale above it is drawn exactly as it is rated
+# (UI_PRINCIPLES.md 1.6). Set in the question size: it is the one thing on that screen to read.
+# `training_clearance` checks it clears the lowest anchor label and the bottom of the screen.
+TRAINING_Y_FRACTION = 0.64
 ANCHOR_POINT_SIZE = 18
 ANCHOR_GAP_PX = 18
 ANCHOR_LABEL_GAP_PX = 16  # clear space required between two anchor labels sharing a row
@@ -194,11 +199,19 @@ class VasWidget(QWidget):
 
     `confirmed` carries a VasResponse. A confirm with no marker shown emits nothing, because
     there is no response to emit -- the session logs the press from `pressed_without_marker`.
+
+    **The training screen** (SPEC.md 10.6, `show_training`) is the same scale, drawn exactly as
+    it is rated, with the proportionality sentence below it. It is not a rating: the marker
+    stays hidden and the two large buttons do nothing. The play button does nothing either
+    until the protocol makes it the answer (`accepting`, once the experimenter has explained
+    the anchors), and then emits `training_confirmed`. The emergency stop works as on every
+    screen.
     """
 
     confirmed = Signal(object)
     emergency_stop = Signal()
     pressed_without_marker = Signal()
+    training_confirmed = Signal()
 
     def __init__(
         self,
@@ -221,6 +234,10 @@ class VasWidget(QWidget):
         self.question = ""
         self.statement = ""
         self.anchors: list[dict] = []
+        # The training sentence while the training screen is up; empty on a rating.
+        self.training = ""
+        # Whether ▶ dismisses the training screen yet.
+        self.training_accepting = False
 
         self._repeat_delay_ms = int(round(float(vas_config["hold_repeat_delay_s"]) * MS_PER_S))
         self._repeat_interval_ms = int(
@@ -236,12 +253,31 @@ class VasWidget(QWidget):
 
     def show_scale(self, scale: str, text: dict) -> None:
         """Present one scale. `text` is the `vas.<scale>` block of the participant text file."""
+        self._set_scale(scale, text, "")
+        self.state.cue()
+        self.update()
+
+    def show_training(self, scale: str, text: dict, training: str, accepting: bool) -> None:
+        """The scale as `show_scale` draws it, uncued, with `training` below it (SPEC.md 10.6).
+
+        Uncued, so no reaction time runs and no press can reveal the marker. ▶ dismisses it
+        only when `accepting`; before that the screen asks for nothing at all.
+        """
+        self._set_scale(scale, text, training)
+        self.training_accepting = accepting
+        self._held = None
+        self._repeat.stop()
+        self.state.reset()
+        self.update()
+
+    def _set_scale(self, scale: str, text: dict, training: str) -> None:
+        """One place that says what a scale is drawn from, so the training draws it as rated."""
         self.scale = scale
         self.question = text["question"]
         self.statement = text.get("statement", "")
         self.anchors = list(text["anchors"])
-        self.state.cue()
-        self.update()
+        self.training = training
+        self.training_accepting = False
 
     # -- input -------------------------------------------------------------------------
 
@@ -258,6 +294,11 @@ class VasWidget(QWidget):
         action = self.responder.action_for(name)
         if action is Action.EMERGENCY_STOP:
             self.emergency_stop.emit()
+        elif self.training:
+            # Nothing but the play button means anything here, and only once the screen is
+            # accepting it; the marker stays hidden.
+            if action is Action.CONFIRM and self.training_accepting:
+                self.training_confirmed.emit()
         elif action is Action.CONFIRM:
             self._confirm()
         elif action in (Action.DECREASE, Action.INCREASE):
@@ -429,6 +470,38 @@ class VasWidget(QWidget):
                 tops.append(baseline - metrics.ascent())
         return min(tops) - self._draw_heading(None, line_y)
 
+    def _draw_training(self, painter: QPainter | None) -> QRect:
+        """Lay the training sentence out below the scale, and draw it if a painter is given.
+
+        Returns the rectangle it occupies. Measuring and drawing are one code path, as for
+        `_draw_heading`.
+        """
+        margin = int(self.width() * SIDE_MARGIN_FRACTION)
+        top = int(self.height() * TRAINING_Y_FRACTION)
+        box = QRect(margin, top, self.width() - 2 * margin, self.height() - top)
+        flags = Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap
+        font = QFont(self.font())
+        font.setPointSize(QUESTION_POINT_SIZE)
+        if painter is not None:
+            painter.setFont(font)
+            painter.setPen(FOREGROUND)
+            painter.drawText(box, flags, self.training)
+        return QFontMetrics(font).boundingRect(box, flags, self.training)
+
+    def training_clearance(self) -> tuple[float, float]:
+        """Pixels from the lowest anchor label to the training text, and from its end to the
+        bottom of the screen. `tests/test_vas.py` holds both for every trained scale in both
+        languages at the lab window size, for the reason `heading_clearance` gives."""
+        line_y = self.height() * LINE_Y_FRACTION
+        metrics = QFontMetrics(self._anchor_font())
+        bottoms = [line_y]
+        for _, _, row, _ in self._anchor_layout(metrics):
+            if row >= 0:
+                baseline, _ = self._label_geometry(row, metrics, line_y)
+                bottoms.append(baseline + metrics.descent())
+        drawn = self._draw_training(None)
+        return drawn.top() - max(bottoms), self.height() - drawn.bottom()
+
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -455,6 +528,9 @@ class VasWidget(QWidget):
             tick_start = line_y + TICK_DROP_PX if row < 0 else line_y - TICK_RISE_PX
             painter.drawLine(int(tick_x), int(tick_start), int(tick_x), int(tick_end))
             painter.drawText(int(left), int(baseline), label)
+
+        if self.training:
+            self._draw_training(painter)
 
         if self.state.visible:
             x = self._x_for(self.state.percent)

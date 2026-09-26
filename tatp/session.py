@@ -26,7 +26,7 @@ from tatp.clock import ISO_FORMAT, Clock
 from tatp.config import REPO_ROOT, Config, hash_files
 from tatp.datafiles import DataFileCollection
 from tatp.garment.arduino_mosfet import ArduinoMosfetGarment
-from tatp.garment.base import GarmentController, Limits
+from tatp.garment.base import LINK_LOST, GarmentController, Limits
 from tatp.garment.mock import MockGarment
 from tatp.garment.patterns import load_folder
 from tatp.units import S_PER_MIN
@@ -193,6 +193,25 @@ class Session:
         self.stop_rehearsal_ran: bool | None = None
         self.stop_rehearsal_press_detected: bool | None = None
 
+        # SPEC.md 10.6: the scales whose proportionality training has been given this session.
+        # Filled by `VasTraining` as each is confirmed, and by a resume from the crashed
+        # session's log, so a resumed session does not give it twice.
+        self.vas_trained: set[str] = set()
+        training_sessions = config.study1["training"]["vas_proportionality_sessions"]
+        # Stage boundary (CLAUDE.md): a session number no session has would never train.
+        n_sessions = int(config.study1["design"]["n_sessions"])
+        # An empty list is valid: no training in any session.
+        assert all(
+            isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= n_sessions
+            for n in training_sessions
+        ), (
+            f"study1.yaml: training.vas_proportionality_sessions {training_sessions} names "
+            f"something that is not a session 1..{n_sessions}"
+        )
+        self.vas_training_this_session = session_number in training_sessions
+        # Every key is a scale: `config.load` refuses one that is not.
+        self.trained_scales = frozenset(config.participant_text["training"])
+
         self.data_folder = Path(config.hardware["data"]["folder"])
         if not self.data_folder.is_absolute():
             self.data_folder = REPO_ROOT / self.data_folder
@@ -271,6 +290,7 @@ class Session:
             "interruption": self._read_interruption(),
             "hardware": {
                 "connected": self.garment.connected,
+                "link_lost": self.garment.link_lost,
                 "faults": list(self.garment.faults),
                 # Hidden while the condition's touch is being delivered (docs/LOG.md N7.D1):
                 # the sham is static at a lower pressure, so per-channel pressure and activity
@@ -346,6 +366,14 @@ class Session:
             origin=origin,
             severity=severity,
             detail=detail,
+        )
+
+    def vas_training_due(self, scale: str) -> bool:
+        """Whether `scale`'s proportionality training is still to be given (SPEC.md 10.6)."""
+        return (
+            self.vas_training_this_session
+            and scale in self.trained_scales
+            and scale not in self.vas_trained
         )
 
     def set_phase(self, phase: str) -> None:
@@ -456,14 +484,24 @@ class Session:
             clamped=bool(command.pop("clamped", False)),
             **command,
         )
+        # A fault and a lost link are the device's, not a command, so no one else logs them.
+        # The log table carries them too (SPEC.md 14.2), so a later `garment_connected` there
+        # always has the disconnect before it (docs/LOG.md N7.U16).
+        if command["event"] == "fault":
+            self.log("garment_fault", severity="error", detail=command["detail"])
+        elif command["event"] == "disconnect" and command.get("detail") == LINK_LOST:
+            self.log("garment_disconnected", severity="error", detail=LINK_LOST)
 
     # -- lifecycle ---------------------------------------------------------------------
 
     def start(self, room_temperature_c: float | None = None,
-              relative_humidity_pct: float | None = None) -> None:
+              relative_humidity_pct: float | None = None,
+              redcap_session_form_completed: bool = False) -> None:
         """Write the session provenance and connect the garment."""
         self.garment.connect()
-        self.files.write_session(self._provenance(room_temperature_c, relative_humidity_pct))
+        self.files.write_session(self._provenance(
+            room_temperature_c, relative_humidity_pct, redcap_session_form_completed
+        ))
         self.log("session_started", detail=f"software {provenance.base()['software_version']}")
         if self.cloud_sync_warning:
             self.log("cloud_sync_folder", severity="warning", detail=self.cloud_sync_warning)
@@ -472,7 +510,7 @@ class Session:
         # SPEC.md 7.3: the schedule warns and never blocks, so the warnings have to be somewhere
         # a session can be audited from afterwards rather than only in the preview.
         for warning in self.schedule.warnings():
-            self.log("schedule_warning", severity="warning", detail=warning)
+            self.log("schedule_warning", severity="warning", detail=str(warning))
         if self.config.has_placeholder_text():
             self.log(
                 "placeholder_participant_text",
@@ -573,7 +611,10 @@ class Session:
         )
 
     def _provenance(
-        self, room_temperature_c: float | None, relative_humidity_pct: float | None
+        self,
+        room_temperature_c: float | None,
+        relative_humidity_pct: float | None,
+        redcap_session_form_completed: bool,
     ) -> dict:
         base = provenance.base()
         filaments = self.config.filaments["filaments"]
@@ -615,6 +656,9 @@ class Session:
             ],
             "room_temperature_c": room_temperature_c,
             "relative_humidity_pct": relative_humidity_pct,
+            # SPEC.md 1.2: the questionnaires are in REDCap, and the software records only
+            # that the per-visit session form was completed, as the experimenter says it was.
+            "redcap_session_form_completed": redcap_session_form_completed,
             # The masking and stop-rehearsal keys are not here: they are measured in setup and
             # written when each procedure ends (`record_masking`, `record_stop_rehearsal`). A
             # session closed before then gets them empty from `DataFileCollection.close`.

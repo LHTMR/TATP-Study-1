@@ -248,7 +248,8 @@ def test_a_stop_that_finds_the_link_lost_still_completes_and_the_session_closes(
     ports[0].fail_writes = True
     session.garment.stop()  # the emergency stop's own write finds the loss, and completes
     assert not session.garment.connected
-    assert session.garment.faults[-1].startswith("Link lost, outputs unknown")
+    assert session.garment.link_lost, "the screen warns the outputs may still be on"
+    assert session.garment.faults[-1].startswith("serial write failed")
     session.close()
     assert session.closed
     with session.files.path("garment").open(encoding="utf-8", newline="") as table:
@@ -257,6 +258,14 @@ def test_a_stop_that_finds_the_link_lost_still_completes_and_the_session_closes(
     # Only what happened: the fault and one disconnect, nothing claimed as sent after it.
     assert after_start[-2:] == ["fault", "disconnect"], after_start
     assert "pattern_stop" not in after_start and "stop" not in after_start
+    # The session's log has them too, once each (docs/LOG.md N7.U16), so a later reconnect
+    # there follows its disconnect.
+    with session.files.path("log").open(encoding="utf-8", newline="") as table:
+        logged = [row for row in csv.DictReader(table)
+                  if row["event"] in ("garment_fault", "garment_disconnected")]
+    assert [(row["event"], row["severity"]) for row in logged] == [
+        ("garment_fault", "error"), ("garment_disconnected", "error")]
+    assert logged[1]["detail"] == "link lost"
 
 
 def test_a_connection_lost_mid_pattern_ends_the_pattern_quietly(made, loaded):

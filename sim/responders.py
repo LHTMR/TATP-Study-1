@@ -23,9 +23,10 @@ touch's pleasantness, relaxation and alertness -- are a fixed level plus the sam
 
 **The whole session** (SPEC.md 2). Every screen a session shows is answered: the welcome and
 the other "press ▶" screens, the noise level, the stop rehearsal, the adjustments, the choices,
-the preference selection, the self-start and every VAS. An adjustment is made **by taps**, one
-step each, not by holding: the validator runs at a speed where a hold, which moves on real
-seconds, would take longer than the session's scaled time-out (`tatp/touchcal.py`).
+the preference selection, the self-start, the VAS training and every VAS. An adjustment is
+made **by taps**, one step each, not by holding: the validator runs at a speed where a hold,
+which moves on real seconds, would take longer than the session's scaled time-out
+(`tatp/touchcal.py`).
 
 **Adversarial participants** are subclasses, one per error path that exists to fire (SPEC.md
 17.3). Each overrides one hook and counts what it did, so the validator can check the software's
@@ -84,6 +85,9 @@ NOISE_TAPS = {"find_level": 15, "mask_level": 15}
 # How often the participant looks at the screen, in real seconds. Short, because at the
 # validator's speed a person's reaction time is a large part of the session.
 TICK_S = 0.002
+# How long after the carried-over lockout ends a deferred ▶ is sent, in real milliseconds:
+# a timer can fire a hair early, and a press still inside the lockout would be deferred again.
+LOCKOUT_MARGIN_MS = 1
 # Taps in one look at the screen before looking again; the garment follows a tap at once.
 TAPS_PER_TICK = 60
 # Taps in a row that changed nothing: the end of the adjustable range has been reached.
@@ -342,7 +346,8 @@ class VirtualParticipant(QObject):
     def _token_for(self, screen: QWidget) -> tuple:
         window = self.window
         if screen is window.vas:
-            return (screen, window.vas.scale, window.vas.state.cue_iso)
+            vas = window.vas
+            return (screen, vas.scale, vas.training, vas.training_accepting, vas.state.cue_iso)
         if screen is window.control:
             return (screen, window.control.target, id(window.control))
         if screen is window.choice:
@@ -365,7 +370,9 @@ class VirtualParticipant(QObject):
         self.on_new_screen()
         if screen is window.vas:
             vas = window.vas
-            self._see(vas.question, vas.statement, *(a["label"] for a in vas.anchors))
+            self._see(
+                vas.question, vas.statement, vas.training, *(a["label"] for a in vas.anchors)
+            )
         elif screen is window.control:
             control = window.control
             self.adjustments_seen += 1
@@ -409,6 +416,14 @@ class VirtualParticipant(QObject):
 
     def on_vas(self) -> None:
         if self._handled:
+            return
+        vas = self.window.vas
+        if vas.training:
+            # The proportionality training (SPEC.md 10.6): listen to the experimenter, and
+            # press ▶ once the continue line shows. Nothing is rated.
+            if vas.training_accepting:
+                self._handled = True
+                self.tap(Action.CONFIRM)
             return
         self._handled = True
         scale = self.window.vas.scale
@@ -544,6 +559,15 @@ class VirtualParticipant(QObject):
     # -- the remote --------------------------------------------------------------------
 
     def tap(self, action: Action) -> None:
+        # A person reads the screen before pressing ▶ on it, so a press never lands inside the
+        # window's carried-over lockout (docs/LOG.md N7.U15). One that would is sent when the
+        # lockout ends instead, on a timer, so the event loop -- and the garment's pattern
+        # ticks -- run on meanwhile. Sent inside it, the press would be dropped, and the
+        # session would wait for a second press that a person gives and this never would.
+        if action is Action.CONFIRM and self.window.confirm_would_carry_over():
+            wait_ms = self.window.clock.scaled_ms(self.window.confirm_lockout_remaining_s())
+            QTimer.singleShot(wait_ms + LOCKOUT_MARGIN_MS, self, lambda: self.tap(action))
+            return
         self._send(action, QEvent.KeyPress)
         self._send(action, QEvent.KeyRelease)
 
@@ -585,7 +609,8 @@ class ConfirmsWithoutMarker(VirtualParticipant):
         self.empty_confirms = 0
 
     def on_vas(self) -> None:
-        if not self._handled:
+        # Not on the training screen, where a confirm is the answer rather than a mistake.
+        if not self._handled and not self.window.vas.training:
             for _ in range(self.EMPTY_CONFIRMS):
                 self.tap(Action.CONFIRM)
                 self.empty_confirms += 1

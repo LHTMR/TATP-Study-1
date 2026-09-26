@@ -93,6 +93,8 @@ from tatp.clock import ISO_FORMAT  # noqa: E402
 from tatp.config import CONFIG_DIR, REPO_ROOT, hash_files  # noqa: E402
 from tatp.datafiles import parse_schema  # noqa: E402
 from tatp.pinprick import PAIN_SCALE, prior_for  # noqa: E402
+from tatp.procedure import VAS_TRAINING_EXPLAINED  # noqa: E402
+from tatp.resume import VAS_TRAINING_CONFIRMED  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
 from tatp.units import MS_PER_S, S_PER_MIN  # noqa: E402
 
@@ -1607,6 +1609,50 @@ def check_session_two_starts_from_session_ones_estimate(runs):
     return failures
 
 
+def check_vas_training_once_before_first_rating(runs):
+    """SPEC.md 10.6: each trained scale's training is given once per session in which it is
+    given, before that scale's first rating, confirmed only after the experimenter's go that
+    the anchors were explained, never inside the intervention, and never in a
+    session it is not configured for. A resumed session is read together with the crashed one
+    it continues, since the training is not repeated."""
+    failures = []
+    for run in runs.values():
+        if run.name == CRASHED and RESUMED in runs:
+            continue  # read with its resumption
+        events = run.events()
+        if run.name == RESUMED and CRASHED in runs:
+            events = runs[CRASHED].events() + events
+        if "session_number" not in run.session:
+            continue  # a run that never wrote its session file; runs_completed reports it
+        trained = set(run.config.participant_text["training"])
+        sessions = run.config.study1["training"]["vas_proportionality_sessions"]
+        due = int(run.session["session_number"]) in sessions
+        given: list[str] = []
+        explained: set[str] = set()
+        rated_untrained: set[str] = set()
+        for row in events:
+            scale = row["detail"]
+            if row["event"] == VAS_TRAINING_EXPLAINED:
+                explained.add(scale)
+            elif row["event"] == VAS_TRAINING_CONFIRMED:
+                given.append(scale)
+                if scale not in explained:
+                    failures.append(f"{run.name}: {scale} confirmed before the anchors were "
+                                    f"explained")
+                if row["phase"] == "intervention":
+                    failures.append(f"{run.name}: {scale} trained inside the intervention")
+            elif (row["event"] == "rating_cued" and scale in trained and due
+                  and scale not in given and scale not in rated_untrained):
+                failures.append(f"{run.name}: {scale} was rated before its training")
+                rated_untrained.add(scale)  # one failure per scale is enough
+        for scale in sorted(set(given)):
+            if given.count(scale) > 1:
+                failures.append(f"{run.name}: {scale} trained {given.count(scale)} times")
+        if not due and given:
+            failures.append(f"{run.name}: trained in a session not configured for it")
+    return failures
+
+
 def _session_path(run: Run) -> Path:
     """The run's own session file: the one holding its seed and start time."""
     for path in sorted(run.folder.glob(f"TATP1_*_P{PARTICIPANT}_S*_session.csv")):
@@ -1689,6 +1735,8 @@ CHECKS: list[Check] = [
           check_a_garment_disconnected_mid_block_loses_nothing),
     Check("session_two_starts_from_session_ones_estimate", _needs(SESSION_TWO),
           check_session_two_starts_from_session_ones_estimate),
+    Check("vas_training_once_before_first_rating", _always,
+          check_vas_training_once_before_first_rating),
 ]
 
 

@@ -204,6 +204,16 @@ def test_temperature_and_humidity_are_recorded_when_given(app, config):
     assert values["relative_humidity_pct"] == "28.0"
 
 
+@pytest.mark.parametrize("given", (True, False))
+def test_whether_the_redcap_form_was_completed_is_recorded(app, config, given):
+    """SPEC.md 1.2: the one thing the software records about the questionnaires."""
+    argv = [*ARGV, "--redcap-form-completed"] if given else ARGV
+    runner = run_session.build(config, run_session.parse_args(argv))
+    run_session.shut_down(runner)
+    values = {r["key"]: r["value"] for r in _rows(runner.session, "session")}
+    assert values["redcap_session_form_completed"] == str(given).lower()
+
+
 def test_unresolved_open_items_are_printed_before_the_windows_open(loaded):
     """SPEC.md 20: warn, never block. The banner is not visible until a window exists."""
     lines = run_session.warnings_for(loaded)
