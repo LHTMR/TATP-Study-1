@@ -361,6 +361,10 @@ launcher:
   design_pattern_detail: Skapa mönster för plagget, förhandsgranska dem och spara dem i en mönstermapp. Endast för S. Verktyget visar mönstrens namn och form, så en försöksledare som kör sessioner öppnar det aldrig.
   preview_schedule: Förhandsgranska schemat
   preview_schedule_detail: Sessionens tidslinje och dess varningar. Ingenting startas.
+  # DRAFT (LOG N7.B4): written by the build, not ethics-sourced
+  hardware_check: Kontrollera utrustningen
+  # DRAFT (LOG N7.B4): written by the build, not ethics-sourced
+  hardware_check_detail: Innan deltagaren kommer. Fjärrkontrollen, skärmarna, ljudet och plagget, en i taget. Ingenting registreras.
   environment_entered: 'Rummet {temperature} °C, {humidity} % RF, lämnas till nästa session.'
   # Sessionsdialogen. Den frågar bara efter det SPEC.md 6 räknar upp; allt annat är konfiguration.
   session_title: Kör en session
@@ -580,3 +584,45 @@ schedule_warnings:
   uneven_spacing: 'Block {block} ({type}) kommer {gap} min efter det förra av samma typ, medan de andra ligger {spacing} min isär.'
   # DRAFT (LOG N7.U10): written by the build, not ethics-sourced
   too_long: 'Schemat sträcker sig till {total} min från t=0, över det inställda maxvärdet {maximum} min.'
+
+# The hardware check, launcher entry 5 (tatp/hardware_check.py). Before the participant
+# arrives, so nothing here is seen by a participant except `label_text`, on an empty screen.
+# DRAFT (LOG N7.B4): every key in this block is written by the build, not ethics-sourced.
+hardware_check:
+  title: Kontrollera utrustningen
+  remote: Fjärrkontroll
+  remote_hint: Tryck på varje knapp; just dess räknare ska öka. ▶ skickar två tangenter i tur och ordning, och båda räknas.
+  remote_none: Inget tryck än.
+  remote_last: 'Senaste tryck: {symbol} ({value})'
+  screens: Skärmar
+  role_participant: Deltagarens skärm
+  role_experimenter: Försöksledarens skärm
+  screen_found: '{role}: skärm {index}, {width} × {height}'
+  screen_missing: '{role}: skärm {index} är inte ansluten ({count} hittade). Kontrollera kabeln och sedan hardware.yaml.'
+  screen_unset: '{role}: inte inställd, så huvudskärmen används.'
+  show_label: Visa en etikett på deltagarens skärm
+  hide_label: Ta bort etiketten
+  label_text: Deltagarens skärm
+  sound: Ljud
+  sound_hint: Starta bruset och höj det tills du hör det i deltagarens hörlurar, och spela sedan signalen över det. Spela larmet och kontrollera att det bara hörs från högtalarna på försöksledarens sida.
+  role_participant_audio: Deltagarens hörlurar
+  role_experimenter_audio: Försöksledarens högtalare
+  device_found: '{role}: {value}'
+  device_missing: '{role}: hittades inte. {value}'
+  devices_available: 'Ljudutgångar på datorn:{value}'
+  backend_recording: Ljudet går till testattrappen, som inte spelar något.
+  start_noise: Starta bruset
+  stop_noise: Stoppa bruset
+  noise_level: '{value} dBFS'
+  play_cue: Spela signalen
+  play_alert: Spela larmet
+  audio_failed: 'Ljudet misslyckades: {value}'
+  garment: Plagg
+  garment_hint: Anslut, slå sedan på och av varje kanal och se på ärmen.
+  connect: Anslut
+  disconnect: Koppla från
+  connecting: 'Ansluter till {garment}…'
+  channel: 'Kanal {value}'
+  garment_connected: '{garment}: ansluten.'
+  garment_disconnected: '{garment}: inte ansluten.'
+  garment_failed: 'Plagget misslyckades: {value}'

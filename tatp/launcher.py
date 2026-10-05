@@ -1,6 +1,6 @@
 """The launcher. SPEC.md 4.1, 6, 8.1, 15.
 
-Four entries, so the auxiliary tools are reachable without the command line:
+Five entries, so the auxiliary tools are reachable without the command line:
 
 1. **Run a session.** A dialog collecting exactly what SPEC.md 6 lists -- participant code,
    session number, experimenter initials, both languages, the data folder and the pattern
@@ -13,6 +13,7 @@ Four entries, so the auxiliary tools are reachable without the command line:
    pattern names and shapes, which a blinded experimenter must not see (SPEC.md 16), and its
    entry says so.
 4. **Preview schedule.** `tools/preview_schedule.py`'s report, in a window.
+5. **Check the hardware** (`tatp/hardware_check.py`), before the participant arrives.
 
 **The session is started by `run_session`'s `preflight` and `build`, not here.** Both are
 reached through `preflight()` and `build()` below, imported when called: `run_session.py`
@@ -56,6 +57,7 @@ from PySide6.QtWidgets import (
 
 from tatp import config as cfg
 from tatp import schedule as sched
+from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
 from tatp.session import DRIVERS, with_session_choices
 from tatp.ui.application import application, scale_screens
@@ -457,7 +459,7 @@ class PreviewDialog(QDialog):
 
 
 class LauncherWindow(QWidget):
-    """The four entries. `runner` is the started session, once there is one."""
+    """The five entries. `runner` is the started session, once there is one."""
 
     def __init__(
         self,
@@ -494,6 +496,7 @@ class LauncherWindow(QWidget):
             ("instruments", self.open_instruments),
             ("design_pattern", self.open_designer),
             ("preview_schedule", self.open_preview),
+            ("hardware_check", self.open_hardware_check),
         ):
             entry = button(words[key], SIZE_LARGE)
             detail = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
@@ -565,6 +568,16 @@ class LauncherWindow(QWidget):
 
     def open_preview(self) -> PreviewDialog:
         dialog = self.preview_dialog()
+        dialog.open()
+        return dialog
+
+    def hardware_check_dialog(self) -> HardwareCheckDialog:
+        return HardwareCheckDialog(self.text, self.config.hardware, parent=self)
+
+    def open_hardware_check(self) -> HardwareCheckDialog:
+        # Modal to the launcher, so no session can start while the check holds the garment's
+        # port or the headphones; closing it lets both go.
+        dialog = self.hardware_check_dialog()
         dialog.open()
         return dialog
 

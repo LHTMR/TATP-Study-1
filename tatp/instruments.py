@@ -319,6 +319,12 @@ class InstrumentsDialog(QDialog):
             _caption(words["relative_humidity"]), self.humidity, self.environment_button,
             self.environment_status,
         )
+        # The way out without the window's own X (S, 30 Sep 2026). On the last line rather
+        # than a line of its own, which would scroll the ladder at the laptop's size. Nothing
+        # unsaved is kept: each section is written only by its own button.
+        self.close_button = button(text["launcher"]["close"], SIZE_BODY)
+        self.close_button.clicked.connect(self.reject)
+        room.addWidget(self.close_button)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(MARGIN_PX, MARGIN_PX, MARGIN_PX, MARGIN_PX)

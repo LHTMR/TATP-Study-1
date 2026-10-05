@@ -11,7 +11,7 @@ import shutil
 import pytest
 import yaml
 from PySide6.QtCore import QEvent
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog
 
 from tatp import config as cfg
 from tatp import instruments
@@ -194,6 +194,19 @@ def test_reopening_and_saving_again_redates_nothing(app, filaments):
     assert rows["60"]["weighed_date"] == DATE
     before = filaments.read_bytes()
     assert not made.save(), "saving again with nothing changed writes nothing"
+    assert filaments.read_bytes() == before
+
+
+def test_close_leaves_without_saving(app, filaments):
+    """S, 30 Sep 2026: there was no way out but the window's own X."""
+    before = filaments.read_bytes()
+    made = InstrumentsDialog(cfg.load("sv", "en").experimenter_text, _load(filaments),
+                             lambda *_: None, path=filaments)
+    made.show()
+    made.weighing_date.setText("2026-09-30")
+    made.close_button.click()
+    assert not made.isVisible()
+    assert made.result() == QDialog.Rejected
     assert filaments.read_bytes() == before
 
 

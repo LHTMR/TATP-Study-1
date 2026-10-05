@@ -393,6 +393,17 @@ def test_the_session_file_is_complete(finished):
     assert values["abort_reason"] == ""
 
 
+def test_the_first_participant_screen_says_the_session_will_start(app, loaded, tmp_path):
+    """S, 30 Sep 2026: not 'Rest for a moment' to someone who has only just sat down."""
+    runner = make_runner(loaded, tmp_path)
+    try:
+        runner.start()
+        participant = runner.rig.participant
+        assert participant.message.text == participant.text["screens"]["session_starting"]
+    finally:
+        runner.session.close()
+
+
 # -- the experimenter view (the contract with Stream E) ----------------------------------------
 
 

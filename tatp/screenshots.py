@@ -48,6 +48,7 @@ from tatp import config as cfg
 from tatp import pattern_design as pd
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
+from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import InstrumentsDialog
 from tatp.launcher import WARN, LauncherWindow
 from tatp.pinprick import F40Fit, LongResult
@@ -679,6 +680,32 @@ def _grab_dialog(dialog: QWidget) -> QPixmap:
     return dialog.grab()
 
 
+class _SampleSounddevice:
+    """The hardware check's device list, fixed for the picture: the lab laptop's outputs on
+    30 Sep 2026 as far as the screenshot needs them."""
+
+    devices = (
+        {"name": "Speakers (Realtek(R) Audio)", "hostapi": 0, "max_output_channels": 2},
+        {"name": "Headphones (Realtek(R) Audio)", "hostapi": 0, "max_output_channels": 2},
+        {"name": "Headphones (Bose QC Headphones)", "hostapi": 0, "max_output_channels": 2},
+    )
+
+    class PortAudioError(Exception):
+        pass
+
+    def query_hostapis(self):
+        return [{"name": "Windows WASAPI"}]
+
+    def query_devices(self, device=None, kind=None):  # noqa: ARG002 -- sounddevice's signature
+        if device is None:
+            return list(self.devices)
+        matching = [d for d in self.devices
+                    if all(word in f"{d['name']}, Windows WASAPI" for word in device.split())]
+        if len(matching) != 1:
+            raise ValueError(f"No output device matching {device!r}")
+        return matching[0]
+
+
 def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     """The launcher and its dialogs (SPEC.md 4.1). Nothing is started and nothing is written."""
     def no_session(config, args):
@@ -759,6 +786,27 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"({language}).",
         preview.grab(),
     )
+    # A sample device list and the mock: the real devices and the screens attached differ
+    # between machines, and the picture is of the dialog, not of this one's hardware. Nothing
+    # is played, because the output is built only when a sound is asked for.
+    hardware = {
+        **config.hardware,
+        "garment": {**config.hardware["garment"], "driver": "mock"},
+        "screens": {**config.hardware["screens"], "participant_screen_index": None,
+                    "experimenter_screen_index": None},
+    }
+    check = HardwareCheckDialog(config.experimenter_text, hardware,
+                                sound=lambda: _SampleSounddevice())
+    check.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+    yield Shot(
+        f"experimenter_{language}_launcher_hardware_check",
+        f"The hardware check (LOG N7.B4), at the lab laptop's size, as it opens: a count for "
+        f"each remote button, where each screen lands, the sound devices, the noise within the "
+        f"participant's own range with the cue and the alert, and each garment channel on and "
+        f"off. Drawn with a sample device list and the mock garment ({language}).",
+        check.grab(),
+    )
+    check.release()
     yield from _designer_shots(config, language)
 
 

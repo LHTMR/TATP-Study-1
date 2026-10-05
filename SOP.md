@@ -115,9 +115,31 @@ Saving changes `config/filaments.yaml` on the lab PC.
 1. Open PowerShell in the repository folder and activate the study environment, as in
    `docs/SETUP.md` step 8.
 2. Run `python run_session.py`.
-3. The launcher opens with four entries: **Run a session**, **Instruments and environment**,
-   **Design a pattern** and **Preview schedule**. **Design a pattern** is for S only: do not
-   open it (see "To keep the blind" above). Starting a session closes it if it was left open.
+3. The launcher opens with five entries: **Run a session**, **Instruments and environment**,
+   **Design a pattern**, **Preview schedule** and **Check the hardware**. **Design a pattern**
+   is for S only: do not open it (see "To keep the blind" above). Starting a session closes it
+   if it was left open.
+
+### 2.1a Check the hardware, before the participant arrives
+
+Choose **Check the hardware**. Nothing is recorded. Do each part:
+
+1. **Remote.** Press each of the four buttons a few times. Each press should raise the count
+   under that button's own symbol, and nothing else. ▶ sends two keys in turn, and both count
+   on ▶. If a press counts under the wrong symbol, stop and tell S.
+2. **Screens.** Press **Show a label on the participant screen**. The words **Participant
+   screen** should fill the display behind the curtain. If they appear on your screen instead,
+   click them away and tell S.
+3. **Sound.** Both devices should say what they found. A **not found** means the headphones or
+   speakers are not the ones the study is set up for: check the cable or the Bluetooth
+   connection, and tell S. Put the headphones on yourself, press **Start the noise**, and raise
+   the level until you hear it. Press **Play the cue**: you should hear a beep over the noise.
+   Press **Play the alert**: it should come from the laptop speakers, not the headphones.
+4. **Garment.** Choose the garment for today, press **Connect**, then turn each channel on and
+   off and watch the sleeve. Press **Disconnect**.
+5. Press **Close**. It turns everything off and lets the garment and the headphones go.
+
+For a pilot or a test, use participant codes **901** to **910**, never a real participant's code.
 
 ### 2.2 Before you open the session dialog
 
@@ -244,10 +266,11 @@ The phase shows **Setup**. Nothing is being measured yet.
 
 1. Seat the participant with the target arm (**Target limb: …**) on the armrest, behind the
    curtain.
-2. The screen shows **Fit the garment and confirm all five channels are seated.**
+2. The screen shows **Fit the garment and confirm all five channels are seated.** The
+   participant's screen shows **The session will start shortly.**
 3. Fit the garment. Check that all five channels are seated.
 4. Give the participant the remote and show them the buttons: the two large buttons move the
-   marker left and right, and the play button confirms.
+   marker left and right, the blue play button (▶) confirms, and the yellow "!" is the stop.
 5. Put the headphones on the participant.
 6. Press **Next step**.
 

@@ -195,13 +195,16 @@ TATP-Study-1/
 
 ### 4.1 Launcher
 
-`run_session.py` opens a launcher offering four entries, so the auxiliary tools are reachable
+`run_session.py` opens a launcher offering five entries, so the auxiliary tools are reachable
 without the command line:
 
 1. **Run a session** — the experiment.
 2. **Instruments and environment** — filament weighing, temperature, humidity (§8.1).
 3. **Design a pattern** — the garment pattern designer (§12.2).
 4. **Preview schedule** — the timeline and its warnings (§7.2).
+5. **Check the hardware** — before the participant arrives: each remote button, where each
+   screen lands, the sound devices, and each garment channel, through the session's own code.
+   Nothing is recorded, and it adds no sound level or pressure (docs/LOG.md N7.B4).
 
 ### 4.2 The rule about literals
 

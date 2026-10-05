@@ -76,6 +76,7 @@ from tatp.units import S_PER_MIN
 # Keys in config/text/participant_*.yaml, not wording.
 WELCOME_SCREEN = "welcome"
 STANDBY_SCREEN = "standby"
+SESSION_STARTING_SCREEN = "session_starting"
 END_SCREEN = "session_end"
 # Controlled vocabularies (docs/DATA_SCHEMA.md), not wording.
 PRIMARY, SECONDARY = pinprick.REGIONS
@@ -436,7 +437,14 @@ class SessionRunner(Procedure):
     # == setup and touch calibration ===========================================================
 
     def _fit_garment(self) -> None:
-        self.await_proceed(self._stage_done, self._standby("fit_garment"))
+        standby = self._standby("fit_garment")
+
+        def prepare() -> None:
+            standby()
+            # The participant has only just sat down: nothing has happened yet to rest from.
+            self.participant.show_message(SESSION_STARTING_SCREEN)
+
+        self.await_proceed(self._stage_done, prepare)
 
     def _welcome(self) -> None:
         self.experimenter.set_instruction(

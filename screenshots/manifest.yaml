@@ -82,6 +82,11 @@ screens:
   experimenter_en_launcher: The launcher's four entries (SPEC.md 4.1), all enabled.
     Design a pattern says it is for S only, because it shows pattern names and shapes
     (en).
+  experimenter_en_launcher_hardware_check: 'The hardware check (LOG N7.B4), at the
+    lab laptop''s size, as it opens: a count for each remote button, where each screen
+    lands, the sound devices, the noise within the participant''s own range with the
+    cue and the alert, and each garment channel on and off. Drawn with a sample device
+    list and the mock garment (en).'
   experimenter_en_launcher_instruments: 'Instruments and environment (SPEC.md 8.1),
     at the lab laptop''s size: all twenty filaments in view at once, in two halves,
     each with its label, size and nominal force, a field for the weighing in grams
@@ -200,6 +205,11 @@ screens:
   experimenter_sv_launcher: The launcher's four entries (SPEC.md 4.1), all enabled.
     Design a pattern says it is for S only, because it shows pattern names and shapes
     (sv).
+  experimenter_sv_launcher_hardware_check: 'The hardware check (LOG N7.B4), at the
+    lab laptop''s size, as it opens: a count for each remote button, where each screen
+    lands, the sound devices, the noise within the participant''s own range with the
+    cue and the alert, and each garment channel on and off. Drawn with a sample device
+    list and the mock garment (sv).'
   experimenter_sv_launcher_instruments: 'Instruments and environment (SPEC.md 8.1),
     at the lab laptop''s size: all twenty filaments in view at once, in two halves,
     each with its label, size and nominal force, a field for the weighing in grams
@@ -301,6 +311,8 @@ screens:
     en.
   participant_en_screen_session_end: The participant text `screens.session_end`, centred,
     en.
+  participant_en_screen_session_starting: The participant text `screens.session_starting`,
+    centred, en.
   participant_en_screen_standby: The participant text `screens.standby`, centred,
     en.
   participant_en_screen_stop_rehearsal: The participant text `screens.stop_rehearsal`,
@@ -403,6 +415,8 @@ screens:
     sv.
   participant_sv_screen_session_end: The participant text `screens.session_end`, centred,
     sv.
+  participant_sv_screen_session_starting: The participant text `screens.session_starting`,
+    centred, sv.
   participant_sv_screen_standby: The participant text `screens.standby`, centred,
     sv.
   participant_sv_screen_stop_rehearsal: The participant text `screens.stop_rehearsal`,
