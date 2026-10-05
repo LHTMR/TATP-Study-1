@@ -101,6 +101,26 @@ def test_each_screen_is_selected_in_turn(participant):
     assert participant.stack.currentWidget() is participant.vas
 
 
+def test_one_message_replacing_another_is_repainted(participant, app, monkeypatch):
+    """The first lab run: "The session will start shortly." stayed up after the welcome was
+    shown, because the message screen draws its own text and stayed the current widget, so
+    nothing asked Qt to paint it again. The participant never saw "Press ▶ to continue".
+    """
+    painted = []
+    paint = participant.message.paintEvent
+    monkeypatch.setattr(
+        participant.message, "paintEvent", lambda event: (painted.append(1), paint(event))
+    )
+    participant.show_message("session_starting")
+    participant.show()
+    app.processEvents()
+    painted.clear()
+    participant.show_message("welcome")
+    app.processEvents()
+    participant.close()
+    assert painted
+
+
 def test_the_emergency_stop_works_when_the_vas_is_not_showing(participant):
     """SPEC.md 13: it is a stop button, not a rating control."""
     stops = []
