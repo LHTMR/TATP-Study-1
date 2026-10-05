@@ -257,9 +257,9 @@ def test_the_remote_reaches_the_participant_whichever_window_is_active(rig):
     rig.participant.message_confirmed.connect(lambda: confirmed.append(1))
     rig.participant.show_message("welcome")
 
-    _key(elsewhere, QT_KEYS["period"])
-    assert confirmed == [1], "the confirm reached the participant window"
     _key(elsewhere, QT_KEYS["f5"])
+    assert confirmed == [1], "the confirm reached the participant window"
+    _key(elsewhere, QT_KEYS["period"])
     assert rig.interruptions.active == "emergency_stop", "and so does the emergency stop"
 
 
@@ -273,15 +273,13 @@ def test_the_remote_drives_the_vas_from_another_window(rig):
 
 
 def test_typing_in_an_experimenter_field_is_not_taken_for_the_remote(rig):
-    """The confirm key is a full stop, which the experimenter types in notes and distances."""
+    """The stop key is a full stop, which the experimenter types in notes and distances."""
     rig.participant.show()
     field = QLineEdit()
     field.show()
-    confirmed = []
-    rig.participant.message_confirmed.connect(lambda: confirmed.append(1))
     rig.participant.show_message("welcome")
     _key(field, QT_KEYS["period"], QEvent.KeyPress)
-    assert confirmed == []
+    assert rig.interruptions.active is None
 
 
 def test_a_deleted_participant_window_takes_its_key_router_with_it(app, loaded, tmp_path):

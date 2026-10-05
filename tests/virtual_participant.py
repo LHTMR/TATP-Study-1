@@ -134,36 +134,36 @@ class Virtual:
             return
         if isinstance(trial, touchcal.Adjustment):
             trial.state.value = self._setting(trial)
-            press(window, "period")
+            press(window, "f5")
         elif isinstance(trial, NoiseAdjustment):
             trial.state.value = self.noise_levels[trial.screen_key]
             trial._apply()
-            press(window, "period")
+            press(window, "f5")
         elif isinstance(trial, touchcal.TouchRating):
             press(window.vas, "pagedown")
             window.vas.state.percent = rating_for(
                 rig.session.garment.pressure_kpa[trial.channel]
                 if rig.session.garment.status()["channels_on"] else 0.0
             )
-            press(window.vas, "period")
+            press(window.vas, "f5")
         elif window.stack.currentWidget() is window.choice and window.choice.accepting:
             press(window, "pageup" if self.choose(self._choice_key(trial), trial) == "left"
                   else "pagedown")
         elif isinstance(trial, touchcal.PreferenceSelection):
             press(window, "pagedown")
             press(window, "pagedown")
-            press(window, "period")
+            press(window, "f5")
         elif isinstance(trial, (MessageConfirm, touchcal.DeliveryStart)) and (
             window.stack.currentWidget() is window.message and trial._connections
         ):
-            press(window, "period")
+            press(window, "f5")
         elif isinstance(trial, VasTraining) and trial._connections:
-            press(window.vas, "period")
+            press(window.vas, "f5")
         elif isinstance(trial, ExperimenterChoice):
             name, args = self.decide(trial)
             trial.actions[name].emit(*args)
         elif isinstance(trial, AwaitStop) and self.press_stop:
-            press(window, "f5")
+            press(window, "period")
 
     def _choice_key(self, trial) -> str:
         if isinstance(trial, touchcal.Comparison):

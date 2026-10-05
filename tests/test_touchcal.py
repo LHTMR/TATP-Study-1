@@ -230,7 +230,7 @@ def _run_adjustment(running, taps=3):
 def test_an_adjustment_writes_one_row_carrying_what_the_participant_did(running):
     session, participant, _ = running
     adjustment, done = _run_adjustment(running)
-    _press(participant, "period")
+    _press(participant, "f5")
 
     assert len(done) == 1
     rows = _rows(session, "touchcal_adjust")
@@ -253,7 +253,7 @@ def test_an_adjustment_writes_one_row_carrying_what_the_participant_did(running)
 def test_the_adjustment_commands_the_garment_it_is_adjusting(running):
     session, participant, _ = running
     adjustment, _ = _run_adjustment(running)
-    _press(participant, "period")
+    _press(participant, "f5")
     assert session.garment.pressure_kpa[3] == pytest.approx(adjustment.state.value)
     commands = [
         row for row in _rows(session, "garment")
@@ -268,7 +268,7 @@ def test_every_button_edge_reaches_the_log(running):
     # Bound, not discarded: an Adjustment with no parent is collected the moment nothing holds
     # it, and a collected QObject stops answering the participant's buttons.
     adjustment, _ = _run_adjustment(running)
-    _press(participant, "period")
+    _press(participant, "f5")
     events = [row["event"] for row in _rows(session, "log")]
     assert events.count("button_down") == 3
     assert events.count("button_up") == 3
@@ -280,7 +280,7 @@ def test_short_exploration_is_recorded_rather_than_refused(running):
     """There is no approved wording for refusing a confirm, so the flag carries it instead."""
     session, participant, _ = running
     adjustment, _ = _run_adjustment(running, taps=1)
-    _press(participant, "period")
+    _press(participant, "f5")
     row = _rows(session, "touchcal_adjust")[0]
     assert row["min_exploration_met"] == "false"
 
@@ -290,7 +290,7 @@ def test_a_cancelled_adjustment_writes_no_row(running):
     session, participant, _ = running
     adjustment, done = _run_adjustment(running)
     adjustment.cancel()
-    _press(participant, "period")
+    _press(participant, "f5")
 
     assert done == []
     assert not session.files.path("touchcal_adjust").exists()
@@ -333,7 +333,7 @@ def test_the_touch_rating_records_the_pressure_that_was_delivering(running):
     rating.finished.connect(done.append)
     rating.start()
     _press(participant.vas, "pagedown")
-    _press(participant.vas, "period")
+    _press(participant.vas, "f5")
 
     assert len(done) == 1
     row = _rows(session, "touch_ratings")[0]
@@ -353,6 +353,6 @@ def test_the_rating_never_reaches_the_experimenter_screen(running):
     )
     rating.start()
     _press(participant.vas, "pagedown")
-    _press(participant.vas, "period")
+    _press(participant.vas, "f5")
     text = session.config.experimenter_text["instructions"]
     assert experimenter.status.text() == text["response_received"]

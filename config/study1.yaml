@@ -4,6 +4,11 @@
 
 design:
   n_participants: 41                 # SPEC.md 20 item 10
+  # Pilot and test codes, never a real participant (S, 30 Sep 2026). Pilot code
+  # pilot_code_offset + i has participant i's allocation, so a pilot runs exactly what a real
+  # session would; a code above the offset is how analysis tells pilot data apart.
+  n_pilot_participants: 10
+  pilot_code_offset: 900
   n_sessions: 3
   conditions: [participant_preferred, ct_targeted, sham]
   limbs: [left, right]               # target limb alternates between visits (SPEC.md 2)

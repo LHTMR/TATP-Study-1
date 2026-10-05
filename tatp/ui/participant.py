@@ -10,8 +10,8 @@ screen was asked for rather than showing a participant a blank.
 
 **Input.** The emergency stop must work on every screen, not only while a rating is on display
 (SPEC.md 13), so the window handles keys whenever the VAS is not the current screen and
-swallows everything else -- including `escape`, which the play button emits and which Qt would
-otherwise read as "close this window" (SPEC.md 10.1).
+swallows everything else. `escape` is one of the play button's two keys, so it must reach the
+window as a confirm and never as Qt's "close this window" (SPEC.md 10.1).
 
 Two screens read more than the emergency stop. The adjustment screen: the pressure adjustment
 of SPEC.md 10.3 is press-and-hold, so both the down and the up of every button matter and the
@@ -741,7 +741,8 @@ class ParticipantWindow(QWidget):
                 self.control.hold("left" if action is Action.DECREASE else "right")
                 self.adjust_pressed.emit(action.value)
         # Everything else is swallowed rather than passed on: off the VAS there is nothing a
-        # press can mean, and Qt would close the window on `escape` (SPEC.md 10.1).
+        # press can mean, and Qt would close the window on `escape`, one of ▶'s keys (SPEC.md
+        # 10.1).
         event.accept()
 
     def confirm_lockout_remaining_s(self) -> float:
@@ -790,7 +791,8 @@ class ParticipantWindow(QWidget):
 
 
 # Widgets the experimenter types into. A key reaching one of these is the experimenter typing,
-# not the participant pressing -- the remote's confirm is the full stop, which is also typed.
+# not the participant pressing -- the remote's emergency stop is the full stop, which is also
+# typed.
 TEXT_ENTRY_WIDGETS = (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
 
 
@@ -804,8 +806,9 @@ class RemoteKeyRouter(QObject):
 
     Installed on the application by the `Rig`. The one exception is a key typed into a text
     field on the experimenter's side: that is the experimenter writing a note or a distance, and
-    the device's confirm key is a full stop. A participant press made while the experimenter is
-    typing therefore reaches the field, not the participant window (docs/LOG.md N7.I1).
+    the device's emergency-stop key is a full stop. A participant press made while the
+    experimenter is typing therefore reaches the field, not the participant window (docs/LOG.md
+    N7.I1).
     """
 
     def __init__(self, participant: ParticipantWindow, parent: QObject | None = None):

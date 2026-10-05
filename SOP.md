@@ -715,9 +715,12 @@ resumed.
 
 - **The hardware stop button and the rapid depressurisation release are the real safety path.**
   They work without the software. The software cannot see them.
-- **The software stop** is the remote's blank-screen button (the F5 key). It sets the garment to
-  zero at once, shows the participant a stop screen, and shows you the red line **EMERGENCY STOP.
-  The garment is at zero. Press Resume when the participant is ready.**
+- **The software stop** is the remote's blank-screen button (the yellow "!", which sends a full
+  stop). The stop sets the garment to zero at once, shows the participant a stop screen, and
+  shows you the red line **EMERGENCY STOP. The garment is at zero. Press Resume when the
+  participant is ready.**
+- **Your keyboard acts as the remote** outside a text box: a full stop is the emergency stop,
+  and F5 or Esc is the participant pressing ▶. Do not press them while a session runs.
 
 When the participant presses either:
 

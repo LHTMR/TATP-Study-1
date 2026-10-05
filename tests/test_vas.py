@@ -463,11 +463,11 @@ def test_play_is_ignored_until_the_anchors_have_been_explained(widget, loaded):
     widget.training_confirmed.connect(lambda: confirmed.append(1))
     _show_training(widget, loaded, "pain", accepting=False)
     assert loaded.participant_text["training_continue"] not in widget.training
-    _press(widget, "period")
+    _press(widget, "f5")
     assert confirmed == [], "▶ dismissed the training before the anchors were explained"
     _show_training(widget, loaded, "pain", accepting=True)
     assert widget.training.endswith(loaded.participant_text["training_continue"])
-    _press(widget, "period")
+    _press(widget, "f5")
     assert confirmed == [1]
 
 
@@ -495,7 +495,7 @@ def test_the_training_screen_asks_only_for_the_play_button(widget, loaded):
     _press(widget, "pagedown")
     _press(widget, "pageup")
     assert not widget.state.visible, "the training screen must never show a marker"
-    _press(widget, "period")
+    _press(widget, "f5")
     assert confirmed == [1]
     assert empty == [] and responses == []
 
@@ -504,7 +504,7 @@ def test_the_emergency_stop_works_on_the_training_screen(widget, loaded):
     stops = []
     widget.emergency_stop.connect(lambda: stops.append(1))
     _show_training(widget, loaded, "pain")
-    _press(widget, "f5")
+    _press(widget, "period")
     assert stops == [1]
 
 
@@ -515,7 +515,7 @@ def test_a_rating_after_the_training_is_an_ordinary_rating(widget, loaded):
     got = []
     widget.confirmed.connect(got.append)
     _press(widget, "pagedown")
-    _press(widget, "period")
+    _press(widget, "f5")
     assert len(got) == 1
 
 
@@ -523,7 +523,7 @@ def test_confirming_emits_the_response(widget):
     got = []
     widget.confirmed.connect(got.append)
     _press(widget, "pagedown")
-    _press(widget, "period")
+    _press(widget, "f5")
     assert len(got) == 1
     assert got[0].rating_percent == 75.0
     assert got[0].first_press_side == "right"
@@ -533,23 +533,27 @@ def test_confirming_with_no_marker_emits_no_response(widget):
     got, empty = [], []
     widget.confirmed.connect(got.append)
     widget.pressed_without_marker.connect(lambda: empty.append(1))
-    _press(widget, "period")
+    _press(widget, "f5")
     assert got == []
     assert empty == [1]
 
 
-def test_escape_is_swallowed(widget):
-    """SPEC.md 10.1: it must not reach Qt, which would close the window."""
+def test_escape_confirms_and_goes_no_further(widget):
+    """SPEC.md 10.1: every other ▶ is escape, and it must not reach Qt, which would close the
+    window."""
+    got = []
+    widget.confirmed.connect(got.append)
+    _press(widget, "pagedown")
     event = QKeyEvent(QEvent.KeyPress, QT_KEYS["escape"], Qt.NoModifier)
     widget.keyPressEvent(event)
     assert event.isAccepted()
-    assert not widget.state.visible, "escape must not move or reveal the marker"
+    assert len(got) == 1
 
 
 def test_the_emergency_stop_key_is_wired(widget):
     stops = []
     widget.emergency_stop.connect(lambda: stops.append(1))
-    _press(widget, "f5")
+    _press(widget, "period")
     assert stops == [1]
 
 

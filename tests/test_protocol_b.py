@@ -163,7 +163,7 @@ def _flat(rig):
             window = rig.participant
             press(window.vas, "pagedown")
             window.vas.state.percent = 50.0
-            press(window.vas, "period")
+            press(window.vas, "f5")
 
     return flat
 
@@ -277,7 +277,7 @@ def test_felt_catch_trials_are_flagged(rig):
         ]:
             press(rig.participant.vas, "pagedown")
             rig.participant.vas.state.percent = 30.0
-            press(rig.participant.vas, "period")
+            press(rig.participant.vas, "f5")
 
     virtual.before_step = felt
     virtual.run()
@@ -381,7 +381,7 @@ def test_an_emergency_stop_mid_estimation_repeats_the_presentation_and_loses_not
             and len(_rows(session, "touchcal_estimate")) == 3
         ):
             stopped.append(True)
-            press(rig.participant.vas, "f5")
+            press(rig.participant.vas, "period")
 
     virtual.before_step = stop_once
     result = virtual.run()
@@ -643,7 +643,7 @@ def _start_delivery(rig, delivery, self_start):
         QApplication.processEvents()
         window = rig.participant
         if trial._connections and window.stack.currentWidget() is window.message:
-            press(rig.participant, "period")
+            press(rig.participant, "f5")
         spins -= 1
     return done, seen, cues
 

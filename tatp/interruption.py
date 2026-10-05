@@ -2,9 +2,10 @@
 
 **One owner for every interruption.** The emergency stop is the one path in the software that
 must behave identically in every phase, so it is one piece of code rather than a copy in each
-protocol. Whatever is running, a press of `f5` does the same four things in the same order: the
-garment goes to zero first, before anything that could fail, then the event is logged with its
-origin, the stop screen goes up, and whatever procedure is running is told to abandon its step.
+protocol. Whatever is running, a press of the stop button does the same four things in the same
+order: the garment goes to zero first, before anything that could fail, then the event is logged
+with its origin, the stop screen goes up, and whatever procedure is running is told to abandon
+its step.
 
 A pause is the experimenter's interruption and follows the same path with the `paused` screen.
 It also takes the garment to zero: a paused participant is waiting, not being measured, and

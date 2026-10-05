@@ -284,8 +284,8 @@ class VasWidget(QWidget):
     def keyPressEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         name = self._names.get(Qt.Key(event.key()))
         if name is None or self.responder.is_ignored(name):
-            # Swallowed, not passed on. Qt would otherwise close a window on Escape, which the
-            # play button emits alongside its real key (SPEC.md 10.1).
+            # Swallowed, not passed on: a key that means nothing here must do nothing at all
+            # (SPEC.md 10.1).
             event.accept()
             return
         if event.isAutoRepeat():

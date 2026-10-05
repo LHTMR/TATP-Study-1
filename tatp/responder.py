@@ -2,9 +2,9 @@
 
 The Logitech R400 emits four keys and nothing else, so the mapping from key to action is
 configuration, not code. The one rule worth stating twice is the `escape` rule: the play button
-emits `escape` as well as `period`, so a default quit binding would let a participant end the
-session by confirming a rating. `escape` is bound to nothing at all, and this module refuses a
-configuration in which an ignored key is also an action key.
+alternates `f5` and `escape` on successive presses, so `escape` is a confirm and must never
+reach a default quit binding, which would end the session on every other ▶. This module refuses
+a configuration in which an ignored key is also an action key.
 """
 
 from __future__ import annotations

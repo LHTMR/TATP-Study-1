@@ -58,23 +58,23 @@ adjustment:
   tick_interval_s: 0.05
 
 responder:
-  # Logitech R400. It emits only these keys (SPEC.md 3, 10.1).
+  # Logitech R400. It emits only these keys (SPEC.md 3, 10.1). Measured on the lab's unit with
+  # a key probe, 30 Sep 2026 (docs/LOG.md N7.B1): the play button alternates f5 and escape on
+  # successive presses and does not auto-repeat; the other three auto-repeat when held.
   device: logitech_r400
   keys:
     decrease: [pageup]               # left large button
     increase: [pagedown]             # right large button
-    confirm: [period]                # play button; see ignore_keys
-    emergency_stop: [f5]             # blank-screen button
+    confirm: [f5, escape]            # play button: both, or every other press would be lost
+    emergency_stop: [period]         # blank-screen button
   # A play-button press this soon after the last one the software accepted is taken to be
   # carried over -- a double tap, or the button bouncing -- and ignored, so it cannot dismiss
   # the screen that has just come up unread (docs/LOG.md N7.U15). Well under the time anyone
   # takes to read a screen, and above a double tap's gap. Session time, which is real time in
   # a session; an accelerated test run shortens it with everything else. Pilot-tunable.
   repeat_confirm_lockout_s: 0.5
-  ignore_keys: [escape]              # The play button emits escape AS WELL AS period. A
-                                     # default quit binding would let a participant end the
-                                     # session by confirming a rating, so escape is bound to
-                                     # nothing at all (SPEC.md 10.1).
+  ignore_keys: []                    # Keys the device emits that must do nothing. None: every
+                                     # key the R400 sends is bound (SPEC.md 10.1).
   # WHAT IS PHYSICALLY PRINTED ON EACH BUTTON. A screen that draws a control draws the symbol
   # the participant's thumb is resting on, at its physical arrangement (UI_PRINCIPLES.md 5.9),
   # so relabelling the remote is a change here and nowhere else. This lives in hardware.yaml

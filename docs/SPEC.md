@@ -122,7 +122,8 @@ Other environment facts:
   not exist on the lab PC. Makefile targets run through `conda run -n tatp-study-1`. Record the
   resolved package versions in each session file.
 - **Participant response device: Logitech R400 presenter.** It emits only `pageup`,
-  `pagedown`, `f5`, and — from the play button — `escape` **and** `period`.
+  `pagedown`, `period`, and — from the play button, alternating press by press — `f5` and
+  `escape` (measured on the lab unit, §10.1).
 - **Garment:** up to 250 kPa, proportional valves, **five independently controlled channels**,
   serial from an Arduino. Existing driver:
   <https://github.com/LHTMR/ttpa_touch_the_pain_away>. Pressure resolution unknown (§20).
@@ -590,11 +591,17 @@ without a code change.
 |---|---|---|
 | Left (large) | `pageup` | Move marker left / decrease |
 | Right (large) | `pagedown` | Move marker right / increase |
-| Play | `escape` + `period` | **Confirm**, and the Study 1 self-start press |
-| Blank screen | `f5` | **Software emergency stop** |
+| Play | `f5`, then `escape`, alternating | **Confirm**, and the Study 1 self-start press |
+| Blank screen | `period` | **Software emergency stop** |
 
-**`escape` must be explicitly disabled as a quit key.** The play button emits it, so a default
-binding would let a participant end a session by confirming a rating. Bind only the `period`.
+Measured on the lab's R400 with a key probe on 30 Sep 2026 (docs/LOG.md N7.B1); an earlier
+version of this table had play and blank screen the wrong way round. The play button does not
+auto-repeat; the other three do when held, and a repeat is never a second press.
+
+**Both of the play button's keys are a confirm, and `escape` must never reach a quit binding.**
+Bound to one only, every other ▶ would be lost; left to Qt's default, every other ▶ would close
+the window. Since the remote is a keyboard to the operating system, the same keys typed on the
+experimenter's keyboard act as the remote's, except inside a text field (docs/LOG.md N7.I1).
 
 **What is printed on each button is configuration, not code.** `responder.button_symbols` in
 `hardware.yaml` records the glyph on each button, and a screen that draws a control draws that
@@ -814,7 +821,7 @@ is a promise, and a promise about a button nobody has pressed is one the partici
 reason to believe at the moment they need it — which is the moment they are least willing to
 experiment. Rehearsing it converts the sentence into something they have seen happen.
 
-- **The software stop only** (`f5`, the blank-screen button on the remote). The hardware button
+- **The software stop only** (`period`, the blank-screen button on the remote). The hardware button
   and the rapid depressurisation mechanism are the real safety path (§13) and act without the
   software, so the software cannot detect a press of them and must not pretend to. Whether they
   are demonstrated verbally is the experimenter's briefing, not this procedure.
@@ -1060,7 +1067,7 @@ way must be impossible to mistake for a real one afterwards.
 - **The hardware emergency stop is the real safety path.** The participant's physical button
   and the rapid depressurisation mechanism act without the software, which must never be in the
   path that makes them work.
-- **Software emergency stop** on `f5`: immediately commands all channels to zero, logs the
+- **Software emergency stop** on `period` (the blank-screen button): immediately commands all channels to zero, logs the
   press, pauses, and offers resume. Bilaga 1 §3.10 says participants are told pressing it will
   not disturb the experiment, so resumption must be genuinely clean.
 - **The participant rehearses that stop once per session, with the garment running** (§10.9).
