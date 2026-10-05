@@ -70,7 +70,35 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
 
 ## Next steps
 
-1. **Re-run the lab session with the remapped remote, starting with Check the hardware.**
+1. **Fix S's 5 Oct issue list.** Not started. S will say when to begin. Participant wording:
+   check the ethics folder first, otherwise draft it (`CLAUDE.md`, acceleration push).
+   - **General:**
+     - experimenter initials case-insensitive;
+     - the arrow button blue (ask S which screen or screens).
+   - **Audio calibration:**
+     - step 1 says to turn the hiss up until it can *just* be heard, which is a threshold task.
+       Change it to "until you can hear it easily";
+     - tell the participant when they pressed the emergency stop;
+     - emergency-stop training moves before audio noise calibration (a SPEC order change, so
+       update SPEC and log it);
+     - if the noise does not mask the garment, prompt the participant to tell the experimenter
+       (who can offer ear plugs). The separate "does it cover the sound?" screen is confusing,
+       so merge it into the flow;
+     - bug: the noise cannot be turned down in the second step;
+     - "any part of the visit" becomes "at any time".
+   - **Rating-scale training:**
+     - "a mark twice as long" comes off the participant screen. The experimenter gets text to
+       explain it instead;
+     - the participant practises making a rating, not just pressing continue.
+   - **Rating scales:** holding a key accelerates the marker along the line (rate and ramp in
+     `config/`).
+   - **Touch calibration:**
+     - a long delay between a response and the next stimulus (check whether it is a configured
+       interval or real lag);
+     - with the mock or prototype garment only, the experimenter can skip to the next event
+       after a few ratings. It must be impossible with the real garment;
+     - the experimenter sees progress as "x/N answered".
+2. **Re-run the lab session with the remapped remote, starting with Check the hardware.**
    - **Sound:** `audio.participant_device` is `Bose QC Headphones WASAPI`, the Bluetooth device.
      On a cable the sound goes to the laptop's own headphone output, which is a different
      device. The check lists every output by name. Set `participant_device` to whichever the
@@ -84,11 +112,11 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
      - the remote routing (N7.I1), including that Esc or F5 on the experimenter's keyboard now
        counts as ▶;
      - whether the alerts are audible over the noise.
-2. **S reviews and merges `accel/integration` into `main`.**
-3. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
-4. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
+3. **S reviews and merges `accel/integration` into `main`.**
+4. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
+5. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
    Milestone 6 done.
-5. **Left open, not blocking:**
+6. **Left open, not blocking:**
    - the mock's injected faults never lose the link (N7.U8 (2));
    - the emergency stop does not stop the white noise.
 
