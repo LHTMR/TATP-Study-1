@@ -14,7 +14,7 @@ from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
-from tatp import launcher
+from tatp import launcher, screenshots
 from tatp import schedule as sched
 from tatp.launcher import REFUSE, RESUME_KEY, WARN, LauncherWindow
 from tools import preview_schedule
@@ -206,6 +206,28 @@ def test_the_pattern_folder_hint_goes_once_a_folder_is_chosen(app, loaded, tmp_p
     assert dialog.form.isRowVisible(dialog.pattern_folder_hint)
 
 
+def test_the_session_dialog_fits_the_lab_laptop(app, loaded, tmp_path):
+    """S, first lab run (docs/LOG.md N7.F5): it opened with its lower edge, and so Start,
+    off the laptop's screen. It must fit as it opens and after a check fills the report."""
+    findings = [(WARN, "preflight.previous_session_missing", 1)] * 4
+    window = LauncherWindow(loaded, Fakes(findings).preflight, Fakes().build)
+    dialog = _filled(window, tmp_path)
+    dialog.resize(screenshots.LAPTOP_WIDTH_PX, screenshots.LAPTOP_HEIGHT_PX)
+    dialog.show()
+    QApplication.processEvents()
+    assert dialog.height() <= screenshots.LAPTOP_HEIGHT_PX, "it can be made that small"
+    for shown in (dialog.start_button, dialog.check_button, dialog.cancel_button):
+        assert dialog.rect().contains(shown.geometry().translated(
+            shown.parentWidget().mapTo(dialog, shown.parentWidget().rect().topLeft())
+        ))
+    dialog.check()
+    QApplication.processEvents()
+    viewport = dialog.scroll.viewport()
+    top = dialog.report.mapTo(viewport, dialog.report.rect().topLeft())
+    assert viewport.rect().contains(top), "the check's report is scrolled into view"
+    dialog.close()
+
+
 def test_the_dialog_asks_for_exactly_what_spec_6_lists(app, loaded, tmp_path):
     window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
     dialog = _filled(window, tmp_path)
@@ -226,6 +248,16 @@ def test_ticking_the_redcap_form_reaches_the_session(app, loaded, tmp_path):
     assert dialog.args().redcap_form_completed is True
     dialog.start()
     assert fakes.built[0][1].redcap_form_completed is True
+
+
+def test_browse_opens_where_the_pattern_folders_are_kept(app, loaded, tmp_path):
+    """S, first lab run (docs/LOG.md N7.F5): an empty field opened the repository root."""
+    dialog = LauncherWindow(loaded, Fakes().preflight, Fakes().build).session_dialog()
+    patterns = dialog.pattern_folder
+    opened = Path(dialog.start_folder(patterns, launcher.PATTERNS_DIR))
+    assert opened == cfg.CONFIG_DIR / "patterns" and opened.is_dir()
+    patterns.setText(str(tmp_path))
+    assert dialog.start_folder(patterns, launcher.PATTERNS_DIR) == str(tmp_path)
 
 
 def test_there_is_no_default_pattern_folder(app, loaded):

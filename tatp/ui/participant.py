@@ -690,6 +690,10 @@ class ParticipantWindow(QWidget):
         self._adjusting = adjusting
         self._choosing = choosing
         self.stack.setCurrentWidget(screen)
+        # The screens draw themselves from their own attributes, and switching to the widget
+        # already current paints nothing: one message replacing another stayed on the old text
+        # in the first lab run (docs/LOG.md N7.F5).
+        screen.update()
         # The VAS reads its own keys; every other screen leaves the window holding focus so the
         # emergency stop still works.
         (screen if screen is self.vas else self).setFocus()

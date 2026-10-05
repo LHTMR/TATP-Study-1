@@ -379,8 +379,10 @@ launcher:
   check: Check
   start: Start session
   close: Close
+  # Beside Start session, which it leaves without doing (docs/LOG.md N7.F5).
+  cancel: Cancel
   missing_field: 'Required: {value}'
-  no_pattern_folder: Choose the pattern folder. There is no default, so the provisional example patterns are never used by accident.
+  no_pattern_folder: Choose the pattern folder with Browse…, which opens where the pattern folders are kept. There is no default, so the provisional example patterns are never used by accident.
   # DRAFT (LOG N7.U17): written by the build, not ethics-sourced
   redcap_form_completed: The REDCap session form has been completed for this visit
   refusals: 'The session cannot start:'

@@ -27,6 +27,14 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
   devices with every output listed, and each garment channel, through the session's own code. It
   adds no sound level or pressure (N7.F4).
 
+**S's second lab run (5 Oct 2026)** (`docs/LOG.md` N7.F5):
+- **The stall after the first Next step was a repaint bug.** One participant message replacing
+  another was never redrawn, so the welcome never appeared. Fixed for every participant screen.
+  The first run's "waiting for the participant's response" over "Rest for a moment" was the same
+  bug.
+- **Run a session** fits the laptop: the form scrolls and the buttons stay visible. Browse for
+  the pattern folder opens in `config/patterns`, and Close is now Cancel.
+
 **Earlier on `accel/integration`, not yet in `main`** (N7.U10–N7.U19, N7.T1–N7.T4):
 - VAS proportionality training;
 - the UI-review calls;
@@ -36,13 +44,14 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
 - the lost-link log;
 - the REDCap checkbox.
 
-**`make check` passes:** 1013 tests, ruff, the validator (35 checks) and 172 screens.
+**`make check` passes:** 1016 tests, ruff, the validator (35 checks) and 172 screens.
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
 - **Screens to review:**
   - new: `experimenter_{en,sv}_launcher_hardware_check` and
     `participant_{en,sv}_screen_session_starting`;
-  - re-approved: `experimenter_{en,sv}_launcher` and `_launcher_instruments` (N7.F3, N7.F4);
+  - re-approved: `experimenter_{en,sv}_launcher` and `_launcher_instruments` (N7.F3, N7.F4),
+    and `experimenter_{en,sv}_launcher_session` and `_launcher_session_checked` (N7.F5);
   - earlier: N7.U10, N7.T3, N7.U19, N7.U17;
   - still unreviewed: N7.U1, N7.U2, N7.U4, N7.C24 and N7.E9.
 - **Drafted wording:**
@@ -66,12 +75,9 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
      On a cable the sound goes to the laptop's own headphone output, which is a different
      device. The check lists every output by name. Set `participant_device` to whichever the
      study will use.
-   - **Re-check these reports from the run**, now the keys are right:
-     - the experimenter screen said "waiting for the participant's response" while the
-       participant's said "Rest for a moment";
-     - the participant was not told of a stop in setup.
-
-     The code was traced and neither was found, so both may have been the swapped keys.
+   - **Confirm the session now runs past the welcome** (N7.F5), then re-check the first run's
+     other report, that the participant was not told of a stop in setup. It may have been the
+     same repaint bug: the stop screen is a message too.
    - **Then the rest of the pilot checks:**
      - the participant screen on the HP at 1.5;
      - the VAS training flow;

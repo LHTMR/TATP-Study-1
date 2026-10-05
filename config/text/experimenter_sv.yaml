@@ -382,8 +382,10 @@ launcher:
   check: Kontrollera
   start: Starta sessionen
   close: Stäng
+  # Bredvid Starta sessionen, som den lämnar utan att göra (docs/LOG.md N7.F5).
+  cancel: Avbryt
   missing_field: 'Obligatoriskt: {value}'
-  no_pattern_folder: Välj mönstermappen. Det finns ingen standardmapp, så att exempelmönstren aldrig används av misstag.
+  no_pattern_folder: Välj mönstermappen med Bläddra…, som öppnas där mönstermapparna finns. Det finns ingen standardmapp, så att exempelmönstren aldrig används av misstag.
   # DRAFT (LOG N7.U17): written by the build, not ethics-sourced
   redcap_form_completed: REDCap-formuläret för besöket är ifyllt
   refusals: 'Sessionen kan inte starta:'

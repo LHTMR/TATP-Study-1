@@ -176,7 +176,7 @@ They are kept only until the launcher closes, and a session runs without them.
    | **Participant language** | The language the participant reads: Svenska or English. |
    | **Experimenter language** | The language you want your screen in. |
    | **Data folder** | Leave it as it is (`data`) unless S says otherwise. |
-   | **Pattern folder** | The folder S has named for the study. There is no default. **[TBC: the pattern folder path for real sessions (open item 5).]** |
+   | **Pattern folder** | The folder S has named for the study. There is no default. **Browse…** opens where the pattern folders are kept. **[TBC: the pattern folder path for real sessions (open item 5).]** |
    | **The REDCap session form has been completed for this visit** | Tick it once the participant's REDCap session form for this visit is complete (section 2.2). It is recorded either way, and it does not stop a session. |
 
 3. Press **Check**. The software checks the session before anything is written, and lists what it
