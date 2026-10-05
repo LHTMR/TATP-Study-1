@@ -800,7 +800,7 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     check.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
     yield Shot(
         f"experimenter_{language}_launcher_hardware_check",
-        f"The hardware check (LOG N7.B4), at the lab laptop's size, as it opens: a count for "
+        f"The hardware check (LOG N7.F4), at the lab laptop's size, as it opens: a count for "
         f"each remote button, where each screen lands, the sound devices, the noise within the "
         f"participant's own range with the cue and the alert, and each garment channel on and "
         f"off. Drawn with a sample device list and the mock garment ({language}).",

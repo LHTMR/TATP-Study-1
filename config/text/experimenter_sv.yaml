@@ -361,9 +361,9 @@ launcher:
   design_pattern_detail: Skapa mönster för plagget, förhandsgranska dem och spara dem i en mönstermapp. Endast för S. Verktyget visar mönstrens namn och form, så en försöksledare som kör sessioner öppnar det aldrig.
   preview_schedule: Förhandsgranska schemat
   preview_schedule_detail: Sessionens tidslinje och dess varningar. Ingenting startas.
-  # DRAFT (LOG N7.B4): written by the build, not ethics-sourced
+  # DRAFT (LOG N7.F4): written by the build, not ethics-sourced
   hardware_check: Kontrollera utrustningen
-  # DRAFT (LOG N7.B4): written by the build, not ethics-sourced
+  # DRAFT (LOG N7.F4): written by the build, not ethics-sourced
   hardware_check_detail: Innan deltagaren kommer. Fjärrkontrollen, skärmarna, ljudet och plagget, en i taget. Ingenting registreras.
   environment_entered: 'Rummet {temperature} °C, {humidity} % RF, lämnas till nästa session.'
   # Sessionsdialogen. Den frågar bara efter det SPEC.md 6 räknar upp; allt annat är konfiguration.
@@ -587,7 +587,7 @@ schedule_warnings:
 
 # The hardware check, launcher entry 5 (tatp/hardware_check.py). Before the participant
 # arrives, so nothing here is seen by a participant except `label_text`, on an empty screen.
-# DRAFT (LOG N7.B4): every key in this block is written by the build, not ethics-sourced.
+# DRAFT (LOG N7.F4): every key in this block is written by the build, not ethics-sourced.
 hardware_check:
   title: Kontrollera utrustningen
   remote: Fjärrkontroll

@@ -1,4 +1,4 @@
-"""The hardware check, launcher entry 5 (docs/LOG.md N7.B4).
+"""The hardware check, launcher entry 5 (docs/LOG.md N7.F4).
 
 Driven with the audio test double and the mock garment, so nothing here needs a device. What is
 tested is that each check goes through the session's own code, and that closing lets go.

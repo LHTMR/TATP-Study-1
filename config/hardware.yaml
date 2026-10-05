@@ -59,7 +59,7 @@ adjustment:
 
 responder:
   # Logitech R400. It emits only these keys (SPEC.md 3, 10.1). Measured on the lab's unit with
-  # a key probe, 30 Sep 2026 (docs/LOG.md N7.B1): the play button alternates f5 and escape on
+  # a key probe, 30 Sep 2026 (docs/LOG.md N7.F1): the play button alternates f5 and escape on
   # successive presses and does not auto-repeat; the other three auto-repeat when held.
   device: logitech_r400
   keys:

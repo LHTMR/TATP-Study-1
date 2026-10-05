@@ -122,7 +122,7 @@ def test_escape_is_swallowed_off_the_vas_as_well(participant):
 
 
 def test_the_play_buttons_escape_half_dismisses_a_message(participant):
-    """The lab R400 sends f5 and escape on alternate presses (docs/LOG.md N7.B1)."""
+    """The lab R400 sends f5 and escape on alternate presses (docs/LOG.md N7.F1)."""
     confirmed = []
     participant.message_confirmed.connect(lambda: confirmed.append(1))
     participant.show_message("welcome")

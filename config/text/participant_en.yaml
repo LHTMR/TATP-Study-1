@@ -86,7 +86,7 @@ screens:
 
     Press ▶ to begin.
   # The first screen of a session, up while the garment is fitted and before the welcome. S's
-  # wording, 30 Sep 2026 (LOG N7.B3).
+  # wording, 30 Sep 2026 (LOG N7.F3).
   session_starting: The session will start shortly.
   standby: |-
     Rest for a moment.

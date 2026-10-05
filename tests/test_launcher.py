@@ -99,7 +99,7 @@ RESUME ={"completed": "blocks 1-4", "since_sensitisation": "1 h 12 min"}
 
 
 def test_the_five_entries_are_all_enabled(app, loaded):
-    """SPEC.md 4.1, and the hardware check (docs/LOG.md N7.B4)."""
+    """SPEC.md 4.1, and the hardware check (docs/LOG.md N7.F4)."""
     window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
     assert list(window.entries) == [
         "run_session", "instruments", "design_pattern", "preview_schedule", "hardware_check",

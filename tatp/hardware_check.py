@@ -1,4 +1,4 @@
-"""The hardware check: launcher entry 5, run before the participant arrives (docs/LOG.md N7.B4).
+"""The hardware check: launcher entry 5, run before the participant arrives (docs/LOG.md N7.F4).
 
 S's first lab run (30 Sep 2026) found two faults only a participant would otherwise have met:
 the remote's keys mapped the wrong way round, and no sound in the headphones. This puts every

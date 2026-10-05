@@ -204,7 +204,7 @@ without the command line:
 4. **Preview schedule** — the timeline and its warnings (§7.2).
 5. **Check the hardware** — before the participant arrives: each remote button, where each
    screen lands, the sound devices, and each garment channel, through the session's own code.
-   Nothing is recorded, and it adds no sound level or pressure (docs/LOG.md N7.B4).
+   Nothing is recorded, and it adds no sound level or pressure (docs/LOG.md N7.F4).
 
 ### 4.2 The rule about literals
 
@@ -597,7 +597,7 @@ without a code change.
 | Play | `f5`, then `escape`, alternating | **Confirm**, and the Study 1 self-start press |
 | Blank screen | `period` | **Software emergency stop** |
 
-Measured on the lab's R400 with a key probe on 30 Sep 2026 (docs/LOG.md N7.B1); an earlier
+Measured on the lab's R400 with a key probe on 30 Sep 2026 (docs/LOG.md N7.F1); an earlier
 version of this table had play and blank screen the wrong way round. The play button does not
 auto-repeat; the other three do when held, and a repeat is never a second press.
 

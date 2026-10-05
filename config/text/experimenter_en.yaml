@@ -358,9 +358,9 @@ launcher:
   design_pattern_detail: Compose garment patterns, preview them, and save them to a pattern folder. For S only. It shows pattern names and shapes, so an experimenter running sessions never opens it.
   preview_schedule: Preview schedule
   preview_schedule_detail: The session timeline and its warnings. Nothing is started.
-  # DRAFT (LOG N7.B4): written by the build, not ethics-sourced
+  # DRAFT (LOG N7.F4): written by the build, not ethics-sourced
   hardware_check: Check the hardware
-  # DRAFT (LOG N7.B4): written by the build, not ethics-sourced
+  # DRAFT (LOG N7.F4): written by the build, not ethics-sourced
   hardware_check_detail: Before the participant arrives. The remote, the screens, the sound and the garment, one by one. Nothing is recorded.
   environment_entered: 'Room {temperature} °C, {humidity} % RH, handed to the next session.'
   # The session dialog. It collects only what SPEC.md 6 lists; everything else is config.
@@ -583,7 +583,7 @@ schedule_warnings:
 
 # The hardware check, launcher entry 5 (tatp/hardware_check.py). Before the participant
 # arrives, so nothing here is seen by a participant except `label_text`, on an empty screen.
-# DRAFT (LOG N7.B4): every key in this block is written by the build, not ethics-sourced.
+# DRAFT (LOG N7.F4): every key in this block is written by the build, not ethics-sourced.
 hardware_check:
   title: Check the hardware
   remote: Remote
