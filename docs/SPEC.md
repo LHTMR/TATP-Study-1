@@ -123,13 +123,8 @@ between them.**
   way (§14). Virtual participants (§17.5) draw from a generator supplied by the caller, of this
   same type, so a simulated session reproduces from the seed its own data file carries.
 
-**A known weakness, recorded rather than papered over:** it is the session generator, not the
-allocation one, whose stream must still reproduce years later from a recorded seed — and
-`random.Random` gives a weaker guarantee of stream stability across Python versions than
-`numpy.random.Generator` does. The two are the wrong way round on that criterion. Nothing in the
-study depends on it yet, because no analysis re-runs a session from its seed; changing it later
-means reseeding `Session` and re-recording, and would invalidate reproduction of any session
-recorded before the change. `docs/LOG.md` N5.20 has it.
+Which generator sits on which side of that boundary is an open question, not a settled design:
+`docs/LOG.md` N5.20 has it, with the gate.
 
 Other environment facts:
 
