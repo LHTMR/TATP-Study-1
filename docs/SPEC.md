@@ -620,7 +620,9 @@ has no entry: it is a button the participant is told about, never one a screen d
   anchor at 10 % on the pain scale and at 10 % and 90 % on the touch intensity scale.
 - **The marker is hidden until the first press.** It then appears at **25 % if the left button
   was pressed first, 75 % if the right was.** Log which.
-- Hold-to-repeat movement; confirm with the play button.
+- A tap moves the marker one step; a hold moves it continuously and **accelerates**, in the
+  shape of §10.3 (`vas.hold_*` in `study1.yaml`, pilot-tunable; S, 5 Oct 2026). A hold the
+  device delivers as repeated presses is still one hold. Confirm with the play button.
 - No numbers, no tick marks beyond the labelled anchors.
 - Record: response percent, reaction time, first-press side, number of direction changes.
 
@@ -709,6 +711,11 @@ pairing of an invigoration word with a wakefulness word and is the natural Swedi
 *uppfriskad och vaken* is the closer cognate but reads oddly in this context.
 
 **VAS training — proportionality** (Price et al. 1983), given once per scale at first use.
+Since S's lab-run list (5 Oct 2026) **the sentence is the experimenter's to say aloud**, shown on
+the experimenter screen (`vas_training_explain` in the experimenter text, both languages), not
+on the participant's. The participant then makes a **practice rating** — free placement, moved
+and confirmed as a real rating — which is logged as `vas_practice_rating` and never written to
+a ratings table (docs/research/R35, DATA_SCHEMA.md `log`).
 
 | Scale | Svenska |
 |---|---|

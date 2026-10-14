@@ -411,14 +411,18 @@ The intervention never contains training.
 
 For each scale:
 
-1. The participant sees the scale as it will be rated, with no marker, and a sentence below
-   it: *a mark twice as far along the line means it was twice as painful* (or *intense*, or
-   *pleasant*). No button does anything on it yet. Your screen shows **Rating scale training:
-   explain the labels along the line aloud, then press Next step.**
+1. The participant sees the scale as it will be rated, with no marker and nothing below it.
+   No button but the stop button does anything on it yet. Your screen shows **Rating scale
+   training: explain the labels along the line aloud, and explain that "…"**, with the
+   proportionality sentence for that scale: *a mark twice as far along the line means it was
+   twice as painful* (or *intense*, or *pleasant*).
 2. Every time, read out each label on the participant's screen and where it sits on the line
-   (Bilaga 1 §3.6.1, §3.9 ask for instructions on the anchors). Then press **Next step**.
-3. **Press ▶ to continue** appears under the sentence, and your screen shows **Rating scale
-   training: waiting for the participant to press ▶.** The participant presses ▶.
+   (Bilaga 1 §3.6.1, §3.9 ask for instructions on the anchors), then say the proportionality
+   sentence. Then press **Next step**.
+3. The participant makes a **practice rating**: a line under the scale asks them to move the
+   marker with the large buttons, both ways, and press ▶. Holding a button moves the marker
+   faster the longer it is held. Your screen says the participant is practising; it never
+   shows where they put the marker, and the practice is not recorded as a rating.
 
 Do not apply a filament until your screen shows the application instruction. The relaxation and alertness questions have no training. After a
 crash, a resumed session does not repeat training already given in that session.

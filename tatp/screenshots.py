@@ -269,19 +269,22 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         window.show_vas_training(scale, accepting=False)
         yield Shot(
             f"participant_{language}_vas_training_{scale}",
-            f"The proportionality training for `{scale}` (SPEC.md 10.6) while the experimenter "
-            f"explains the anchors: the scale exactly as it is rated, with no marker, and "
-            f"`training.{scale}` below it; no continue line, and ▶ does nothing, {language}.",
+            f"The VAS training for `{scale}` (SPEC.md 10.6) while the experimenter explains "
+            f"the anchors and proportionality aloud: the scale exactly as it is rated, with no "
+            f"marker and nothing below it; only the stop button does anything, {language}.",
             _grab(window),
         )
 
-    # One scale is enough for the second state: the continue line is drawn by the same code
-    # under every scale's sentence.
+    # One scale is enough for the practice: its line is the same under every scale. Photographed
+    # after the first press, so the marker the participant is practising with is in the shot.
     window.show_vas_training(VARIANT_SCALE, accepting=True)
+    window.vas.state.press(Action.INCREASE)
     yield Shot(
-        f"participant_{language}_vas_training_{VARIANT_SCALE}_accepting",
-        f"The `{VARIANT_SCALE}` training once the experimenter has pressed Next step: "
-        f"`training_continue` under the sentence, and ▶ now dismisses it, {language}.",
+        f"participant_{language}_vas_training_{VARIANT_SCALE}_practice",
+        f"The `{VARIANT_SCALE}` training once the experimenter has pressed Next step: a "
+        f"practice rating, `training.{VARIANT_SCALE}` below the scale, the marker shown after "
+        f"a right press; ▶ confirms the practice, which is never recorded as a rating, "
+        f"{language}.",
         _grab(window),
     )
 

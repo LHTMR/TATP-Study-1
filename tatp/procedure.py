@@ -61,6 +61,7 @@ from tatp.units import MS_PER_S
 VAS_TRAINING_SHOWN = "vas_training_shown"
 VAS_TRAINING_EXPLAINED = "vas_training_explained"
 VAS_TRAINING_INSTRUCTION = "vas_training"
+VAS_TRAINING_EXPLAIN = "vas_training_explain"
 
 
 class Rig(QObject):
@@ -230,9 +231,10 @@ class Procedure(QObject):
         a training screen never falls between a stimulus and its rating. Each scale is two
         steps, so an interruption repeats the one it was in:
 
-        1. The scale and its sentence, with ▶ doing nothing, while the experimenter explains
-           the anchors aloud (Bilaga 1 3.6.1, 3.9); their go is logged `vas_training_explained`.
-        2. `VasTraining`: the continue line appears and ▶ dismisses the screen.
+        1. The scale alone, with no button but the stop doing anything, while the experimenter
+           explains the anchors and proportionality aloud (Bilaga 1 3.6.1, 3.9), from
+           `vas_training_explain`; their go is logged `vas_training_explained`.
+        2. `VasTraining`: a practice rating, never recorded as a rating.
 
         Once confirmed it is not shown again this session (`Session.vas_training_due`).
         """
@@ -244,8 +246,13 @@ class Procedure(QObject):
 
         def show() -> None:
             self.participant.show_vas_training(scale, accepting=False)
+            # The proportionality sentence is the experimenter's to say, not the participant's
+            # to read (S's lab-run list, 5 Oct 2026).
+            text = self.experimenter.text
             self.experimenter.set_instruction(
-                self.experimenter.text["instructions"][VAS_TRAINING_INSTRUCTION]
+                text["instructions"][VAS_TRAINING_INSTRUCTION].format(
+                    explanation=text[VAS_TRAINING_EXPLAIN][scale]
+                )
             )
             self.experimenter.set_status("")
             self.experimenter.refresh()

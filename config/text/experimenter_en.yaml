@@ -104,10 +104,16 @@ instructions:
   response_received: Response received.
   # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. The VAS proportionality
   # training (SPEC.md 10.6), before a scale's first rating; the same in every condition.
-  vas_training: 'Rating scale training: explain the labels along the line aloud, then press Next step.'
-  # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. After that Next step, while
-  # the participant's screen asks for ▶.
-  vas_training_wait: 'Rating scale training: waiting for the participant to press ▶.'
+  # Reworded (LOG N7.F7a): the proportionality sentence is said aloud here, not shown to the
+  # participant.
+  vas_training: >-
+    Rating scale training: explain the labels along the line aloud, and explain that
+    "{explanation}" Then press Next step.
+  # DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. After that Next step, while
+  # the participant makes the practice rating. Never shows where they put the marker.
+  vas_training_wait: >-
+    Rating scale training: the participant is making a practice rating and confirms it with ▶.
+    It is not recorded as a rating.
   # Setup and touch calibration (SPEC.md 9, 10.7, 10.9). None names a pattern or a condition.
   masking_check: 'Audio setup: the participant is setting the noise level against the garment.'
   earplugs: Fit the earplugs under the headphones, then press Next step.
@@ -160,6 +166,17 @@ instructions:
     is not prompted again; the rekindle is timed from then. Press Next step to confirm. If the
     heat was not in fact applied, apply it now and enter a note. The garment stays off until the
     rekindle is over.
+
+# DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. What the experimenter says
+# about proportionality in the VAS training (SPEC.md 10.6), shown inside `instructions.
+# vas_training` as {explanation}. It was on the participant's screen until S's lab-run list
+# (5 Oct 2026); it is the participant text's old sentence, and Bilaga 1's "a mark twice as far
+# along the line indicates it is twice as painful" / "twice as pleasant/intense". One key per
+# trained scale, the same scales as the participant text's `training`.
+vas_training_explain:
+  pain: A mark twice as far along the line means it was twice as painful.
+  intensity: A mark twice as far along the line means the touch felt twice as intense.
+  pleasantness: A mark twice as far along the line means the touch felt twice as pleasant.
 
 controls:
   proceed: Next step

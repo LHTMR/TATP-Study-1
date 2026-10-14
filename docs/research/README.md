@@ -14,6 +14,7 @@ Numbers are never reused.
 | [R32](R32-touchcal-estimation-timing.md) | Touch-calibration estimation run (SPEC §9 step 2): hold before VAS, stimulus during rating, off-interval, amplitude spacing, catch-trial count | medium (off-interval low) | 3 s hold from command; stimulus on until confirm, 12 s rating timeout; off 8–12 s jittered; 10 log-even amplitudes inclusive of bracket; 2 catch trials added (12 total) |
 | [R33](R33-touchcal-equalisation-mismatch.md) | What counts as a mismatch in the Protocol B equalisation check, and how re-adjustment loops (SPEC §9) | medium | A pair is both orders; a second pair only if the first favoured one channel both times; a channel winning all four is re-adjusted from both start points and re-checked once (LOG N7.C5) |
 | [R34](R34-vas-proportionality-training-frequency.md) | Is the VAS proportionality instruction (SPEC §10.6) given at first use of each scale in every session, or only in session 1? | medium | Every session, at the first use of each scale in that session (LOG N7.T1) |
+| [R35](R35-vas-practice-rating.md) | Should the VAS training's practice rating be free placement or aimed at a target, and should it be recorded, and where? (SPEC §10.6) | medium | Free placement, no target, no feedback; logged only (`vas_practice_rating`), never in a ratings table |
 
 ## To fetch
 
@@ -34,3 +35,6 @@ papers are copyrighted), a later session re-reads it and updates the report that
 | 10.1016/0304-3959(94)90097-3 | Price, Bush, Long & Harkins 1994, A comparison of pain measurement characteristics of mechanical visual analogue and simple numerical rating scales | R34 |
 | 10.1016/j.jpain.2026.106253 | De Vera, Abssy, Seminowicz & Moayedi 2026, Reliability and stability of pain ratings and secondary hyperalgesia to experimental phasic heat pain across multiple days and weeks | R34 |
 | 10.3758/BF03202857 | Teghtsoonian & Teghtsoonian 1983, Consistency of individual exponents in cross-modal matching (confirm the one-week finding is here, not in their 1971 note, 10.3758/BF03205774) | R34 |
+| 10.1017/S0140525X00040061 | Poulton 1995, Bias by stimuli presented before the start of an investigation (abstract only; which biases, and how large) | R35 |
+| 10.1037/0033-2909.86.4.777 | Poulton 1979, Models for biases in judging sensory magnitude (known only from citations; transfer and centring bias) | R35 |
+| 10.1016/j.pain.2013.01.016 | Watkinson et al. 2013, Pain ratings reflect cognitive context: a range frequency model of pain perception (abstract only; effect sizes) | R35 |

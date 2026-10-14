@@ -53,9 +53,10 @@ SCENARIO_ENDED = "validator: the scenario's error path is over"
 PROCEED_INSTRUCTIONS = (
     "fit_garment", "thermode_start", "capsaicin_apply", "capsaicin_remove",
     "intervention_start", "thermode_rekindle", "ready", "touchcal_uneven", "earplugs",
-    # The VAS training: the anchors explained aloud, then the go (SPEC.md 10.6).
-    "vas_training",
 )
+# Templated instructions after which the software waits for Next step. The VAS training: the
+# anchors and proportionality explained aloud, then the go (SPEC.md 10.6).
+PROCEED_TEMPLATES = ("touchcal_gain_undefined", "vas_training")
 
 
 def template_pattern(template: str) -> re.Pattern:
@@ -88,7 +89,9 @@ class VirtualExperimenter(QObject):
         self._brush = template_pattern(instructions["apply_brush"])
         self._mapping_ready = template_pattern(instructions["mapping_ready"])
         self._mapping_path = template_pattern(instructions["mapping_path"])
-        self._gain_undefined = template_pattern(instructions["touchcal_gain_undefined"])
+        self._proceed_templates = [
+            template_pattern(instructions[key]) for key in PROCEED_TEMPLATES
+        ]
         self._proceed = {instructions[key] for key in PROCEED_INSTRUCTIONS} | {
             text["dialogs"]["distances_outstanding"]
         }
@@ -181,7 +184,9 @@ class VirtualExperimenter(QObject):
         instruction = window.instruction.text()
         phase = self._phases.get(window.phase.text())
         self._track_mapping(instruction, phase)
-        if instruction in self._proceed or self._gain_undefined.fullmatch(instruction):
+        if instruction in self._proceed or any(
+            pattern.fullmatch(instruction) for pattern in self._proceed_templates
+        ):
             window.proceed_requested.emit()
         elif self._mapping_ready.search(instruction):
             window.proceed_requested.emit()

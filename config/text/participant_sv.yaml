@@ -54,18 +54,19 @@ vas:
       - {pct: 0.0, label: instämmer inte alls}
       - {pct: 100.0, label: instämmer helt}
 
+# DRAFT (LOG N7.F7a): written by the build, not ethics-sourced
+# Övningsskattningen i VAS-övningen (SPEC.md 10.6), en nyckel per övad skala: en skala med en
+# nyckel här övas, och varje nyckel måste vara en skala. Visas under skalan, som ritas som den
+# skattas, när försöksledaren har förklarat etiketterna och proportionaliteten muntligt --
+# proportionalitetsmeningen är nu försöksledarens (`vas_training_explain`, S:s lista efter
+# labbkörningen 5 okt 2026). Fri placering, inget mål (docs/research/R35). Samma ord för varje
+# skala, så att ingenting skiljer sig mellan skalor eller besök.
 training:
-  # Proportionalitetsinstruktion (Price et al. 1983), en gång per skala vid första användning.
-  pain: Ett märke dubbelt så långt ut på linjen betyder att det gjorde dubbelt så ont.
-  intensity: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så intensiv.
-  pleasantness: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så behaglig.
-
-# DRAFT (LOG N7.T1): written by the build, not ethics-sourced
-# Raden under varje skalas `training`-mening på övningsskärmen, som visar skalan som den skattas
-# med meningen under (SPEC.md 10.6). Utanför `training`, där varje nyckel måste vara en skala.
-# Samma ord som den godkända "Tryck på ▶ för att fortsätta." i `stop_rehearsal_done` och
-# `audio_setup.settled`.
-training_continue: Tryck på ▶ för att fortsätta.
+  pain: &practice >-
+    Övning: flytta markören med de två stora knapparna, åt båda hållen, och tryck sedan på ▶.
+    Övningen är ingen skattning.
+  intensity: *practice
+  pleasantness: *practice
 
 screens:
   # Godkänd 23 aug 2026. Ordvalen följer Bilaga 3a, som beskriver hudmätningen som "tunna

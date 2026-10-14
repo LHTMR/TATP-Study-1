@@ -104,10 +104,16 @@ instructions:
   response_received: Svar mottaget.
   # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. Övningen i proportionalitet på
   # VAS (SPEC.md 10.6), före en skalas första skattning; densamma i alla betingelser.
-  vas_training: 'Övning på skattningsskalan: förklara etiketterna längs linjen högt, och tryck sedan på Nästa steg.'
-  # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. Efter det Nästa steg, medan
-  # deltagarens skärm ber om ▶.
-  vas_training_wait: 'Övning på skattningsskalan: väntar på att deltagaren trycker på ▶.'
+  # Omformulerad (LOG N7.F7a): proportionalitetsmeningen sägs högt här, den visas inte för
+  # deltagaren.
+  vas_training: >-
+    Övning på skattningsskalan: förklara etiketterna längs linjen högt, och förklara att
+    "{explanation}" Tryck sedan på Nästa steg.
+  # DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. Efter det Nästa steg, medan
+  # deltagaren gör en övningsskattning. Visar aldrig var markören hamnade.
+  vas_training_wait: >-
+    Övning på skattningsskalan: deltagaren gör en övningsskattning och bekräftar den med ▶.
+    Den sparas inte som en skattning.
   # Förberedelser och beröringskalibrering (SPEC.md 9, 10.7, 10.9). Ingen nämner ett mönster
   # eller en betingelse.
   masking_check: 'Ljudinställning: deltagaren ställer in brusnivån mot plagget.'
@@ -158,6 +164,16 @@ instructions:
     inte igen; återuppvärmningen räknas därifrån. Tryck på Nästa steg för att bekräfta. Om
     värmen i själva verket inte gavs, ge den nu och skriv en anteckning. Plagget förblir avstängt
     tills återuppvärmningen är klar.
+
+# DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. Vad försöksledaren säger om
+# proportionalitet i VAS-övningen (SPEC.md 10.6), visat i `instructions.vas_training` som
+# {explanation}. Det stod på deltagarens skärm fram till S:s lista efter labbkörningen (5 okt
+# 2026); det är deltagartextens tidigare mening (SPEC.md 10.6). En nyckel per övad skala,
+# samma skalor som deltagartextens `training`.
+vas_training_explain:
+  pain: Ett märke dubbelt så långt ut på linjen betyder att det gjorde dubbelt så ont.
+  intensity: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så intensiv.
+  pleasantness: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så behaglig.
 
 controls:
   proceed: Nästa steg
