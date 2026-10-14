@@ -57,24 +57,19 @@ things that genuinely have no tool: running the test suite, git, conda.
 `git ls-files` and `grep -rn` are the fallback. `git ls-files` is usually the best of them: it
 lists exactly the tracked files and never descends into `data/`.
 
-The permissions in `.claude/settings.json` have three tiers, and the split is deliberate:
+**Permissions come from the session's auto mode alone.** Since 14 Oct 2026 (S's decision,
+`docs/LOG.md` N4.5) `.claude/settings.json` holds no allow, ask or deny rules. What the deny
+list used to enforce is now yours to keep:
 
-- **Deny** is kept to what the study depends on: participant data (`data/`), anything that
-  sends data off the machine (`curl`, `ssh`, `scp`, …), rewriting the environment outside
-  `environment.yml`, destroying git history (`git push`, `git reset --hard`, `git clean`), and
-  writes to OneDrive on either machine.
-  Recursive `rm` (`rm -r`, `rm -rf`, …) is denied too: a single-file `rm` is enough for
-  anything the build does, and a recursive one is how a folder of participant data disappears.
-- **Ask** is kept to `ln`, `git config` and the shell wrappers (`bash -c`, `eval`), which hide
-  the real command inside a string. Nothing the build does needs them. Write the command out
-  instead.
-- **Allow** covers everything the parallel streams need to run without a person watching: every
-  `make` target, `conda run -n tatp-study-1 …`, single-file `rm`, `mv`, `cp`, `git checkout` /
-  `git restore`, `git worktree`, `git merge`, `git cherry-pick`, and `WebSearch` / `WebFetch`
-  for research. **No agent should ever wait on S for a permission.** A command that prompts
-  means the command was written wrongly (see the hard rules below), so rewrite it rather than
-  asking. Commit often: `git restore` is allowed, and a branch protects only what is committed.
-- Everything else is left to the session's permission mode.
+- never read, edit or write participant data (`data/`), except through the study's own tools;
+- nothing that sends data off the machine (`curl`, `ssh`, `scp`, …) beyond `WebSearch` /
+  `WebFetch` for research;
+- no environment changes outside `environment.yml` (no `conda install`, `pip install`, …);
+- no `git reset --hard`, `git clean` or recursive `rm`: a single-file `rm` is enough for
+  anything the build does, and a recursive one is how a folder of participant data disappears;
+- no writes to OneDrive on either machine.
+
+Commit often: a branch protects only what is committed.
 
 **The Bash tool on the lab PC sometimes fails to start**, with
 `bash.exe: *** fatal error - add_item ("\??\C:\Program Files\Git", "/", ...) failed, errno 1`.
@@ -82,33 +77,21 @@ That is Git Bash failing to launch, not your command failing, and running the sa
 works. **Retry once, unchanged.** It seems to happen most when several shells start at once, so
 prefer `Read` / `Grep` / `Glob` to shell commands, and do not fire several Bash calls in parallel.
 
-`conda run … python tools/…` is allowed **both with and without `--no-capture-output`**. The
-Makefile uses the flag, so that is the spelling in front of you when you run a tool by hand,
-and a rule matching only the bare form prompts on the one you would naturally copy.
-
 ## Hard rules
 
-- **Prefer one shell command per Bash call.** Claude Code checks each part of a chained
-  command against the rules separately, so chaining is safe, but one unmatched part makes the
-  whole call prompt. Separate calls are easier to approve and to read back.
-- **Write the command so the permission rule can match it.** The rules in
-  `.claude/settings.json` match a command *prefix*, so anything in front of the real command
-  breaks the match and prompts:
+- **Prefer one shell command per Bash call.** Separate calls are easier to read back.
+- **Keep commands plain:**
   - **No environment-variable prefix.** Not `QT_QPA_PLATFORM=offscreen pytest`. Set the
-    variable in `tests/conftest.py` or in the tool itself. (`env` is denied anyway.)
+    variable in `tests/conftest.py` or in the tool itself, so every run gets it.
   - **No `git -C <path>`, and no `cd <path> &&` in front.** The working directory is already
-    the repository root (or the worktree, for a stream agent), so plain `git status`,
-    `git add -A`, `git commit` are both shorter and matchable.
-  - **No newline inside a command.** A multi-line `git commit -m "…"` prompts even though
-    `git commit` is allowed, because a newline can hide a second command. Write the message to
-    a file in the session scratchpad and use `git commit -F <file>`.
-  - Prefer `make check` over its parts. Subprocesses a Makefile spawns are not
-    permission-checked, so the Makefile is the right home for the env vars and the
+    the repository root (or the worktree, for a stream agent).
+  - **No newline inside a command.** Write a multi-line commit message to a file in the session
+    scratchpad and use `git commit -F <file>`.
+  - Prefer `make check` over its parts. The Makefile is the home for the env vars and the
     `conda run` invocations.
 - **Never write outside this repository**, except throwaway files in the session scratchpad.
-  Not to OneDrive, not to a home directory, nowhere else on the machine. Deny rules cover
-  OneDrive, but nothing mechanical stops a tool's `--out` path pointing elsewhere
-  (`Bash(… python tools/*)` is an allow rule), so this rule is yours to keep.
+  Not to OneDrive, not to a home directory, nowhere else on the machine. Nothing mechanical
+  stops a tool's `--out` path pointing elsewhere, so this rule is yours to keep.
 - **Never commit participant data.** `data/` is gitignored. If you find data in a commit, stop
   and say so.
 - **No literals in task code.** Timings, forces, pressures, thresholds, rates and every
@@ -179,7 +162,7 @@ the right default — downgrade deliberately, not by habit.
 - **Never end a session with the repository broken.** If something is half-finished, either
   finish it, or revert it and note it in `docs/STATUS.md`.
 - Message says what changed and why, and names the milestone.
-- Do not push. `git push` is denied; S pushes.
+- Push and pull when S asks. Never force-push.
 
 ## Sessions, context and limits
 
