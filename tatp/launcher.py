@@ -646,6 +646,9 @@ class LauncherWindow(QWidget):
         # Modal to the launcher, so no session can start while the check holds the garment's
         # port or the headphones; closing it lets both go.
         dialog = self.hardware_check_dialog()
+        # Deleted on close, so a check opened again builds afresh rather than leaving the last
+        # one's audio stream open on the participant's headphones.
+        dialog.setAttribute(Qt.WA_DeleteOnClose)
         dialog.open()
         return dialog
 

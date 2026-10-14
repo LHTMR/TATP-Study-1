@@ -75,6 +75,10 @@ def pilot_rows(rows, n_pilot: int, code_offset: int):
         raise ValueError(
             f"{n_pilot} pilot codes but only {len(real_codes)} participants to copy"
         )
+    # Analysis tells a pilot session by its code being above the offset, so no real code may be.
+    assert code_offset >= max(int(code) for code in real_codes), (
+        f"pilot_code_offset {code_offset} is not above every real participant code"
+    )
     copied = {code: str(code_offset + int(code)) for code in real_codes[:n_pilot]}
     return [(copied[code], *rest) for code, *rest in rows if code in copied]
 

@@ -390,6 +390,18 @@ def test_the_preference_screen_reads_the_buttons_as_the_adjustment_does(particip
     assert confirmed == [True]
 
 
+def test_a_held_stop_button_is_one_stop(participant):
+    """The R400's stop button auto-repeats when held; a repeat is not another press."""
+    stops = []
+    participant.emergency_stop.connect(lambda: stops.append(True))
+    participant.show_message("welcome")
+    key = QT_KEYS["period"]
+    participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, key, Qt.NoModifier))
+    for _ in range(3):
+        participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, key, Qt.NoModifier, "", True))
+    assert stops == [True]
+
+
 def test_a_message_screen_reports_the_play_button(participant):
     """"Press ▶ to continue" needs the press to reach whoever is waiting for it."""
     seen = []

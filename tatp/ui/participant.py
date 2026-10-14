@@ -707,7 +707,10 @@ class ParticipantWindow(QWidget):
         self.last_press_real_s = self.clock.real_elapsed_s()
         action = self._action(event)
         if action is Action.EMERGENCY_STOP:
-            self.emergency_stop.emit()
+            # The R400's stop button auto-repeats when held (docs/LOG.md N7.F1). The first press
+            # has already zeroed the garment, and each repeat would log another stop.
+            if not event.isAutoRepeat():
+                self.emergency_stop.emit()
         elif (
             action is Action.CONFIRM
             and not self._adjusting

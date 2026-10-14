@@ -229,3 +229,18 @@ items:
          procedure and not the build's to decide. Write it into SOP.md, add any screen wording
          it needs, then add `lost_link_procedure_decided: <date>` under garment.prototype."
     blocks_use: true
+
+  - item: "L15"
+    summary: The participant's stop button is lost while an experimenter text field has focus
+    resolved_when: {file: hardware.yaml, path: "responder.text_field_stop_decided"}
+    fix: "S, before piloting. Since the R400 remap (docs/LOG.md N7.F1) the stop button sends a
+         full stop. RemoteKeyRouter leaves every key to a focused experimenter text field, so
+         the experimenter can type notes and decimal distances, and a participant's stop
+         pressed then is typed into the field: the garment is not zeroed and nothing is logged
+         (found by the review of 14 Oct 2026). Routing the stop key everywhere would make every
+         full stop the experimenter types an emergency stop. Possible ways out: decimal commas
+         in the distance fields and the stop routed everywhere; the hardware stop as the
+         safeguard while a field has focus, written into the SOP; or the fields refusing '.'.
+         A safety procedure, so not the build's. Record the choice, then add
+         `text_field_stop_decided: <date>` under responder:."
+    blocks_use: true

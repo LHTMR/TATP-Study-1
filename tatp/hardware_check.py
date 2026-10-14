@@ -150,7 +150,6 @@ class HardwareCheckDialog(QDialog):
         self.responder = Responder(hardware)
         self.presses: dict[Action, int] = {action: 0 for action in Action}
         self.remote_keys = RemoteKeys(self.responder, self.pressed, self)
-        QApplication.instance().installEventFilter(self.remote_keys)
 
         audio_config = hardware["audio"]
         self.audio = Audio(audio_config, self.clock, lambda *_, **__: None)
@@ -186,6 +185,9 @@ class HardwareCheckDialog(QDialog):
         layout.addLayout(closing)
         self.finished.connect(self.release)
         fit_to_screen(self, HARDWARE_CHECK_WIDTH_PX, HARDWARE_CHECK_HEIGHT_PX)
+        # Last, once nothing above can raise: a filter installed by a dialog that failed to
+        # build would never be removed, and would swallow every remote press in a later session.
+        QApplication.instance().installEventFilter(self.remote_keys)
 
     # -- sections ------------------------------------------------------------------------
 
@@ -430,9 +432,12 @@ class HardwareCheckDialog(QDialog):
         if self.garment is None or not self.garment.connected:
             return
         try:
-            if self.garment.per_channel_pressure:
-                pressure = self.hardware["audio"]["masking_check_pressure_kpa"] if on else 0.0
-                self.garment.set_pressure(channel, pressure)
+            # Off is the valve alone: commanding 0 kPa would go through the rate limit, which
+            # applies to falls too, and a quick on-off would leave pressure commanded.
+            if on and self.garment.per_channel_pressure:
+                self.garment.set_pressure(
+                    channel, self.hardware["audio"]["masking_check_pressure_kpa"]
+                )
             self.garment.set_channel(channel, on)
         except GARMENT_ERRORS as error:
             self._show_garment(self.words["garment_failed"].format(value=error))
