@@ -44,14 +44,13 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
 - the lost-link log;
 - the REDCap checkbox.
 
-**`make check` passes:** 1021 tests, ruff, the validator (35 checks) and 172 screens.
+**`make check` passes:** 1024 tests, ruff, the validator (35 checks) and 172 screens.
 
-**The Mac's Milestone 2 line is reconciled (14 Oct 2026).** `origin/main` had five commits from
-the Mac that the lab's line never had. Local `main` merged them with `-s ours`, keeping the
-lab's tree (`ae3fd1e`), and that merge is not pushed yet. Two parts were not superseded and are
-now on this branch: the lost-taps fix (adjustment presses timed from their key events, including
-those the experimenter's window forwards) and the RNG question, since decided: the session keeps `random.Random`, with a test pinning its
-stream (LOG N3.7).
+**`main` and `accel/integration` are level (14 Oct 2026).** The Mac's Milestone 2 line was
+merged keeping the lab's tree (`ae3fd1e`); its two unsuperseded parts were ported: the lost-taps
+fix (adjustment presses timed from their key events) and the RNG question, decided as keep
+`random.Random` with a test pinning its stream (LOG N3.7). The lab-run commits were reviewed
+(code-review high, spec-review) and their fixes landed in `8589ade` before the merge to `main`.
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
 - **Screens to review:**
@@ -71,7 +70,8 @@ stream (LOG N3.7).
   - blinding choices N7.E4 and N7.D17;
   - low-confidence decisions N7.C2, N7.B2 and N7.D8.
 - **Open items still S's:** L11, the rehearsal pressure; L13, the noise ceiling and the cue; L3,
-  alert metering; L14, a lost sleeve link.
+  alert metering; L14, a lost sleeve link; **L15, the participant's stop typed into a focused
+  experimenter text field (a safety gap, decide before piloting).**
 
 ---
 
@@ -120,7 +120,7 @@ stream (LOG N3.7).
        counts as ▶;
      - whether the alerts are audible over the noise;
      - taps on the adjustment are never lost or misread (N2.9).
-3. **S pushes `main` (the Mac merge), then reviews and merges `accel/integration` into it.**
+3. **Merge `accel/integration` into `main` again** once steps 1 and 2 are done and reviewed.
 4. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
 5. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
    Milestone 6 done.
