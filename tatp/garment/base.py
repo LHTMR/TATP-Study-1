@@ -162,12 +162,13 @@ class GarmentController(ABC):
         # The rate limit constrains change over time, so the first command to a channel has no
         # elapsed interval to constrain and is not limited. That is the intended reading: the
         # limit exists so that holding a button cannot ramp to maximum quickly (SPEC.md 13),
-        # not to slow a single deliberate command to a calibrated pressure.
+        # not to slow a single deliberate command to a calibrated pressure. Rises only: a fall
+        # moves away from harm, and slowing it would hold pressure on the participant for longer
+        # than was asked for (S, 14 Oct 2026; docs/LOG.md N7.D21).
         since = now - self._last_command_s.get(channel, now)
         if since > 0:
             allowed = self.limits.pressure_rate_max_kpa_s * since
-            if abs(target - current) > allowed:
-                target = current + allowed * (1.0 if target > current else -1.0)
+            target = min(target, current + allowed)
 
         self._set_pressure(channel, target)
         self.pressure_kpa[channel] = target

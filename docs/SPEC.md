@@ -1082,7 +1082,8 @@ way must be impossible to mistake for a real one afterwards.
   The rehearsal fires the real path, not a lookalike.
 - **Hard pressure ceiling and rate limit in software, independent of participant adjustment.**
   `garment.pressure_ceiling_kpa` clamps every command, whatever its source, and the clamp lives
-  in `GarmentController` rather than in each driver so it cannot differ between them.
+  in `GarmentController` rather than in each driver so it cannot differ between them. The rate
+  limit applies to rises only: a fall is never slowed (S, 14 Oct 2026; `docs/LOG.md` N7.D21).
 
   **The ceiling is set at the hardware maximum, 250 kPa** (S, 23 Aug 2026). It therefore holds
   no margin below the hardware: what it guarantees is that the software never commands past what
