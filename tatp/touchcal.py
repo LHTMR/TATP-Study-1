@@ -712,15 +712,21 @@ class EstimationPresentation(Trial):
     interval made the pause after a response the drawn interval plus up to the ceiling over the
     rate limit -- 4 s more on the prototype, whose pressures are not even delivered (docs/LOG.md
     N7.F8a). A ramp longer than the interval still ends before the cue, so the cue waits for it.
+
+    The interval counts from `stopped_s`, the previous presentation's stop as it reported it,
+    so the work between -- a row written, a screen redrawn -- is inside the interval rather
+    than added to it. None (the first presentation, or a repeat after an interruption) counts
+    from this one's own start. Finishes with (plan, rating, the `elapsed_s` of its own stop).
     """
 
     def __init__(self, session, participant, experimenter, plan, channel: int, run_index: int,
-                 off_s: float):
+                 off_s: float, stopped_s: float | None):
         super().__init__(session, participant, experimenter)
         self.plan = plan
         self.channel = channel
         self.run_index = run_index
         self.off_s = off_s
+        self.stopped_s = stopped_s
         touch = session.config.study1["touch_calibration"]
         self.settle_s = float(touch["estimation_settle_s"])
         self.onset_iso = ""
@@ -728,7 +734,7 @@ class EstimationPresentation(Trial):
 
     def start(self) -> None:
         clock = self.session.clock
-        stopped_s = clock.elapsed_s()
+        stopped_s = clock.elapsed_s() if self.stopped_s is None else self.stopped_s
         # From nothing, whatever an interrupted attempt or a restored garment left behind.
         self.session.garment.stop()
         levels = {} if self.plan.catch_trial else {self.channel: self.plan.pressure_kpa}
@@ -779,7 +785,8 @@ class EstimationPresentation(Trial):
             valid_for_analysis=self.session.garment.per_channel_pressure,
         )
         self.session.garment.stop()
-        self.done((self.plan, response.rating_percent))
+        stopped_s = self.session.clock.elapsed_s()
+        self.done((self.plan, response.rating_percent, stopped_s))
 
 
 # -- step 4: one equalisation comparison -------------------------------------------------
@@ -1196,17 +1203,18 @@ class TouchCalibration(Procedure):
         self.gain_sources: dict[int, str] = {self.reference: GAIN_REFERENCE}
         self.match_settings: dict[int, list[float]] = {}
         self.match_passes: dict[int, int] = {}
-        self.pleasant_kpa = 0.0
+        # None until step 5 sets it: a measured 0 kPa is a level, not the absence of one.
+        self.pleasant_kpa: float | None = None
         self.stage1_pass = False
+        # The stage-1 reasons of a fit put to the experimenter and not yet accepted or re-run;
+        # None when no decision is pending.
+        self.pending_reasons: tuple[str, ...] | None = None
 
+        # Counted within the current run (`len(self.estimates)`), at least 1 (config.py).
         self.skip_min_ratings = int(self.touch["pilot_skip_min_ratings"])
-        # Stage boundary (CLAUDE.md): a skip offered before any rating would end on nothing.
-        assert self.skip_min_ratings >= 1, (
-            "study1.yaml: touch_calibration.pilot_skip_min_ratings must be at least 1"
-        )
-        # Every estimation rating given, across re-runs: what the skip is offered after.
-        self.ratings_answered = 0
         self.skipped = False
+        # This run's (plan, rating) pairs; reset by `_start_run`.
+        self.estimates: list[tuple[maths.EstimationPlan, float]] = []
 
     # -- the experimenter's skip, on a pilot rig only ----------------------------------
 
@@ -1224,18 +1232,22 @@ class TouchCalibration(Procedure):
         few ratings; with the study garment it must be impossible. The button is never shown
         there, and `_skip` asserts it besides, so a hidden button is not the only guard.
         """
-        if self.session.garment.pilot_rig and self.ratings_answered >= self.skip_min_ratings:
+        if self.session.garment.pilot_rig and len(self.estimates) >= self.skip_min_ratings:
             self.experimenter.set_actions_enabled(skip_calibration=True)
 
     def _skip(self) -> None:
         """End the calibration now, on what it has, recorded as skipped (docs/LOG.md N7.F8b).
 
         Targets come from an accepted fit if there is one, else from the fallback line through
-        the step 1 settings; a channel not yet matched is delivered at the reference's pressure;
-        a level not yet set is the geometric mean of P30 and P80; and with no preference made,
-        the participant-preferred condition uses the fixed pattern. Every `touchcal_channels`
-        row says `skipped` and is not valid for analysis, so a skipped calibration can never
-        pass for a full one. Identical in every condition (SPEC.md 16).
+        this run's step 1 settings -- the skip is offered only once this run has its own
+        ratings, so never on an earlier run's bracket. A fit awaiting the experimenter's
+        decision keeps its `touchcal_fit` row, written superseded because it was not accepted,
+        and its verdict does not become the calibration's. A channel not yet matched is
+        delivered at the reference's pressure; a level not yet set is the geometric mean of P30
+        and P80; and with no preference made, the participant-preferred condition uses the
+        fixed pattern. Every `touchcal_channels` row says `skipped` and is not valid for
+        analysis, so a skipped calibration can never pass for a full one. Identical in every
+        condition (SPEC.md 16).
         """
         garment = self.session.garment
         # Stage boundary (CLAUDE.md): the study garment never skips a calibration. Asserted
@@ -1243,29 +1255,38 @@ class TouchCalibration(Procedure):
         assert garment.pilot_rig, (
             f"{garment.driver_name} is the study garment: touch calibration cannot be skipped"
         )
-        assert self.ratings_answered >= self.skip_min_ratings, (
-            f"a skip after {self.ratings_answered} ratings; it is offered after "
+        answered = len(self.estimates)
+        assert answered >= self.skip_min_ratings, (
+            f"a skip after {answered} ratings in run {self.run_index}; it is offered after "
             f"{self.skip_min_ratings}"
         )
         assert self.rig.interruptions.active is None, "a skip while the session is interrupted"
         self._halt()
         garment.stop()
+        # Whatever the cancelled trial had up is taken down, as at the end of any step.
+        self.participant.show_blank()
+        self.experimenter.set_status("")
         self.experimenter.hide_fit_preview()
+        self.experimenter.refresh()
         self.skipped = True
         self.valid = False
         self.session.log(
             "touchcal_skipped", origin="experimenter", severity="warning",
-            detail=f"run {self.run_index}, after {self.ratings_answered} ratings; not valid "
-            "for analysis",
+            detail=f"run {self.run_index}, after {answered} ratings; not valid for analysis",
         )
+        if self.pending_reasons is not None:
+            self._write_fit(superseded=True, reasons=self.pending_reasons)
+            self.pending_reasons = None
         if self.inverse is None:
+            # No fit was accepted, so no stage-1 verdict is the calibration's.
+            self.stage1_pass = False
             self._fallback(("skipped",))
             self._set_targets()
         for channel in self.others:
             if channel not in self.gains:
                 self.gains[channel] = 1.0
                 self.gain_sources[channel] = GAIN_SKIPPED
-        if not self.pleasant_kpa:
+        if self.pleasant_kpa is None:
             self.pleasant_kpa = maths.geometric_mean(
                 [self.targets[self.low_pct], self.targets[self.high_pct]]
             )
@@ -1295,9 +1316,11 @@ class TouchCalibration(Procedure):
         self.fit = None
         self.raw_targets = {}
         self.targets_clamped = ()
-        self.estimates: list[tuple[maths.EstimationPlan, float]] = []
+        self.estimates = []
         self.catch_fraction: float | None = None
         self.catch_flag = False
+        # A new run has no ratings of its own yet, so nothing to skip on.
+        self.experimenter.set_actions_enabled(skip_calibration=False)
         self._anchor(list(anchor_plans(self.session.config, self.run_index)))
 
     def _anchor(self, plans: list[AdjustmentPlan]) -> None:
@@ -1346,13 +1369,15 @@ class TouchCalibration(Procedure):
             len(amplitudes), float(self.touch["catch_trial_fraction"])
         )
         plans = list(maths.estimation_plans(amplitudes, n_catch, self.session.rng))
-        self._present(plans, len(plans), off_s=0.0)
+        self._present(plans, off_s=0.0, stopped_s=None)
 
     def _device_range(self) -> tuple[float, float]:
         return (float(self.session.config.hardware["adjustment"]["tap_step_kpa"]),
                 self.ceiling_kpa)
 
-    def _present(self, plans: list[maths.EstimationPlan], total: int, off_s: float) -> None:
+    def _present(self, plans: list[maths.EstimationPlan], off_s: float,
+                 stopped_s: float | None) -> None:
+        """The next presentation, `off_s` after the last one's stop at `stopped_s`."""
         if not plans:
             self._fit()
             return
@@ -1360,14 +1385,14 @@ class TouchCalibration(Procedure):
         # was answered (SPEC.md 16).
         self.experimenter.set_instruction(
             self.experimenter.text["instructions"]["touchcal_estimation"].format(
-                answered=len(self.estimates), total=total
+                answered=len(self.estimates), total=len(self.estimates) + len(plans)
             )
         )
         self.experimenter.refresh()
 
         def presented(outcome) -> None:
-            self.estimates.append(outcome)
-            self.ratings_answered += 1
+            plan, rating, stopped_s = outcome
+            self.estimates.append((plan, rating))
             self._offer_skip()
             if len(plans) == 1:
                 self._fit()
@@ -1377,11 +1402,16 @@ class TouchCalibration(Procedure):
                 float(self.touch["estimation_iti_min_s"]),
                 float(self.touch["estimation_iti_max_s"]),
             )
-            self._present(plans[1:], total, iti_s)
+            self._present(plans[1:], iti_s, stopped_s)
+
+        # The last stop anchors the first attempt only: one repeated after an interruption
+        # waits the whole interval again from its own start, as a repeated wait did.
+        anchors = [stopped_s]
 
         self.run_trial(
             lambda: EstimationPresentation(
-                *self._windows(), plans[0], self.reference, self.run_index, off_s
+                *self._windows(), plans[0], self.reference, self.run_index, off_s,
+                anchors.pop() if anchors else None,
             ),
             presented,
         )
@@ -1435,6 +1465,7 @@ class TouchCalibration(Procedure):
 
     def _gate(self, reasons: tuple[str, ...], usable: bool) -> None:
         self.stage1_pass = not reasons
+        self.pending_reasons = reasons
         if self.preview:
             self.fit_ready.emit(self._fit_ready(reasons))
         if self.preview or (reasons and self.real):
@@ -1526,6 +1557,7 @@ class TouchCalibration(Procedure):
                 "touchcal_stage1_rerun", origin="experimenter", severity="warning",
                 detail=f"run {self.run_index}: {reason}",
             )
+        self.pending_reasons = None
         self._write_fit(superseded=True, reasons=reasons, rerun_reason=reason)
         self._start_run()
 
@@ -1569,6 +1601,7 @@ class TouchCalibration(Procedure):
         )
 
     def _accept(self, reasons: tuple[str, ...], usable: bool) -> None:
+        self.pending_reasons = None
         self._write_fit(superseded=False, reasons=reasons)
         if usable:
             self.inverse = self.fit
@@ -1805,7 +1838,7 @@ class TouchCalibration(Procedure):
         pair(1)
 
     def _after_equalisation(self) -> None:
-        if self.pleasant_kpa:
+        if self.pleasant_kpa is not None:
             # A rebalance: the pleasantness level is on the reference's scale, which the
             # gains do not touch, so it stands (docs/LOG.md N7.C8).
             self._evenness()

@@ -25,6 +25,7 @@ from tatp import touchcal
 from tatp import touchcal_maths as maths
 from tatp.garment.mock import MockGarment
 from tatp.touchcal_maths import REFERENCE_STRONGER, TEST_STRONGER
+from tatp.trials import ExperimenterChoice
 
 
 @pytest.fixture(scope="module")
@@ -640,7 +641,7 @@ def test_the_ramp_to_an_amplitude_runs_inside_the_off_interval(app, loaded, tmp_
         plan = maths.EstimationPlan(presentation_order=2, amplitude_index=10,
                                     pressure_kpa=pressure_kpa, catch_trial=False)
         trial = touchcal.EstimationPresentation(
-            session, rig.participant, rig.experimenter, plan, reference, 1, off_s
+            session, rig.participant, rig.experimenter, plan, reference, 1, off_s, None
         )
         cues = []
 
@@ -663,6 +664,40 @@ def test_the_ramp_to_an_amplitude_runs_inside_the_off_interval(app, loaded, tmp_
         session.close()
 
 
+def test_the_off_interval_counts_from_the_last_stop_not_from_the_next_start(
+    app, loaded, tmp_path
+):
+    """Work between the stop and the next presentation's start is inside the interval."""
+    # Slow, so a timer's few milliseconds late are a small part of the 3 s being looked for.
+    rig = make_rig(make_config(loaded, tmp_path), clock_speed=20.0)
+    try:
+        _check_off_interval_from_stop(rig)
+    finally:
+        rig.session.close()
+
+
+def _check_off_interval_from_stop(rig):
+    session = rig.session
+    off_s, earlier_s = 8.0, 3.0
+    reference = int(session.config.study1["touch_calibration"]["reference_channel"])
+    plan = maths.EstimationPlan(presentation_order=2, amplitude_index=0, pressure_kpa=0.0,
+                                catch_trial=True)
+    stopped_s = session.clock.elapsed_s() - earlier_s
+    trial = touchcal.EstimationPresentation(
+        session, rig.participant, rig.experimenter, plan, reference, 1, off_s, stopped_s
+    )
+    cues = []
+    rig.participant.warning_cue_shown.connect(lambda: cues.append(session.clock.elapsed_s()))
+    trial.start()
+    deadline = time.monotonic() + 5.0
+    while not cues and time.monotonic() < deadline:
+        QApplication.processEvents()
+        time.sleep(0.0005)
+    trial.cancel()
+    assert cues, "the cue never came"
+    assert cues[0] - stopped_s == pytest.approx(off_s, abs=earlier_s / 2)
+
+
 # -- the experimenter's view of the estimation run, and the pilot-rig skip ---------------
 
 
@@ -678,17 +713,32 @@ def test_the_experimenter_sees_how_many_ratings_are_answered(rig):
     assert progress == [template.format(answered=n, total=12) for n in range(12)]
 
 
-def _skip_when_offered(rig, procedure, offered):
-    """Record whether Skip calibration is shown at each step, and press it once it is."""
+def _skip_when_offered(rig, procedure, offered, when=lambda trial: True):
+    """Record (run, ratings this run, Skip shown) at each step; press Skip once it is shown
+    and `when(trial)` says this is the moment."""
     button = rig.experimenter.skip_button
 
     def step(trial):
         shown = not button.isHidden()
-        offered.append((procedure.ratings_answered, shown))
-        if shown and button.isEnabled():
+        offered.append((procedure.run_index, len(procedure.estimates), shown))
+        if shown and button.isEnabled() and when(trial):
             button.click()
 
     return step
+
+
+def _skipped_at(rig, when, **setup):
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    for name, value in setup.items():
+        setattr(virtual, name, value)
+    offered = []
+    virtual.before_step = _skip_when_offered(rig, procedure, offered, when)
+    result = virtual.run()
+    assert result.skipped and not result.valid_for_analysis
+    assert all(row["skipped"] == "true" and row["valid_for_analysis"] == "false"
+               for row in _rows(rig.session, "touchcal_channels"))
+    return result, procedure, offered
 
 
 def test_with_a_pilot_rig_the_experimenter_can_skip_after_a_few_ratings(rig):
@@ -701,7 +751,7 @@ def test_with_a_pilot_rig_the_experimenter_can_skip_after_a_few_ratings(rig):
     result = virtual.run()
     few = int(session.config.study1["touch_calibration"]["pilot_skip_min_ratings"])
 
-    assert all(not shown for answered, shown in offered if answered < few)
+    assert all(not shown for _, answered, shown in offered if answered < few)
     assert result.skipped and not result.valid_for_analysis
     assert rig.experimenter.skip_button.isHidden(), "gone once the calibration is over"
     assert len(_rows(session, "touchcal_estimate")) == few
@@ -737,7 +787,7 @@ def test_the_study_garment_can_never_skip(rig, monkeypatch):
 
     def step(trial):
         record(trial)
-        if procedure.ratings_answered >= few and not refused:
+        if len(procedure.estimates) >= few and not refused:
             with pytest.raises(AssertionError, match="study garment"):
                 procedure._skip()
             refused.append(True)
@@ -745,10 +795,93 @@ def test_the_study_garment_can_never_skip(rig, monkeypatch):
     virtual.before_step = step
     result = virtual.run()
     assert refused
-    assert not any(shown for _, shown in offered)
+    assert not any(shown for _, _, shown in offered)
     assert not result.skipped
     assert not _events(rig.session, "touchcal_skipped")
     assert len(_rows(rig.session, "touchcal_estimate")) == 12
+
+
+def test_a_skip_mid_rating_takes_the_rating_screen_and_the_status_down(rig):
+    _skipped_at(rig, lambda trial: isinstance(trial, touchcal.TouchRating))
+    window = rig.participant
+    assert window.stack.currentWidget() is window.message and window.message.text == ""
+    assert rig.experimenter.status.text() == ""
+
+
+def test_a_skip_while_the_fit_awaits_a_decision_keeps_its_row_but_not_its_verdict(
+    app, loaded, tmp_path
+):
+    preview = {**loaded.study1["fit_preview"], "enabled": True}
+    rig = make_rig(make_config(loaded, tmp_path, fit_preview=preview))
+    try:
+        result, _, _ = _skipped_at(rig, lambda trial: isinstance(trial, ExperimenterChoice))
+        (fit,) = _rows(rig.session, "touchcal_fit")
+        assert fit["superseded"] == "true", "never accepted"
+        assert fit["stage1_pass"] == "true", "the row keeps the fit's own verdict"
+        assert not result.stage1_pass, "an unaccepted fit's verdict is not the calibration's"
+        assert result.targets_source == touchcal.FROM_BRACKET_LINE
+    finally:
+        rig.session.close()
+
+
+def test_a_skip_after_an_accepted_fit_keeps_the_fit(rig):
+    result, _, _ = _skipped_at(rig, lambda trial: isinstance(trial, touchcal.MatchAdjustment))
+    assert result.stage1_pass and result.targets_source == touchcal.FROM_FIT
+    assert result.p20_kpa == pytest.approx(_true(20.0), rel=0.02)
+    (fit,) = _rows(rig.session, "touchcal_fit")
+    assert fit["superseded"] == "false"
+    assert {result.gain_sources[c] for c in (1, 2, 4, 5)} == {touchcal.GAIN_SKIPPED}
+
+
+def test_a_skip_after_step_5_keeps_the_measured_level_and_gains(rig):
+    gains = {1: 1.3, 2: 1.1, 4: 0.9, 5: 1.2}
+    result, _, _ = _skipped_at(
+        rig, lambda trial: isinstance(trial, touchcal.PreferenceSelection), gains=gains
+    )
+    settings = [float(row["produced_pressure_kpa"])
+                for row in _rows(rig.session, "touchcal_adjust")
+                if row["stage"] == "pleasantness"]
+    assert len(settings) == 2
+    assert result.pleasant_kpa == pytest.approx(maths.geometric_mean(settings))
+    assert {result.gain_sources[c] for c in gains} == {touchcal.GAIN_MATCHED}
+    assert result.preferred_pattern == rig.session.config.study1["patterns"]["fixed_ct_pattern"]
+    assert not _rows(rig.session, "touchcal_preference")
+
+
+def test_a_rerun_withdraws_the_skip_until_it_has_ratings_of_its_own(rig):
+    few = int(rig.session.config.study1["touch_calibration"]["pilot_skip_min_ratings"])
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    virtual.decide = lambda trial: ("rerun", ("flat",))
+    offered = []
+    skip = _skip_when_offered(rig, procedure, offered,
+                              when=lambda trial: procedure.run_index == 2)
+
+    def step(trial):
+        if procedure.run_index == 1:
+            _flat(rig)(trial)
+        skip(trial)
+
+    virtual.before_step = step
+    result = virtual.run()
+    assert result.skipped and result.run_index == 2
+    assert not any(shown for run, answered, shown in offered if run == 2 and answered < few)
+    (skipped,) = _events(rig.session, "touchcal_skipped")
+    assert skipped["detail"].startswith(f"run 2, after {few} ratings")
+    (fallback,) = _events(rig.session, "touchcal_fallback")
+    assert fallback["detail"].startswith("run 2")
+    assert {row["run_index"] for row in _rows(rig.session, "touchcal_channels")} == {"2"}
+
+
+def test_a_measured_level_of_zero_is_a_level(rig, monkeypatch):
+    """A rebalance with the level set returns to the evenness check, even at 0 kPa."""
+    procedure = touchcal.TouchCalibration(rig)
+    went = []
+    monkeypatch.setattr(procedure, "_evenness", lambda: went.append("evenness"))
+    monkeypatch.setattr(procedure, "_pleasantness", lambda: went.append("pleasantness"))
+    procedure.pleasant_kpa = 0.0
+    procedure._after_equalisation()
+    assert went == ["evenness"]
 
 
 # -- starting a touch delivery, SPEC.md 12.3 and 16 -------------------------------------

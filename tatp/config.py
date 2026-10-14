@@ -129,6 +129,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "touch_calibration.equalisation_pairs_to_flag", int, 1, None),
     ("study1.yaml", "touch_calibration.equalisation_readjust_max_passes", int, 0, None),
     ("study1.yaml", "touch_calibration.evenness_max_rebalances", int, 0, None),
+    ("study1.yaml", "touch_calibration.pilot_skip_min_ratings", int, 1, None),
     ("study1.yaml", "patterns.condition_pattern", dict, None, None),
     ("study1.yaml", "patterns.preference_candidates", list, None, None),
     ("study1.yaml", "patterns.fixed_ct_pattern", str, None, None),
