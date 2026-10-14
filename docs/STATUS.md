@@ -44,7 +44,13 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
 - the lost-link log;
 - the REDCap checkbox.
 
-**`make check` passes:** 1016 tests, ruff, the validator (35 checks) and 172 screens.
+**`make check` passes:** 1021 tests, ruff, the validator (35 checks) and 172 screens.
+
+**The Mac's Milestone 2 line is reconciled (14 Oct 2026).** `origin/main` had five commits from
+the Mac that the lab's line never had. Local `main` merged them with `-s ours`, keeping the
+lab's tree (`ae3fd1e`), and that merge is not pushed yet. Two parts were not superseded and are
+now on this branch: the lost-taps fix (adjustment presses timed from their key events, including
+those the experimenter's window forwards) and the RNG note (LOG N3.7).
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
 - **Screens to review:**
@@ -62,7 +68,8 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
   - the UI-review calls (N7.U10);
   - VAS training in every session (N7.T4, R34);
   - blinding choices N7.E4 and N7.D17;
-  - low-confidence decisions N7.C2, N7.B2 and N7.D8.
+  - low-confidence decisions N7.C2, N7.B2 and N7.D8;
+  - which random generator the session uses (N3.7), before any real session is recorded.
 - **Open items still S's:** L11, the rehearsal pressure; L13, the noise ceiling and the cue; L3,
   alert metering; L14, a lost sleeve link.
 
@@ -111,8 +118,9 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
      - the VAS training flow;
      - the remote routing (N7.I1), including that Esc or F5 on the experimenter's keyboard now
        counts as ▶;
-     - whether the alerts are audible over the noise.
-3. **S reviews and merges `accel/integration` into `main`.**
+     - whether the alerts are audible over the noise;
+     - taps on the adjustment are never lost or misread (N2.9).
+3. **S pushes `main` (the Mac merge), then reviews and merges `accel/integration` into it.**
 4. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
 5. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
    Milestone 6 done.
