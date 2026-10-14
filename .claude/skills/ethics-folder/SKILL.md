@@ -120,8 +120,8 @@ implications are dated.
 
 ## Writing
 
-**Never write to the folder.** `Edit` and `Write` are denied on the CloudStorage path in
-`.claude/settings.json`, and the folder's own conventions say direct writes to the synced path
+**Never write to the folder.** No settings rule enforces this any more (CLAUDE.md, permissions),
+so it is yours to keep, and the folder's own conventions say direct writes to the synced path
 are blocked anyway. Everything derived from it goes in this repository.
 
 ## Skill, not resident agent
