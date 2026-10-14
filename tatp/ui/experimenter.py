@@ -1045,6 +1045,8 @@ class DistancesDialog(QDialog):
             self.fields.append(field)
         self.enter_button = button(controls["enter_distances"], SIZE_BODY)
         self.enter_button.clicked.connect(self.enter)
+        # Close, not Cancel (docs/LOG.md N7.F5): Enter distances keeps the window open, so this
+        # is pressed once they are entered, and Cancel would say they were thrown away.
         self.close_button = button(text["dialogs"]["close"], SIZE_BODY)
         self.close_button.clicked.connect(self.hide)
 

@@ -91,7 +91,7 @@ def _deliver(session) -> None:
 def test_the_stop_zeroes_the_garment_logs_it_and_shows_the_stop_screen(rigged):
     session, participant, _, interruptions, seen = rigged
     _deliver(session)
-    _press(participant, "f5")
+    _press(participant, "period")
 
     assert session.garment.pressure_kpa[CHANNEL] == 0.0
     assert session.garment.status()["channels_on"] == []
@@ -108,14 +108,14 @@ def test_the_stop_zeroes_the_garment_logs_it_and_shows_the_stop_screen(rigged):
 def test_the_stop_works_on_the_vas(rigged):
     session, participant, _, _, seen = rigged
     participant.show_vas("pain")
-    _press(participant.vas, "f5")
+    _press(participant.vas, "period")
     assert seen == [EMERGENCY_STOP]
 
 
 def test_a_second_press_is_logged_and_zeroes_again_but_tells_nobody_twice(rigged):
     session, participant, _, interruptions, seen = rigged
-    _press(participant, "f5")
-    _press(participant, "f5")
+    _press(participant, "period")
+    _press(participant, "period")
     assert len(_events(session, "emergency_stop")) == 2, "every press is logged (SPEC.md 13)"
     assert seen == [EMERGENCY_STOP]
     assert interruptions.emergency_stops == 2
@@ -125,7 +125,7 @@ def test_a_stop_with_the_garment_disconnected_still_works(rigged):
     """The one path that must never fail must not fail for want of a device."""
     session, participant, _, _, seen = rigged
     session.garment.disconnect()
-    _press(participant, "f5")
+    _press(participant, "period")
     assert seen == [EMERGENCY_STOP]
 
 
@@ -147,14 +147,14 @@ def test_the_pause_zeroes_the_garment_and_shows_the_paused_screen(rigged):
 def test_a_stop_during_a_pause_takes_over_without_a_second_interruption(rigged):
     session, participant, experimenter, interruptions, seen = rigged
     experimenter.pause_requested.emit()
-    _press(participant, "f5")
+    _press(participant, "period")
     assert interruptions.active == EMERGENCY_STOP
     assert seen == [PAUSE]
 
 
 def test_a_pause_while_stopped_changes_nothing(rigged):
     session, participant, experimenter, interruptions, seen = rigged
-    _press(participant, "f5")
+    _press(participant, "period")
     experimenter.pause_requested.emit()
     assert interruptions.active == EMERGENCY_STOP
     assert seen == [EMERGENCY_STOP]
@@ -165,7 +165,7 @@ def test_a_pause_while_stopped_changes_nothing(rigged):
 
 def test_a_resume_with_nothing_to_restore_hands_straight_back(rigged):
     session, participant, experimenter, interruptions, seen = rigged
-    _press(participant, "f5")
+    _press(participant, "period")
     experimenter.resume_requested.emit()
     assert seen == [EMERGENCY_STOP, "resumed"]
     assert interruptions.active is None
@@ -176,7 +176,7 @@ def test_a_resume_restores_the_garment_after_the_warning_cue(rigged):
     """SPEC.md 10.9: the resume is shown, and the garment start is preceded by the cue."""
     session, participant, _, interruptions, seen = rigged
     _deliver(session)
-    _press(participant, "f5")
+    _press(participant, "period")
     interruptions.resume()
 
     assert participant.stack.currentWidget() is participant.cue
@@ -190,7 +190,7 @@ def test_a_resume_restores_the_garment_after_the_warning_cue(rigged):
 def test_a_resume_restarts_the_pattern_that_was_playing(rigged):
     session, participant, _, interruptions, seen = rigged
     session.garment.play_pattern(session.patterns["sweep_03cms"])
-    _press(participant, "f5")
+    _press(participant, "period")
     assert session.garment.status()["pattern_name"] is None
     interruptions.resume()
     _spin(lambda: "resumed" in seen)
@@ -200,9 +200,9 @@ def test_a_resume_restarts_the_pattern_that_was_playing(rigged):
 def test_a_stop_during_the_resume_cue_cancels_the_restore(rigged):
     session, participant, _, interruptions, seen = rigged
     _deliver(session)
-    _press(participant, "f5")
+    _press(participant, "period")
     interruptions.resume()
-    _press(participant, "f5")
+    _press(participant, "period")
     deadline = time.monotonic() + (interruptions.warning_lead_s * 2) / CLOCK_SPEED + 0.2
     while time.monotonic() < deadline:
         QApplication.processEvents()
@@ -215,7 +215,7 @@ def test_a_garment_disconnected_during_the_stop_is_not_restored(rigged):
     """The resume still completes; commanding a disconnected garment would raise."""
     session, participant, _, interruptions, seen = rigged
     _deliver(session)
-    _press(participant, "f5")
+    _press(participant, "period")
     session.garment.disconnect()
     interruptions.resume()
     _spin(lambda: "resumed" in seen)

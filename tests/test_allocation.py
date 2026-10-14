@@ -22,12 +22,30 @@ def design():
     return study1, alloc.load(path, study1["conditions"], study1["limbs"], study1["n_sessions"])
 
 
+def _real_codes(study1, allocation) -> list[str]:
+    """The counterbalance is over real participants; pilot codes sit above the offset."""
+    return [c for c in allocation.participant_codes if int(c) < study1["pilot_code_offset"]]
+
+
 def test_covers_every_participant_and_session(design):
     study1, allocation = design
-    assert len(allocation.participant_codes) == study1["n_participants"]
-    assert len(allocation.rows) == study1["n_participants"] * study1["n_sessions"]
+    n_codes = study1["n_participants"] + study1["n_pilot_participants"]
+    assert len(_real_codes(study1, allocation)) == study1["n_participants"]
+    assert len(allocation.participant_codes) == n_codes
+    assert len(allocation.rows) == n_codes * study1["n_sessions"]
     assert allocation.participant_codes[0] == "01"
     assert allocation.get("01", 1).condition in study1["conditions"]
+
+
+def test_each_pilot_code_runs_its_participants_allocation(design):
+    """Pilot code offset + i is participant i, so a pilot session is a real session's."""
+    study1, allocation = design
+    for i in range(1, study1["n_pilot_participants"] + 1):
+        pilot = str(study1["pilot_code_offset"] + i)
+        real = str(i).zfill(len(str(study1["n_participants"])))
+        for session in range(1, study1["n_sessions"] + 1):
+            p, r = allocation.get(pilot, session), allocation.get(real, session)
+            assert (p.condition, p.limb) == (r.condition, r.limb)
 
 
 def test_condition_orders_are_balanced_to_within_one_participant(design):
@@ -40,7 +58,7 @@ def test_condition_orders_are_balanced_to_within_one_participant(design):
                 key=lambda r: r.session_number,
             )
         )
-        for code in allocation.participant_codes
+        for code in _real_codes(study1, allocation)
     )
     # 3! = 6 orders over 41 participants: 6 orders used 7 times and 5 used 6 times, or similar.
     assert len(orders) == 6
@@ -49,7 +67,7 @@ def test_condition_orders_are_balanced_to_within_one_participant(design):
 
 def test_starting_limb_is_balanced(design):
     study1, allocation = design
-    starts = Counter(allocation.get(code, 1).limb for code in allocation.participant_codes)
+    starts = Counter(allocation.get(code, 1).limb for code in _real_codes(study1, allocation))
     assert set(starts) == set(study1["limbs"])
     assert max(starts.values()) - min(starts.values()) <= 1
 

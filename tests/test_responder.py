@@ -19,22 +19,22 @@ def test_the_r400_keys_map_to_the_four_actions(hardware):
     responder = Responder(hardware)
     assert responder.action_for("pageup") is Action.DECREASE
     assert responder.action_for("pagedown") is Action.INCREASE
-    assert responder.action_for("period") is Action.CONFIRM
-    assert responder.action_for("f5") is Action.EMERGENCY_STOP
+    assert responder.action_for("f5") is Action.CONFIRM
+    assert responder.action_for("period") is Action.EMERGENCY_STOP
     assert responder.action_for("space") is None
 
 
-def test_escape_does_nothing_at_all(hardware):
-    """SPEC.md 10.1: the play button emits escape, so a quit binding would end the session."""
+def test_both_of_the_play_buttons_keys_confirm(hardware):
+    """SPEC.md 10.1: the play button alternates f5 and escape, so both must be a confirm."""
     responder = Responder(hardware)
-    assert responder.is_ignored("escape")
-    assert responder.action_for("escape") is None
-    assert "escape" not in responder.keys
+    assert responder.action_for("f5") is Action.CONFIRM
+    assert responder.action_for("escape") is Action.CONFIRM
+    assert not responder.is_ignored("escape")
 
 
 def test_binding_an_ignored_key_to_an_action_is_refused(hardware):
     broken = copy.deepcopy(hardware)
-    broken["responder"]["keys"]["confirm"] = ["escape"]
+    broken["responder"]["ignore_keys"] = ["escape"]
     with pytest.raises(ResponderError, match="must do nothing at all"):
         Responder(broken)
 

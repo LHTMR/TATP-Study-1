@@ -285,6 +285,40 @@ class AdjustmentState:
         self.exploration += abs(self.value - before)
 
 
+class PressTiming:
+    """When a button went up, in real seconds, from the key events' own timestamps.
+
+    The press handler writes a log row before the release handler can run, so timing a press
+    from handler calls would add any stall in that write to the hold -- turning a tap into a
+    press too long to be a tap and too short to be a hold, which moves nothing. The press is
+    placed when its handler runs and the release that many event milliseconds after it.
+
+    A long enough stall can still let a tick run before the release, so the press moves as a
+    hold (docs/LOG.md N2.9).
+    """
+
+    def __init__(self):
+        self._presses: dict[Action, tuple[int, float]] = {}
+
+    def pressed(self, action: Action, event_ms: int, now_s: float) -> float:
+        self._presses[action] = (event_ms, now_s)
+        return now_s
+
+    def released(self, action: Action, event_ms: int, now_s: float) -> float:
+        if action not in self._presses:
+            # Held down before this screen appeared, so the press never reached it.
+            # AdjustmentState ignores a release it holds no press for; the time is irrelevant.
+            return now_s
+        press_ms, press_s = self._presses.pop(action)
+        held_ms = event_ms - press_ms
+        if held_ms < 0:
+            # The OS's millisecond counter wrapped mid-press (Windows' does every 49.7 days of
+            # uptime). Not asserted: an exception in this slot would leave the state held, and
+            # the tick would ramp the pressure with nobody touching the button.
+            return now_s
+        return press_s + held_ms / MS_PER_S
+
+
 class Adjustment(QObject):
     """One method-of-adjustment trial, driven by the participant's buttons. SPEC.md 9, 10.3.
 
@@ -319,6 +353,7 @@ class Adjustment(QObject):
 
         self.start_iso = ""
         self._start_s = 0.0
+        self._press_timing = PressTiming()
         self._t_session_s: float | None = None
         self.timed_out = False
         self._ceiling_logged = False
@@ -362,12 +397,16 @@ class Adjustment(QObject):
         self._tick.start()
         self._timeout.start(self.session.clock.scaled_ms(self.timeout_s))
 
-    def _on_pressed(self, action_value: str) -> None:
-        self.state.press(Action(action_value), self.session.clock.real_elapsed_s())
+    def _on_pressed(self, action_value: str, event_ms: int) -> None:
+        action = Action(action_value)
+        now_s = self.session.clock.real_elapsed_s()
+        self.state.press(action, self._press_timing.pressed(action, event_ms, now_s))
         self._log_button("button_down", action_value)
 
-    def _on_released(self, action_value: str) -> None:
-        self.state.release(Action(action_value), self.session.clock.real_elapsed_s())
+    def _on_released(self, action_value: str, event_ms: int) -> None:
+        action = Action(action_value)
+        now_s = self.session.clock.real_elapsed_s()
+        self.state.release(action, self._press_timing.released(action, event_ms, now_s))
         self._log_button("button_up", action_value)
         self._command()
 
@@ -890,7 +929,7 @@ class PreferenceSelection(Trial):
         garment.play_pattern(self.session.patterns[name])
         self.session.log("preference_playing", detail=f"position {self.index + 1}")
 
-    def _pressed(self, action_value: str) -> None:
+    def _pressed(self, action_value: str, _event_ms: int) -> None:
         step = -1 if Action(action_value) is Action.DECREASE else 1
         self.index = (self.index + step) % len(self.order)
         self.moves += 1

@@ -110,7 +110,7 @@ def _run_trial(running, application=APPLICATION, presses=2):
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
     for _ in range(presses):
         _press(participant.vas, "pagedown")
-    _press(participant.vas, "period")
+    _press(participant.vas, "f5")
     assert len(done) == 1, "the trial ends when the participant confirms"
     return trial, done[0]
 
@@ -286,5 +286,5 @@ def test_a_cancelled_trial_writes_no_row_and_reports_nothing(running):
     assert not session.files.path("pinprick").exists()
     assert "trial_cancelled" in [row["event"] for row in _rows(session, "log")]
     # Nothing it connected is left behind to answer a later trial's confirm.
-    _press(participant.vas, "period")
+    _press(participant.vas, "f5")
     assert done == []

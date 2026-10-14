@@ -41,6 +41,8 @@ PLACEHOLDER_PREFIX = "PLACEHOLDER"
 NUMBER = (int, float)
 SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | None], ...] = (
     ("study1.yaml", "design.n_participants", int, 1, None),
+    ("study1.yaml", "design.n_pilot_participants", int, 0, None),
+    ("study1.yaml", "design.pilot_code_offset", int, 1, None),
     ("study1.yaml", "design.n_sessions", int, 1, None),
     ("study1.yaml", "design.conditions", list, None, None),
     ("study1.yaml", "design.limbs", list, None, None),

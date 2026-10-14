@@ -101,24 +101,53 @@ def test_each_screen_is_selected_in_turn(participant):
     assert participant.stack.currentWidget() is participant.vas
 
 
+def test_one_message_replacing_another_is_repainted(participant, app, monkeypatch):
+    """The first lab run: "The session will start shortly." stayed up after the welcome was
+    shown, because the message screen draws its own text and stayed the current widget, so
+    nothing asked Qt to paint it again. The participant never saw "Press ▶ to continue".
+    """
+    painted = []
+    paint = participant.message.paintEvent
+    monkeypatch.setattr(
+        participant.message, "paintEvent", lambda event: (painted.append(1), paint(event))
+    )
+    participant.show_message("session_starting")
+    participant.show()
+    app.processEvents()
+    painted.clear()
+    participant.show_message("welcome")
+    app.processEvents()
+    participant.close()
+    assert painted
+
+
 def test_the_emergency_stop_works_when_the_vas_is_not_showing(participant):
     """SPEC.md 13: it is a stop button, not a rating control."""
     stops = []
     participant.emergency_stop.connect(lambda: stops.append(1))
     participant.show_warning_cue()
-    _press(participant, "f5")
+    _press(participant, "period")
     assert stops == [1]
     participant.show_vas("pain")
-    _press(participant.vas, "f5")
+    _press(participant.vas, "period")
     assert stops == [1, 1]
 
 
 def test_escape_is_swallowed_off_the_vas_as_well(participant):
-    """SPEC.md 10.1: the play button emits it, and Qt would read it as 'close this window'."""
+    """SPEC.md 10.1: every other ▶ is escape, and Qt would read it as 'close this window'."""
     participant.show_message("standby")
     event = QKeyEvent(QEvent.KeyPress, QT_KEYS["escape"], Qt.NoModifier)
     participant.keyPressEvent(event)
     assert event.isAccepted()
+
+
+def test_the_play_buttons_escape_half_dismisses_a_message(participant):
+    """The lab R400 sends f5 and escape on alternate presses (docs/LOG.md N7.F1)."""
+    confirmed = []
+    participant.message_confirmed.connect(lambda: confirmed.append(1))
+    participant.show_message("welcome")
+    _press(participant, "escape")
+    assert confirmed == [1]
 
 
 def test_a_null_screen_index_leaves_the_window_where_it_is(participant, session):
@@ -208,7 +237,7 @@ def test_the_press_is_the_response_and_there_is_no_confirm(participant):
     participant.show_choice("comparison")
     participant.accept_choice()
 
-    _press(participant, "period")
+    _press(participant, "f5")
     assert chosen == [], "the confirm key produced a response on a screen with no confirm"
 
     _press(participant, "pagedown")
@@ -296,7 +325,7 @@ def test_the_emergency_stop_works_on_the_choice_screen(participant):
     participant.emergency_stop.connect(lambda: stops.append(1))
     participant.show_choice("comparison")
     participant.accept_choice()
-    _press(participant, "f5")
+    _press(participant, "period")
     assert stops == [1]
 
 
@@ -351,14 +380,26 @@ def test_a_held_button_is_drawn_pressed_until_it_is_released(participant):
 def test_the_preference_screen_reads_the_buttons_as_the_adjustment_does(participant):
     """Something now moves between patterns (SPEC.md 9 step 6), so a press is drawn and sent."""
     pressed, confirmed = [], []
-    participant.adjust_pressed.connect(pressed.append)
+    participant.adjust_pressed.connect(lambda value, _event_ms: pressed.append(value))
     participant.adjust_confirmed.connect(lambda: confirmed.append(True))
     participant.show_preference()
     participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, QT_KEYS["pagedown"], Qt.NoModifier))
     assert participant.control.held == {"right"}
     assert pressed == [Action.INCREASE.value]
-    _press(participant, "period")
+    _press(participant, "f5")
     assert confirmed == [True]
+
+
+def test_a_held_stop_button_is_one_stop(participant):
+    """The R400's stop button auto-repeats when held; a repeat is not another press."""
+    stops = []
+    participant.emergency_stop.connect(lambda: stops.append(True))
+    participant.show_message("welcome")
+    key = QT_KEYS["period"]
+    participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, key, Qt.NoModifier))
+    for _ in range(3):
+        participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, key, Qt.NoModifier, "", True))
+    assert stops == [True]
 
 
 def test_a_message_screen_reports_the_play_button(participant):
@@ -366,10 +407,10 @@ def test_a_message_screen_reports_the_play_button(participant):
     seen = []
     participant.message_confirmed.connect(lambda: seen.append(True))
     participant.show_message("stop_rehearsal_done")
-    _press(participant, "period")
+    _press(participant, "f5")
     assert seen == [True]
     participant.show_vas("pain")
-    _press(participant.vas, "period")
+    _press(participant.vas, "f5")
     assert seen == [True], "a confirm on the VAS is the VAS's, not a message's"
 
 
@@ -399,13 +440,13 @@ def test_a_press_carried_over_cannot_dismiss_the_next_message_unread(stepped):
     window.message_confirmed.connect(lambda: confirmed.append(True))
     window.confirm_carried_over.connect(lambda: ignored.append(True))
     window.show_message("welcome")
-    _press(window, "period")
+    _press(window, "f5")
     window.show_message("stop_rehearsal_done")
     clock.now_s += lockout_s / 2
-    _press(window, "period")
+    _press(window, "f5")
     assert (confirmed, ignored) == ([True], [True]), "the second tap was the first's"
     clock.now_s += lockout_s
-    _press(window, "period")
+    _press(window, "f5")
     assert confirmed == [True, True], "a press after the lockout is the new screen's"
 
 
@@ -417,10 +458,10 @@ def test_a_press_on_a_screen_that_asks_for_none_starts_no_lockout(stepped):
     window.message_confirmed.connect(lambda: confirmed.append(True))
     window.confirm_carried_over.connect(lambda: ignored.append(True))
     window.show_blank()
-    _press(window, "period")
-    _press(window, "period")
+    _press(window, "f5")
+    _press(window, "f5")
     window.show_message("stop_rehearsal_done")
-    _press(window, "period")
+    _press(window, "f5")
     assert ignored == [], "nothing on a blank screen is carried over"
     assert len(confirmed) == 3, "and the screen that asks takes its press at once"
 
@@ -431,12 +472,12 @@ def test_a_press_carried_over_cannot_confirm_an_adjustment_at_its_start(stepped)
     confirmed = []
     window.adjust_confirmed.connect(lambda: confirmed.append(True))
     window.show_message("welcome")
-    _press(window, "period")
+    _press(window, "f5")
     window.show_level_adjustment("find_level")
-    _press(window, "period")
+    _press(window, "f5")
     assert confirmed == []
     clock.now_s += lockout_s
-    _press(window, "period")
+    _press(window, "f5")
     assert confirmed == [True]
 
 
@@ -459,7 +500,7 @@ def test_the_warning_cue_announces_itself_for_the_audible_cue(participant):
 
 def test_the_level_adjustment_reads_the_buttons_on_a_text_screen(participant, session):
     pressed = []
-    participant.adjust_pressed.connect(pressed.append)
+    participant.adjust_pressed.connect(lambda value, _event_ms: pressed.append(value))
     participant.show_level_adjustment("find_level")
     assert participant.message.text == session.config.participant_text["audio_setup"][
         "find_level"
@@ -1023,7 +1064,7 @@ def test_the_window_never_draws_a_rating(rig_trial):
     for _ in range(RATING_PRESSES):
         _press(participant.vas, "pagedown")
     assert participant.vas.state.percent == float(RATING_SHOWN)
-    _press(participant.vas, "period")
+    _press(participant.vas, "f5")
     assert len(done) == 1, "the trial ends when the participant confirms"
     window.refresh()
     shown = " ".join(_visible_texts(window))

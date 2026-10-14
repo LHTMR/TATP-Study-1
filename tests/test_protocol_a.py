@@ -120,7 +120,7 @@ def _answer(participant, right_presses: int) -> None:
         _press(participant.vas, "pagedown", right_presses)
     else:
         _press(participant.vas, "pageup")
-    _press(participant.vas, "period")
+    _press(participant.vas, "f5")
 
 
 def _drive(procedure, done, respond=_observer, before_answer=None, max_trials=60) -> int:
@@ -205,14 +205,14 @@ def test_the_pain_training_comes_before_the_first_application(app, loaded, tmp_p
         vas = participant.vas
         assert vas.training and vas.scale == "pain" and not vas.training_accepting
         assert "warning_cue" not in _events(made.session), "no stimulus before the training"
-        _press(vas, "period")
+        _press(vas, "f5")
         assert "vas_training_confirmed" not in _events(made.session), (
             "▶ dismissed the training before the experimenter's go"
         )
         # The anchors explained aloud; the experimenter's go.
         made.experimenter.proceed_requested.emit()
         assert vas.training_accepting
-        _press(vas, "period")
+        _press(vas, "f5")
         _drive(protocol, done)
         events = _events(made.session)
         assert events.count("vas_training_confirmed") == 1

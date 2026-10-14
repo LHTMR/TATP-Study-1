@@ -1,6 +1,6 @@
 """The launcher. SPEC.md 4.1, 6, 8.1, 15.
 
-Four entries, so the auxiliary tools are reachable without the command line:
+Five entries, so the auxiliary tools are reachable without the command line:
 
 1. **Run a session.** A dialog collecting exactly what SPEC.md 6 lists -- participant code,
    session number, experimenter initials, both languages, the data folder and the pattern
@@ -13,6 +13,7 @@ Four entries, so the auxiliary tools are reachable without the command line:
    pattern names and shapes, which a blinded experimenter must not see (SPEC.md 16), and its
    entry says so.
 4. **Preview schedule.** `tools/preview_schedule.py`'s report, in a window.
+5. **Check the hardware** (`tatp/hardware_check.py`), before the participant arrives.
 
 **The session is started by `run_session`'s `preflight` and `build`, not here.** Both are
 reached through `preflight()` and `build()` below, imported when called: `run_session.py`
@@ -39,6 +40,7 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -46,16 +48,19 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
 from tatp import config as cfg
 from tatp import schedule as sched
+from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
 from tatp.session import DRIVERS, with_session_choices
 from tatp.ui.application import application, scale_screens
@@ -72,6 +77,7 @@ from tatp.ui.widgets import (
     WARNING_COLOUR,
     MessageDialog,
     button,
+    fit_to_screen,
     label,
     line_edit,
     sized,
@@ -93,6 +99,9 @@ RESUME_KEY = "dialogs.resume_found"
 # box) is no answer at all, and this is the explicit new session.
 NEW_SESSION = 2
 RESUME_ANSWERS = {QDialog.DialogCode.Accepted.value: True, NEW_SESSION: False}
+
+# Where every pattern folder is kept, and where Browse opens for an empty pattern folder field.
+PATTERNS_DIR = cfg.CONFIG_DIR / "patterns"
 
 LAUNCHER_WIDTH_PX = 720
 PREVIEW_WIDTH_PX = 900
@@ -134,6 +143,36 @@ def lookup(text: dict, dotted: str) -> str:
 
 
 # -- the session dialog, SPEC.md 6 ----------------------------------------------------------
+
+
+class _Unfolded(QScrollArea):
+    """Asks for all of its content, and scrolls only when the screen gives it less.
+
+    `AdjustToContents` would cap the request at about 24 lines, so the dialog would scroll on
+    a screen with room to spare.
+    """
+
+    def _narrowest(self) -> int:
+        """The content's minimum width: the viewport is never narrower, the scrollbar apart."""
+        # Measured before its layout first runs, the content is shorter than it will be, and
+        # the dialog opened a few pixels too short to need no scrolling.
+        self.widget().layout().activate()
+        return self.widget().minimumSizeHint().width()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 -- Qt's name
+        return QSize(
+            self._narrowest() + self.verticalScrollBar().sizeHint().width(),
+            super().minimumSizeHint().height(),
+        )
+
+    def sizeHint(self) -> QSize:  # noqa: N802 -- Qt's name
+        # The wrapped hint and report are taller at a given width than their plain hint says,
+        # so the height is the content's at the narrowest the viewport can be.
+        narrowest = self._narrowest()
+        return QSize(
+            narrowest + self.verticalScrollBar().sizeHint().width(),
+            self.widget().heightForWidth(narrowest),
+        )
 
 
 class SessionDialog(QDialog):
@@ -205,7 +244,7 @@ class SessionDialog(QDialog):
             ("experimenter_language", self.experimenter_language),
             ("garment", self.garment),
             ("data_folder", self._with_browse(self.data_folder)),
-            ("pattern_folder", self._with_browse(self.pattern_folder)),
+            ("pattern_folder", self._with_browse(self.pattern_folder, PATTERNS_DIR)),
         ):
             caption = label(SIZE_SMALL, colour=SECONDARY)
             caption.setText(words[key])
@@ -216,11 +255,13 @@ class SessionDialog(QDialog):
         self.report = label(SIZE_BODY, wrap=True)
         self.check_button = button(words["check"], SIZE_BODY)
         self.start_button = button(words["start"], SIZE_BODY)
-        self.close_button = button(words["close"], SIZE_BODY)
+        # Cancel, not Close, beside Start session: it leaves without starting (S, first lab
+        # run, docs/LOG.md N7.F5).
+        self.cancel_button = button(words["cancel"], SIZE_BODY)
         self.start_button.setEnabled(False)
         self.check_button.clicked.connect(self.check)
         self.start_button.clicked.connect(self.start)
-        self.close_button.clicked.connect(self.reject)
+        self.cancel_button.clicked.connect(self.reject)
         # Anything edited after a check makes the check stale.
         typed = (self.participant, self.experimenter, self.data_folder, self.pattern_folder)
         for field in typed:
@@ -236,23 +277,37 @@ class SessionDialog(QDialog):
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
-        buttons.addWidget(self.close_button)
-        # Apart from the two that go forward, so Close is not pressed for Check.
+        buttons.addWidget(self.cancel_button)
+        # Apart from the two that go forward, so Cancel is not pressed for Check.
         buttons.addSpacing(GROUP_GAP_PX)
         buttons.addWidget(self.check_button)
         buttons.addWidget(self.start_button)
 
         title = label(SIZE_LARGE)
         title.setText(words["session_title"])
+        content = QWidget()
+        fields = QVBoxLayout(content)
+        fields.setContentsMargins(0, 0, 0, 0)
+        fields.addWidget(title)
+        fields.addSpacing(ITEM_GAP_PX)
+        fields.addLayout(form)
+        fields.addSpacing(GROUP_GAP_PX)
+        fields.addWidget(self.report)
+        fields.addStretch(1)
+        # The form and the report scroll and the buttons do not: on the lab laptop at 150 %
+        # the whole dialog was taller than the screen, and Start was below its edge
+        # (docs/LOG.md N7.F5).
+        self.scroll = scroll = _Unfolded()
+        scroll.setWidget(content)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(MARGIN_PX, MARGIN_PX, MARGIN_PX, MARGIN_PX)
-        layout.addWidget(title)
-        layout.addSpacing(ITEM_GAP_PX)
-        layout.addLayout(form)
-        layout.addSpacing(GROUP_GAP_PX)
-        layout.addWidget(self.report)
-        layout.addStretch(1)
+        layout.addWidget(scroll, 1)
         layout.addLayout(buttons)
+        hint = self.sizeHint()
+        fit_to_screen(self, hint.width(), hint.height())
 
     def _choice(self, options: list[tuple[str, object]]) -> QComboBox:
         """A choice that starts on a placeholder carrying no value, so nothing is assumed."""
@@ -263,18 +318,30 @@ class SessionDialog(QDialog):
         combo.setCurrentIndex(0)
         return combo
 
-    def _with_browse(self, field: QLineEdit) -> QWidget:
+    def _with_browse(self, field: QLineEdit, empty_start: Path | None = None) -> QWidget:
         holder = QWidget()
         row = QHBoxLayout(holder)
         row.setContentsMargins(0, 0, 0, 0)
         row.addWidget(field, 1)
         browse = button(self.text["launcher"]["browse"])
-        browse.clicked.connect(lambda: self._browse(field))
+        browse.clicked.connect(lambda: self._browse(field, empty_start))
         row.addWidget(browse)
         return holder
 
-    def _browse(self, field: QLineEdit) -> None:
-        chosen = QFileDialog.getExistingDirectory(self, "", field.text())
+    def start_folder(self, field: QLineEdit, empty_start: Path | None) -> str:
+        """Where Browse opens: the field's folder, or `empty_start` while the field is empty.
+
+        An empty field opened the picker in the working directory, the repository root, with
+        nothing to say which folder was meant (S, first lab run, docs/LOG.md N7.F5).
+        """
+        if field.text().strip() or empty_start is None:
+            return field.text()
+        return str(empty_start)
+
+    def _browse(self, field: QLineEdit, empty_start: Path | None) -> None:
+        chosen = QFileDialog.getExistingDirectory(
+            self, "", self.start_folder(field, empty_start)
+        )
         if chosen:
             field.setText(chosen)
 
@@ -373,6 +440,9 @@ class SessionDialog(QDialog):
         # (UI_PRINCIPLES.md 3.4).
         colour = DISCONNECTED_COLOUR if refusals else WARNING_COLOUR if warnings else SECONDARY
         self.report.setStyleSheet(f"color: {colour};")
+        # On a short screen the report is below the fold, and a check that seemed to do
+        # nothing would be pressed again rather than read.
+        self.scroll.ensureWidgetVisible(self.report)
 
     def resume_dialog(self, value: dict) -> MessageDialog:
         """SPEC.md 15: what was completed and how long ago sensitisation began.
@@ -457,7 +527,7 @@ class PreviewDialog(QDialog):
 
 
 class LauncherWindow(QWidget):
-    """The four entries. `runner` is the started session, once there is one."""
+    """The five entries. `runner` is the started session, once there is one."""
 
     def __init__(
         self,
@@ -494,6 +564,7 @@ class LauncherWindow(QWidget):
             ("instruments", self.open_instruments),
             ("design_pattern", self.open_designer),
             ("preview_schedule", self.open_preview),
+            ("hardware_check", self.open_hardware_check),
         ):
             entry = button(words[key], SIZE_LARGE)
             detail = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
@@ -565,6 +636,19 @@ class LauncherWindow(QWidget):
 
     def open_preview(self) -> PreviewDialog:
         dialog = self.preview_dialog()
+        dialog.open()
+        return dialog
+
+    def hardware_check_dialog(self) -> HardwareCheckDialog:
+        return HardwareCheckDialog(self.text, self.config.hardware, parent=self)
+
+    def open_hardware_check(self) -> HardwareCheckDialog:
+        # Modal to the launcher, so no session can start while the check holds the garment's
+        # port or the headphones; closing it lets both go.
+        dialog = self.hardware_check_dialog()
+        # Deleted on close, so a check opened again builds afresh rather than leaving the last
+        # one's audio stream open on the participant's headphones.
+        dialog.setAttribute(Qt.WA_DeleteOnClose)
         dialog.open()
         return dialog
 

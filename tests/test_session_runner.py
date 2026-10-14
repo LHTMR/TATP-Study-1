@@ -141,7 +141,7 @@ class Driver(Virtual):
             if window.stack.currentWidget() is window.vas and trial.rating_cue_iso:
                 press(window.vas, "pagedown")
                 window.vas.state.percent = self._pain(trial)
-                press(window.vas, "period")
+                press(window.vas, "f5")
             return
         if trial is None:
             if self.innermost()._on_go is not None:
@@ -391,6 +391,17 @@ def test_the_session_file_is_complete(finished):
     assert values["sensitisation_start_iso"]
     assert values["session_end_iso"]
     assert values["abort_reason"] == ""
+
+
+def test_the_first_participant_screen_says_the_session_will_start(app, loaded, tmp_path):
+    """S, 30 Sep 2026: not 'Rest for a moment' to someone who has only just sat down."""
+    runner = make_runner(loaded, tmp_path)
+    try:
+        runner.start()
+        participant = runner.rig.participant
+        assert participant.message.text == participant.text["screens"]["session_starting"]
+    finally:
+        runner.session.close()
 
 
 # -- the experimenter view (the contract with Stream E) ----------------------------------------
@@ -757,7 +768,7 @@ def _experimenter_sequence(app, loaded, tmp_path, condition) -> list[tuple[str, 
         QApplication.processEvents()
         if (not pressed and session.clock.t_session_s() > PRESS_AFTER_S
                 and window.message.text == self_start):
-            press(window, "period")
+            press(window, "f5")
             pressed = True
         time.sleep(0.0005)
     assert (condition == "participant_preferred") == pressed

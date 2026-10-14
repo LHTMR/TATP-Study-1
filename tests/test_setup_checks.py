@@ -185,7 +185,7 @@ def test_a_stop_during_the_masking_check_repeats_the_step(rig):
     def stop_once(trial):
         if not stopped and isinstance(trial, Choice):
             stopped.append(True)
-            press(rig.participant, "f5")
+            press(rig.participant, "period")
 
     virtual.before_step = stop_once
     result = virtual.run()

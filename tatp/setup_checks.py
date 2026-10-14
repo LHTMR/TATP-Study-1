@@ -28,7 +28,7 @@ from PySide6.QtCore import QTimer
 from tatp.interruption import EMERGENCY_STOP
 from tatp.procedure import Procedure
 from tatp.responder import Action
-from tatp.touchcal import AdjustmentState
+from tatp.touchcal import AdjustmentState, PressTiming
 from tatp.trials import Choice, Cue, ExperimenterChoice, MessageConfirm, Ramp, Trial
 from tatp.ui.participant import SIDES
 from tatp.units import MS_PER_S
@@ -82,6 +82,7 @@ class NoiseAdjustment(Trial):
             audio.max_dbfs,
             audio.noise_level_dbfs,
         )
+        self._press_timing = PressTiming()
         self._tick = QTimer(self)
         # Real milliseconds: the control describes the hand, not the session (LOG N6.22).
         interval_s = float(session.config.hardware["adjustment"]["tick_interval_s"])
@@ -99,12 +100,14 @@ class NoiseAdjustment(Trial):
     def _now(self) -> float:
         return self.session.clock.real_elapsed_s()
 
-    def _pressed(self, action_value: str) -> None:
-        self.state.press(Action(action_value), self._now())
+    def _pressed(self, action_value: str, event_ms: int) -> None:
+        action = Action(action_value)
+        self.state.press(action, self._press_timing.pressed(action, event_ms, self._now()))
         self._log("button_down", action_value)
 
-    def _released(self, action_value: str) -> None:
-        self.state.release(Action(action_value), self._now())
+    def _released(self, action_value: str, event_ms: int) -> None:
+        action = Action(action_value)
+        self.state.release(action, self._press_timing.released(action, event_ms, self._now()))
         self._log("button_up", action_value)
         self._apply()
 
