@@ -112,8 +112,8 @@ Timing is handled with `time.perf_counter()` and Qt timers. Sound with `sounddev
 noise is generated, not a file). Randomisation is seeded and recorded: the allocation
 (`tools/make_allocation.py`) uses `numpy.random.Generator`, and the session uses
 `random.Random`, one stream per stage seeded from the recorded `rng_seed` (`docs/LOG.md`
-N7.D13). Which generator sits on which side is an open question, not a settled design:
-`docs/LOG.md` N3.7 has it, with the gate.
+N7.D13). Neither generator promises its helper methods are stable across versions, so the
+session's draws are recorded in the data, and a test pins the stream (`docs/LOG.md` N3.7).
 
 Other environment facts:
 

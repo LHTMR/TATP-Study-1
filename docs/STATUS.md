@@ -50,7 +50,8 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
 the Mac that the lab's line never had. Local `main` merged them with `-s ours`, keeping the
 lab's tree (`ae3fd1e`), and that merge is not pushed yet. Two parts were not superseded and are
 now on this branch: the lost-taps fix (adjustment presses timed from their key events, including
-those the experimenter's window forwards) and the RNG note (LOG N3.7).
+those the experimenter's window forwards) and the RNG question, since decided: the session keeps `random.Random`, with a test pinning its
+stream (LOG N3.7).
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
 - **Screens to review:**
@@ -68,8 +69,7 @@ those the experimenter's window forwards) and the RNG note (LOG N3.7).
   - the UI-review calls (N7.U10);
   - VAS training in every session (N7.T4, R34);
   - blinding choices N7.E4 and N7.D17;
-  - low-confidence decisions N7.C2, N7.B2 and N7.D8;
-  - which random generator the session uses (N3.7), before any real session is recorded.
+  - low-confidence decisions N7.C2, N7.B2 and N7.D8.
 - **Open items still S's:** L11, the rehearsal pressure; L13, the noise ceiling and the cue; L3,
   alert metering; L14, a lost sleeve link.
 
