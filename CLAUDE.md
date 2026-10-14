@@ -99,8 +99,9 @@ prefer `Read` / `Grep` / `Glob` to shell commands, and do not fire several Bash 
   `tatp/touchcal.py` should be an array index or a unit conversion, nothing else.
 - **Fail fast.** No broad `try`/`except`. Let exceptions propagate. The single exception is the
   data-write path, which must never lose an already-collected trial.
-- **Never substitute mock, synthetic, fallback or empty data for real data.** If something
-  required is missing, stop and ask.
+- **Never substitute mock, synthetic, fallback or empty data for real data.** If required
+  data is missing (a measurement, a file, a participant record), stop and ask: that is a gap
+  in the data, not a choice the spec left open, so **Deciding** below does not cover it.
 - **Assert at stage boundaries** — after loading config, after reading the allocation file,
   after each calibration, before each garment command.
 
@@ -159,7 +160,8 @@ the right default — downgrade deliberately, not by habit.
   `main` and named `pilot/<topic>`. `main` only receives merges (`--no-ff`) that pass
   `make check` and have been reviewed, in this order: `/code-review high` on the branch's diff,
   then the **spec-review** agent, both at full strength. Fix what survives, run `make check` on
-  the branch, then merge. Delete the branch once merged.
+  the branch, then merge, then run `make check` on `main` (another branch may have merged in
+  between). Delete the branch once merged.
 - **Screenshots.** A branch may re-approve the screens it deliberately changed, in the same
   commit, and names each one in `docs/LOG.md` so S can review them. Re-approving a screen the
   change did not mean to alter is a bug, not an approval.

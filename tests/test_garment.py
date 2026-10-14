@@ -119,6 +119,10 @@ def test_a_fall_is_not_rate_limited(garment):
     garment.set_pressure(1, 150.0)
     garment.clock.now += 0.01
     assert garment.set_pressure(1, 0.0) == 0.0
+    # And the rise after it is limited from where the fall landed, not from where it began.
+    garment.clock.now += 0.1
+    allowed = garment.limits.pressure_rate_max_kpa_s * 0.1
+    assert garment.set_pressure(1, 200.0) == pytest.approx(allowed)
 
 
 def test_stop_is_not_rate_limited(garment):

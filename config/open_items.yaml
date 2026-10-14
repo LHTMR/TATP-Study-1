@@ -144,9 +144,11 @@ items:
          maximum quickly, but does not give a number. 60 kPa/s is a working value chosen to
          sit just above the 50 kPa/s top adjustment rate of SPEC.md 10.3. S, 24 Sep 2026:
          deferred to hardware bring-up. Set it from the measured inflation rate per channel
-         (open item 3), and decide then whether it should limit falling pressure as well as
-         rising (docs/LOG.md N7.A7). Until then 60 kPa/s stands, and holding the button can
-         never reach it."
+         (open item 3). Falls: S decided 14 Oct 2026 that the limit applies to rises only
+         (docs/LOG.md N7.D21). With falls no longer slowed in software, measure each channel's
+         deflation time at bring-up too: a stimulus whose level steps down is cued as soon as
+         the command lands, and if the garment takes long to deflate it needs a settle time.
+         Until then 60 kPa/s stands, and holding the button can never reach it."
     blocks_use: true
 
   - item: "L3"
