@@ -7,6 +7,7 @@ would and rates on a known observer model, so each test knows what the calibrati
 from __future__ import annotations
 
 import csv
+import time
 
 import pytest
 from PySide6.QtWidgets import QApplication
@@ -21,6 +22,7 @@ from virtual_participant import (
 
 from tatp import config as cfg
 from tatp import touchcal
+from tatp import touchcal_maths as maths
 from tatp.garment.mock import MockGarment
 from tatp.touchcal_maths import REFERENCE_STRONGER, TEST_STRONGER
 
@@ -616,6 +618,137 @@ def test_every_presentation_has_the_same_onset_to_scale_timing(rig):
     assert onsets, "the settle interval was observed at least once"
     for order, held in onsets:
         assert held == pytest.approx(plans[order])
+
+
+def test_the_ramp_to_an_amplitude_runs_inside_the_off_interval(app, loaded, tmp_path):
+    """S, 5 Oct 2026: the pause after a response was the drawn interval plus the ramp.
+
+    150 kPa at 25 kPa/s is a 6 s ramp. Ramping after an 8 s interval put the cue at 14 s; the
+    interval runs from the stop to the cue, with the ramp inside it (docs/research/R32).
+    """
+    off_s, pressure_kpa, rate_kpa_s = 8.0, 150.0, 25.0
+    ramp_s = pressure_kpa / rate_kpa_s
+    config = make_config(loaded, tmp_path)
+    garment = {**config.hardware["garment"], "pressure_rate_max_kpa_s": rate_kpa_s}
+    config = cfg.Config(**{**config.__dict__,
+                           "hardware": {**config.hardware, "garment": garment}})
+    # Slower than the other tests, so a timer's few milliseconds are a small part of a second.
+    rig = make_rig(config, clock_speed=50.0)
+    session = rig.session
+    try:
+        reference = int(config.study1["touch_calibration"]["reference_channel"])
+        plan = maths.EstimationPlan(presentation_order=2, amplitude_index=10,
+                                    pressure_kpa=pressure_kpa, catch_trial=False)
+        trial = touchcal.EstimationPresentation(
+            session, rig.participant, rig.experimenter, plan, reference, 1, off_s
+        )
+        cues = []
+
+        def cued():
+            cues.append((session.clock.elapsed_s(), session.garment.pressure_kpa[reference]))
+
+        rig.participant.warning_cue_shown.connect(cued)
+        started_s = session.clock.elapsed_s()
+        trial.start()
+        deadline = time.monotonic() + 5.0
+        while not cues and time.monotonic() < deadline:
+            QApplication.processEvents()
+            time.sleep(0.0005)
+        trial.cancel()
+        assert cues, "the cue never came"
+        cue_s, held_kpa = cues[0]
+        assert held_kpa == pytest.approx(pressure_kpa), "the pressure is reached before the cue"
+        assert off_s - 0.5 <= cue_s - started_s < off_s + ramp_s / 2
+    finally:
+        session.close()
+
+
+# -- the experimenter's view of the estimation run, and the pilot-rig skip ---------------
+
+
+def test_the_experimenter_sees_how_many_ratings_are_answered(rig):
+    seen = []
+    window = rig.experimenter
+    window.set_instruction = lambda text: (seen.append(text),
+                                           type(window).set_instruction(window, text))
+    _calibrate(rig)
+    template = window.text["instructions"]["touchcal_estimation"]
+    progress = [text for text in seen if text in
+                {template.format(answered=n, total=12) for n in range(13)}]
+    assert progress == [template.format(answered=n, total=12) for n in range(12)]
+
+
+def _skip_when_offered(rig, procedure, offered):
+    """Record whether Skip calibration is shown at each step, and press it once it is."""
+    button = rig.experimenter.skip_button
+
+    def step(trial):
+        shown = not button.isHidden()
+        offered.append((procedure.ratings_answered, shown))
+        if shown and button.isEnabled():
+            button.click()
+
+    return step
+
+
+def test_with_a_pilot_rig_the_experimenter_can_skip_after_a_few_ratings(rig):
+    session = rig.session
+    assert session.garment.pilot_rig
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    offered = []
+    virtual.before_step = _skip_when_offered(rig, procedure, offered)
+    result = virtual.run()
+    few = int(session.config.study1["touch_calibration"]["pilot_skip_min_ratings"])
+
+    assert all(not shown for answered, shown in offered if answered < few)
+    assert result.skipped and not result.valid_for_analysis
+    assert rig.experimenter.skip_button.isHidden(), "gone once the calibration is over"
+    assert len(_rows(session, "touchcal_estimate")) == few
+    assert not _rows(session, "touchcal_preference")
+    assert result.preferred_pattern == session.config.study1["patterns"]["fixed_ct_pattern"]
+    assert result.targets_source == touchcal.FROM_BRACKET_LINE
+    assert result.p30_kpa < result.pleasant_kpa < result.p80_kpa
+    channels = _rows(session, "touchcal_channels")
+    assert len(channels) == 5
+    assert all(row["skipped"] == "true" and row["valid_for_analysis"] == "false"
+               for row in channels)
+    assert {row["gain_source"] for row in channels if row["channel"] != "3"} == {
+        touchcal.GAIN_SKIPPED
+    }
+    (skip,) = _events(session, "touchcal_skipped")
+    assert skip["origin"] == "experimenter" and f"after {few} ratings" in skip["detail"]
+
+
+def test_a_full_calibration_is_recorded_as_not_skipped(rig):
+    result, _ = _calibrate(rig)
+    assert not result.skipped
+    assert all(row["skipped"] == "false" for row in _rows(rig.session, "touchcal_channels"))
+
+
+def test_the_study_garment_can_never_skip(rig, monkeypatch):
+    """Not just a hidden button: the skip itself asserts the garment is a pilot rig."""
+    monkeypatch.setattr(MockGarment, "pilot_rig", False)
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    offered, refused = [], []
+    record = _skip_when_offered(rig, procedure, offered)
+    few = int(rig.session.config.study1["touch_calibration"]["pilot_skip_min_ratings"])
+
+    def step(trial):
+        record(trial)
+        if procedure.ratings_answered >= few and not refused:
+            with pytest.raises(AssertionError, match="study garment"):
+                procedure._skip()
+            refused.append(True)
+
+    virtual.before_step = step
+    result = virtual.run()
+    assert refused
+    assert not any(shown for _, shown in offered)
+    assert not result.skipped
+    assert not _events(rig.session, "touchcal_skipped")
+    assert len(_rows(rig.session, "touchcal_estimate")) == 12
 
 
 # -- starting a touch delivery, SPEC.md 12.3 and 16 -------------------------------------

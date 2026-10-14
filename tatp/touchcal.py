@@ -704,23 +704,40 @@ class EstimationPresentation(Trial):
     question asks how intense the touch *is* (docs/research/R32). A catch trial commands no
     pressure and switches nothing on: on a device whose channels are on/off at a hand-set
     pressure, switching one on would be a real touch.
+
+    **The off-interval is this trial's, and the ramp runs inside it.** `off_s` is the time from
+    the previous presentation's stop to this one's warning cue (docs/research/R32: "from the
+    deflate command to the next warning cue"). The pressure is reached with the channel closed
+    during it, so a high amplitude's ramp no longer adds to the interval. Ramping after the
+    interval made the pause after a response the drawn interval plus up to the ceiling over the
+    rate limit -- 4 s more on the prototype, whose pressures are not even delivered (docs/LOG.md
+    N7.F8a). A ramp longer than the interval still ends before the cue, so the cue waits for it.
     """
 
-    def __init__(self, session, participant, experimenter, plan, channel: int, run_index: int):
+    def __init__(self, session, participant, experimenter, plan, channel: int, run_index: int,
+                 off_s: float):
         super().__init__(session, participant, experimenter)
         self.plan = plan
         self.channel = channel
         self.run_index = run_index
+        self.off_s = off_s
         touch = session.config.study1["touch_calibration"]
         self.settle_s = float(touch["estimation_settle_s"])
         self.onset_iso = ""
         self._t_session_s: float | None = None
 
     def start(self) -> None:
+        clock = self.session.clock
+        stopped_s = clock.elapsed_s()
         # From nothing, whatever an interrupted attempt or a restored garment left behind.
         self.session.garment.stop()
         levels = {} if self.plan.catch_trial else {self.channel: self.plan.pressure_kpa}
-        self.ramp_then(levels, lambda: self.cue_then(self._onset))
+        self.ramp_then(
+            levels,
+            lambda: self.after(
+                clock.remaining_s(stopped_s, self.off_s), lambda: self.cue_then(self._onset)
+            ),
+        )
 
     def _onset(self) -> None:
         self.onset_iso = self.session.clock.wall_iso()
@@ -1032,7 +1049,8 @@ class TouchCalibrationResult:
 
     `valid_for_analysis` is false in timing-only mode (SPEC.md 12.4), and whenever a fallback
     stood in for a measured value -- `targets_source` other than `fit`, or a `gain_sources`
-    entry of `fallback_unit_gain`. The data says which.
+    entry of `fallback_unit_gain` -- and when the calibration was `skipped`. The data says
+    which.
     """
 
     run_index: int
@@ -1047,6 +1065,8 @@ class TouchCalibrationResult:
     pleasant_kpa: float
     preferred_pattern: str
     stage1_pass: bool
+    # Ended early by the experimenter on a pilot rig (`TouchCalibration._skip`).
+    skipped: bool
     valid_for_analysis: bool
     sham: Delivery
     ct_targeted: Delivery
@@ -1088,6 +1108,7 @@ FROM_DEVICE_RANGE = "device_range"
 GAIN_REFERENCE = "reference"
 GAIN_MATCHED = "matched"
 GAIN_FALLBACK = "fallback_unit_gain"
+GAIN_SKIPPED = "skipped_unit_gain"
 
 
 # -- Protocol B in full ------------------------------------------------------------------
@@ -1118,6 +1139,10 @@ class TouchCalibration(Procedure):
     every step runs with its real interaction and duration, every row is written
     `valid_for_analysis: false`, and the gate never stops the session: an unusable estimate
     goes straight to the fallback, because the pressures are not delivered anyway.
+
+    **The skip, on a pilot rig only** (`GarmentController.pilot_rig`: the mock and the
+    prototype). After `pilot_skip_min_ratings` estimation ratings the experimenter can end the
+    calibration and move on to the next event; see `_skip`. Never on the study garment.
 
     `fit_ready` carries the estimate to the fit preview, when the preview is on.
     """
@@ -1173,6 +1198,78 @@ class TouchCalibration(Procedure):
         self.match_passes: dict[int, int] = {}
         self.pleasant_kpa = 0.0
         self.stage1_pass = False
+
+        self.skip_min_ratings = int(self.touch["pilot_skip_min_ratings"])
+        # Stage boundary (CLAUDE.md): a skip offered before any rating would end on nothing.
+        assert self.skip_min_ratings >= 1, (
+            "study1.yaml: touch_calibration.pilot_skip_min_ratings must be at least 1"
+        )
+        # Every estimation rating given, across re-runs: what the skip is offered after.
+        self.ratings_answered = 0
+        self.skipped = False
+
+    # -- the experimenter's skip, on a pilot rig only ----------------------------------
+
+    def connect_actions(self) -> None:
+        self.experimenter.skip_calibration_requested.connect(self._skip)
+
+    def disconnect_actions(self) -> None:
+        self.experimenter.skip_calibration_requested.disconnect(self._skip)
+        self.experimenter.set_actions_enabled(skip_calibration=False)
+
+    def _offer_skip(self) -> None:
+        """Offer the skip once `pilot_skip_min_ratings` ratings are in, on a pilot rig only.
+
+        S, 5 Oct 2026: with the mock or the prototype, the experimenter can move on after a
+        few ratings; with the study garment it must be impossible. The button is never shown
+        there, and `_skip` asserts it besides, so a hidden button is not the only guard.
+        """
+        if self.session.garment.pilot_rig and self.ratings_answered >= self.skip_min_ratings:
+            self.experimenter.set_actions_enabled(skip_calibration=True)
+
+    def _skip(self) -> None:
+        """End the calibration now, on what it has, recorded as skipped (docs/LOG.md N7.F8b).
+
+        Targets come from an accepted fit if there is one, else from the fallback line through
+        the step 1 settings; a channel not yet matched is delivered at the reference's pressure;
+        a level not yet set is the geometric mean of P30 and P80; and with no preference made,
+        the participant-preferred condition uses the fixed pattern. Every `touchcal_channels`
+        row says `skipped` and is not valid for analysis, so a skipped calibration can never
+        pass for a full one. Identical in every condition (SPEC.md 16).
+        """
+        garment = self.session.garment
+        # Stage boundary (CLAUDE.md): the study garment never skips a calibration. Asserted
+        # here, where the skip takes effect, and not only by the button's absence.
+        assert garment.pilot_rig, (
+            f"{garment.driver_name} is the study garment: touch calibration cannot be skipped"
+        )
+        assert self.ratings_answered >= self.skip_min_ratings, (
+            f"a skip after {self.ratings_answered} ratings; it is offered after "
+            f"{self.skip_min_ratings}"
+        )
+        assert self.rig.interruptions.active is None, "a skip while the session is interrupted"
+        self._halt()
+        garment.stop()
+        self.experimenter.hide_fit_preview()
+        self.skipped = True
+        self.valid = False
+        self.session.log(
+            "touchcal_skipped", origin="experimenter", severity="warning",
+            detail=f"run {self.run_index}, after {self.ratings_answered} ratings; not valid "
+            "for analysis",
+        )
+        if self.inverse is None:
+            self._fallback(("skipped",))
+            self._set_targets()
+        for channel in self.others:
+            if channel not in self.gains:
+                self.gains[channel] = 1.0
+                self.gain_sources[channel] = GAIN_SKIPPED
+        if not self.pleasant_kpa:
+            self.pleasant_kpa = maths.geometric_mean(
+                [self.targets[self.low_pct], self.targets[self.high_pct]]
+            )
+        self._finish_calibration(self.pattern_config["fixed_ct_pattern"])
 
     # -- steps 1 and 2 -----------------------------------------------------------------
 
@@ -1248,35 +1345,43 @@ class TouchCalibration(Procedure):
         n_catch = maths.catch_trial_count(
             len(amplitudes), float(self.touch["catch_trial_fraction"])
         )
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touchcal_estimation"]
-        )
-        self._present(list(maths.estimation_plans(amplitudes, n_catch, self.session.rng)))
+        plans = list(maths.estimation_plans(amplitudes, n_catch, self.session.rng))
+        self._present(plans, len(plans), off_s=0.0)
 
     def _device_range(self) -> tuple[float, float]:
         return (float(self.session.config.hardware["adjustment"]["tap_step_kpa"]),
                 self.ceiling_kpa)
 
-    def _present(self, plans: list[maths.EstimationPlan]) -> None:
+    def _present(self, plans: list[maths.EstimationPlan], total: int, off_s: float) -> None:
         if not plans:
             self._fit()
             return
+        # "x/N answered" (S, 5 Oct 2026): the same count in every condition, and never what
+        # was answered (SPEC.md 16).
+        self.experimenter.set_instruction(
+            self.experimenter.text["instructions"]["touchcal_estimation"].format(
+                answered=len(self.estimates), total=total
+            )
+        )
+        self.experimenter.refresh()
 
         def presented(outcome) -> None:
             self.estimates.append(outcome)
+            self.ratings_answered += 1
+            self._offer_skip()
             if len(plans) == 1:
                 self._fit()
                 return
-            # Drawn now, before the wait, so a repeated wait is the same wait.
+            # Drawn now, before the presentation, so a repeated one waits the same.
             iti_s = self.session.rng.uniform(
                 float(self.touch["estimation_iti_min_s"]),
                 float(self.touch["estimation_iti_max_s"]),
             )
-            self.wait(iti_s, lambda: self._present(plans[1:]))
+            self._present(plans[1:], total, iti_s)
 
         self.run_trial(
             lambda: EstimationPresentation(
-                *self._windows(), plans[0], self.reference, self.run_index
+                *self._windows(), plans[0], self.reference, self.run_index, off_s
             ),
             presented,
         )
@@ -1470,6 +1575,11 @@ class TouchCalibration(Procedure):
             self.targets_source = FROM_FIT
         else:
             self._fallback(reasons)
+        self._set_targets()
+        self._match_all(self._equalise_all)
+
+    def _set_targets(self) -> None:
+        """Every target, and the match level, off whichever line `inverse` holds."""
         self.targets = {
             pct: maths.clamp(self.inverse.invert(pct), self.ceiling_kpa)
             for pct in self.derived_pct
@@ -1479,11 +1589,12 @@ class TouchCalibration(Procedure):
         self.match_level_kpa = maths.clamp(
             self.inverse.invert(float(self.touch["channel_match_pct"])), self.ceiling_kpa
         )
-        self._match_all(self._equalise_all)
 
     def _fallback(self, reasons: tuple[str, ...]) -> None:
         """Targets that are not the fit, stated as such (the procedure's docstring)."""
-        percents = sorted(self.anchor_settings)
+        # The configured anchors, not this run's settings: a skip at the start of a re-run
+        # comes here before the run has set any (`_skip`).
+        percents = sorted(float(p) for p in self.touch["anchors_pct"])
         if maths.bracket_is_usable(*self.bracket, self.fit_form):
             self.targets_source, (low, high) = FROM_BRACKET_LINE, self.bracket
         else:
@@ -1886,6 +1997,7 @@ class TouchCalibration(Procedure):
             pleasant_kpa=self.pleasant_kpa,
             preferred_pattern=preferred,
             stage1_pass=self.stage1_pass,
+            skipped=self.skipped,
             valid_for_analysis=self.valid,
             **deliveries,
         )
@@ -1893,6 +2005,7 @@ class TouchCalibration(Procedure):
             "touch_calibration_done",
             severity="info" if self.valid else "warning",
             detail=f"run {self.run_index}"
+            + ("; skipped" if self.skipped else "")
             + ("" if self.valid else "; not valid for analysis"),
         )
         self.experimenter.set_instruction("")
@@ -1929,6 +2042,7 @@ class TouchCalibration(Procedure):
                 participant_preferred_kpa=levels["participant_preferred"][channel],
                 participant_preferred_pattern=preferred,
                 clamped=";".join(c for c in levels if channel in clamped[c]),
+                skipped=self.skipped,
                 valid_for_analysis=self.valid,
             )
 

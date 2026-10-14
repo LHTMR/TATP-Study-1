@@ -68,6 +68,11 @@ class GarmentController(ABC):
     # Declared statically by the driver class (SPEC.md 12.1), never queried from the device.
     n_channels: int = 0
     per_channel_pressure: bool = False
+    # True only for a driver that can never be the study garment: the mock and the current
+    # prototype. What is allowed for piloting alone -- the touch-calibration skip (docs/LOG.md
+    # N7.F8b) -- asserts it. False by default, so a new driver, the valve garment's included,
+    # is the study garment unless it says otherwise.
+    pilot_rig: bool = False
 
     def __init__(
         self,

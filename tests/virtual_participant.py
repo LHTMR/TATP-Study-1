@@ -55,9 +55,9 @@ def make_config(loaded: cfg.Config, tmp_path, **study1_overrides) -> cfg.Config:
     return cfg.Config(**{**loaded.__dict__, "hardware": hardware, "study1": study1})
 
 
-def make_rig(config: cfg.Config) -> Rig:
+def make_rig(config: cfg.Config, clock_speed: float = CLOCK_SPEED) -> Rig:
     session = Session(
-        config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=CLOCK_SPEED), rng_seed=7
+        config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=clock_speed), rng_seed=7
     )
     session.start()
     participant = ParticipantWindow(config, Responder(config.hardware), session.clock)

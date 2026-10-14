@@ -117,7 +117,8 @@ instructions:
     tryck på Återuppta. Tryck på Nästa steg bara om deltagaren inte kan trycka.
   stop_rehearsal_resume: Stoppet registrerades. Tryck på Återuppta för att fortsätta inför deltagaren.
   touchcal_bracket: 'Beröringskalibrering, steg 1: deltagaren ställer in beröringen på mittkanalen.'
-  touchcal_estimation: 'Beröringskalibrering, steg 2: deltagaren skattar en serie beröringar.'
+  # DRAFT (LOG N7.F8c): the progress, "x/N answered" (S, 5 Oct 2026).
+  touchcal_estimation: 'Beröringskalibrering, steg 2: deltagaren skattar en serie beröringar. {answered}/{total} besvarade.'
   touchcal_match: 'Beröringskalibrering, steg 3: deltagaren matchar kanal {channel} mot mittkanalen.'
   touchcal_equalise: 'Beröringskalibrering, steg 4: deltagaren jämför kanal {channel} med mittkanalen.'
   touchcal_pleasantness: 'Beröringskalibrering, steg 5: deltagaren ställer in den behagligaste nivån.'
@@ -173,6 +174,9 @@ controls:
   # SPEC.md 11.1, visas endast när fit_preview.enabled är på.
   fit_accept: Godkänn den här skattningen
   fit_rerun: Gör om proceduren
+  # DRAFT (LOG N7.F8b): written by the build. Shown only with the mock or prototype garment,
+  # after a few touch-calibration ratings; ends the calibration, recorded as skipped.
+  skip_calibration: Hoppa över kalibreringen
   # Fritextfälten (SPEC.md 8.2, 8.4, 11). Inget av dem avbryter någonsin sessionen.
   add_note: Lägg till anteckning
   substitution: Filament använt i stället (g)

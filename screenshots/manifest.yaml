@@ -129,6 +129,10 @@ screens:
     block, named by its phase. (en)'
   experimenter_en_rerun_dialog: The re-run reason, asked before a fit is discarded
     (SPEC.md 11.1). (en)
+  experimenter_en_touchcal_estimation_skip: 'The estimation run with the mock or prototype
+    garment: how many ratings are answered, and Skip calibration under the garment,
+    shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).
+    Nothing else has moved. (en)'
   experimenter_sv_abort_dialog: 'The abort confirmation: what happens to the data,
     a reason field, and Abort disabled until a reason is typed. (sv)'
   experimenter_sv_all_banners: 'All three banners at once, in the space they need,
@@ -252,6 +256,10 @@ screens:
     block, named by its phase. (sv)'
   experimenter_sv_rerun_dialog: The re-run reason, asked before a fit is discarded
     (SPEC.md 11.1). (sv)
+  experimenter_sv_touchcal_estimation_skip: 'The estimation run with the mock or prototype
+    garment: how many ratings are answered, and Skip calibration under the garment,
+    shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).
+    Nothing else has moved. (sv)'
   participant_en_adjust_just_noticeable: 'The adjustment screen for `just_noticeable`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     en.'
