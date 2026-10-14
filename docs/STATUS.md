@@ -1,10 +1,10 @@
 # STATUS
 
-**Last updated:** 5 October 2026.
-**Milestone:** 6 (pilotable), in progress. Milestones 2–5 and the Milestone 6 work up to the
-UI review, plus the test-worker crash fix, are in `main`. Acceleration push under way
-(`CLAUDE.md`).
-**Branch:** `accel/integration`, ahead of `main` by the work below.
+**Last updated:** 14 October 2026.
+**Milestone:** 6 (pilotable), in progress, in lab piloting. Everything to date is in `main`.
+**Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
+back (`CLAUDE.md`, Committing). `accel/integration` is finished and no longer used. Open:
+`pilot/falls-unlimited`, the rate limit on rises only (LOG N7.D21), not yet reviewed or merged.
 
 ---
 
@@ -35,7 +35,7 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
 - **Run a session** fits the laptop: the form scrolls and the buttons stay visible. Browse for
   the pattern folder opens in `config/patterns`, and Close is now Cancel.
 
-**Earlier on `accel/integration`, not yet in `main`** (N7.U10–N7.U19, N7.T1–N7.T4):
+**Earlier Milestone 6 work** (N7.U10–N7.U19, N7.T1–N7.T4):
 - VAS proportionality training;
 - the UI-review calls;
 - the validator timing fix;
@@ -44,9 +44,10 @@ is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.
 - the lost-link log;
 - the REDCap checkbox.
 
-**`make check` passes:** 1024 tests, ruff, the validator (35 checks) and 172 screens.
+**`make check` passes:** 1025 tests, ruff, the validator (35 checks) and 172 screens.
 
-**`main` and `accel/integration` are level (14 Oct 2026).** The Mac's Milestone 2 line was
+**The acceleration push is over (14 Oct 2026)** and its way of deciding is now standing practice
+(`CLAUDE.md`, Deciding). The Mac's Milestone 2 line was
 merged keeping the lab's tree (`ae3fd1e`); its two unsuperseded parts were ported: the lost-taps
 fix (adjustment presses timed from their key events) and the RNG question, decided as keep
 `random.Random` with a test pinning its stream (LOG N3.7). The lab-run commits were reviewed
@@ -78,7 +79,7 @@ fix (adjustment presses timed from their key events) and the RNG question, decid
 ## Next steps
 
 1. **Fix S's 5 Oct issue list.** Not started. S will say when to begin. Participant wording:
-   check the ethics folder first, otherwise draft it (`CLAUDE.md`, acceleration push).
+   check the ethics folder first, otherwise draft it (`CLAUDE.md`, Deciding).
    - **General:**
      - experimenter initials case-insensitive;
      - the arrow button blue (ask S which screen or screens).
@@ -120,7 +121,7 @@ fix (adjustment presses timed from their key events) and the RNG question, decid
        counts as ▶;
      - whether the alerts are audible over the noise;
      - taps on the adjustment are never lost or misread (N2.9).
-3. **Merge `accel/integration` into `main` again** once steps 1 and 2 are done and reviewed.
+3. **Review and merge `pilot/falls-unlimited` into `main`.**
 4. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
 5. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
    Milestone 6 done.

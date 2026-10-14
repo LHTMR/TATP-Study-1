@@ -432,8 +432,7 @@ class HardwareCheckDialog(QDialog):
         if self.garment is None or not self.garment.connected:
             return
         try:
-            # Off is the valve alone: commanding 0 kPa would go through the rate limit, which
-            # applies to falls too, and a quick on-off would leave pressure commanded.
+            # Off is the valve alone; the pressure is only set for switching on.
             if on and self.garment.per_channel_pressure:
                 self.garment.set_pressure(
                     channel, self.hardware["audio"]["masking_check_pressure_kpa"]

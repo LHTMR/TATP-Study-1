@@ -1,6 +1,6 @@
 ---
 name: decision-research
-description: Research one open design or methods decision (the spec does not settle it) using the literature and reference implementations, write a sourced report under docs/research/, and return a recommendation. Use before taking any [R] decision during the acceleration push.
+description: Research one open design or methods decision (the spec does not settle it) using the literature and reference implementations, write a sourced report under docs/research/, and return a recommendation. Use before taking any [R] decision (CLAUDE.md, Deciding).
 model: inherit
 effort: high
 tools: Read, Grep, Glob, WebSearch, WebFetch, Write

@@ -99,8 +99,9 @@ prefer `Read` / `Grep` / `Glob` to shell commands, and do not fire several Bash 
   `tatp/touchcal.py` should be an array index or a unit conversion, nothing else.
 - **Fail fast.** No broad `try`/`except`. Let exceptions propagate. The single exception is the
   data-write path, which must never lose an already-collected trial.
-- **Never substitute mock, synthetic, fallback or empty data for real data.** If something
-  required is missing, stop and ask.
+- **Never substitute mock, synthetic, fallback or empty data for real data.** If required
+  data is missing (a measurement, a file, a participant record), stop and ask: that is a gap
+  in the data, not a choice the spec left open, so **Deciding** below does not cover it.
 - **Assert at stage boundaries** — after loading config, after reading the allocation file,
   after each calibration, before each garment command.
 
@@ -123,9 +124,9 @@ hidden from the experimenter screen as well** — recorded in the data, never di
 
 Use one when the answer needs many files read but only the conclusion matters.
 
-During the acceleration push (below), implementation subagents are allowed, one per stream, each
-in its own worktree on its own branch. Otherwise, edits belong in the main session so they land
-in one reviewable diff. Always give a subagent a specific task or question, and tell it to return
+Edits belong in the main session so they land in one reviewable diff, except for parallel
+streams (see **Deciding**), where each implementation agent works in its own worktree on its
+own branch. Always give a subagent a specific task or question, and tell it to return
 findings rather than file contents.
 
 **A subagent protects context, not budget.** Its work happens in a separate window and only its
@@ -142,7 +143,7 @@ wrong answer.
 | Extract a convention or protocol detail from a reference repo | `haiku`, or `sonnet` if the protocol is intricate | ~10 | Bounded retrieval, and the answer is verifiable at a glance |
 | Investigate a failure spanning several modules | `sonnet` | ~25 | Real diagnosis, but the hypothesis comes back here to be checked |
 | **Adversarial review at each milestone** | **`inherit` — never downgrade** | ~40 | Last line of defence. A weak reviewer produces false comfort, which is worse than no review |
-| Implement one stream of the push | `inherit` | — | Writes code other streams merge against. A cheaper model here costs more in integration |
+| Implement one parallel stream | `inherit` | — | Writes code other streams merge against. A cheaper model here costs more in integration |
 | Research a decision (`decision-research`) | `inherit` | ~40 | Its report is what S reviews instead of the decision itself |
 
 Invoke the reviewer by name: **"Use the spec-review agent to review this diff against
@@ -155,8 +156,15 @@ the right default — downgrade deliberately, not by habit.
 
 ## Committing
 
-- **Branches are the protection.** `main` only receives merges that pass `make check` and have
-  been reviewed. Work happens on `accel/integration` and the stream branches cut from it.
+- **Branches are the protection.** Each change is made on its own short-lived branch, cut from
+  `main` and named `pilot/<topic>`. `main` only receives merges (`--no-ff`) that pass
+  `make check` and have been reviewed, in this order: `/code-review high` on the branch's diff,
+  then the **spec-review** agent, both at full strength. Fix what survives, run `make check` on
+  the branch, then merge, then run `make check` on `main` (another branch may have merged in
+  between). Delete the branch once merged.
+- **Screenshots.** A branch may re-approve the screens it deliberately changed, in the same
+  commit, and names each one in `docs/LOG.md` so S can review them. Re-approving a screen the
+  change did not mean to alter is a bug, not an approval.
 - **Commit at every milestone in `docs/SPEC.md` §18 with `make check` passing**, and commit
   smaller working increments in between.
 - **Never end a session with the repository broken.** If something is half-finished, either
@@ -221,14 +229,14 @@ default something the spec does not fix, do both of these or neither:
 Doing only one of the two is how a guess ends up in the study. When S settles an item, set the
 config value and update its `fix` to record the decision, in the same commit.
 
-Only genuinely non-blocking things belong in `open_items.yaml`. If something blocks the build,
-**stop and ask** — except during the acceleration push, below.
+Only genuinely non-blocking things belong in `open_items.yaml`. Anything else the spec does not
+settle is decided by the build, as below.
 
-## Acceleration push — from 23 Sep 2026 until S ends it
+## Deciding — the build decides, S reviews
 
-S wants a **lab-testable build with the mock garment** as fast as possible: Milestones 2–5 and
-the Milestone 6 documents. S has delegated decisions to the build. **Branching is the
-protection**, so these rules relax the ones above for the length of the push.
+S has delegated decisions to the build. These rules began as the acceleration push
+(23 Sep – 14 Oct 2026) and, at S's instruction, now apply to all work on the repository.
+**Branching is the protection.**
 
 **Decide, don't ask, and leave a trail.** When the spec does not settle something:
 
@@ -252,7 +260,7 @@ hide the gaps that genuinely are placeholders. `tests/test_blinding_text.py` sti
 **Still S's, and never decided by the build:** anything that weakens blinding (§16), and hardware
 or safety limits (pressure, rate, sound level). These get the two-places rule — a `PLACEHOLDER`
 plus an open item — and the build carries on around them. The startup banner makes them
-impossible to miss at the pilot.
+impossible to miss in the lab.
 
 **Nothing waits on S to fetch a paper.** Research works from what is openly reachable: open
 access, PubMed Central / Europe PMC, preprints, author copies, abstracts. When a source that
@@ -261,11 +269,12 @@ decision is **taken anyway**, and the paper is listed under "To fetch" in
 `docs/research/README.md`. If S drops PDFs into `docs/research/sources/` (gitignored — papers
 are copyrighted), a later session re-checks the affected reports. Until then nothing is blocked.
 
-**Streams.** The main session is the integrator. It cuts each stream branch from
-`accel/integration`, fixes the shared interfaces first (config keys, schema tables, the
-protocol-runner call shape) so streams do not invent them twice, and then runs one
-implementation agent per stream with `isolation: "worktree"`. Worktrees live under
-`.claude/worktrees/`, which is gitignored. Each stream agent:
+**Parallel streams, when a piece of work is big enough to split.** The main session is the
+integrator. It cuts each stream branch from `main` (as `pilot/<topic>`), fixes the shared
+interfaces first (config keys, schema tables, the protocol-runner call shape) so streams do not
+invent them twice, and then runs one implementation agent per stream with
+`isolation: "worktree"`. Worktrees live under `.claude/worktrees/`, which is gitignored. Each
+stream agent:
 
 - works only on its own branch, commits small working increments, and runs `make check` before
   each commit;
@@ -276,18 +285,8 @@ implementation agent per stream with `isolation: "worktree"`. Worktrees live und
   its `docs/LOG.md` §7 rows in its final message rather than editing the file, because every
   stream appending to one table is a guaranteed conflict.
 
-**Review before every merge into `accel/integration`**, in this order:
-
-1. `/code-review high` on the stream's diff, for correctness bugs.
-2. The **spec-review** agent, for the spec. Both run at full strength.
-
-Fix what survives, then merge, then run `make check` on the integration branch. `main` receives
-`accel/integration` only at a milestone boundary, with `make check` passing.
-
-**Screenshots.** A stream may re-approve the screens it deliberately changed, in the same
-commit. It must name each one in its final message, and the integrator records it in
-`docs/LOG.md` §7, so S can review every re-approved screen in one sitting before the pilot.
-Re-approving a screen the stream did not mean to change is a bug, not an approval.
+Each stream is reviewed and merged into `main` as in **Committing** above. A stream names every
+screen it re-approved in its final message, and the integrator records them in `docs/LOG.md` §7.
 
 ## Working style
 
