@@ -26,7 +26,7 @@ from typing import NamedTuple
 from tatp import allocation as alloc
 from tatp.config import REPO_ROOT, Config
 from tatp.resume import previous_session_f40, read_session_values, session_files
-from tatp.session import earlier_experimenters
+from tatp.session import canonical_initials, earlier_experimenters
 
 REFUSE = "refuse"
 WARN = "warn"
@@ -142,6 +142,7 @@ def preflight(
         # launch, not only in the log once the calibration begins.
         findings.append(Finding(WARN, "preflight.previous_estimate_missing", str(previous)))
 
+    initials = canonical_initials(initials)
     earlier = earlier_experimenters(data_folder, participant_code)
     if earlier and initials not in earlier:
         findings.append(Finding(WARN, "warnings.experimenter_changed", initials))

@@ -126,6 +126,22 @@ def test_preflight_offers_the_resume_of_an_open_session(app, config):
     run_session.shut_down(resumed)
 
 
+def test_a_session_started_in_lower_case_resumes_in_upper_case(app, config):
+    """S, lab run 5 Oct: "sm" and "SM" are one experimenter, so no change is warned."""
+    lower = run_session.parse_args(["sm" if a == "SM" else a for a in ARGV])
+    assert lower.experimenter == "SM"
+    first = run_session.build(config, lower)
+    first.start()
+    first.cancel()
+    first.lock.release()
+    findings = run_session.preflight(config, run_session.parse_args(ARGV))
+    assert [key for _, key, _ in findings] == [run_session.RESUME_OFFER]
+    resumed = run_session.build(config, run_session.parse_args([*ARGV, "--resume"]))
+    assert resumed.resume is not None
+    assert resumed.session.experimenter_initials == "SM"
+    run_session.shut_down(resumed)
+
+
 def test_the_resume_summary_names_finished_phases_and_blocks(config):
     from datetime import datetime
 
