@@ -109,8 +109,11 @@ this the right choice, and both are load-bearing for §17:
   dependent on GPU and driver.
 
 Timing is handled with `time.perf_counter()` and Qt timers. Sound with `sounddevice` (white
-noise is generated, not a file). Randomisation with `numpy.random.Generator`, seeded and
-recorded.
+noise is generated, not a file). Randomisation is seeded and recorded: the allocation
+(`tools/make_allocation.py`) uses `numpy.random.Generator`, and the session uses
+`random.Random`, one stream per stage seeded from the recorded `rng_seed` (`docs/LOG.md`
+N7.D13). Which generator sits on which side is an open question, not a settled design:
+`docs/LOG.md` N3.7 has it, with the gate.
 
 Other environment facts:
 

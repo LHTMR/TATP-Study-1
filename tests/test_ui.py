@@ -380,7 +380,7 @@ def test_a_held_button_is_drawn_pressed_until_it_is_released(participant):
 def test_the_preference_screen_reads_the_buttons_as_the_adjustment_does(participant):
     """Something now moves between patterns (SPEC.md 9 step 6), so a press is drawn and sent."""
     pressed, confirmed = [], []
-    participant.adjust_pressed.connect(pressed.append)
+    participant.adjust_pressed.connect(lambda value, _event_ms: pressed.append(value))
     participant.adjust_confirmed.connect(lambda: confirmed.append(True))
     participant.show_preference()
     participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, QT_KEYS["pagedown"], Qt.NoModifier))
@@ -488,7 +488,7 @@ def test_the_warning_cue_announces_itself_for_the_audible_cue(participant):
 
 def test_the_level_adjustment_reads_the_buttons_on_a_text_screen(participant, session):
     pressed = []
-    participant.adjust_pressed.connect(pressed.append)
+    participant.adjust_pressed.connect(lambda value, _event_ms: pressed.append(value))
     participant.show_level_adjustment("find_level")
     assert participant.message.text == session.config.participant_text["audio_setup"][
         "find_level"

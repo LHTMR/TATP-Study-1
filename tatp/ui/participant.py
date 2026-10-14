@@ -476,9 +476,12 @@ class ParticipantWindow(QWidget):
     confirmed = Signal(object)  # a VasResponse
     emergency_stop = Signal()
     pressed_without_marker = Signal()
-    # The adjustment screen only (SPEC.md 10.3). Each carries the responder action's value.
-    adjust_pressed = Signal(str)
-    adjust_released = Signal(str)
+    # The adjustment screen only (SPEC.md 10.3). Each carries the responder action's value and
+    # the key event's own timestamp in milliseconds -- when the button moved, not when a handler
+    # ran (tatp.touchcal.PressTiming). `object`, not `int`: a Signal(int) is a 32-bit C int, and
+    # a millisecond uptime passes that after 25 days.
+    adjust_pressed = Signal(str, object)
+    adjust_released = Signal(str, object)
     adjust_confirmed = Signal()
     # The choice screen only (SPEC.md 10.8). `chosen` carries "left" or "right".
     chosen = Signal(str)
@@ -743,7 +746,7 @@ class ParticipantWindow(QWidget):
                     self.adjust_confirmed.emit()
             elif action is not None:
                 self.control.hold("left" if action is Action.DECREASE else "right")
-                self.adjust_pressed.emit(action.value)
+                self.adjust_pressed.emit(action.value, event.timestamp())
         # Everything else is swallowed rather than passed on: off the VAS there is nothing a
         # press can mean, and Qt would close the window on `escape`, one of ▶'s keys (SPEC.md
         # 10.1).
@@ -777,7 +780,7 @@ class ParticipantWindow(QWidget):
             and action in (Action.DECREASE, Action.INCREASE)
         ):
             self.control.release("left" if action is Action.DECREASE else "right")
-            self.adjust_released.emit(action.value)
+            self.adjust_released.emit(action.value, event.timestamp())
         event.accept()
 
     def _action(self, event) -> Action | None:
@@ -843,15 +846,16 @@ class RemoteKeyRouter(QObject):
             if participant.stack.currentWidget() is participant.vas
             else participant
         )
-        QApplication.sendEvent(
-            target,
-            QKeyEvent(
-                event.type(),
-                event.key(),
-                event.modifiers(),
-                event.text(),
-                event.isAutoRepeat(),
-                event.count(),
-            ),
+        forwarded = QKeyEvent(
+            event.type(),
+            event.key(),
+            event.modifiers(),
+            event.text(),
+            event.isAutoRepeat(),
+            event.count(),
         )
+        # The adjustment times a press from these stamps (tatp.touchcal.PressTiming), and a
+        # press can start in one window and end in the other.
+        forwarded.setTimestamp(event.timestamp())
+        QApplication.sendEvent(target, forwarded)
         return True

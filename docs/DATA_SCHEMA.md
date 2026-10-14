@@ -61,7 +61,7 @@ written, with an empty value — an absent row and an empty value must not be co
 | `experimenter_changed` | - | `true` if these differ from an earlier session for this participant |
 | `participant_language` | - | `sv` or `en` |
 | `experimenter_language` | - | `sv` or `en` |
-| `rng_seed` | - | Integer seed for `numpy.random.Generator` |
+| `rng_seed` | - | Integer seed; each stage draws from `random.Random(f"{rng_seed}:{stage_id}")` (LOG N7.D13) |
 | `allocation_file` | - | Path as given |
 | `allocation_sha256` | - | Hash of the allocation file |
 | `schedule_file` | - | Path as given |

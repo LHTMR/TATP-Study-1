@@ -568,11 +568,15 @@ class VirtualParticipant(QObject):
             wait_ms = self.window.clock.scaled_ms(self.window.confirm_lockout_remaining_s())
             QTimer.singleShot(wait_ms + LOCKOUT_MARGIN_MS, self, lambda: self.tap(action))
             return
-        self._send(action, QEvent.KeyPress)
-        self._send(action, QEvent.KeyRelease)
+        # One stamp for both edges: a tap is instant, and stamping the release when it is sent
+        # would put however long the press handler took into the thumb's hold -- the very
+        # error the stamps exist to remove (tatp.touchcal.PressTiming).
+        stamp_ms = self._now_ms()
+        self._send(action, QEvent.KeyPress, stamp_ms)
+        self._send(action, QEvent.KeyRelease, stamp_ms)
 
     def hold(self, action: Action) -> None:
-        self._send(action, QEvent.KeyPress)
+        self._send(action, QEvent.KeyPress, self._now_ms())
         self._held = action
 
     def press_emergency_stop(self) -> None:
@@ -581,15 +585,24 @@ class VirtualParticipant(QObject):
     def _let_go(self) -> None:
         if self._held is not None:
             held, self._held = self._held, None
-            self._send(held, QEvent.KeyRelease)
+            self._send(held, QEvent.KeyRelease, self._now_ms())
 
-    def _send(self, action: Action, kind: QEvent.Type) -> None:
+    @staticmethod
+    def _now_ms() -> int:
+        # Real time, as the device stamps its events: the hold is the hand's, not the session's.
+        # perf_counter, not monotonic, which ticks in 15.6 ms steps on Windows -- coarse enough
+        # to move a planned hold across the tap threshold.
+        return int(time.perf_counter() * MS_PER_S)
+
+    def _send(self, action: Action, kind: QEvent.Type, stamp_ms: int) -> None:
         # Where a real key would land: the VAS reads its own keys, the window reads the rest
         # (tatp/ui/participant.py). Sent as an event rather than a method call, so it passes
         # through Qt's delivery exactly as the remote's key does.
         window = self.window
         target = window.vas if window.stack.currentWidget() is window.vas else window
-        QApplication.sendEvent(target, QKeyEvent(kind, self._keys[action], Qt.NoModifier))
+        event = QKeyEvent(kind, self._keys[action], Qt.NoModifier)
+        event.setTimestamp(stamp_ms)
+        QApplication.sendEvent(target, event)
 
 
 # -- adversarial participants, SPEC.md 17.5 ----------------------------------------------

@@ -272,6 +272,21 @@ def test_the_remote_drives_the_vas_from_another_window(rig):
     assert rig.participant.vas.state.visible, "the first press showed the marker"
 
 
+def test_a_forwarded_key_keeps_its_timestamp(rig):
+    """The adjustment times a press from the event's stamp (tatp.touchcal.PressTiming), so a
+    forwarded key with a zeroed stamp would turn a press's hold into the whole uptime."""
+    rig.participant.show()
+    elsewhere = QPushButton()
+    elsewhere.show()
+    stamps = []
+    rig.participant.adjust_pressed.connect(lambda _value, event_ms: stamps.append(event_ms))
+    rig.participant.show_level_adjustment("find_level")
+    event = QKeyEvent(QEvent.KeyPress, QT_KEYS["pagedown"], Qt.NoModifier)
+    event.setTimestamp(123456)
+    QApplication.sendEvent(elsewhere, event)
+    assert stamps == [123456]
+
+
 def test_typing_in_an_experimenter_field_is_not_taken_for_the_remote(rig):
     """The stop key is a full stop, which the experimenter types in notes and distances."""
     rig.participant.show()

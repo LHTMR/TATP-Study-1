@@ -276,6 +276,70 @@ def test_every_button_edge_reaches_the_log(running):
     assert events[-1] == "adjustment_confirmed"
 
 
+def _stamped(kind, name, stamp_ms):
+    event = QKeyEvent(kind, QT_KEYS[name], Qt.NoModifier)
+    event.setTimestamp(stamp_ms)
+    return event
+
+
+def test_a_tap_survives_a_stall_in_the_press_handler(running, loaded, monkeypatch):
+    """A slow write between press and release must not turn a tap into nothing.
+
+    Found by the Mac's validator: the press handler writes a log row, and a stalled write
+    delayed the release handler past `tap_max_duration_s`, losing about 3 runs in 7. The stall
+    is put in that write, and sits between the tap and hold thresholds, where a misread press
+    moves nothing.
+    """
+    session, participant, experimenter = running
+    adjustment = touchcal.Adjustment(
+        session, participant, experimenter, touchcal.anchor_plans(session.config)[0]
+    )
+    adjustment.start()
+    adjust = loaded.hardware["adjustment"]
+    stall_s = (float(adjust["tap_max_duration_s"]) + float(adjust["hold_delay_s"])) / 2
+    log = session.log
+
+    def stalled_log(event, *args, **kwargs):
+        if event == "button_down":
+            time.sleep(stall_s)
+        return log(event, *args, **kwargs)
+
+    monkeypatch.setattr(session, "log", stalled_log)
+    before = adjustment.state.value
+
+    participant.keyPressEvent(_stamped(QEvent.KeyPress, "pagedown", 1000))
+    participant.keyReleaseEvent(_stamped(QEvent.KeyRelease, "pagedown", 1050))
+    assert adjustment.state.value == before + adjustment.state.tap_step
+
+
+def test_a_release_whose_press_came_before_the_screen_is_ignored(running):
+    """A button already held when the adjustment appeared: the release moves nothing."""
+    session, participant, experimenter = running
+    adjustment = touchcal.Adjustment(
+        session, participant, experimenter, touchcal.anchor_plans(session.config)[0]
+    )
+    adjustment.start()
+    before = adjustment.state.value
+    participant.keyReleaseEvent(_stamped(QEvent.KeyRelease, "pagedown", 1000))
+    assert adjustment.state.value == before
+
+
+def test_each_button_is_timed_from_its_own_press():
+    """The second button down must not take the first's press as its own."""
+    timing = touchcal.PressTiming()
+    timing.pressed(Action.INCREASE, 1000, 5.0)
+    timing.pressed(Action.DECREASE, 1500, 5.5)
+    assert timing.released(Action.INCREASE, 1100, 9.0) == pytest.approx(5.1)
+    assert timing.released(Action.DECREASE, 1700, 9.0) == pytest.approx(5.7)
+
+
+def test_a_counter_that_wrapped_mid_press_falls_back_to_handler_time():
+    """Not an exception: one in the release slot would leave the button held for ever."""
+    timing = touchcal.PressTiming()
+    timing.pressed(Action.INCREASE, 2**32 - 10, 5.0)
+    assert timing.released(Action.INCREASE, 40, 5.05) == 5.05
+
+
 def test_short_exploration_is_recorded_rather_than_refused(running):
     """There is no approved wording for refusing a confirm, so the flag carries it instead."""
     session, participant, _ = running
