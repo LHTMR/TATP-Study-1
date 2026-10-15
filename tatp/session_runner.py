@@ -77,11 +77,11 @@ from tatp.touchcal import (
 )
 from tatp.touchcal_maths import Delivery
 from tatp.trials import MessageConfirm
+from tatp.ui.participant import STANDBY_SCREEN
 from tatp.units import S_PER_MIN
 
 # Keys in config/text/participant_*.yaml, not wording.
 WELCOME_SCREEN = "welcome"
-STANDBY_SCREEN = "standby"
 SESSION_STARTING_SCREEN = "session_starting"
 END_SCREEN = "session_end"
 BASELINE_INTRO_SCREEN = "intro_baseline"
@@ -196,13 +196,21 @@ class _QuietDeliveryStart(DeliveryStart):
     The runner shows `touch_start` itself, for the same time in every condition; a delivery
     that did it too would put it back whenever it restarts -- after a stop, or a reconnect --
     which in the participant-preferred condition happens for as long as the press is awaited.
-    `prompting` is whether the self-start prompt is up, waiting for the press.
+    `prompting` is whether the self-start prompt is up, waiting for the press. `cueing` is
+    whether it has reached its warning cue: from then on the participant's screen is its own
+    (the cue, the blank before the touch, the prompt), and before then -- while it ramps -- it
+    shows nothing of its own.
     """
 
     prompting = False
+    cueing = False
 
     def instruct(self, key: str, **values: object) -> None:
         """Nothing on the experimenter screen."""
+
+    def cue_then(self, then) -> None:
+        self.cueing = True
+        super().cue_then(then)
 
     def _cued(self) -> None:
         super()._cued()
@@ -269,7 +277,7 @@ class TouchBlock(Procedure):
             self.finish(None)
             return
         # A blank that reads as a break before the next scale (UI_PRINCIPLES.md 1.10).
-        self.wait(self.gap_s, self._next)
+        self.blank_for(self.gap_s, self._next)
 
 
 class SessionRunner(Procedure):
@@ -471,12 +479,14 @@ class SessionRunner(Procedure):
 
         A delivery still starting owns the participant's screen -- the cue, then in the
         participant-preferred condition the self-start prompt, which is put back if a block
-        took the screen in the meantime (docs/LOG.md N7.D17).
+        took the screen in the meantime (docs/LOG.md N7.D17). Before its cue a delivery shows
+        nothing of its own, so standby: after a resume, a delivery started again is ramping,
+        and the stop or paused screen must not stay up through it (N7.F11c8).
         """
-        if self._delivery is None:
-            self.participant.show_message(STANDBY_SCREEN)
-        elif self._delivery.prompting:
+        if self._delivery is not None and self._delivery.prompting:
             self.participant.show_message(SELF_START_SCREEN)
+        elif self._delivery is None or not self._delivery.cueing:
+            self.participant.show_message(STANDBY_SCREEN)
 
     # == setup and touch calibration ===========================================================
 
@@ -523,7 +533,6 @@ class SessionRunner(Procedure):
         """Bilaga 1 Table 2's baseline relaxation and alertness, with the garment off."""
         self.session.garment.stop()
         scales = list(self.session.config.study1["touch_block"]["baseline_scales"])
-
         gap_s = float(self.session.config.study1["touch_block"]["gap_s"])
 
         def rate(index: int) -> None:
@@ -532,7 +541,7 @@ class SessionRunner(Procedure):
                     self._stage_done()
                     return
                 # A blank that reads as a break before the next scale (UI_PRINCIPLES.md 1.10).
-                self.wait(gap_s, lambda: rate(index + 1))
+                self.blank_for(gap_s, lambda: rate(index + 1))
 
             self.run_trial(
                 lambda: TouchRating(
@@ -545,19 +554,10 @@ class SessionRunner(Procedure):
         def begin() -> None:
             # Introduced, like each task of the calibration before it (N7.F11c1). The
             # experimenter's line is the ratings' own: the participant is reading about them.
-            def show() -> None:
-                self.participant.show_message(BASELINE_INTRO_SCREEN)
-                self.experimenter.set_instruction(
-                    self.experimenter.text["instructions"]["baseline_ratings"]
-                )
-                self.experimenter.refresh()
-
-            self.run_trial(
-                lambda: MessageConfirm(
-                    self.session, self.participant, self.experimenter, show,
-                    BASELINE_INTRO_SCREEN,
-                ),
-                lambda _: rate(0),
+            self.introduce(
+                BASELINE_INTRO_SCREEN,
+                self.experimenter.text["instructions"]["baseline_ratings"],
+                lambda: rate(0),
             )
 
         # Relaxation and alertness have no training sentence today, so this gives none; it is
@@ -736,7 +736,7 @@ class SessionRunner(Procedure):
         self.session.log("garment_activated")
         # Standby unless a protocol has the screen: a block still waiting for its go has not
         # taken it yet (N7.F11c8).
-        if self._child is None or self._child._on_go is not None:
+        if self._child is None or self._child.awaiting_go:
             self.participant.show_message(STANDBY_SCREEN)
         if self._settled_then is not None:
             then, self._settled_then = self._settled_then, None
@@ -973,10 +973,16 @@ class SessionRunner(Procedure):
         )
         self.experimenter.set_status("")
         self.experimenter.refresh()
+        self._complete_shown_s = self.session.clock.real_elapsed_s()
         self.experimenter.proceed_requested.connect(self._end_program)
 
     def _end_program(self) -> None:
-        """The experimenter's last Next step, on a session already closed."""
+        """The experimenter's last Next step, on a session already closed. A press within
+        `session_end.quit_lockout_s` of the screen appearing is the second of a double press
+        on the Next step before it, and would skip the screen saying the data are saved."""
+        lockout_s = float(self.session.config.study1["session_end"]["quit_lockout_s"])
+        if self.session.clock.real_elapsed_s() - self._complete_shown_s < lockout_s:
+            return
         QApplication.instance().quit()
 
     def _note(self, note: str) -> None:

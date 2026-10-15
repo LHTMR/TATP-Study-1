@@ -97,15 +97,16 @@ screens:
     Press ▶ to begin.
   # The first screen of a session, up while the garment is fitted and before the welcome. S's
   # wording, 30 Sep 2026 (LOG N7.F3).
-  # DRAFT (LOG N7.F11c11): written by the build, not ethics-sourced. Unchanged here; the
-  # Swedish was reworded.
+  # (LOG N7.F11c11: the Swedish was reworded; this English is S's, unchanged.)
   session_starting: The session will start shortly.
   # DRAFT (LOG N7.F11c8): written by the build, not ethics-sourced. Shown through every wait --
   # the heat, the capsaicin, the gaps between blocks, the experimenter's decisions -- so it may
-  # not promise that anything starts "shortly", which by the second time is untrue.
+  # not promise that anything starts "shortly", which by the second time is untrue. Nor that
+  # nothing is asked: the area mapping shows it while the participant says when the feeling
+  # changes, as the experimenter instructs aloud.
   standby: |-
     Rest for now.
-    Nothing is needed from you until the next part.
+    The experimenter will tell you what comes next.
   session_end: |-
     That is the end of today's visit.
     Thank you.
@@ -139,14 +140,20 @@ screens:
   # (15 Oct 2026 pilot review: seven tasks ran back to back with nothing saying the task had
   # changed). The same in every session and condition. Nothing about how strong any touch will
   # be: the estimation run's catch trials must stay unannounced.
+  # `intro_bracket` names the anchors in the order `touch_calibration.anchor_prompt_keys` asks
+  # for them, which a test holds it to.
   intro_bracket: |-
     Next you set how strong the touch is, with the two large buttons.
     First until it is just noticeable, then until it is just uncomfortable.
 
     Press ▶ to start.
+  # Not "a series of touches ... while you feel it": the run includes presentations with no
+  # pressure (catch trials), and saying each is a touch to be felt would prime a report of one,
+  # which is what `catch_felt_fraction` measures. The scale's own question and its "no sensation
+  # at all" anchor then let an empty period be rated as it is felt.
   intro_estimation: |-
-    Next you will feel a series of touches, one at a time.
-    Rate each one on the line while you feel it.
+    Next comes a series of short periods, one at a time.
+    Rate each one on the line.
 
     Press ▶ to start.
   intro_match: |-
@@ -163,8 +170,9 @@ screens:
     Set it so that it feels as pleasant as possible.
 
     Press ▶ to start.
+  # No count: `touch_block.baseline_scales` says how many.
   intro_baseline: |-
-    Next, two questions about how you feel right now.
+    Next, some questions about how you feel right now.
 
     Press ▶ to start.
 
@@ -202,8 +210,7 @@ choices:
     # SPEC.md 9 step 4. Approved 23 Aug 2026 as a text screen; what has gone since is only the
     # two lines the drawn buttons replace -- "Left button: the first. Right button: the second."
     # and "Press ▶ to confirm." The question is unchanged.
-    # DRAFT (LOG N7.F11c11): written by the build, not ethics-sourced. Unchanged here; the
-    # Swedish was reworded.
+    # (LOG N7.F11c11: the Swedish was reworded; this English is unchanged.)
     question: |-
       Two touches, one after the other.
       Which felt stronger?
@@ -236,7 +243,7 @@ audio_setup:
     A hiss is playing in the headphones, too quietly to hear at first.
     Left button: quieter. Right button: louder.
     Turn it up until you can hear it easily, then press ▶.
-  # DRAFT (LOG N7.F11c11): unchanged here; the Swedish was reworded.
+  # (LOG N7.F11c11: the Swedish was reworded; this English is unchanged.)
   # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. The question "Can you still
   # hear the garment?" was its own screen until 5 Oct 2026, which S found confusing; it is now
   # this screen's own instruction, and ▶ is the answer that the hiss covers it. A participant

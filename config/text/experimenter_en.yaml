@@ -133,9 +133,6 @@ instructions:
     Stop rehearsal: the participant will now press the stop button. When the stop screen shows,
     press Resume. Press Next step only if they cannot press it.
   stop_rehearsal_resume: The stop was detected. Press Resume to carry on in front of the participant.
-  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced. While the participant
-  # reads the introduction to the next kind of task (participant `screens.intro_*`).
-  touchcal_intro: 'Touch calibration, step {step}: the participant is reading what comes next.'
   touchcal_bracket: 'Touch calibration, step 1: the participant sets the touch on the middle channel.'
   # DRAFT (LOG N7.F8c): the progress, "x/N answered" (S, 5 Oct 2026).
   touchcal_estimation: 'Touch calibration, step 2: the participant rates a series of touches. {answered}/{total} answered.'
@@ -194,6 +191,17 @@ instructions:
     is not prompted again; the rekindle is timed from then. Press Next step to confirm. If the
     heat was not in fact applied, apply it now and enter a note. The garment stays off until the
     rekindle is over.
+
+# DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced. While the participant reads
+# the introduction to the next kind of task in touch calibration, one line per participant
+# `screens.intro_*` key. Each line is whole, with SPEC.md 9's step number written in, so it
+# does not depend on how the step instructions themselves are numbered.
+touchcal_intro:
+  intro_bracket: 'Touch calibration, step 1: the participant is reading what comes next.'
+  intro_estimation: 'Touch calibration, step 2: the participant is reading what comes next.'
+  intro_match: 'Touch calibration, step 3: the participant is reading what comes next.'
+  intro_compare: 'Touch calibration, step 4: the participant is reading what comes next.'
+  intro_pleasant: 'Touch calibration, step 5: the participant is reading what comes next.'
 
 # DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. What the experimenter says
 # about proportionality in the VAS training (SPEC.md 10.6), shown inside `instructions.

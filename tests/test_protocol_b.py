@@ -380,6 +380,19 @@ def test_uneven_offers_a_rebalance_which_reruns_steps_3_and_4(rig):
     ]
 
 
+def test_step_1_asks_for_the_anchors_in_the_order_its_introduction_names_them(loaded):
+    """`screens.intro_bracket` says "first just noticeable, then just uncomfortable" in
+    words; reorder the anchors and that sentence must change with them (LOG N7.F11c1)."""
+    plans = touchcal.anchor_plans(loaded)
+    keys = list(dict.fromkeys(plan.target_key for plan in plans))
+    assert keys == ["just_noticeable", "just_uncomfortable"]
+    for language in ("sv", "en"):
+        text = cfg.load(language, language).participant_text
+        intro = text["screens"]["intro_bracket"]
+        names = [text["vas"]["intensity"]["anchors"][i]["label"] for i in (1, 2)]
+        assert 0 <= intro.index(names[0]) < intro.index(names[1]), language
+
+
 def test_the_match_shows_which_of_its_two_touches_is_playing(rig):
     """Reference and test take turns; the screen names them and marks the one on (N7.F11c5)."""
     participant, garment = rig.participant, rig.session.garment

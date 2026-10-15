@@ -21,6 +21,7 @@ from virtual_participant import EXAMPLES, Virtual, make_config, press
 
 from tatp import config as cfg
 from tatp import resume as resumption
+from tatp import session_runner
 from tatp.audio import AudioError
 from tatp.clock import Clock
 from tatp.pinprick import BrushTrial, F40Fit, LongProtocol, PinprickTrial, ladder, prior_for
@@ -1030,7 +1031,17 @@ def test_the_session_ends_on_the_experimenters_last_next_step(app, loaded, tmp_p
     saved (N7.F11c9). Now the files close, the screens say so, and Next step ends it."""
     runner = make_runner(loaded, tmp_path)
     quits = []
-    monkeypatch.setattr(runner, "_end_program", lambda: quits.append(1))
+
+    class Application:
+        @staticmethod
+        def instance():
+            return Application
+
+        @staticmethod
+        def quit():
+            quits.append(1)
+
+    monkeypatch.setattr(session_runner, "QApplication", Application)
     Driver(runner.rig, runner).run()
     session, participant = runner.session, runner.rig.participant
     assert runner.completed and session.closed and not quits
@@ -1044,6 +1055,12 @@ def test_the_session_ends_on_the_experimenters_last_next_step(app, loaded, tmp_p
     runner.experimenter.pause_requested.emit()
     assert len(_events(session)) == rows
     assert participant.message.text == participant.text["screens"]["session_end"]
+    # At once: the second half of a double press on the Next step before. Ignored.
+    runner.experimenter.proceed_requested.emit()
+    assert not quits
+    lockout_s = loaded.study1["session_end"]["quit_lockout_s"]
+    now_s = session.clock.real_elapsed_s()
+    monkeypatch.setattr(session.clock, "real_elapsed_s", lambda: now_s + lockout_s)
     runner.experimenter.proceed_requested.emit()
     assert quits == [1]
 
@@ -1067,11 +1084,11 @@ def test_a_resume_after_the_intervention_has_ended_does_not_start_the_touch(app,
     runner.session.close()
 
 
-def test_a_self_start_prompt_stays_up_while_a_block_waits_for_its_go(app, loaded, tmp_path):
-    """A block arriving before the self-start press took the prompt down (N7.F11c8): its wait
-    for the go now shows what the runner shows between steps, and after the press, standby."""
-    runner = make_runner(loaded, tmp_path, condition="participant_preferred")
-    session, window = runner.session, runner.rig.participant
+def _pending_delivery_runner(loaded, tmp_path, condition):
+    """A runner in the intervention with every scale trained and a delivery for each
+    condition, ready for `_deliver`."""
+    runner = make_runner(loaded, tmp_path, condition=condition)
+    session = runner.session
     session.start_sensitisation()
     session.set_phase("intervention")
     session.vas_trained.update(session.trained_scales)
@@ -1080,6 +1097,42 @@ def test_a_self_start_prompt_stays_up_while_a_block_waits_for_its_go(app, loaded
         name: Delivery("sweep_03cms", levels)
         for name in loaded.study1["design"]["conditions"]
     }
+    return runner
+
+
+@pytest.mark.parametrize("condition", ["participant_preferred", "ct_targeted"])
+def test_a_resume_while_a_delivery_is_starting_never_leaves_the_paused_screen_up(
+        app, loaded, tmp_path, condition):
+    """A pause while a block waits for its go and the touch is still starting: the resume
+    starts the delivery again, ramping, which shows nothing of its own -- so the block's wait
+    puts standby up rather than leave the paused screen (N7.F11c8)."""
+    runner = _pending_delivery_runner(loaded, tmp_path, condition)
+    session, window = runner.session, runner.rig.participant
+    interruptions = runner.rig.interruptions
+    runner._deliver(lambda: None)
+    runner.run_child(lambda: TouchBlock(runner.rig, runner.reference_channel), lambda _: None)
+    interruptions.pause()
+    paused = loaded.participant_text["screens"]["paused"]
+    assert window.message.text == paused
+    interruptions.resume()
+    deadline = time.monotonic() + RUN_TIMEOUT_S
+    while interruptions.active is not None:
+        assert time.monotonic() < deadline, "the resume never finished"
+        QApplication.processEvents()
+        time.sleep(0.0005)
+    assert not (window.stack.currentWidget() is window.message
+                and window.message.text == paused)
+    if runner._delivery is not None and not runner._delivery.cueing:
+        assert window.message.text == loaded.participant_text["screens"]["standby"]
+    runner.cancel()
+    session.close()
+
+
+def test_a_self_start_prompt_stays_up_while_a_block_waits_for_its_go(app, loaded, tmp_path):
+    """A block arriving before the self-start press took the prompt down (N7.F11c8): its wait
+    for the go now shows what the runner shows between steps, and after the press, standby."""
+    runner = _pending_delivery_runner(loaded, tmp_path, "participant_preferred")
+    session, window = runner.session, runner.rig.participant
     self_start = loaded.participant_text["screens"]["self_start"]
     runner._deliver(lambda: None)
     deadline = time.monotonic() + RUN_TIMEOUT_S

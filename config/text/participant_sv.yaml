@@ -97,10 +97,11 @@ screens:
   # the visit is spoken of to a participant.
   session_starting: Vi börjar snart.
   # DRAFT (LOG N7.F11c8): written by the build, not ethics-sourced. Visas under varje väntan,
-  # så den får inte lova att något börjar "snart".
+  # så den får inte lova att något börjar "snart" -- och inte heller att ingenting begärs:
+  # kartläggningen visar den medan deltagaren säger till när känslan ändras.
   standby: |-
     Vila så länge.
-    Du behöver inte göra något förrän nästa del.
+    Försöksledaren berättar vad som händer härnäst.
   session_end: |-
     Då är dagens besök slut.
     Tack.
@@ -140,9 +141,11 @@ screens:
     Först tills den är precis märkbar, sedan tills den är precis obehaglig.
 
     Tryck på ▶ för att börja.
+  # Inte "en serie beröringar": serien har tomma försök utan tryck, och de får inte utlovas som
+  # beröringar (se den engelska filen).
   intro_estimation: |-
-    Nu kommer en serie beröringar, en i taget.
-    Markera på linjen hur intensiv var och en är medan du känner den.
+    Nu kommer en serie korta perioder, en i taget.
+    Skatta var och en på linjen.
 
     Tryck på ▶ för att börja.
   intro_match: |-
@@ -160,7 +163,7 @@ screens:
 
     Tryck på ▶ för att börja.
   intro_baseline: |-
-    Nu följer två frågor om hur du känner dig just nu.
+    Nu följer några frågor om hur du känner dig just nu.
 
     Tryck på ▶ för att börja.
 
@@ -236,7 +239,8 @@ audio_setup:
   # skärmens egen instruktion, och ▶ är svaret att bruset döljer ljudet. En deltagare som
   # fortfarande hör plagget säger det, och försöksledaren erbjuder öronproppar (SPEC.md 10.7).
   # Knappraden upprepas från `find_level` så att det framgår hur man sänker.
-  # DRAFT (LOG N7.F11c11): "Plagget arbetar nu" är inte naturlig svenska.
+  # DRAFT (LOG N7.F11c11): written by the build, not ethics-sourced. "Plagget arbetar nu" är
+  # inte naturlig svenska.
   mask_level: |-
     Plagget är igång nu, och du kanske kan höra det.
     Vänster knapp: svagare. Höger knapp: starkare.

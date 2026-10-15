@@ -281,6 +281,13 @@ touch_block:
   # starts it at 0.5 s; pilot-tunable; docs/LOG.md N7.F11c7).
   gap_s: 0.5
 
+session_end:
+  # Real seconds after "Session complete" appears during which Next step does not close the
+  # program: the Next step that closes a session with mapping distances missing is the one
+  # before it, and a double press would otherwise skip the screen saying the data are saved
+  # (docs/LOG.md N7.F11c9). Real time, because it is about the experimenter's hand.
+  quit_lockout_s: 1.0
+
 training:
   # SPEC.md 10.9. The pressure the stop rehearsal runs the fixed pattern at -- its own value,
   # free to diverge from audio.masking_check_pressure_kpa, because a pressure chosen to be

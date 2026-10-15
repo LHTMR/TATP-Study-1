@@ -134,8 +134,6 @@ instructions:
     Övning med stoppknappen: deltagaren trycker nu på stoppknappen. När stoppskärmen visas,
     tryck på Återuppta. Tryck på Nästa steg bara om deltagaren inte kan trycka.
   stop_rehearsal_resume: Stoppet registrerades. Tryck på Återuppta för att fortsätta inför deltagaren.
-  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
-  touchcal_intro: 'Beröringskalibrering, steg {step}: deltagaren läser om vad som kommer härnäst.'
   touchcal_bracket: 'Beröringskalibrering, steg 1: deltagaren ställer in beröringen på mittkanalen.'
   # DRAFT (LOG N7.F8c): the progress, "x/N answered" (S, 5 Oct 2026).
   touchcal_estimation: 'Beröringskalibrering, steg 2: deltagaren skattar en serie beröringar. {answered}/{total} besvarade.'
@@ -187,6 +185,15 @@ instructions:
     inte igen; återuppvärmningen räknas därifrån. Tryck på Nästa steg för att bekräfta. Om
     värmen i själva verket inte gavs, ge den nu och skriv en anteckning. Plagget förblir avstängt
     tills återuppvärmningen är klar.
+
+# DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced. Medan deltagaren läser
+# introduktionen till nästa sorts uppgift; en hel rad per deltagarnyckel `screens.intro_*`.
+touchcal_intro:
+  intro_bracket: 'Beröringskalibrering, steg 1: deltagaren läser om vad som kommer härnäst.'
+  intro_estimation: 'Beröringskalibrering, steg 2: deltagaren läser om vad som kommer härnäst.'
+  intro_match: 'Beröringskalibrering, steg 3: deltagaren läser om vad som kommer härnäst.'
+  intro_compare: 'Beröringskalibrering, steg 4: deltagaren läser om vad som kommer härnäst.'
+  intro_pleasant: 'Beröringskalibrering, steg 5: deltagaren läser om vad som kommer härnäst.'
 
 # DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. Vad försöksledaren säger om
 # proportionalitet i VAS-övningen (SPEC.md 10.6), visat i `instructions.vas_training` som
