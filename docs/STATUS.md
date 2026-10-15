@@ -42,9 +42,10 @@ passed on the merged tree (1215 tests, 36 validator checks, 202 screens):
   session); Resume only elsewhere, including the intervention.
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
-- **Changed S-approved participant wording** (DRAFT): `screens.welcome` (the circle
-  "marks the start of each step"), `screens.standby`, `audio_setup.find_level`, sv
-  `choices.comparison.question` (N7.F11c2, c6, c8, c11).
+- **Changed S-approved participant wording** (DRAFT): `screens.standby`,
+  `audio_setup.find_level`, sv `choices.comparison.question` (N7.F11c6, c8, c11). The
+  welcome is back to S's wording: the circle cue is now the text "Get ready" / "Gör dig redo"
+  (N7.F12g1, S's choice).
 - **Decisions to confirm:**
   - the rekindle's touch restarts on the thermode-removal press, not automatically (N7.F11b10);
   - the shortened interruption lines (N7.F11b12) and the capsaicin-removal log label (b17);
