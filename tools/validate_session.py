@@ -403,11 +403,12 @@ def run_one(scenario: Scenario, folder: Path, loaded: cfg.Config) -> Run:
         if crashed:
             # The process dies: everything stops where it is and nothing more is written.
             runner.cancel()
-            runner.lock.release()
-            # ...and the operating system closes its files, as a dead process's are. Left open,
-            # Windows refuses to delete them. Nothing is written: a run with a held row has
-            # already failed on its write failures.
+            # ...and the operating system closes its files. Left open, Windows refuses to delete
+            # them. release() would also write a row a failed write held, which a dead process
+            # could not, but a run with one has already failed on its write failures. Files
+            # before the lock, as SessionRunner._leave_open does.
             session.files.release()
+            runner.lock.release()
         elif errors:
             runner.cancel()
             session.close(VALIDATOR_ABORT)
