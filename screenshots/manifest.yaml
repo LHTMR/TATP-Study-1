@@ -292,15 +292,6 @@ screens:
     the press starts a timer that would blank the screen before it could be grabbed.
   participant_en_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
     and neither emphasised -- the state before the first stimulus, en.'
-  participant_en_choice_still_audible_accepting: 'Both stimuli delivered, no emphasis,
-    the next press is the answer. Identical to the waiting state by design: nothing
-    on screen may hint that a press is due.'
-  participant_en_choice_still_audible_chosen_right: The right button shown back as
-    chosen -- filled, its symbol reversed out. Set directly rather than by pressing,
-    because the press starts a timer that would blank the screen before it could be
-    grabbed.
-  participant_en_choice_still_audible_waiting: '`choices.still_audible` with both
-    buttons drawn and neither emphasised -- the state before the first stimulus, en.'
   participant_en_cue: 'The visual warning cue: one filled disc, centred, no wording.'
   participant_en_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, en.'
@@ -397,15 +388,6 @@ screens:
     the press starts a timer that would blank the screen before it could be grabbed.
   participant_sv_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
     and neither emphasised -- the state before the first stimulus, sv.'
-  participant_sv_choice_still_audible_accepting: 'Both stimuli delivered, no emphasis,
-    the next press is the answer. Identical to the waiting state by design: nothing
-    on screen may hint that a press is due.'
-  participant_sv_choice_still_audible_chosen_right: The right button shown back as
-    chosen -- filled, its symbol reversed out. Set directly rather than by pressing,
-    because the press starts a timer that would blank the screen before it could be
-    grabbed.
-  participant_sv_choice_still_audible_waiting: '`choices.still_audible` with both
-    buttons drawn and neither emphasised -- the state before the first stimulus, sv.'
   participant_sv_cue: 'The visual warning cue: one filled disc, centred, no wording.'
   participant_sv_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, sv.'

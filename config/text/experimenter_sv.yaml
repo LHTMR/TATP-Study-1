@@ -117,6 +117,18 @@ instructions:
   # Förberedelser och beröringskalibrering (SPEC.md 9, 10.7, 10.9). Ingen nämner ett mönster
   # eller en betingelse.
   masking_check: 'Ljudinställning: deltagaren ställer in brusnivån mot plagget.'
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. Maskeringssteget (SPEC.md
+  # 10.7): deltagaren ombeds säga till om hen fortfarande hör plagget, och försöksledarens
+  # Nästa steg är det som registrerar det.
+  masking_check_mask: >-
+    Ljudinställning: plagget är igång och deltagaren höjer bruset för att dölja det. Om
+    deltagaren säger att hen fortfarande hör plagget, tryck på Nästa steg. Bruset stängs av så
+    att du kan erbjuda öronproppar.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. Samma steg med öronproppar.
+  masking_check_mask_earplugs: >-
+    Ljudinställning, med öronproppar: deltagaren höjer bruset för att dölja plagget. Om
+    deltagaren säger att hen fortfarande hör det, tryck på Nästa steg. Sessionen fortsätter och
+    registreras som inte helt maskerad.
   earplugs: Sätt öronpropparna under hörlurarna och tryck sedan på Nästa steg.
   stop_rehearsal: >-
     Övning med stoppknappen: deltagaren trycker nu på stoppknappen. När stoppskärmen visas,
@@ -254,15 +266,21 @@ warnings:
     Fler än tillåten andel av kontrollförsöken utan tryck rapporterades som kända ({value}).
   schedule: 'Schemavarning, block {block}: {value}'
   no_response: Inget svar på {value} s.
-  # SPEC.md 10.7 steg 5. Att höja bruset hjälper inte längre, så åtgärden är fysisk. Hörbar
-  # larmsignal också, eftersom försöksledaren kan titta på deltagaren i stället för skärmen.
+  # SPEC.md 10.7 steg 4. Att höja bruset har inte hjälpt, så åtgärden är fysisk.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. Omformulerad 5 okt 2026:
+  # försöksledaren rapporterar det nu själv, så texten säger inte längre att bruset inte kan
+  # höjas mer.
   masking_failed: >-
-    Deltagaren hör fortfarande plagget och bruset kan inte höjas mer. Erbjud öronproppar under
-    hörlurarna. Bruset har stängts av så att ni kan prata, och kontrollen börjar om från början
-    när propparna sitter på plats.
+    Deltagaren hör fortfarande plagget. Erbjud öronproppar under hörlurarna. Bruset har stängts
+    av så att ni kan prata, och kontrollen börjar om från början när propparna sitter på plats.
   masking_failed_after_earplugs: >-
     Fortfarande hörbart med öronproppar. Sessionen fortsätter och registreras som inte helt
     maskerad.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. SPEC.md 10.7 steg 3:
+  # deltagaren bekräftade vid brusets tak, så bruset kanske bara precis döljer plagget.
+  masking_at_ceiling: >-
+    Deltagaren bekräftade bruset på högsta nivå, så det döljer kanske bara precis plagget. Detta
+    registreras.
   equalisation_mismatch: >-
     Kanal {channel} matchar fortfarande inte mittkanalen efter omjustering. Sessionen fortsätter
     och detta registreras.

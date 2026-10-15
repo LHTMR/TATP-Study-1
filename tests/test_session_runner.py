@@ -207,7 +207,7 @@ def test_every_stage_runs_once_in_the_planned_order(finished):
 def test_the_order_of_the_session(finished):
     ids = [stage.id for stage in finished.stages]
     assert ids[:6] == [
-        "setup.garment", "setup.welcome", "setup.masking_check", "setup.stop_rehearsal",
+        "setup.garment", "setup.welcome", "setup.stop_rehearsal", "setup.masking_check",
         "touch_calibration", "touch_calibration.baseline",
     ]
     assert ids.index("pre_sensitisation.long") < ids.index("sensitisation")
@@ -519,6 +519,42 @@ def test_a_crash_before_t_zero_reloads_what_was_completed(app, loaded, tmp_path)
     old = {r["key"]: r["value"] for r in _rows(crashed.session, "session")}
     assert values["white_noise_level_dbfs"] == old["white_noise_level_dbfs"]
     assert runner.session.audio.noise_running, "the noise is back at the chosen level"
+    runner.cancel()
+    runner.session.close()
+
+
+def test_a_resume_of_an_old_order_session_skips_the_completed_masking_check(
+    app, loaded, tmp_path, monkeypatch
+):
+    """Before 5 Oct 2026 the masking check came before the stop rehearsal. A session file
+    written in that order, crashed between the two, resumes at the rehearsal -- and the
+    masking check after it is already done, so it is skipped, not run and recorded twice."""
+    from tatp import session_runner
+
+    original = session_runner.stage_layout
+
+    def old_order(schedule):
+        stages = original(schedule)
+        ids = [stage[0] for stage in stages]
+        i, j = ids.index("setup.stop_rehearsal"), ids.index("setup.masking_check")
+        stages[i], stages[j] = stages[j], stages[i]
+        return stages
+
+    monkeypatch.setattr(session_runner, "stage_layout", old_order)
+    crashed = _crash_after(app, loaded, tmp_path, "setup.masking_check")
+    monkeypatch.setattr(session_runner, "stage_layout", original)
+
+    runner = _resumed(loaded, tmp_path, crashed)
+
+    def past_the_setup() -> bool:
+        return any(r["event"] == "stage_started" and r["detail"] == "touch_calibration"
+                   for r in _events(runner.session))
+
+    Driver(runner.rig, runner, stop_when=past_the_setup).run()
+    started = [r["detail"] for r in _events(runner.session) if r["event"] == "stage_started"]
+    assert started[:2] == ["setup.stop_rehearsal", "touch_calibration"]
+    keys = [r["key"] for r in _rows(runner.session, "session")]
+    assert keys.count("masking_confirmed") == 1, "the masking keys are written once"
     runner.cancel()
     runner.session.close()
 

@@ -94,16 +94,32 @@ def _rows(session, table):
 
 def test_a_tap_moves_one_step(state):
     state.press(Action.INCREASE, 0.0)
-    state.tick(state.tap_max_duration_s / 2)
-    state.release(Action.INCREASE, state.tap_max_duration_s / 2)
+    state.tick(state.hold_delay_s / 4)
+    state.release(Action.INCREASE, state.hold_delay_s / 4)
     assert state.value == START_KPA + state.tap_step
     assert state.button_events == 2
 
 
 def test_a_tap_on_the_other_button_moves_the_other_way(state):
     state.press(Action.DECREASE, 0.0)
-    state.release(Action.DECREASE, state.tap_max_duration_s)
+    state.release(Action.DECREASE, state.hold_delay_s / 2)
     assert state.value == START_KPA - state.tap_step
+
+
+@pytest.mark.parametrize("fraction_of_delay", [0.6, 0.9, 1.0, 1.05])
+def test_a_press_up_to_and_just_past_the_hold_delay_moves_one_step(state, fraction_of_delay):
+    """S's 5 Oct 2026 lab run: the noise "cannot be turned down in the second step".
+
+    A press of about 200 ms -- an ordinary deliberate press on the remote -- fell between the
+    old 150 ms tap threshold and the 300 ms hold delay and moved nothing; one just past the
+    delay moved a sliver of a step. Turning down in the masking check is done by single
+    presses, so there it looked like a dead button.
+    """
+    released_s = state.hold_delay_s * fraction_of_delay
+    state.press(Action.DECREASE, 0.0)
+    state.tick(released_s)
+    state.release(Action.DECREASE, released_s)
+    assert state.value == pytest.approx(START_KPA - state.tap_step)
 
 
 def test_nothing_moves_during_the_hold_delay(state):
@@ -163,7 +179,7 @@ def test_travel_the_range_refused_is_not_exploration(state):
     """Pressing against an end stop teaches the participant nothing (comparison doc 7.3)."""
     state.value = RANGE_MAX_KPA
     state.press(Action.INCREASE, 0.0)
-    state.release(Action.INCREASE, state.tap_max_duration_s)
+    state.release(Action.INCREASE, 0.0)
     assert state.exploration == 0.0
 
 
@@ -286,9 +302,9 @@ def test_a_tap_survives_a_stall_in_the_press_handler(running, loaded, monkeypatc
     """A slow write between press and release must not turn a tap into nothing.
 
     Found by the Mac's validator: the press handler writes a log row, and a stalled write
-    delayed the release handler past `tap_max_duration_s`, losing about 3 runs in 7. The stall
-    is put in that write, and sits between the tap and hold thresholds, where a misread press
-    moves nothing.
+    delayed the release handler past the tap threshold there was then, losing about 3 runs in
+    7. The stall is put in that write, twice the hold delay long, so a press misread from the
+    handlers' times would move as a hold, several steps, rather than as the one-step tap it is.
     """
     session, participant, experimenter = running
     adjustment = touchcal.Adjustment(
@@ -296,7 +312,7 @@ def test_a_tap_survives_a_stall_in_the_press_handler(running, loaded, monkeypatc
     )
     adjustment.start()
     adjust = loaded.hardware["adjustment"]
-    stall_s = (float(adjust["tap_max_duration_s"]) + float(adjust["hold_delay_s"])) / 2
+    stall_s = 2 * float(adjust["hold_delay_s"])
     log = session.log
 
     def stalled_log(event, *args, **kwargs):

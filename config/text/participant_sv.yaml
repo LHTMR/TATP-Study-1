@@ -113,9 +113,12 @@ screens:
     Beröringen är igång nu.
     Tryck på den här knappen för att stänga av den.
     Ingenting går förlorat — vi fortsätter direkt efteråt.
+  # DRAFT (LOG N7.F6a): written by the build, not ethics-sourced. S kortade 5 okt 2026 "at
+  # any time, in any part of the visit" till "at any time"; "Den fungerar när som helst." är
+  # byggets översättning.
   stop_rehearsal_done: |-
     Det där är stoppknappen.
-    Den fungerar när som helst, under alla delar av besöket.
+    Den fungerar när som helst.
 
     Tryck på ▶ för att fortsätta.
 
@@ -159,12 +162,6 @@ choices:
       Vilken kändes starkast?
     left: Den första
     right: Den andra
-  still_audible:
-    # SPEC.md 10.7, maskeringskontrollen. Godkänd av S 23 aug 2026 under `audio_setup` och
-    # flyttad hit oförändrad när audio.py byggdes (docs/LOG.md N5.12): det är en valskärm.
-    question: Hör du fortfarande plagget?
-    left: Ja, jag hör det
-    right: Nej, bruset döljer det
   # DRAFT (LOG N7.C1): written by the build, not ethics-sourced
   evenness:
     # SPEC.md 9, jämnhetskontrollen i slutet av kalibreringen, medan mönstret spelas.
@@ -180,16 +177,25 @@ audio_setup:
   # "Brus" om ljudet, inte "vitt brus": deltagaren ska höja det tills det döljer ett ljud och
   # behöver veta vad hen lyssnar efter, inte vad det heter. Ingenting här säger varför bruset
   # finns, eftersom skälet är att plagget inte ska gå att känna igen på ljudet (SPEC.md 16).
+  #
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced -- the Swedish of S's
+  # 5 Oct 2026 change, "until you can hear it easily" in place of "until you can just hear it",
+  # because "precis" made it a threshold task.
   find_level: |-
     Det hörs ett svagt brus i hörlurarna.
     Vänster knapp: svagare. Höger knapp: starkare.
-    Höj det tills du precis kan höra det, och tryck sedan på ▶.
+    Höj det tills du lätt kan höra det, och tryck sedan på ▶.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. Frågan "Hör du fortfarande
+  # plagget?" var en egen skärm till 5 okt 2026, vilket S tyckte var förvirrande; nu är den
+  # skärmens egen instruktion, och ▶ är svaret att bruset döljer ljudet. En deltagare som
+  # fortfarande hör plagget säger det, och försöksledaren erbjuder öronproppar (SPEC.md 10.7).
+  # Knappraden upprepas från `find_level` så att det framgår hur man sänker.
   mask_level: |-
     Plagget arbetar nu, och du kanske kan höra det.
-    Höj bruset tills det döljer det ljudet.
-    Sluta innan bruset i sig blir obehagligt.
-    Tryck på ▶ när det är lagom.
-  # `still_audible` ligger under `choices` (docs/LOG.md N5.12).
+    Vänster knapp: svagare. Höger knapp: starkare.
+    Höj bruset tills det döljer det ljudet, men sluta innan bruset i sig blir obehagligt.
+    Om du fortfarande hör plagget, säg det till försöksledaren.
+    Tryck på ▶ när bruset döljer det.
   settled: |-
     Då är ljudnivån inställd för idag.
     Den är densamma resten av besöket.

@@ -310,7 +310,7 @@ def _choice_shots(window: ParticipantWindow, text: dict, language: str) -> Itera
         )
 
         # Only a choice between two stimuli emphasises a button; a question about something
-        # already happening (`still_audible`, `evenness`) never reaches that state.
+        # already happening (`evenness`) never reaches that state.
         if key in PAIRED_CHOICES:
             window.emphasise_choice("left")
             yield Shot(

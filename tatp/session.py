@@ -551,6 +551,10 @@ class Session:
         self.log("session_ended")
         # A session that ended before a setup procedure recorded its keys still writes them,
         # empty and ahead of the closing keys, so the file keeps DATA_SCHEMA.md's key order.
+        if self.stop_rehearsal_ran is None:
+            self.files.write_session(
+                {"stop_rehearsal_ran": "", "stop_rehearsal_press_detected": ""}
+            )
         if self.masking_confirmed is None:
             self.files.write_session(
                 {
@@ -559,10 +563,6 @@ class Session:
                     "masking_attempts": "",
                     "earplugs_used": "",
                 }
-            )
-        if self.stop_rehearsal_ran is None:
-            self.files.write_session(
-                {"stop_rehearsal_ran": "", "stop_rehearsal_press_detected": ""}
             )
         self.files.write_session(
             {

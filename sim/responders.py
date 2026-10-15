@@ -81,7 +81,7 @@ STATE_LEVELS_PCT = {"pleasantness": 62.0, "relaxation": 55.0, "alertness": 50.0}
 PRACTICE_PCT = 60.0
 # The smallest difference in felt intensity, in VAS points, this participant can tell apart.
 COMPARISON_JND_PCT = 5.0
-# Noise-level taps, from the start level: to "just audible", then further to cover the garment.
+# Noise-level taps, from the start level: to "easily heard", then further to cover the garment.
 NOISE_TAPS = {"find_level": 15, "mask_level": 15}
 
 # How often the participant looks at the screen, in real seconds. Short, because at the
@@ -261,9 +261,9 @@ class VirtualParticipant(QObject):
             text["audio_setup"][key]: taps for key, taps in NOISE_TAPS.items()
         }
         choices = text["choices"]
-        # The garment is masked, and the movement feels even (the affirmative is on the left).
+        # The movement feels even (the affirmative is on the left). The garment is masked: the
+        # participant confirms the masking level and never reports it still audible.
         self._choice_answers = {
-            choices["still_audible"]["question"]: SIDES[1],
             choices["evenness"]["question"]: SIDES[0],
         }
 
@@ -599,7 +599,7 @@ class VirtualParticipant(QObject):
     def _now_ms() -> int:
         # Real time, as the device stamps its events: the hold is the hand's, not the session's.
         # perf_counter, not monotonic, which ticks in 15.6 ms steps on Windows -- coarse enough
-        # to move a planned hold across the tap threshold.
+        # to move a planned hold across the hold delay.
         return int(time.perf_counter() * MS_PER_S)
 
     def _send(self, action: Action, kind: QEvent.Type, stamp_ms: int) -> None:
