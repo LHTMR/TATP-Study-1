@@ -309,6 +309,8 @@ class SessionRunner(Procedure):
         # The session time the timed wait now running ends at (`_wait_until`), for skip_wait.
         self.waiting_until_s: float | None = None
         self._alarms: list[tuple[float, str]] = []
+        # Every alert sounded, so a step whose alarms are set again does not sound one twice.
+        self._sounded: set[str] = set()
         self._alarm_timer = QTimer(self)
         self._alarm_timer.setSingleShot(True)
         self._alarm_timer.timeout.connect(self._fire_alarm)
@@ -889,6 +891,9 @@ class SessionRunner(Procedure):
                 self.session.set_upcoming(PHASE, REKINDLE_END, end_s)
                 standby()
 
+            # The heat's end is a step like any scheduled one (SPEC.md 7.4): alerted as due,
+            # and as overdue if the thermode's removal is not confirmed within the margin.
+            self._set_alarms(Upcoming(PHASE, REKINDLE_END, end_s), REKINDLE_END)
             self._wait_until(end_s, ended, prepare)
 
         def resumed_after_heat(heat_t_s: float) -> None:
@@ -910,7 +915,12 @@ class SessionRunner(Procedure):
         def ended() -> None:
             # The thermode comes off before the garment's touch starts again under it. The
             # heat's end is past, so the countdown goes on to the next block rather than
-            # showing the heat's end due, then overdue, in the alarm colours.
+            # showing the heat's end due, then overdue, in the alarm colours. Its alerts are
+            # armed now, beside the heat's overdue one, so a slow removal cannot make the next
+            # block's due alert late.
+            following = self._next_upcoming(self.stage_index + 1)
+            if following is not None:
+                self._set_alarms(following, self._alarm_name(following), keep=True)
             standby = self._standby("rekindle_remove")
 
             def prepare() -> None:
@@ -920,8 +930,10 @@ class SessionRunner(Procedure):
             self.await_proceed(removed, prepare)
 
         def removed() -> None:
-            # Logged, so a resume after this press does not ask for it again.
+            # Logged, so a resume after this press does not ask for it again. The next step
+            # sets its own alarms as it begins; one already sounded does not sound twice.
             self.session.log(resumption.REKINDLE_THERMODE_REMOVED, origin="experimenter")
+            self._clear_alarms()
             reactivate()
 
         def reactivate() -> None:
@@ -1123,30 +1135,43 @@ class SessionRunner(Procedure):
         )
 
     def _show_upcoming(self, from_index: int) -> None:
-        if self.session.clock.session_started:
-            for stage in self.stages[from_index:]:
-                if stage.upcoming is not None:
-                    at = stage.upcoming
-                    self.session.set_upcoming(at.kind, at.label_key, at.due_s, at.block)
-                    self.experimenter.refresh()
-                    return
-        self.session.clear_upcoming()
+        at = self._next_upcoming(from_index) if self.session.clock.session_started else None
+        if at is None:
+            self.session.clear_upcoming()
+        else:
+            self.session.set_upcoming(at.kind, at.label_key, at.due_s, at.block)
         self.experimenter.refresh()
 
-    def _set_alarms(self, at: Upcoming, what: str) -> None:
+    def _next_upcoming(self, from_index: int) -> Upcoming | None:
+        return next((stage.upcoming for stage in self.stages[from_index:]
+                     if stage.upcoming is not None), None)
+
+    @staticmethod
+    def _alarm_name(at: Upcoming) -> str:
+        """What an alert names its step by, as the step's own stage does."""
+        return f"{BLOCK} {at.block.index}" if at.kind == BLOCK else at.label_key
+
+    def _set_alarms(self, at: Upcoming, what: str, keep: bool = False) -> None:
         """The due alert ahead of time and the overdue one after. One already past sounds now,
-        and only the latest of those, so a late arrival is not a burst of alerts."""
+        and only the latest of those, so a late arrival is not a burst of alerts; one that has
+        already sounded never sounds again. `keep` adds these to the alarms already set, for
+        two steps awaited at once (the rekindle's thermode, and the step after it)."""
         now_s = self.session.clock.t_session_s()
         alarms = [
             (at.due_s - self.due_lead_s, f"{what} due"),
             (at.due_s + self.overdue_margin_s, f"{what} overdue"),
         ]
         past = [alarm for alarm in alarms if alarm[0] <= now_s]
-        self._alarms = [alarm for alarm in alarms if alarm[0] > now_s]
-        if past:
+        future = [alarm for alarm in alarms if alarm[0] > now_s]
+        self._alarms = sorted([*self._alarms, *future] if keep else future)
+        if past and past[-1][1] not in self._sounded:
             # Now, not on a timer: a step already late may be launched before a timer fires.
-            self.session.audio.experimenter_alert(past[-1][1])
+            self._sound(past[-1][1])
         self._schedule_alarm()
+
+    def _sound(self, reason: str) -> None:
+        self._sounded.add(reason)
+        self.session.audio.experimenter_alert(reason)
 
     def _schedule_alarm(self) -> None:
         self._alarm_timer.stop()
@@ -1156,7 +1181,7 @@ class SessionRunner(Procedure):
 
     def _fire_alarm(self) -> None:
         _, reason = self._alarms.pop(0)
-        self.session.audio.experimenter_alert(reason)
+        self._sound(reason)
         self.experimenter.refresh()
         self._schedule_alarm()
 

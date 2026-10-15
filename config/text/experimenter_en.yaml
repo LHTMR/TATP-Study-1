@@ -299,8 +299,10 @@ say:
     I will touch you with this filament, moving a small step at a time towards the marked
     area. Tell me as soon as the feeling clearly changes — burning, tenderness, or a sharper
     pricking.
-  # DRAFT (LOG N7.F11b1): written by the build, not ethics-sourced
-  circle: A circle on the screen means something is about to start.
+  # DRAFT (LOG N7.F11b1): written by the build, not ethics-sourced. The participant welcome's
+  # own words (stream C): it marks a step, and promises no touch -- the estimation run cues its
+  # zero-pressure catch trials too.
+  circle: A white circle on the screen marks the start of each step.
   # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. {minutes} is filled after.
   heat: You will now feel heat on your hand for {minutes} minutes.
   # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced

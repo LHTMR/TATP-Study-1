@@ -305,8 +305,10 @@ say:
     Jag kommer att röra vid dig med det här filamentet och flytta ett litet steg i taget mot
     det markerade området. Säg till så snart känslan tydligt förändras – brännande, ömmande
     eller vassare stick.
-  # DRAFT (LOG N7.F11b1): written by the build, not ethics-sourced
-  circle: En cirkel på skärmen betyder att något snart börjar.
+  # DRAFT (LOG N7.F11b1): written by the build, not ethics-sourced. Deltagarens välkomsttexts
+  # egna ord (ström C): den markerar ett steg och lovar ingen beröring -- skattningsserien
+  # signalerar också sina kontrollförsök utan tryck.
+  circle: En vit cirkel på skärmen markerar början på varje steg.
   # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. {minutes} fylls i efteråt.
   heat: Nu kommer du att känna värme på handen i {minutes} minuter.
   # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced

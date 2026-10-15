@@ -132,9 +132,14 @@ experimenter's Next step as the heat starts, and `rekindle_thermode_removed` (or
 `experimenter`) at their Next step once the heat has ended and the thermode is off, just before
 the garment's touch starts again. A resume reads both back: after the first the heat is never
 prompted again (docs/LOG.md N7.D14), and after the second the removal is not asked for again
-either; the session logs `rekindle_resumed` and restarts the touch. The capsaicin's removal is
-the scheduled step `capsaicin_removal` (until 15 Oct 2026 it was logged as
-`post_sensitisation`).
+either; the session logs `rekindle_resumed` and restarts the touch. The heat's end is alerted
+like a scheduled step, `experimenter_alert` with `detail` `rekindle_end due` and, if the
+removal is not confirmed within the overdue margin, `rekindle_end overdue`; the touch restarts
+at the removal press, so the time the touch is off includes the experimenter's response, and
+`garment_reactivated` records when it came back. The capsaicin's removal is the scheduled step
+`capsaicin_removal`: its `scheduled_step_started` detail starts `capsaicin_removal;` and its
+`experimenter_alert` rows read `capsaicin_removal due` and `capsaicin_removal overdue`. Until
+15 Oct 2026 all three said `post_sensitisation` instead.
 
 The VAS training (§10.6) is four events, each with the scale in `detail` (`pain`,
 `intensity`, `pleasantness`): `vas_training_shown` when the screen goes up (again after an

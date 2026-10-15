@@ -454,6 +454,22 @@ def test_every_scheduled_step_is_alerted_and_every_alert_logged(finished):
     assert "block 1 overdue" in alerts
 
 
+def test_the_rekindle_heat_end_is_alerted_and_the_next_block_is_not_delayed(finished):
+    """Spec-review of N7.F11b10: the touch restarts on the removal press, so the heat's end is
+    alerted like a scheduled step, and the next block's alerts are armed while the removal is
+    awaited -- the block's alert sounds at its time, never twice."""
+    events = _events(finished.session)
+    alerts = [(i, r["detail"]) for i, r in enumerate(events)
+              if r["event"] == "experimenter_alert"]
+    assert any(detail.startswith("rekindle_end ") for _, detail in alerts)
+    removed = next(i for i, r in enumerate(events) if r["event"] == "rekindle_thermode_removed")
+    after = finished.stages[[s.id for s in finished.stages].index("rekindle") + 1]
+    name = f"block {after.upcoming.block.index}"
+    theirs = [(i, detail) for i, detail in alerts if detail.startswith(name + " ")]
+    assert len(theirs) == 1, "once, not again when the block's own stage sets its alarms"
+    assert theirs[0][0] < removed, "sounded while the removal was awaited"
+
+
 def test_an_alert_sounds_ahead_of_a_step_that_is_not_yet_due(app, loaded, tmp_path):
     runner = make_runner(loaded, tmp_path)
     session = runner.session
