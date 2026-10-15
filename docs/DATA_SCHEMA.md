@@ -104,6 +104,7 @@ written, with an empty value — an absent row and an empty value must not be co
 | `masking_attempts` | - | How many times the participant set the masking level, accumulated across an earplug restart: 1 normally, 2 when earplugs were fitted. Before 5 Oct 2026, how many times the level was raised and re-asked. Each report that the garment was still audible is a `masking_reported_audible` row in `log` (origin `experimenter`, the level at the time in `detail`) |
 | `earplugs_used` | - | `true` when earplugs were fitted under the headphones because the participant could still hear the garment (§10.7) |
 | `fit_preview_reruns` | - | Total re-runs the experimenter chose with the fit preview on, across the session (§11.1); `0` when none. Written at close, with the keys below it, because a re-run can come at any time point |
+| `intervention_emergency_stops` | - | How many times the participant's emergency stop interrupted the session during the intervention (phase `intervention` or `rekindle`), counted the same way in every condition: an intercurrent event for analysis (`docs/research/R36`). A press while already stopped is not counted again. Across a crash, the resumed session's file counts the earlier files' stops too. `0` when none. Never displayed. Written at close; files before 15 Oct 2026 lack it |
 | `sensitisation_start_iso` | - | Session t=0; empty until sensitisation begins |
 | `session_end_iso` | - | Written at close |
 | `abort_reason` | - | Empty unless the session was aborted |
@@ -183,6 +184,23 @@ An experimenter's note (§11) is `experimenter_note`, origin `experimenter`, the
 `detail`, at any point in the session, interruptions included. **Sessions before 15 October
 2026 have no notes:** the field was never connected to the log, so anything typed into it then
 was lost (docs/LOG.md N7.F10a).
+
+After an emergency stop during touch calibration, how the experimenter went on is
+`recalibration_after_stop` (origin `experimenter`, phase `touch_calibration`), written for every
+such stop from 15 Oct 2026 (docs/research/R36, docs/LOG.md N7.F10d). `detail` is
+`<choice>; <step>; <reason>`. `<choice>` is `resume` (the abandoned step repeated, as after any
+stop), `rebalance` (steps 3 and 4 for every test channel, then the evenness check; new
+`touchcal_adjust` rows with the next `pass_index`) or `restart` (a new run from step 1, with the
+next `run_index`; see `touchcal_fit`). `<step>` is where the stop came: `training`,
+`step1_bracket`, `step2_estimation`, `fit_decision`, `step3_match`, `step4_compare` (a channel
+matched again inside step 4 included), `step5_pleasantness`, `evenness` or `step6_preference`,
+each with its introduction screen. `<reason>` is empty for `resume`, and otherwise the key of
+the reason chosen: `channel_uneven` ("a channel felt wrong or uneven"), `too_strong` ("the touch
+was too strong overall") or `other`. Rebalance and restart together are allowed
+`touch_calibration.recalibrations_after_stop_max` times a session, a crash included; for either,
+the stop ends with `resumed` whose `detail` reads `emergency_stop; garment not restored:
+<choice>`, and no `garment_restored` or `step_repeated` follows: the garment stays at zero until
+the chosen path's own cue. The rest of the session offers Resume only.
 
 `substitution_not_recorded` (origin `experimenter`, severity `warning`, `detail`
 `trial <n>: <what was typed>`) is written when a filament trial ends with something typed in
@@ -431,7 +449,7 @@ One row per adjustment — Protocol B steps 1, 3 and 5 (§9).
 | t_session_s | float | s | no | Seconds from session t=0 |
 | stage | str | - | yes | `anchor`, `channel_match` or `pleasantness` |
 | run_index | int | - | yes | The run of steps 1 and 2 this belongs to; joins to `touchcal_fit`. A stage-1 re-run starts a new one |
-| pass_index | int | - | yes | For `channel_match`, which pass for this channel: 1, then one more for each step 4 re-adjustment, zero-setting repeat or rebalance. 1 for the other stages |
+| pass_index | int | - | yes | For `channel_match`, which pass for this channel within the run: 1, then one more for each step 4 re-adjustment, zero-setting repeat or rebalance, a rebalance after an emergency stop included. 1 for the other stages |
 | channel | int | - | yes | Channel adjusted |
 | reference_channel | int | - | no | Empty for `anchor` |
 | anchor_percent | float | % | no | Target VAS point: 10 or 90, the two labelled anchors. Empty for `pleasantness`, which has no target |
@@ -485,9 +503,9 @@ One row per estimation run — the fitted rating function and the targets read o
 | timestamp_iso | iso8601 | - | yes | Wall clock at the fit |
 | t_session_s | float | s | no | Seconds from session t=0 |
 | channel | int | - | yes | Reference channel |
-| run_index | int | - | yes | 1 for the first run; incremented for each re-run (§11.1) |
-| superseded | bool | - | yes | `true` if the experimenter re-ran after seeing this fit, or skipped the calibration while it awaited their decision (`touchcal_channels.skipped`), so it was never accepted. The row is retained regardless — a procedure repeatable until it looks right is a forking path unless every attempt is kept |
-| rerun_reason | str | - | no | Free text the experimenter gave when re-running |
+| run_index | int | - | yes | 1 for the first run; incremented for each re-run (§11.1), and for a restart after an emergency stop |
+| superseded | bool | - | yes | `true` if the experimenter re-ran after seeing this fit, or skipped the calibration while it awaited their decision (`touchcal_channels.skipped`), so it was never accepted, or restarted the calibration after an emergency stop. The row is retained regardless — a procedure repeatable until it looks right is a forking path unless every attempt is kept. **A run restarted after a stop once its fit had been accepted has two rows**: the accepted one, `false`, and a later copy, `true`, with the `rerun_reason`; the later row supersedes it. A run stopped and restarted before its fit has no row. `touchcal_channels.run_index` names the run used |
+| rerun_reason | str | - | no | Free text the experimenter gave when re-running; for a restart after an emergency stop, `after_emergency_stop: <reason>` with the reason's key (`log`, `recalibration_after_stop`) |
 | fit_form | str | - | yes | `log_pressure` or `linear_pressure` (§9 step 2) |
 | intercept | float | - | no | `a` in `rating ~ a + b·log(pressure)`. This and the six columns after it are empty when the run had no fit, because the step 1 bracket left nothing to sample (`stage1_failures` says `bracket_unusable`) |
 | slope | float | - | no | `b` |
@@ -591,7 +609,7 @@ calibrated level. A rebalance re-runs steps 3 and 4 and asks again, so there can
 |---|---|---|---|---|
 | timestamp_iso | iso8601 | - | yes | Wall clock at the answer |
 | t_session_s | float | s | no | Seconds from session t=0 |
-| check_index | int | - | yes | 1 for the first question, incremented after each rebalance |
+| check_index | int | - | yes | 1 for the first question, incremented each time it is asked again: after a rebalance, or a rebalance or restart after an emergency stop (`log`, `recalibration_after_stop`) |
 | level_kpa | float | kPa | yes | Reference-scale level the pattern played at; every channel through its gain |
 | judgement | str | - | yes | `even` or `uneven` |
 | rebalance_offered | bool | - | yes | `true` when an `uneven` answer put the rebalance to the experimenter; `false` once `evenness_max_rebalances` is used up |

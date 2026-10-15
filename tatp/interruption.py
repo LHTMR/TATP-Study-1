@@ -21,14 +21,19 @@ is touched.
 Contract with procedures (`tatp/procedure.py`): `interrupted` fires once per interruption, after
 the garment is at zero and the screen is up. `resumed` fires after the garment is restored. A
 second stop during an interruption commands zero again and is logged, but does not fire
-`interrupted` again -- nothing is running to abandon.
+`interrupted` again -- nothing is running to abandon. The one other way out of an emergency
+stop is `end_without_restore`, for touch calibration's re-calibration in place of Resume
+(docs/research/R36): the garment stays at zero, `resumed` is not emitted, and the procedure
+takes its new path itself.
+
+A stop during the intervention is counted for the session file, `intervention_emergency_stops`.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from tatp.session import Session, SessionError
+from tatp.session import CONDITION_PHASES, Session, SessionError
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 
@@ -87,6 +92,10 @@ class Interruptions(QObject):
         self._cancel_pending()
         self._zero_garment()
         self.emergency_stops += 1
+        # An intercurrent event for analysis (docs/research/R36), counted the same in every
+        # condition and written only to the session file.
+        if first and self.session.phase in CONDITION_PHASES:
+            self.session.intervention_emergency_stops += 1
         self.active = EMERGENCY_STOP
         self.session.log(
             "emergency_stop",
@@ -136,6 +145,24 @@ class Interruptions(QObject):
         """A resume under way stops before it restores the garment: the session is being
         stopped for an error (`SessionRunner.stop_for_error`)."""
         self._cancel_pending()
+
+    def end_without_restore(self, why: str) -> None:
+        """End an emergency stop with the garment left at zero and nothing repeated: the
+        procedure it interrupted goes on along another path, which starts the garment with its
+        own cue (touch calibration's re-calibration after a stop, docs/research/R36). `resumed`
+        is not emitted, because no step is to be repeated."""
+        if self.active != EMERGENCY_STOP:
+            raise SessionError(
+                f"only an emergency stop ends without a restore, not {self.active}"
+            )
+        # Stage boundary (CLAUDE.md): the offer is withdrawn once Resume is pressed, so a
+        # restore cannot be under way.
+        assert self._pending is None, "a resume is already restoring the garment"
+        self.session.log("resumed", origin="experimenter",
+                         detail=f"{self.active}; garment not restored: {why}")
+        self._snapshot = None
+        self.active = None
+        self.experimenter.refresh()
 
     def _end_cue(self) -> None:
         self.participant.show_blank()

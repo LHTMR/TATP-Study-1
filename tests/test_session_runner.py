@@ -29,6 +29,7 @@ from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import Session
 from tatp.session_runner import SessionRunner, TouchBlock, Upcoming, stop_on_error
+from tatp.touchcal import Comparison, TouchCalibration, TouchRating
 from tatp.touchcal_maths import Delivery
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -708,6 +709,106 @@ def test_a_resume_after_the_thermode_came_off_only_restarts_the_touch(app, loade
         assert cfg.instruction(config, key) not in shown
     runner.cancel()
     runner.session.close()
+
+
+def _recalibrating_driver(runner, choice, stop_when, during=TouchRating):
+    """A driver that stops once in run 1, during a `during` trial, and chooses `choice`
+    instead of Resume (docs/research/R36)."""
+    driver = Driver(runner.rig, runner, stop_when=stop_when)
+    done = []
+
+    def step(trial):
+        calibration = driver.innermost()
+        if (not done and isinstance(calibration, TouchCalibration)
+                and calibration.run_index == 1 and isinstance(trial, during)):
+            done.append(True)
+            press(runner.rig.participant, "period")
+            runner.experimenter.recalibration_requested.emit(choice, "other")
+
+    driver.before_step = step
+    return driver
+
+
+def _logged(runner, event, detail=None) -> bool:
+    return any(r["event"] == event and (detail is None or r["detail"] == detail)
+               for r in _events(runner.session))
+
+
+def test_a_crash_after_a_restart_after_a_stop_redoes_the_calibration_with_the_cap_used(
+    app, loaded, tmp_path
+):
+    """docs/research/R36: the crashed calibration is redone from its start (SPEC.md 15), and
+    the re-calibration it used still counts: a stop in the redone one offers Resume only."""
+    crashed = make_runner(loaded, tmp_path)
+    _recalibrating_driver(crashed, "restart", lambda: _logged(
+        crashed, "touch_calibration_run", "run 2")).run()
+    crashed.cancel()
+    runner = _resumed(loaded, tmp_path, crashed)
+    assert runner.resume.in_progress == "touch_calibration"
+    assert runner.resume.recalibrations_after_stop == 1
+    offered = []
+    driver = Driver(runner.rig, runner,
+                    stop_when=lambda: _logged(runner, "stage_completed", "touch_calibration"))
+
+    def stop_again(trial):
+        if not offered and isinstance(trial, TouchRating):
+            press(runner.rig.participant, "period")
+            window = runner.experimenter
+            offered.append((not window.rebalance_after_stop_button.isHidden(),
+                            not window.restart_after_stop_button.isHidden(),
+                            not window.recalibration_used.isHidden()))
+
+    driver.before_step = stop_again
+    driver.run()
+    assert offered == [(False, False, True)]
+    choices = [r["detail"] for r in _events(runner.session)
+               if r["event"] == "recalibration_after_stop"]
+    assert choices == ["resume; step2_estimation; "]
+    assert runner.deliveries is not None
+    fits = [(r["run_index"], r["superseded"]) for r in _rows(runner.session, "touchcal_fit")]
+    assert fits == [("1", "false")], "the redone calibration starts its own runs"
+    runner.cancel()
+    runner.session.close()
+
+
+def test_a_crash_after_a_rebalanced_calibration_reloads_what_it_delivers(app, loaded, tmp_path):
+    crashed = make_runner(loaded, tmp_path)
+    _recalibrating_driver(crashed, "rebalance", lambda: _logged(
+        crashed, "stage_completed", "touch_calibration"), during=Comparison).run()
+    crashed.cancel()
+    assert _logged(crashed, "recalibration_after_stop", "rebalance; step4_compare; other")
+    runner = _resumed(loaded, tmp_path, crashed)
+    assert "touch_calibration" in runner.resume.completed_stages
+    assert runner.resume.recalibrations_after_stop == 1
+    Driver(runner.rig, runner, stop_when=lambda: True).run()  # starts it, which reloads
+    assert runner.deliveries == crashed.deliveries, "what the rebalanced calibration delivers"
+    assert runner.session.recalibrations_after_stop == 1
+    runner.cancel()
+    runner.session.close()
+
+
+def test_the_intervention_stops_are_counted_across_a_crash(app, loaded, tmp_path):
+    crashed = make_runner(loaded, tmp_path)
+    pressed = []
+
+    def stop_once_then_crash() -> bool:
+        if (not pressed and crashed.session.phase == "intervention"
+                and crashed.rig.interruptions.active is None):
+            pressed.append(True)
+            press(crashed.rig.participant, "period")
+            return False
+        return bool(pressed) and _logged(crashed, "stage_completed", "block.1")
+
+    Driver(crashed.rig, crashed, stop_when=stop_once_then_crash).run()
+    crashed.cancel()
+    assert crashed.session.intervention_emergency_stops == 1
+    runner = _resumed(loaded, tmp_path, crashed)
+    assert runner.resume.intervention_emergency_stops == 1
+    Driver(runner.rig, runner, stop_when=lambda: True).run()  # starts it, which reloads
+    runner.cancel()
+    runner.session.close()
+    values = {r["key"]: r["value"] for r in _rows(runner.session, "session")}
+    assert values["intervention_emergency_stops"] == "1"
 
 
 def test_once_the_heat_has_ended_the_countdown_moves_on(finished):

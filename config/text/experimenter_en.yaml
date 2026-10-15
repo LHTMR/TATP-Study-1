@@ -375,6 +375,13 @@ controls:
   # DRAFT (LOG N7.F8b): written by the build. Shown only with the mock or prototype garment,
   # after a few touch-calibration ratings; ends the calibration, recorded as skipped.
   skip_calibration: Skip calibration
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Beside Resume after an
+  # emergency stop in touch calibration (docs/research/R36); each opens a dialog asking why.
+  rebalance_after_stop: Rebalance channels…
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
+  restart_after_stop: Restart calibration…
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Confirms the restart's dialog.
+  restart_calibration: Restart calibration
   # The free-text entries (SPEC.md 8.2, 8.4, 11). None of them ever blocks the session.
   add_note: Add note
   # DRAFT (LOG N7.F10a): written by the build, not ethics-sourced. Shown in the emptied note
@@ -412,6 +419,10 @@ status:
   interrupted_emergency_stop: Stopped by the participant; garment at zero. Remove any stimulus, ask what they need, then press {controls[resume]}.
   # DRAFT (LOG N7.F11b12): written by the build, not ethics-sourced
   interrupted_pause: Paused; garment at zero. The step in progress will be repeated. Press {controls[resume]} to continue.
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Under Resume, in place of
+  # the re-calibrations after a stop in touch calibration once the session's are used up. One
+  # line at small size: a test holds both languages to it.
+  recalibration_used: Rebalancing or restarting after a stop is used up for this session, so only {controls[resume]} is offered.
   discarded: Last trial discarded. It will be repeated.
   discarded_not_repeated: >-
     Last trial discarded. The application limit has been reached, so it will not be repeated.
@@ -531,6 +542,19 @@ dialogs:
   distances_outstanding: Mapping distances are still missing. Enter them with Mapping distances…, or press Next step to finish with them recorded as missing.
   fit_rerun_reason: Why are you re-running? Recorded with the discarded estimate, which is kept.
   fit_rerun_exhausted: The re-run limit for this procedure has been reached. This estimate will be used.
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The re-calibrations after
+  # an emergency stop in touch calibration (docs/research/R36), the same in every condition.
+  rebalance_after_stop: 'Rebalance the channels instead of resuming? The participant sets each of the other channels against the middle channel again and compares them (steps 3 and 4), then the evenness check. A pleasantness level already set is kept. The garment stays off until the first of these starts, and everything recorded so far is kept.'
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
+  restart_after_stop: 'Restart the touch calibration instead of resuming? It starts again from step 1 as a new run, without the rating-scale training. The garment stays off until step 1 starts, and everything recorded so far is kept, the earlier run marked as superseded.'
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
+  recalibration_reason: Why? Recorded with the choice.
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The keys are what the log
+  # records (docs/DATA_SCHEMA.md, recalibration_after_stop).
+  recalibration_reasons:
+    channel_uneven: A channel felt wrong or uneven
+    too_strong: The touch was too strong overall
+    other: Other
   error: Error
   close: Close
   # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. An error nothing caught,

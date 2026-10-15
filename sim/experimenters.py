@@ -18,7 +18,8 @@ The normal experimenter runs a whole session from the experimenter screen, and o
 - **It enters the four mapping distances** once a time point's four paths have run.
 - **It resumes after an interruption**, through `resume_requested`, after `resume_after_s` of
   session time. The resume is the experimenter's and never a timer's (SPEC.md 10.9); this is
-  the experimenter.
+  the experimenter. After a stop in touch calibration it resumes too, never rebalancing or
+  restarting instead (docs/research/R36), so the validator's runs keep their shape.
 - It accepts a touch-calibration estimate that is put to it, re-runs one that cannot be used,
   and proceeds past an uneven or zero-gain question, so a session never waits on it.
 

@@ -17,6 +17,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -417,6 +418,68 @@ class ReasonDialog(QDialog):
 
     def reason_text(self) -> str:
         return self.reason.text().strip()
+
+
+class ChoiceDialog(QDialog):
+    """A question that needs a reason from a fixed list before it can be confirmed: the
+    re-calibration after an emergency stop (docs/research/R36). As `ReasonDialog`, but the
+    reason is one of `options` ({key: wording}), so it costs one press and can be analysed.
+    Each option is a button that stays down when chosen, one at a time."""
+
+    def __init__(
+        self,
+        title: str,
+        message: str,
+        reason_label: str,
+        options: dict[str, str],
+        confirm: str,
+        cancel: str,
+        parent: QWidget | None = None,
+    ):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setStyleSheet(stylesheet())
+        self.message = label(SIZE_BODY, wrap=True)
+        self.message.setText(message)
+        self.reason_label = label(SIZE_SMALL, colour=SECONDARY)
+        self.reason_label.setText(reason_label)
+        self.confirm = button(confirm, SIZE_BODY)
+        self.confirm.setStyleSheet(emphasis_button_style(WARNING_COLOUR))
+        self.cancel = button(cancel, SIZE_BODY)
+        self.confirm.setEnabled(False)
+        self.confirm.clicked.connect(self.accept)
+        self.cancel.clicked.connect(self.reject)
+
+        self.group = QButtonGroup(self)
+        self.group.setExclusive(True)
+        self.options: dict[str, QPushButton] = {}
+        reasons = QVBoxLayout()
+        for key, wording in options.items():
+            option = button(wording, SIZE_BODY)
+            option.setCheckable(True)
+            self.group.addButton(option)
+            self.options[key] = option
+            reasons.addWidget(option)
+        self.group.buttonToggled.connect(
+            lambda *_: self.confirm.setEnabled(bool(self.choice()))
+        )
+
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(self.cancel)
+        buttons.addWidget(self.confirm)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(MARGIN_PX, MARGIN_PX, MARGIN_PX, MARGIN_PX)
+        layout.addWidget(self.message)
+        layout.addSpacing(GROUP_GAP_PX)
+        layout.addWidget(self.reason_label)
+        layout.addLayout(reasons)
+        layout.addSpacing(GROUP_GAP_PX)
+        layout.addLayout(buttons)
+
+    def choice(self) -> str:
+        """The chosen option's key, or "" before one is chosen."""
+        return next((key for key, option in self.options.items() if option.isChecked()), "")
 
 
 class MessageDialog(QDialog):

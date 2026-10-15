@@ -154,17 +154,23 @@ screens:
     the filament entry, Mapping distances) hidden in places kept for them; no zone
     diagram, since there is no target; the garment connected, its button quiet at
     the foot of the side column. (en)
+  experimenter_en_rebalance_after_stop_dialog: 'Rebalance channels… after a stop in
+    touch calibration: what it does instead of Resume, and why, from a fixed list;
+    Rebalance channels disabled until a reason is chosen (docs/research/R36). (en)'
   experimenter_en_reduced_capability_banner: The reduced-capability banner naming
     the garment in use in words, as the launcher does (SPEC.md 12.4). (en)
   experimenter_en_rekindle_due: 'The rekindle is due: a timed event that is not a
     block, named by its phase, and the thermode to place. (en)'
   experimenter_en_rerun_dialog: The re-run reason, asked before a fit is discarded
     (SPEC.md 11.1). (en)
+  experimenter_en_restart_after_stop_dialog: Restart calibration… after a stop in
+    touch calibration, with a reason chosen, shown pressed, so Restart calibration
+    is enabled (docs/research/R36). (en)
   experimenter_en_session_complete: 'The last state: the session closed and every
     file written, the garment to come off, and Next step to close the program (docs/LOG.md
     N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
-    and Connect garment and Pause are disabled: nothing is left to pause or to connect
-    again. (en)'
+    and Pause and the garment button are withdrawn: nothing is left to pause or to
+    connect again. (en)'
   experimenter_en_status_warning: A warning in the status region, in amber, kept apart
     from the routine status so the next 'Waiting for...' does not replace it (15 Oct
     2026 pilot review). It goes under the routine line; this one is too long for both,
@@ -173,6 +179,14 @@ screens:
     garment: how many ratings are answered, and Skip calibration under the garment,
     shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).
     Nothing else has moved. (en)'
+  experimenter_en_touchcal_stopped_recalibrate: 'The participant pressed the stop
+    during touch calibration''s step 4, with step 2''s fit accepted: beside Resume,
+    Rebalance channels… and Restart calibration… are offered, each in the place of
+    its kin in the situational row, and each asks why (docs/research/R36). The same
+    in every condition; nothing else moved. (en)'
+  experimenter_en_touchcal_stopped_recalibration_used: 'A stop during touch calibration
+    once the session''s re-calibration after a stop is used: Resume only, and one
+    grey line where the two offers were saying why. (en)'
   experimenter_sv_abort_dialog: 'The abort confirmation: what happens to the data,
     a reason field, and Abort disabled until a reason is typed. (sv)'
   experimenter_sv_all_banners: 'All three banners at once, one line each with the
@@ -321,17 +335,23 @@ screens:
     the filament entry, Mapping distances) hidden in places kept for them; no zone
     diagram, since there is no target; the garment connected, its button quiet at
     the foot of the side column. (sv)
+  experimenter_sv_rebalance_after_stop_dialog: 'Rebalance channels… after a stop in
+    touch calibration: what it does instead of Resume, and why, from a fixed list;
+    Rebalance channels disabled until a reason is chosen (docs/research/R36). (sv)'
   experimenter_sv_reduced_capability_banner: The reduced-capability banner naming
     the garment in use in words, as the launcher does (SPEC.md 12.4). (sv)
   experimenter_sv_rekindle_due: 'The rekindle is due: a timed event that is not a
     block, named by its phase, and the thermode to place. (sv)'
   experimenter_sv_rerun_dialog: The re-run reason, asked before a fit is discarded
     (SPEC.md 11.1). (sv)
+  experimenter_sv_restart_after_stop_dialog: Restart calibration… after a stop in
+    touch calibration, with a reason chosen, shown pressed, so Restart calibration
+    is enabled (docs/research/R36). (sv)
   experimenter_sv_session_complete: 'The last state: the session closed and every
     file written, the garment to come off, and Next step to close the program (docs/LOG.md
     N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
-    and Connect garment and Pause are disabled: nothing is left to pause or to connect
-    again. (sv)'
+    and Pause and the garment button are withdrawn: nothing is left to pause or to
+    connect again. (sv)'
   experimenter_sv_status_warning: A warning in the status region, in amber, kept apart
     from the routine status so the next 'Waiting for...' does not replace it (15 Oct
     2026 pilot review). It goes under the routine line; this one is too long for both,
@@ -340,6 +360,14 @@ screens:
     garment: how many ratings are answered, and Skip calibration under the garment,
     shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).
     Nothing else has moved. (sv)'
+  experimenter_sv_touchcal_stopped_recalibrate: 'The participant pressed the stop
+    during touch calibration''s step 4, with step 2''s fit accepted: beside Resume,
+    Rebalance channels… and Restart calibration… are offered, each in the place of
+    its kin in the situational row, and each asks why (docs/research/R36). The same
+    in every condition; nothing else moved. (sv)'
+  experimenter_sv_touchcal_stopped_recalibration_used: 'A stop during touch calibration
+    once the session''s re-calibration after a stop is used: Resume only, and one
+    grey line where the two offers were saying why. (sv)'
   participant_en_adjust_just_noticeable: 'The adjustment screen for `just_noticeable`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     en.'

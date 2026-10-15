@@ -940,7 +940,8 @@ def test_nothing_moves_when_a_control_or_entry_is_offered(drawn):
 
     before = places()
     window.set_actions_enabled(rebalance=True, fit_decision=True, discard=True,
-                               substitution=True, skip_calibration=True)
+                               substitution=True, skip_calibration=True,
+                               rebalance_after_stop=True, restart_after_stop=True)
     window.set_mapping_phases(["post_sensitisation"])
     window.set_target("primary", 3, filament=True)
     assert places() == before
@@ -1115,6 +1116,66 @@ def test_rebalance_and_the_fit_choice_wait_to_be_asked_for(drawn):
     window.set_actions_enabled(rebalance=False, fit_decision=False)
     assert not window.rebalance_button.isVisibleTo(window)
     assert not window.fit_accept_button.isVisibleTo(window)
+
+
+def test_the_recalibrations_are_offered_only_while_stopped(drawn):
+    """Beside Resume after an emergency stop in touch calibration (docs/research/R36): never
+    while running or paused, whatever the procedure offers, and in the places of their kin."""
+    window, held = drawn
+    after = (window.rebalance_after_stop_button, window.restart_after_stop_button)
+    window.set_actions_enabled(rebalance_after_stop=True, restart_after_stop=True)
+    for kind in (None, "pause"):
+        held["view"] = _all_keys(interruption=kind)
+        window.refresh()
+        assert not any(widget.isVisibleTo(window) for widget in after), kind
+    held["view"] = _all_keys(interruption="emergency_stop")
+    window.refresh()
+    assert all(_offered(window, widget) for widget in after)
+    assert not window.recalibration_used.isVisibleTo(window)
+    for kin, widget in ((window.rebalance_button, after[0]),
+                        (window.fit_rerun_button, after[1])):
+        assert (window.controls.getItemPosition(window.controls.indexOf(kin))
+                == window.controls.getItemPosition(window.controls.indexOf(widget)))
+    window.set_actions_enabled(rebalance_after_stop=False, restart_after_stop=False,
+                               recalibration_used=True)
+    assert not any(widget.isVisibleTo(window) for widget in after)
+    assert window.recalibration_used.isVisibleTo(window)
+    assert window.recalibration_used.text() == window.text["status"][
+        "recalibration_used"].format(controls=window.text["controls"])
+
+
+def test_a_recalibration_asks_why_from_a_fixed_list(drawn):
+    window, held = drawn
+    reasons = window.text["dialogs"]["recalibration_reasons"]
+    seen = _emitted(window.recalibration_requested)
+    for choice, button in (("rebalance", window.rebalance_after_stop_button),
+                           ("restart", window.restart_after_stop_button)):
+        dialog = window.open_recalibration_dialog(choice)
+        assert list(dialog.options) == list(reasons)
+        assert not dialog.confirm.isEnabled(), "not without a reason"
+        dialog.options["too_strong"].click()
+        dialog.options["channel_uneven"].click()
+        assert [key for key, option in dialog.options.items() if option.isChecked()] == [
+            "channel_uneven"], "one reason at a time"
+        dialog.confirm.click()
+        assert seen[-1] == (choice, "channel_uneven")
+        assert dialog.windowTitle() == button.text()
+    dialog = window.open_recalibration_dialog("restart")
+    dialog.options["other"].click()
+    dialog.cancel.click()
+    assert len(seen) == 2, "cancelling chooses nothing"
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_the_recalibration_used_line_is_one_line_at_the_laptop_width(app, language):
+    text = cfg.load(language, language).experimenter_text
+    window = ExperimenterWindow(text, lambda: _all_keys(interruption="emergency_stop"))
+    window.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+    window.set_actions_enabled(recalibration_used=True)
+    window.show()
+    QApplication.processEvents()
+    line = window.recalibration_used
+    assert line.fontMetrics().horizontalAdvance(line.text()) <= line.width(), language
 
 
 def test_an_experimenter_choice_enables_the_controls_it_waits_on(app, session, participant):

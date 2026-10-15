@@ -1287,6 +1287,9 @@ class SessionRunner(Procedure):
             self.session.audio.start_noise(state.masking[0])
         # SPEC.md 10.6: training already given in this session is not given again.
         self.session.vas_trained.update(state.vas_trained)
+        # docs/research/R36: counted for the whole session, across the crash.
+        self.session.intervention_emergency_stops = state.intervention_emergency_stops
+        self.session.recalibrations_after_stop = state.recalibrations_after_stop
         if "touch_calibration" in done:
             assert state.deliveries is not None, "a completed calibration wrote its channels"
             self.deliveries = dict(state.deliveries)

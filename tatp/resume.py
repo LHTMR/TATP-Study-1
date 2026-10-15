@@ -19,9 +19,10 @@ logs, because an append-only file cannot be rewritten to say so.
 **What is reloaded, not redone.** The F40 estimates and the chosen filament
 (`calibration_pinprick`), the touch calibration and the preferred pattern
 (`touchcal_channels`), the masking check's level, the stop rehearsal, the ceiling ratings that
-cap the time point in progress, the mapping distances still outstanding, and the RNG seed. Each
-is read from every file in the resume chain, since a session resumed twice has its history in
-three sets of files.
+cap the time point in progress, the mapping distances still outstanding, the stops during the
+intervention and the re-calibrations after a stop already used (docs/research/R36), and the
+RNG seed. Each is read from every file in the resume chain, since a session resumed twice has
+its history in three sets of files.
 
 The RNG is not reloaded as a state: every stage draws from a stream derived from the seed and
 its own id (`tatp/session_runner.py`), so the stages after the crash draw exactly what they
@@ -37,6 +38,7 @@ import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from tatp.session import CONDITION_PHASES
 from tatp.touchcal_maths import Delivery
 from tatp.units import S_PER_MIN
 
@@ -53,6 +55,11 @@ PATH_MARKER = ", path "
 # Written by `tatp/trials.py`'s `VasTraining`, which takes the name from here.
 VAS_TRAINING_CONFIRMED = "vas_training_confirmed"
 CONDITIONS = ("sham", "ct_targeted", "participant_preferred")
+# The participant's stop, as `tatp/interruption.py` logs it; and how the experimenter went on
+# from one in touch calibration (docs/research/R36), which `tatp/touchcal.py` takes from here.
+EMERGENCY_STOP = "emergency_stop"
+RECALIBRATION_AFTER_STOP = "recalibration_after_stop"
+RESUME_AFTER_STOP = "resume"
 
 
 class ResumeError(Exception):
@@ -146,6 +153,10 @@ class ResumeState:
     current_file: str = ""
     # The scales whose VAS training the participant had already confirmed (SPEC.md 10.6).
     vas_trained: frozenset[str] = frozenset()
+    # docs/research/R36: the stops during the intervention, for the session file, and the
+    # re-calibrations after a stop already used against the session's cap.
+    intervention_emergency_stops: int = 0
+    recalibrations_after_stop: int = 0
 
     @property
     def after_t_zero(self) -> bool:
@@ -204,6 +215,17 @@ def load(open_session: OpenSession, config, per_channel_pressure: bool) -> Resum
         vas_trained=frozenset(
             row["detail"] for row in _rows(chain, "log")
             if row["event"] == VAS_TRAINING_CONFIRMED
+        ),
+        # A stop pressed again while stopped has a detail saying so, and is not another stop.
+        intervention_emergency_stops=sum(
+            row["event"] == EMERGENCY_STOP and not row["detail"]
+            and row["phase"] in CONDITION_PHASES
+            for row in _rows(chain, "log")
+        ),
+        recalibrations_after_stop=sum(
+            row["event"] == RECALIBRATION_AFTER_STOP
+            and not row["detail"].startswith(f"{RESUME_AFTER_STOP};")
+            for row in _rows(chain, "log")
         ),
     )
 

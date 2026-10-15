@@ -591,6 +591,31 @@ def _experimenter_states(config: cfg.Config) -> dict:
             # (tatp/pinprick.py `_disconnect_extra`).
             lambda window: (pinprick(window), window.withdraw_substitution()),
         ),
+        "touchcal_stopped_recalibrate": (
+            "The participant pressed the stop during touch calibration's step 4, with step 2's "
+            "fit accepted: beside Resume, Rebalance channels… and Restart calibration… are "
+            "offered, each in the place of its kin in the situational row, and each asks why "
+            "(docs/research/R36). The same in every condition; nothing else moved.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
+             "interruption": "emergency_stop"},
+            lambda window: (
+                window.set_instruction(cfg.instruction(config, "touchcal_equalise",
+                                                       **SAMPLE_MATCH)),
+                window.set_actions_enabled(rebalance_after_stop=True, restart_after_stop=True),
+            ),
+        ),
+        "touchcal_stopped_recalibration_used": (
+            "A stop during touch calibration once the session's re-calibration after a stop "
+            "is used: Resume only, and one grey line where the two offers were saying why.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
+             "interruption": "emergency_stop"},
+            lambda window: (
+                window.set_instruction(instructions["touchcal_estimation"].format(
+                    answered=SAMPLE_ANSWERED, total=SAMPLE_PRESENTATIONS
+                )),
+                window.set_actions_enabled(recalibration_used=True),
+            ),
+        ),
         "interrupted_pause": (
             "The experimenter's pause: the same line in amber, the step dimmed, Resume "
             "offered.",
@@ -763,6 +788,17 @@ def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             "The error dialog: a red title and the message as raised.",
             window.error_dialog(SAMPLE_ERROR),
         ),
+        "rebalance_after_stop_dialog": (
+            "Rebalance channels… after a stop in touch calibration: what it does instead of "
+            "Resume, and why, from a fixed list; Rebalance channels disabled until a reason "
+            "is chosen (docs/research/R36).",
+            window.recalibration_dialog("rebalance"),
+        ),
+        "restart_after_stop_dialog": (
+            "Restart calibration… after a stop in touch calibration, with a reason chosen, "
+            "shown pressed, so Restart calibration is enabled (docs/research/R36).",
+            _chosen(window.recalibration_dialog("restart"), "channel_uneven"),
+        ),
     }
     window.set_mapping_phases(["post_sensitisation", "post_intervention"])
     for field, typed in zip(window.distances.fields, SAMPLE_DISTANCES, strict=False):
@@ -790,8 +826,19 @@ def _dispose(window: QWidget) -> None:
     QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
+def _chosen(dialog, reason: str):
+    """A re-calibration dialog with `reason` chosen, as the experimenter leaves it."""
+    dialog.options[reason].click()
+    return dialog
+
+
 def _grab_dialog(dialog: QWidget) -> QPixmap:
-    dialog.resize(DIALOG_WIDTH_PX, dialog.sizeHint().height())
+    # A long wrapped message needs more height at this width than the size hint, which is
+    # worked out at the dialog's own preferred width, gives it; it was cut off top and bottom.
+    layout = dialog.layout()
+    wrapped = (layout.totalHeightForWidth(DIALOG_WIDTH_PX)
+               if layout is not None and layout.hasHeightForWidth() else 0)
+    dialog.resize(DIALOG_WIDTH_PX, max(dialog.sizeHint().height(), wrapped))
     return dialog.grab()
 
 

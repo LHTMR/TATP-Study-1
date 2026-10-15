@@ -233,6 +233,10 @@ touch_calibration:
                                      # is offered after this many estimation ratings ("a few",
                                      # S, 5 Oct 2026; docs/LOG.md N7.F8b). Never offered, and
                                      # asserted impossible, on the study garment.
+  recalibrations_after_stop_max: 1   # [R] R36, LOG N7.F10d. After an emergency stop during
+                                     # touch calibration the experimenter may rebalance the
+                                     # channels or restart the calibration instead of resuming,
+                                     # this many times per session; then only Resume
 
 patterns:
   # Which pattern each condition uses, by pattern name within the selected pattern folder.

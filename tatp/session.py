@@ -198,6 +198,12 @@ class Session:
         # participant's ratings and is recorded as unblinded in that respect.
         self.fit_preview_enabled = config.study1["fit_preview"]["enabled"]
         self.fit_preview_reruns = 0
+        # docs/research/R36: a stop during the intervention is an intercurrent event, counted
+        # for the session file (`Interruptions`), never displayed; and the re-calibrations a
+        # stop in touch calibration has led to, against their cap (`TouchCalibration`). Both
+        # carried across a crash by a resume (`tatp/resume.py`).
+        self.intervention_emergency_stops = 0
+        self.recalibrations_after_stop = 0
 
         # SPEC.md 10.7, 10.9. Set by the masking check and the stop rehearsal and written to the
         # session file when each ends (`record_masking`, `record_stop_rehearsal`) -- the
@@ -593,6 +599,7 @@ class Session:
                 "abort_reason": abort_reason,
                 # Known only at the end: a re-run can happen at any of the three time points.
                 "fit_preview_reruns": self.fit_preview_reruns,
+                "intervention_emergency_stops": self.intervention_emergency_stops,
             }
         )
         self.files.close()
