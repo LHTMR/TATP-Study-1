@@ -119,6 +119,10 @@ Other environment facts:
 
 - **One Windows lab PC, two displays.** Participant window fullscreen on the display behind
   the curtain; experimenter window on the lab display. One process, one clock.
+- **Also a MacBook, for piloting and demonstration** (docs/LOG.md N7.F12e5): one screen, no
+  remote, no lab sound devices. The hardware page then puts the participant window in a window
+  kept above the experimenter's, uses the default output, and reads the remote (or the keyboard
+  standing in for it) from every keyboard; `screens.scale_factors` applies on Windows only.
 - **Conda environment `tatp-study-1`, declared in `environment.yml`.** Add dependencies by
   editing that file and running `conda env update -f environment.yml --prune`, never with an
   ad-hoc `conda install` or `pip install` — an ad-hoc install is invisible in the diff and will
@@ -222,6 +226,19 @@ without the command line:
 6. **Check the hardware** — before the participant arrives: each remote button, where each
    screen lands, the sound devices, and each garment channel, through the session's own code.
    Nothing is recorded, and it adds no sound level or pressure (docs/LOG.md N7.F4).
+
+**The hardware page opens first** (docs/LOG.md N7.F12e1), before the launcher, as a
+videoconferencing program shows its devices before a call; entry 6 reopens it. It is the
+hardware check with a choice for each device: the participant's input, the participant and
+experimenter screens (each connected display, or a window on the experimenter's screen), the
+participant's and the experimenter's sound devices (each output present, or the system default)
+and the prototype sleeve's serial port. Each starts on `hardware.yaml`'s lab setup, says whether
+it is found or missing and what to do, and follows what is connected until changed by hand: a
+device connected later is found without a restart (sound devices are listed by a child process,
+so the launcher process does not load PortAudio before a session plays). Continue opens the
+launcher, and every session and demonstration started from it runs with these choices
+(`tatp.session.with_hardware_choices`); the session file records them, and preflight warns when
+any differs from the lab setup.
 
 ### 4.2 The rule about literals
 
@@ -636,6 +653,15 @@ as an error, and if Raw Input stops reporting, that is logged and every keyboard
 remote, as under `any_keyboard`. `any_keyboard`, for
 development and the headless tests, takes every keyboard as the remote except inside a text
 field (N7.I1).
+
+**Without the remote, a pilot or a demonstration may respond otherwise** (docs/LOG.md
+N7.F12e4), chosen on the hardware page: the keyboard (`responder.alternative_keys`: ← and → for
+the large buttons, Return for ▶, Esc for the emergency stop), or buttons on the participant
+window for a mouse or trackpad, which press and release the remote's own keys at the mouse's own
+times, so a hold is a hold. Both read every keyboard (`any_keyboard`), are the same in every
+condition, and are recorded (`participant_input`). Preflight refuses either for a study
+participant's code: only a pilot code (above `design.pilot_code_offset`) or a demonstration may
+use them. With the remote the participant window is the approved screens, with no buttons.
 
 **What is printed on each button is configuration, not code.** `responder.button_symbols` in
 `hardware.yaml` records the glyph on each button, and a screen that draws a control draws that

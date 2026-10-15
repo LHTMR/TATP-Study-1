@@ -315,8 +315,8 @@ class HardwareCheckDialog(QDialog):
     """The hardware page. `choices()` is what it chose; `garment` and `audio` are what is in
     use, for the tests to drive.
 
-    `choices` reopens the page as it was left; None starts from hardware.yaml. `startup` is the
-    page shown before the launcher, whose way out without continuing ends the program.
+    `choices` reopens the page as it was left; None starts from hardware.yaml. `detectors` are
+    how it finds what is connected, the lab's own (`live_detectors`) unless given.
     """
 
     def __init__(self, text: dict, hardware: dict, choices: HardwareChoices | None = None,
