@@ -7,17 +7,22 @@ what is tested here is what the launcher collects and how it answers what they s
 from __future__ import annotations
 
 import argparse
+import dataclasses
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
-from tatp import launcher, screenshots
+from tatp import hardware_check, launcher, screenshots
 from tatp import schedule as sched
+from tatp.devices import CHOICE_NAMES, KEYBOARD, ON_SCREEN, REMOTE, HardwareChoices, Present
+from tatp.hardware_check import Detectors
 from tatp.launcher import REFUSE, RESUME_KEY, WARN, LauncherWindow
+from tatp.screenshots import sample_probe
 from tools import preview_schedule
 
 T_ZERO = datetime(2026, 9, 24, 9, 30)
@@ -94,6 +99,94 @@ def test_the_chosen_garment_is_the_session_driver(app, loaded, tmp_path):
     assert args.garment == "arduino_mosfet"
     assert dialog.config(args).hardware["garment"]["driver"] == "arduino_mosfet"
     assert loaded.hardware["garment"]["driver"] == configured, "the loaded config is untouched"
+
+
+MACBOOK = HardwareChoices(
+    participant_screen_index=None, experimenter_screen_index=0,
+    participant_audio_device=None, experimenter_audio_device=None, garment_port=None,
+    participant_input=KEYBOARD, chosen=frozenset(CHOICE_NAMES),
+)
+
+
+def test_what_was_not_chosen_by_hand_is_worked_out_again_at_each_start(app, loaded, tmp_path,
+                                                                        monkeypatch):
+    """Code review: a second monitor or the remote connected after Continue is used, while a
+    choice made by hand stays (docs/LOG.md N7.F12e1)."""
+    connected = SimpleNamespace(screens=[(1280, 800)], remote=False)
+    monkeypatch.setattr(launcher, "present_now", lambda hardware, choices: Present(
+        list(connected.screens), [], connected.remote))
+    automatic = HardwareChoices(None, 0, None, None, None, KEYBOARD,
+                                chosen=frozenset({"experimenter_audio_device"}))
+    # Off the lab's platform, where a remote that is not seen gives way to the keyboard.
+    monkeypatch.setattr(launcher.cfg, "load", lambda *languages: cfg.Config(**{
+        **loaded.__dict__, "hardware": {**loaded.hardware, "lab_platform": "elsewhere"}}))
+    window = LauncherWindow(loaded, Fakes().preflight, Fakes().build, choices=automatic)
+    dialog = _filled(window, tmp_path)
+    hardware = dialog.config(dialog.args()).hardware
+    assert hardware["screens"]["participant_screen_index"] is None
+    assert hardware["responder"]["participant_input"] == KEYBOARD
+    connected.screens = [(1280, 800), (1280, 800)]
+    connected.remote = True
+    hardware = dialog.config(dialog.args()).hardware
+    assert hardware["screens"]["participant_screen_index"] == 1
+    assert hardware["responder"]["participant_input"] == REMOTE
+    assert hardware["audio"]["experimenter_device"] is None, "chosen by hand: kept"
+
+
+@pytest.mark.parametrize("demo", [False, True])
+def test_every_session_runs_with_the_hardware_pages_choices(app, loaded, tmp_path, demo):
+    """A session and a demonstration alike (docs/LOG.md N7.F12e1)."""
+    fakes = Fakes()
+    window = LauncherWindow(loaded, fakes.preflight, fakes.build, choices=MACBOOK)
+    dialog = _filled(window, tmp_path) if not demo else window.session_dialog(demo=True)
+    if demo:
+        dialog.experimenter.setText("SM")
+        _choose(dialog.session_number, 1)
+        _choose(dialog.participant_language, "sv")
+        _choose(dialog.experimenter_language, "en")
+    hardware = dialog.config(dialog.args()).hardware
+    assert hardware["screens"]["participant_screen_index"] is None
+    assert hardware["audio"]["participant_device"] is None
+    assert hardware["responder"]["participant_input"] == KEYBOARD
+    assert hardware["responder"]["keys"] == loaded.hardware["responder"]["alternative_keys"]
+    assert "participant_input" in hardware["changed_at_launch"]
+
+
+def test_a_demonstration_on_the_sleeve_uses_the_pages_port(app, loaded, tmp_path):
+    """Stream F's worn garment in a demo (held at real time, people at both places) and the
+    hardware page's port choice together (merge of N7.F12e1 with stream F)."""
+    choices = dataclasses.replace(MACBOOK, garment_port="COM9")
+    window = LauncherWindow(loaded, Fakes().preflight, Fakes().build, choices=choices)
+    dialog = window.session_dialog(demo=True)
+    dialog.experimenter.setText("SM")
+    _choose(dialog.session_number, 1)
+    _choose(dialog.participant_language, "sv")
+    _choose(dialog.experimenter_language, "en")
+    _choose(dialog.garment, "arduino_mosfet")
+    hardware = dialog.config(dialog.args()).hardware
+    assert hardware["garment"]["driver"] == "arduino_mosfet"
+    assert hardware["garment"]["prototype"]["port"] == "COM9"
+    assert hardware["responder"]["participant_input"] == KEYBOARD
+
+
+def test_the_hardware_entry_reopens_the_page_and_continue_keeps_its_choices(
+    app, loaded, monkeypatch
+):
+    connected = SimpleNamespace(screens=[(1280, 800)], ports=[], remote=None)
+    monkeypatch.setattr(hardware_check, "live_detectors", lambda hardware, parent: Detectors(
+        lambda: connected.screens, lambda: connected.ports, lambda: connected.remote,
+        lambda request, on_done: on_done(sample_probe(request, [], None), ""),
+    ))
+    window = LauncherWindow(loaded, Fakes().preflight, Fakes().build, choices=MACBOOK)
+    page = window.hardware_check_dialog()
+    assert page.choices().participant_input == KEYBOARD, "reopened as it was left"
+    page.choose("participant_input", page.options["participant_input"].index(ON_SCREEN))
+    page.reject()
+    assert window.choices == MACBOOK, "Cancel keeps what there was"
+    page = window.hardware_check_dialog()
+    page.choose("participant_input", page.options["participant_input"].index(ON_SCREEN))
+    page.accept()
+    assert window.choices.participant_input == ON_SCREEN
 
 
 RESUME ={"completed": "blocks 1-4", "since_sensitisation": "1 h 12 min"}

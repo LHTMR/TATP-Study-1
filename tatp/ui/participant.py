@@ -23,6 +23,8 @@ with no protocol in it.
 
 from __future__ import annotations
 
+import time
+
 import shiboken6
 from PySide6.QtCore import QEvent, QObject, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import (
@@ -35,10 +37,17 @@ from PySide6.QtGui import (
     QPen,
 )
 from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QAbstractSlider,
     QAbstractSpinBox,
     QApplication,
+    QComboBox,
+    QDialog,
+    QHBoxLayout,
     QLineEdit,
+    QMenu,
     QPlainTextEdit,
+    QPushButton,
     QStackedWidget,
     QTextEdit,
     QVBoxLayout,
@@ -47,6 +56,7 @@ from PySide6.QtWidgets import (
 
 from tatp.clock import Clock
 from tatp.config import Config
+from tatp.devices import ON_SCREEN
 from tatp.responder import Action, Responder
 from tatp.ui.vas import (
     BACKGROUND,
@@ -110,6 +120,13 @@ STOP_BUTTON_CENTRE_FRACTION = 0.5
 # button's own label.
 PAIR_ROW_FRACTIONS = (0.3, 0.7)
 PAIR_UNDERLINE_GAP_PX = 6
+# The on-screen buttons that stand in for the remote (docs/LOG.md N7.F12e4), in a row below the
+# screens. Large enough to hit without looking twice.
+RESPONSE_BUTTON_POINT_SIZE = 28
+RESPONSE_BUTTON_WIDTH_PX = 110
+RESPONSE_BUTTON_HEIGHT_PX = 64
+RESPONSE_BAR_MARGIN_PX = 12
+RESPONSE_BAR_GROUP_GAP_PX = 48
 
 
 class _MessageScreen(QWidget):
@@ -527,6 +544,52 @@ def _draw_button(
     draw_prose(painter, label_box, label, responder)
 
 
+class _ResponseButton(QPushButton):
+    """One of the remote's buttons on screen, for a mouse or trackpad (docs/LOG.md N7.F12e4).
+
+    Its press and its release are delivered as the remote's key going down and up, stamped
+    with the mouse event's own time, exactly as a raw report from the remote is
+    (`ParticipantWindow.deliver_remote_key`): the adjustment and the VAS time a hold from those
+    stamps. It never takes the focus, which the window or the VAS keeps for the keys.
+    """
+
+    def __init__(self, symbol: str, key: str, deliver, parent: QWidget):
+        super().__init__(symbol, parent)
+        self.key = key
+        self._deliver = deliver
+        self.setFocusPolicy(Qt.NoFocus)
+        font = self.font()
+        font.setPointSize(RESPONSE_BUTTON_POINT_SIZE)
+        self.setFont(font)
+        self.setMinimumSize(RESPONSE_BUTTON_WIDTH_PX, RESPONSE_BUTTON_HEIGHT_PX)
+        self.setStyleSheet(
+            f"QPushButton {{ color: {FOREGROUND.name()}; "
+            f"background-color: {BACKGROUND.name()}; "
+            f"border: {BUTTON_LINE_WIDTH_PX}px solid {FOREGROUND.name()}; "
+            f"border-radius: {BUTTON_RADIUS_PX}px; }}"
+        )
+
+        # The press's own stamp and the real time it came, while it is held.
+        self.held: tuple[int, float] | None = None
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        super().mousePressEvent(event)
+        self.held = (event.timestamp(), time.monotonic())
+        self._deliver(self.key, False, False, event.timestamp())
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        super().mouseReleaseEvent(event)
+        if self.held is None:
+            return
+        self.held = None
+        self._deliver(self.key, True, False, event.timestamp())
+
+    def release_stamp(self) -> int:
+        """The stamp a release would carry now: the press's, plus the real time held since."""
+        press_ms, press_s = self.held
+        return press_ms + round((time.monotonic() - press_s) * MS_PER_S)
+
+
 class ParticipantWindow(QWidget):
     """The participant's screen. Everything shown to a participant goes through here."""
 
@@ -606,12 +669,48 @@ class ParticipantWindow(QWidget):
             self.stack.addWidget(screen)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.addWidget(self.stack)
+        # Only when the hardware page chose them, so with the remote the window is the
+        # approved screens and nothing else (docs/LOG.md N7.F12e4).
+        self.response_buttons: dict[Action, _ResponseButton] = {}
+        if responder_config["participant_input"] == ON_SCREEN:
+            layout.addWidget(self._response_bar(responder_config))
 
         self._adjusting = False
         self._choosing = False
         self.setFocusPolicy(Qt.StrongFocus)
         self.show_blank()
+
+    def _response_bar(self, responder_config: dict) -> QWidget:
+        """The remote's four buttons, on screen for a mouse or trackpad (docs/LOG.md
+        N7.F12e4): the two large ones at the left, where the hand would hold them, ▶ apart, and
+        the stop alone at the far right, on its sticker's disc. Each presses and releases the
+        key the remote's button sends, at the moment the mouse does, so a hold is a hold."""
+        bar = QWidget(self)
+        bar.setAttribute(Qt.WA_StyledBackground, True)
+        bar.setStyleSheet(f"background-color: {BACKGROUND.name()};")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(RESPONSE_BAR_MARGIN_PX, RESPONSE_BAR_MARGIN_PX,
+                               RESPONSE_BAR_MARGIN_PX, RESPONSE_BAR_MARGIN_PX)
+        row.setSpacing(RESPONSE_BAR_MARGIN_PX)
+        for action in Action:
+            made = _ResponseButton(
+                self.responder.symbol_for(action, pointing_at_stop=True),
+                self.responder.key_for(action), self.deliver_remote_key, bar,
+            )
+            if action is Action.EMERGENCY_STOP:
+                row.addStretch(1)
+                colour = responder_config["button_symbol_colours"][action]
+                disc = responder_config["button_symbol_discs"][action]
+                made.setStyleSheet(made.styleSheet() + (
+                    f"QPushButton {{ color: {colour}; background-color: {disc}; }}"
+                ))
+            elif action is Action.CONFIRM:
+                row.addSpacing(RESPONSE_BAR_GROUP_GAP_PX)
+            self.response_buttons[action] = made
+            row.addWidget(made)
+        return bar
 
     # -- placement ---------------------------------------------------------------------
 
@@ -844,6 +943,20 @@ class ParticipantWindow(QWidget):
     def _confirm_accepted(self, *_response) -> None:
         self._confirm_accepted_s = self.clock.elapsed_s()
 
+    def hideEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        """An on-screen button held as the window hides -- the shared window's flags changing
+        around a dialog hide it for a moment -- loses its mouse release, and a hold with no end
+        would ramp the pressure on. So its release is delivered now, at the time held so far,
+        as the VAS ends its hold on a hide (spec review of N7.F12e4)."""
+        for made in self.response_buttons.values():
+            if made.held is not None:
+                stamp = made.release_stamp()
+                made.held = None
+                made.setDown(False)
+                QApplication.sendEvent(self.key_target(), remote_key_event(
+                    QEvent.KeyRelease, QT_KEYS[made.key], False, stamp))
+        super().hideEvent(event)
+
     def keyReleaseEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         action = self._action(event)
         if (
@@ -890,6 +1003,21 @@ class ParticipantWindow(QWidget):
 # experimenter typing, not the participant pressing -- the remote's emergency stop is the full
 # stop, which is also typed.
 TEXT_ENTRY_WIDGETS = (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
+# Widgets that act on the arrows, Return and Esc themselves (code review of N7.F12e4). Under
+# any_keyboard a key reaching one of these, or any widget in a dialog or a popup, is the
+# experimenter's: Return accepting a dialog is not ▶, and an arrow in a list does not move the
+# participant's marker. The stop is still forwarded from them: no dialog uses the full stop, and
+# a stop is never to be lost.
+KEY_USING_WIDGETS = (QComboBox, QAbstractItemView, QAbstractSlider, QMenu)
+
+
+def uses_keys(widget: QWidget) -> bool:
+    window = widget.window()
+    return (
+        isinstance(widget, KEY_USING_WIDGETS)
+        or isinstance(window, QDialog)
+        or window.windowType() == Qt.Popup
+    )
 
 # Set in a key event's native modifiers to mark it as the remote's own, delivered to the
 # participant: from its raw report, or forwarded by the router. Bit 31, which Windows' native
@@ -925,7 +1053,11 @@ class RemoteKeyRouter(QObject):
     - **It cannot** (`any_keyboard`): every keyboard is the remote, and its keys are forwarded
       to the participant, except a key typed into an experimenter text field, which is taken as
       the experimenter writing a note or a distance (docs/LOG.md N7.I1). A participant's stop
-      pressed while the experimenter is typing then reaches the field.
+      pressed while the experimenter is typing then reaches the field. Nor are the other
+      buttons' keys forwarded from a dialog, a popup, a list or a combo box, which use them
+      (`uses_keys`); the stop still is. So on one screen, with one person playing both parts
+      (a MacBook, N7.F12e4), keys pressed over the experimenter window's own surface -- after
+      clicking Next step, say -- still reach the participant.
     """
 
     def __init__(self, participant: ParticipantWindow, source, parent: QObject | None = None):
@@ -955,6 +1087,8 @@ class RemoteKeyRouter(QObject):
         if at_participant or not participant.isVisible():
             return False
         if isinstance(watched, TEXT_ENTRY_WIDGETS):
+            return False
+        if participant._action(event) is not Action.EMERGENCY_STOP and uses_keys(watched):
             return False
         # The native codes go with it, as the remote's own event would carry them.
         forwarded = QKeyEvent(

@@ -58,6 +58,7 @@ from PySide6.QtWidgets import QComboBox, QGridLayout, QVBoxLayout, QWidget
 
 from tatp.clock import Clock
 from tatp.config import REPO_ROOT, Config
+from tatp.devices import KEY_SOURCE_CHANGE
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source
 from tatp.session import DRIVERS, with_session_choices
 from tatp.session_runner import SessionRunner
@@ -192,6 +193,14 @@ def demo_config(loaded: Config, speed: float, garment: str) -> Config:
     check_speed(demo, speed, garment)
     config = with_session_choices(loaded, run_folder(demo), garment)
     hardware = with_key_source(config.hardware, ANY_KEYBOARD)
+    # Recorded as the hardware page records it (`hardware_changed`, docs/LOG.md N7.F12e3), so
+    # the session file says which keyboards counted (spec review).
+    if config.hardware["responder"]["key_source"] != ANY_KEYBOARD:
+        changed = [name for name in config.hardware.get("changed_at_launch", "").split(";")
+                   if name]
+        if KEY_SOURCE_CHANGE not in changed:
+            changed.append(KEY_SOURCE_CHANGE)
+        hardware = {**hardware, "changed_at_launch": ";".join(changed)}
     # The study's own folder, whose instance lock a demonstration holds
     # (`tatp.preflight.lock_folder`), so one never runs beside a session from it, or beside
     # another demonstration.

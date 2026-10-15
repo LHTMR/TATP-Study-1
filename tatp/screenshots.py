@@ -50,9 +50,10 @@ from tatp import pattern_design as pd
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
 from tatp.demo import OFF, DemoControls
+from tatp.devices import ON_SCREEN, check_key, matching_outputs
 from tatp.garment.base import Limits
 from tatp.garment.mock import MockGarment
-from tatp.hardware_check import HardwareCheckDialog
+from tatp.hardware_check import Detectors, HardwareCheckDialog
 from tatp.instruments import InstrumentsDialog
 from tatp.launcher import WARN, LauncherWindow
 from tatp.pinprick import F40Fit, LongResult
@@ -322,6 +323,23 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     )
 
     yield from _vas_variant_shots(window, language)
+
+    # The remote's buttons on screen, for a pilot or a demonstration without it (docs/LOG.md
+    # N7.F12e4). Every other participant screen is the remote's, with no buttons below it.
+    responder = {**config.hardware["responder"], "participant_input": ON_SCREEN}
+    on_screen = cfg.Config(**{**config.__dict__,
+                              "hardware": {**config.hardware, "responder": responder}})
+    buttons = ParticipantWindow(on_screen, Responder(on_screen.hardware), Clock())
+    buttons.show_adjustment(sorted(text["adjust_targets"])[0])
+    yield Shot(
+        f"participant_{language}_on_screen_buttons",
+        f"The adjustment screen with the remote's four buttons drawn below it, for a mouse or "
+        f"trackpad (hardware page, 'Mouse or trackpad'): ‹ and › at the left, ▶ apart, the "
+        f"stop alone at the right on its sticker's disc. Pilot codes and demonstrations only; "
+        f"with the remote the window has no such row ({language}).",
+        _grab(buttons),
+    )
+    _dispose(buttons)
 
 
 def _choice_shots(window: ParticipantWindow, text: dict, language: str) -> Iterator[Shot]:
@@ -895,33 +913,40 @@ class _SampleDemo(QObject):
         setattr(self, f"{who}_mode", mode)
 
 
-class _SampleSounddevice:
-    """The hardware check's device list, fixed for the picture: the lab laptop's outputs on
-    30 Sep 2026 as far as the screenshot needs them."""
+def _sample_detectors(screens, ports, remote, outputs) -> Detectors:
+    """What the hardware page is told is connected, fixed for the picture: the screens and the
+    devices attached differ between machines, and the picture is of the page, not of this
+    machine's hardware. The outputs are the lab laptop's on 30 Sep 2026, as far as needed."""
 
-    devices = (
-        {"name": "Speakers (Realtek(R) Audio)", "hostapi": 0, "max_output_channels": 2},
-        {"name": "Headphones (Realtek(R) Audio)", "hostapi": 0, "max_output_channels": 2},
-        {"name": "Headphones (Bose QC Headphones)", "hostapi": 0, "max_output_channels": 2},
-    )
+    def probe(request, on_done):
+        on_done(sample_probe(request, list(outputs), outputs[0]), "")
 
-    class PortAudioError(Exception):
-        pass
+    return Detectors(lambda: list(screens), lambda: list(ports), lambda: remote, probe)
 
-    def query_hostapis(self):
-        return [{"name": "Windows WASAPI"}]
 
-    def query_devices(self, device=None, kind=None):  # noqa: ARG002 -- sounddevice's signature
-        if device is None:
-            return list(self.devices)
-        matching = [d for d in self.devices
-                    if all(word in f"{d['name']}, Windows WASAPI" for word in device.split())]
-        if len(matching) != 1:
-            raise ValueError(f"No output device matching {device!r}")
-        return matching[0]
+def sample_probe(request: dict, outputs: list[str], default: str | None,
+                 unusable: dict[str, str] | None = None) -> dict:
+    """`tatp.devices.probe`'s answer for these outputs, with no PortAudio: a device can be
+    opened when its name matches exactly one output (and the default when there is one),
+    unless `unusable` gives a reason it cannot play at the configured settings."""
+    unusable = unusable or {}
+    checks = {}
+    for role, specs in request["candidates"].items():
+        checks[role] = {}
+        for spec in specs:
+            found = (default is not None if spec is None
+                     else len(matching_outputs(spec, outputs)) == 1)
+            why = "" if found else f"No output device matching {spec!r}"
+            checks[role][check_key(spec)] = unusable.get(spec, why) if found else why
+    return {"outputs": outputs, "default": default, "checks": checks}
 
-    def check_output_settings(self, device=None, channels=None, samplerate=None):
-        """Every sample device plays at the configured settings."""
+
+SAMPLE_OUTPUTS = (
+    "Speakers (Realtek(R) Audio), Windows WASAPI",
+    "Headphones (Realtek(R) Audio), Windows WASAPI",
+    "Headphones (Bose QC Headphones), Windows WASAPI",
+)
+SAMPLE_SCREEN = (WIDTH_PX, HEIGHT_PX)
 
 
 def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
@@ -1054,25 +1079,46 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"({language}).",
         preview.grab(),
     )
-    # A sample device list, the mock and every keyboard as the remote: the real devices and the
-    # screens attached differ between machines, and the picture is of the dialog, not of this
-    # one's hardware. Nothing is played, because the output is built only when a sound is asked
-    # for, and Raw Input needs a native window the offscreen platform does not have.
+    # Sample hardware (`_sample_detectors`), the mock, the test double for the sound and every
+    # keyboard as the remote: nothing is played, nothing is opened, and Raw Input needs a native
+    # window the offscreen platform does not have. On the lab's platform wherever it is drawn,
+    # so a missing device is drawn as the lab would see it on every machine.
     hardware = {
         **with_key_source(config.hardware, ANY_KEYBOARD),
+        "lab_platform": sys.platform,
         "garment": {**config.hardware["garment"], "driver": "mock"},
-        "screens": {**config.hardware["screens"], "participant_screen_index": None,
-                    "experimenter_screen_index": None},
+        "audio": {**config.hardware["audio"], "backend": "recording"},
     }
-    check = HardwareCheckDialog(config.experimenter_text, hardware,
-                                sound=lambda: _SampleSounddevice())
-    check.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+    nothing = HardwareCheckDialog(
+        config.experimenter_text, hardware,
+        detectors=_sample_detectors([SAMPLE_SCREEN], [], False, SAMPLE_OUTPUTS[:1]),
+    )
+    # At the lab laptop's 1280 x 800 (docs/LOG.md N7.U10): the page opens fitted to the screen,
+    # and on a shorter one scrolls with Continue still in view.
+    nothing.resize(LAPTOP_WIDTH_PX, HEIGHT_PX)
+    yield Shot(
+        f"experimenter_{language}_launcher_hardware_check_nothing_found",
+        f"The hardware page (LOG N7.F12e1) with nothing of the lab's connected: one screen, so "
+        f"the participant's window shares it; the remote, the headphones and the sleeve's port "
+        f"missing, each in its own colour and saying what to do -- in the lab the keyboard is "
+        f"chosen by hand, never stood in automatically. Each is found when connected "
+        f"({language}).",
+        nothing.grab(),
+    )
+    nothing.release()
+    check = HardwareCheckDialog(
+        config.experimenter_text, hardware,
+        detectors=_sample_detectors([SAMPLE_SCREEN, SAMPLE_SCREEN], ["COM3"], True,
+                                    SAMPLE_OUTPUTS),
+    )
+    check.resize(LAPTOP_WIDTH_PX, HEIGHT_PX)
     yield Shot(
         f"experimenter_{language}_launcher_hardware_check",
-        f"The hardware check (LOG N7.F4), at the lab laptop's size, as it opens: a count for "
-        f"each remote button, where each screen lands, the sound devices, the noise within the "
-        f"participant's own range with the cue and the alert, and each garment channel on and "
-        f"off. Drawn with a sample device list and the mock garment ({language}).",
+        f"The hardware page (LOG N7.F4, N7.F12e1), shown before the launcher, at the lab "
+        f"laptop's size, with the lab's hardware connected: each choice on hardware.yaml's "
+        f"own, found; a count for each remote button; the noise within the participant's own "
+        f"range with the cue and the alert; each garment channel on and off. Continue opens "
+        f"the launcher ({language}).",
         check.grab(),
     )
     check.toggle_garment()

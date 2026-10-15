@@ -17,7 +17,10 @@ Six entries, so the auxiliary tools are reachable without the command line:
    pattern names and shapes, which a blinded experimenter must not see (SPEC.md 16), and its
    entry says so.
 4. **Preview schedule.** `tools/preview_schedule.py`'s report, in a window.
-5. **Check the hardware** (`tatp/hardware_check.py`), before the participant arrives.
+5. **Check the hardware** (`tatp/hardware_check.py`), before the participant arrives: the
+   hardware page, which also opens before the launcher itself. What it chooses -- screens,
+   sound devices, the sleeve's port, the participant's input -- goes into every session started
+   from here, through `tatp.session.with_hardware_choices` (docs/LOG.md N7.F12e1).
 
 **The session is started by `run_session`'s `preflight` and `build`, not here.** Both are
 reached through `preflight()` and `build()` below, imported when called: `run_session.py`
@@ -75,9 +78,15 @@ from tatp.demo import (
     resolved,
     worn_garment,
 )
-from tatp.hardware_check import HardwareCheckDialog
+from tatp.devices import HardwareChoices, configured, settle
+from tatp.hardware_check import HardwareCheckDialog, present_now
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
-from tatp.session import DRIVERS, canonical_initials, with_session_choices
+from tatp.session import (
+    DRIVERS,
+    canonical_initials,
+    with_hardware_choices,
+    with_session_choices,
+)
 from tatp.session_runner import stop_on_error
 from tatp.ui.application import application, scale_screens
 from tatp.ui.widgets import (
@@ -632,10 +641,14 @@ class LauncherWindow(QWidget):
         preflight: Callable = preflight,
         build: Callable = build,
         filaments_path: Path = FILAMENTS_PATH,
+        choices: HardwareChoices | None = None,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
         self.config = config
+        # The hardware page's choices (docs/LOG.md N7.F12e1), which every session started from
+        # here runs with; hardware.yaml's own until the page has been shown.
+        self.choices = choices or configured(config.hardware)
         self.text = config.experimenter_text
         self._preflight = preflight
         self._build = build
@@ -687,9 +700,19 @@ class LauncherWindow(QWidget):
             self.environment,
             self._preflight,
             self._start_session,
+            load=self.load,
             demo=self.config.study1["demo"] if demo else None,
             parent=self,
         )
+
+    def load(self, participant_language: str, experimenter_language: str) -> cfg.Config:
+        """The configuration a session is checked and started with: these languages, and the
+        hardware page's choices settled against what is connected now (docs/LOG.md N7.F12e1):
+        what was chosen by hand stays, and the rest are worked out again, so a monitor or the
+        remote connected after the page closed is used."""
+        loaded = cfg.load(participant_language, experimenter_language)
+        present = present_now(loaded.hardware, self.choices)
+        return with_hardware_choices(loaded, settle(self.choices, loaded.hardware, present))
 
     def open_demo_dialog(self) -> SessionDialog:
         """Run a demo (tatp/demo.py): the session dialog, for a demonstration."""
@@ -746,7 +769,11 @@ class LauncherWindow(QWidget):
         return dialog
 
     def hardware_check_dialog(self) -> HardwareCheckDialog:
-        return HardwareCheckDialog(self.text, self.config.hardware, parent=self)
+        """The hardware page, as it was left (docs/LOG.md N7.F12e1). Continue keeps what it
+        chose for the sessions started after; Cancel keeps what there was."""
+        dialog = HardwareCheckDialog(self.text, self.config.hardware, self.choices, parent=self)
+        dialog.accepted.connect(lambda: setattr(self, "choices", dialog.choices()))
+        return dialog
 
     def open_hardware_check(self) -> HardwareCheckDialog:
         # Modal to the launcher, so no session can start while the check holds the garment's
@@ -824,7 +851,12 @@ def run_launcher(argv: list[str] | None = None) -> int:
     config = cfg.load(DEFAULT_PARTICIPANT_LANGUAGE, args.language)
     scale_screens(config.hardware)
     app = QApplication.instance() or application(config.hardware)
-    launcher = LauncherWindow(config)
+    # The hardware page first, as a videoconferencing program shows its devices before a call
+    # (docs/LOG.md N7.F12e1). Cancel there ends the program: there is nothing behind it yet.
+    page = HardwareCheckDialog(config.experimenter_text, config.hardware)
+    if page.exec() != QDialog.DialogCode.Accepted:
+        return 0
+    launcher = LauncherWindow(config, choices=page.choices())
     stop_on_error(lambda: launcher.runner, launcher.show_error)
     launcher.show()
     app.exec()

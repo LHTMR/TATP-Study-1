@@ -609,12 +609,22 @@ preflight:
   another_instance: En annan session körs redan från den här datamappen ({value}). Stäng den först.
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_missing: Deltagarens fjärrkontroll är inte ansluten (inget tangentbord matchar {value}). Anslut mottagaren och starta igen.
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_needs_windows: Den här datorn ({value}) kan inte skilja fjärrkontrollen från andra tangentbord. Sätt responder.key_source till any_keyboard i hardware.yaml, eller kör sessionen på labbdatorn.
-  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
-  participant_audio_missing: 'Deltagarens hörlurar kan inte användas ({value}). Anslut eller slå på dem, och stäng sedan programmet och öppna det igen: det ser bara de enheter som fanns när det öppnades. Under Kontrollera utrustningen listas datorns ljudenheter; audio.participant_device i hardware.yaml anger vilken som används.'
-  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
-  experimenter_audio_missing: 'Försöksledarens högtalare kan inte användas ({value}). Anslut dem, och stäng sedan programmet och öppna det igen: det ser bara de enheter som fanns när det öppnades. Under Kontrollera utrustningen listas datorns ljudenheter; audio.experimenter_device i hardware.yaml anger vilken som används.'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  remote_needs_windows: Den här datorn ({value}) kan inte skilja fjärrkontrollen från andra tangentbord, vilket responder.key_source raw_input kräver. Starta sessionen från programmets första sida (Kontrollera utrustningen), eller kör den på labbdatorn.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  every_keyboard_is_the_remote: 'Alla tangentbord räknas här som deltagarens fjärrkontroll ({value}), även försöksledarens, så en studiedeltagares session kan inte köras: försöksledarens punkt skulle stoppa den. Kör den på labbdatorn med fjärrkontrollen ansluten. En pilotkod, en demonstration eller det simulerade plagget kan köras.'
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  participant_screen_shared: 'Deltagarens skärm {value} är inte ansluten, eller är ett fönster på försöksledarens skärm, så en studiedeltagares session kan inte köras. Anslut deltagarens skärm och välj den under Kontrollera utrustningen. En pilotkod, en demonstration eller det simulerade plagget kan köras.'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_check_failed: 'Ljudenheterna kunde inte kontrolleras ({value}). Ingenting kan starta förrän de kan det: kontrollera att ljudenheterna fungerar och kontrollera sedan igen.'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  participant_audio_missing: 'Deltagarens hörlurar kan inte användas ({value}). Anslut eller slå på dem, eller välj en annan utgång under Kontrollera utrustningen, och kontrollera sedan igen. Programmet behöver inte startas om.'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  experimenter_audio_missing: 'Försöksledarens högtalare kan inte användas ({value}). Anslut dem, eller välj en annan utgång under Kontrollera utrustningen, och kontrollera sedan igen. Programmet behöver inte startas om.'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  alternative_input_study_code: 'Deltagarkod {value} tillhör en studiedeltagare, som svarar med fjärrkontrollen. Tangentbordet och knapparna på skärmen är för pilotkoder och demonstrationer. Anslut fjärrkontrollen och välj den under Kontrollera utrustningen.'
+  # DRAFT (LOG N7.F12e3): written by the build, not ethics-sourced
+  hardware_changed: 'Den här sessionen körs med annan utrustning än labbets ({value}). Sessionsfilen registrerar det.'
 
 zones:
   # Bredvid zondiagrammet (SPEC.md 11): var den aktuella stimuleringen ska ges.
@@ -676,8 +686,8 @@ launcher:
   preview_schedule_detail: Sessionens tidslinje och dess varningar. Ingenting startas.
   # DRAFT (LOG N7.F4): written by the build, not ethics-sourced
   hardware_check: Kontrollera utrustningen
-  # DRAFT (LOG N7.F4): written by the build, not ethics-sourced
-  hardware_check_detail: Innan deltagaren kommer. Fjärrkontrollen, skärmarna, ljudet och plagget, en i taget. Ingenting registreras.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  hardware_check_detail: Sidan som visas vid start. Välj och testa fjärrkontrollen, skärmarna, ljudet och plagget innan deltagaren kommer. Ingenting registreras.
   environment_entered: 'Rummet {temperature} °C, {humidity} % RF, lämnas till nästa session.'
   # Sessionsdialogen. Den frågar bara efter det SPEC.md 6 räknar upp; allt annat är konfiguration.
   session_title: Kör en session
@@ -913,34 +923,83 @@ schedule_warnings:
 # DRAFT (LOG N7.F4): every key in this block is written by the build, not ethics-sourced.
 hardware_check:
   title: Kontrollera utrustningen
-  remote: Fjärrkontroll
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  page_hint: Varje val börjar på labbets egen uppsättning. Anslut det som saknas; det hittas här utan omstart.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  continue: Fortsätt
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input: Deltagarens svar
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input_choice: Svarar med
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  inputs:
+    remote: Fjärrkontrollen
+    keyboard: 'Tangentbord: ← → Retur, punkt stoppar'
+    on_screen: 'Mus eller styrplatta: knappar i deltagarens fönster'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
   remote_hint: Tryck på varje knapp; just dess räknare ska öka. ▶ skickar två tangenter i tur och ordning, och båda räknas.
   remote_last: 'Senaste tryck: {symbol} ({value})'
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_found: Fjärrkontrollen hittad; bara den räknas.
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_missing: 'Fjärrkontrollen saknas: anslut den.'
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_any_keyboard: Alla tangentbord räknas här.
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_needs_windows: 'Kräver Windows: alla tangentbord räknas.'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  remote_missing: 'Fjärrkontrollen hittades inte: anslut dess mottagare.'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  remote_unknown: Den här datorn kan inte skilja fjärrkontrollen från ett tangentbord, så alla tangentbord räknas som fjärrkontrollen.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input_keyboard: Bara för pilotkoder och demonstrationer; eller en simulerad deltagare under Kör en demo.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input_on_screen: Bara för pilotkoder och demonstrationer. Klicka och håll som på fjärrkontrollen.
+  # DRAFT (LOG N7.F12e3): written by the build, not ethics-sourced. Each choice, as the
+  # preflight's warning names it when it is not the lab's.
+  changed:
+    participant_screen_index: deltagarens skärm
+    experimenter_screen_index: försöksledarens skärm
+    participant_audio_device: deltagarens hörlurar
+    experimenter_audio_device: försöksledarens högtalare
+    garment_port: ärmens port
+    participant_input: deltagarens svar
+    key_source: vilket tangentbord som räknas som fjärrkontrollen
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_unusable: 'Kan inte användas: {value}'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  found: Hittad.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  not_connected: '{value} (inte ansluten)'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  none: ingen
   screens: Skärmar
   role_participant: Deltagarens skärm
   role_experimenter: Försöksledarens skärm
-  screen_found: '{role}: skärm {index}, {width} × {height}'
-  screen_missing: '{role}: skärm {index} är inte ansluten ({count} hittade). Kontrollera kabeln och sedan hardware.yaml.'
-  screen_unset: '{role}: inte inställd, så huvudskärmen används.'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  screen_choice: 'Skärm {index}: {width} × {height}'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  screen_numbered: Skärm {index}
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  screen_window: Ett fönster på den här skärmen
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  screen_missing: 'Inte ansluten: kontrollera kabeln.'
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  screen_unplaced_participant: 'Ett fönster ovanpå försöksledarens: bara för test.'
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  screen_unplaced_experimenter: Ett fönster där datorn placerar det.
   show_label: Visa en etikett på deltagarens skärm
   hide_label: Ta bort etiketten
   label_text: Deltagarens skärm
   sound: Ljud
-  sound_hint: Starta bruset och höj det tills du hör det i deltagarens hörlurar, och spela sedan signalen över det. Spela larmet och kontrollera att det bara hörs från högtalarna på försöksledarens sida.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  sound_hint: Höj bruset tills det hörs i hörlurarna och spela sedan signalen över det. Larmet ska bara höras på försöksledarens sida.
   role_participant_audio: Deltagarens hörlurar
   role_experimenter_audio: Försöksledarens högtalare
-  device_found: '{role}: {value}'
-  device_missing: '{role}: hittades inte. {value}'
-  devices_available: 'Ljudutgångar på datorn:{value}'
-  backend_recording: Ljudet går till testattrappen, som inte spelar något.
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_default: 'Systemets standard ({value})'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_default_line: Datorns standardutgång, som följer datorns egen ljudinställning.
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_missing: 'Inte ansluten: anslut eller slå på den.'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_listing: Letar efter ljudenheter…
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_list_failed: 'Ljudenheterna kunde inte listas: {value}'
   start_noise: Starta bruset
   stop_noise: Stoppa bruset
   noise_level: '{value} dBFS'
@@ -949,6 +1008,12 @@ hardware_check:
   audio_failed: 'Ljudet misslyckades: {value}'
   garment: Plagg
   garment_hint: Anslut, slå sedan på och av varje kanal och se på ärmen.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  port: Prototypärmens port
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  port_missing: 'Inte ansluten: anslut ärmens USB-kabel.'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  ports_none: Ingen seriell port hittades.
   connect: Anslut
   disconnect: Koppla från
   connecting: 'Ansluter till {garment}…'

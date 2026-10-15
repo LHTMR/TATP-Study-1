@@ -5,10 +5,12 @@
 - **Refused:** a session that has already been completed; a participant code the allocation
   file does not have; a second instance while one is running from the same data folder; the
   remote not plugged in, when the session tells it from other keyboards (`raw_input`); a
-  configured sound device that cannot be found, when the session plays through sounddevice.
+  configured sound device that cannot be found, when the session plays through sounddevice; an
+  alternative to the remote for a study participant's code (docs/LOG.md N7.F12e4).
 - **Warned, and allowed:** session N when session N-1 has no data; initials that differ from
   the participant's earlier sessions (SPEC.md 11); a session that was started and aborted
-  before. A warning is the experimenter's to read, and the deviation lands in the data.
+  before; hardware other than hardware.yaml's lab setup, chosen on the hardware page. A warning
+  is the experimenter's to read, and the deviation lands in the data.
 
 The launcher (Stream E) shows each `Finding` by its `text_key`, a dotted path into
 `config/text/experimenter_*.yaml`, with `value` filled into `{value}`.
@@ -25,9 +27,19 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
+from PySide6.QtGui import QGuiApplication
+
 from tatp import allocation as alloc
-from tatp.audio import SOUNDDEVICE, query_sounddevice, unresolved_devices
+from tatp.audio import DEVICE_ROLES, SOUNDDEVICE
 from tatp.config import REPO_ROOT, Config
+from tatp.devices import (
+    PARTICIPANT_INPUTS,
+    REMOTE,
+    ProbeError,
+    check_key,
+    probe_in_child,
+    probe_request,
+)
 from tatp.remote_keys import (
     KEY_SOURCES,
     RAW_INPUT,
@@ -41,6 +53,8 @@ from tatp.session import canonical_initials, earlier_experimenters
 REFUSE = "refuse"
 WARN = "warn"
 LOCK_NAME = "TATP1_instance.lock"
+# The garment no participant data can come from (`tatp.session.DRIVERS`).
+MOCK_DRIVER = "mock"
 PRE_SENSITISATION = "pre_sensitisation"
 # The lock covers one byte of the lock file: all a byte-range lock needs to exclude a second
 # holder. A size, not a study parameter.
@@ -120,16 +134,38 @@ def data_folder_for(config: Config) -> Path:
     return folder if folder.is_absolute() else REPO_ROOT / folder
 
 
+def unresolved_in_child(hardware: dict) -> dict[str, str]:
+    """Each configured sound device that cannot be opened, with why, asked of a child process
+    (`tatp.devices`): this one does not load PortAudio before the session plays, so the
+    session sees a device connected after the program opened. Waits on the GUI thread for at
+    most `devices.probe_timeout_s`, and raises `ProbeError` if the child fails or is silent."""
+    audio = hardware["audio"]
+    request = probe_request(
+        audio, {role: [audio[f"{role}_device"]] for role in DEVICE_ROLES}
+    )
+    checks = probe_in_child(request, hardware["devices"]["probe_timeout_s"])["checks"]
+    return {role: why for role in DEVICE_ROLES
+            if (why := checks[role][check_key(audio[f"{role}_device"])])}
+
+
+def is_study_participant(config: Config, participant_code: str) -> bool:
+    """Not a pilot code (above `design.pilot_code_offset`, docs/LOG.md N7.F2) and not a
+    demonstration's, which is above the pilot codes."""
+    offset = config.study1["design"]["pilot_code_offset"]
+    return not (participant_code.isdigit() and int(participant_code) > offset)
+
+
 def preflight(
     config: Config,
     participant_code: str,
     session_number: int,
     initials: str,
     data_folder: Path,
-    sound=query_sounddevice,
+    unresolved_audio=unresolved_in_child,
 ) -> list[Finding]:
-    """Every reason not to start, or to start with a warning. Writes nothing. `sound` loads
-    sounddevice, asked only when the session will play through it."""
+    """Every reason not to start, or to start with a warning. Writes nothing.
+    `unresolved_audio(hardware)` is asked only when the session will play through
+    sounddevice."""
     findings: list[Finding] = []
     design = config.study1["design"]
     path = Path(design["allocation_file"])
@@ -192,11 +228,50 @@ def preflight(
                 Finding(REFUSE, "preflight.remote_missing", responder["device_match"])
             )
 
+    # A study participant's responses come from the device the study describes; the keyboard
+    # and the on-screen buttons are for pilots and demonstrations (docs/LOG.md N7.F12e4).
+    participant_input = responder["participant_input"]
+    assert participant_input in PARTICIPANT_INPUTS, (
+        f"responder.participant_input is {participant_input!r}; one of {PARTICIPANT_INPUTS}"
+    )
+    study = is_study_participant(config, participant_code)
+    if participant_input != REMOTE and study:
+        findings.append(
+            Finding(REFUSE, "preflight.alternative_input_study_code", participant_code)
+        )
+    # What a study participant's data may not come from (spec review of N7.F12e4-e5). Not on the
+    # mock garment, from which no real data can come, and on which the tests and the validator
+    # run study codes.
+    if study and config.hardware["garment"]["driver"] != MOCK_DRIVER:
+        if participant_input == REMOTE and responder["key_source"] != RAW_INPUT:
+            # Every keyboard then counts as the remote, the experimenter's too, so the
+            # experimenter's full stop is the participant's stop (open item L15), whatever
+            # made it so: hardware.yaml, or a computer without Raw Input.
+            findings.append(Finding(REFUSE, "preflight.every_keyboard_is_the_remote",
+                                    responder["key_source"]))
+        index = config.hardware["screens"]["participant_screen_index"]
+        if index is None or index >= len(QGuiApplication.screens()):
+            # A participant window on the experimenter's display is unseen behind the curtain:
+            # a loose cable must stop the session, not move the participant's screens.
+            findings.append(Finding(REFUSE, "preflight.participant_screen_shared",
+                                    "" if index is None else str(index)))
+    # Absent for a session named on the command line, which runs as hardware.yaml says.
+    changed = config.hardware.get("changed_at_launch", "")
+    if changed:
+        names = config.experimenter_text["hardware_check"]["changed"]
+        findings.append(Finding(WARN, "preflight.hardware_changed",
+                                ", ".join(names[name] for name in changed.split(";"))))
+
     # A device that cannot be opened is otherwise found only when the masking check starts the
     # noise, and the session then stood still with nothing on either screen (15 Oct 2026).
-    audio = config.hardware["audio"]
-    if audio["backend"] == SOUNDDEVICE:
-        for role, why in unresolved_devices(audio, sound()).items():
+    if config.hardware["audio"]["backend"] == SOUNDDEVICE:
+        try:
+            unresolved = unresolved_audio(config.hardware)
+        except ProbeError as error:
+            # Not a device's fault but the listing's: said as such, and nothing can start.
+            findings.append(Finding(REFUSE, "preflight.audio_check_failed", str(error)))
+            return findings
+        for role, why in unresolved.items():
             findings.append(Finding(REFUSE, f"preflight.{role}_audio_missing", why))
     return findings
 

@@ -1159,6 +1159,11 @@ MAY_BE_EMPTY: dict[str, tuple[str, Callable[[Run], bool]]] = {
                               lambda run: not run.config.unresolved),
     "resumed_from_session_file": ("the run did not resume",
                                   lambda run: run.scenario.resumes is None),
+    # docs/LOG.md N7.F12e3: empty when the run is on hardware.yaml's own setup.
+    "hardware_changed": ("the run is on hardware.yaml's own setup",
+                         lambda run: not run.config.hardware.get("changed_at_launch")),
+    "garment_port": ("no sleeve port is configured",
+                     lambda run: run.config.hardware["garment"]["prototype"]["port"] is None),
     "sensitisation_start_iso": ("the run ended before session t=0",
                                 lambda run: not _logged(run, "sensitisation_started")
                                 and not _logged(run, "sensitisation_resumed")),

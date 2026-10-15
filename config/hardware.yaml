@@ -1,5 +1,21 @@
 # Ports, pressure limits, screens, audio and adjustment rates. SPEC.md 4, 10.3, 13, 14.1.
 
+# The screens, sound devices, port and remote below are the lab's: the Windows lab laptop. They
+# are the defaults of the hardware page that opens before the launcher (tatp/hardware_check.py,
+# docs/LOG.md N7.F12e1), where each can be changed for what is connected, and a session records
+# what it ran with. On another platform the lab's sound devices cannot exist, so the page takes
+# the system's default output in their place (tatp/devices.py).
+lab_platform: win32
+
+# The hardware page's live detection (docs/LOG.md N7.F12e2). Display rates, not study timings.
+devices:
+  poll_interval_s: 2.0               # screens, serial ports and the remote, read again
+  audio_poll_interval_s: 6.0         # sound devices, listed again in a child process
+  # A child process that has not listed them by then failed. The preflight waits for it on the
+  # GUI thread, so this is also the longest Check can freeze the launcher.
+  probe_timeout_s: 8.0
+  child_stop_timeout_s: 1.0          # the test-sound child given this long to end, then killed
+
 garment:
   driver: mock                       # mock | arduino_mosfet | arduino_valves
   port: null                         # serial port; unused by mock
@@ -86,6 +102,23 @@ responder:
   # The laptop's own keyboard is an ACPI device (HPQ8002). A second Logitech receiver plugged in
   # would match too.
   device_match: VID_046D&PID_C538
+  # What the participant responds with (docs/LOG.md N7.F12e4): `remote`, the R400 above, or,
+  # when it is missing, `keyboard` (the keys below) or `on_screen` (buttons on the participant
+  # window, for a mouse or trackpad). Chosen on the hardware page. The two alternatives are for a
+  # pilot code or a demonstration only: preflight refuses them for a study participant, whose
+  # responses must come from the device the study describes (tatp/preflight.py).
+  participant_input: remote
+  # `keyboard`: keys on every keyboard, a MacBook's included. The arrows are the large buttons,
+  # left and right where they sit; Return is ▶. The emergency stop is the full stop, the key
+  # the remote's own stop button sends, so the mapping mirrors the remote. Not Esc, which
+  # dismisses every dialog and would have made closing one an emergency stop (code review,
+  # docs/LOG.md N7.F12e4). Every keyboard counts (any_keyboard), except in a text field, a
+  # dialog, a list or a combo box, which use these keys themselves (tatp/ui/participant.py).
+  alternative_keys:
+    decrease: [left]
+    increase: [right]
+    confirm: [return, enter]
+    emergency_stop: [period]
   # WHAT IS PHYSICALLY PRINTED ON EACH BUTTON. A screen that draws a control draws the symbol
   # the participant's thumb is resting on, at its physical arrangement (UI_PRINCIPLES.md 5.9),
   # so relabelling the remote is a change here and nowhere else. This lives in hardware.yaml
@@ -126,6 +159,11 @@ screens:
   participant_screen_index: 1
   experimenter_screen_index: 0
   participant_fullscreen: true
+  # The participant window when it shares the experimenter's screen (a null index, chosen on
+  # the hardware page when there is one display: a MacBook, docs/LOG.md N7.F12e5). A window of
+  # this size, kept above the experimenter's and movable, so both can be seen and used at once.
+  # Three quarters of the 1280x800 every screen is laid out at. A display size, not a timing.
+  shared_participant_window_px: [960, 600]
   # How much larger each screen draws, by screen index, in place of the Windows setting
   # (docs/LOG.md N7.U10). 1920x1200 at 1.5 is 1280x800, the size every screen is laid out and
   # approved at, so the participant sees the approved screenshots enlarged. The laptop is 1.5
