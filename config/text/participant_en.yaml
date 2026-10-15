@@ -57,7 +57,7 @@ vas:
 # The VAS training's practice rating (SPEC.md 10.6), one key per trained scale: a scale with a
 # key here is trained, and every key must be a scale. Shown below the scale, which is drawn as
 # it is rated, once the experimenter has explained the anchors and proportionality aloud -- the
-# proportionality sentence itself is now the experimenter's (`vas_training_explain`, S's
+# proportionality sentence itself is now the experimenter's (`say.proportionality`, S's
 # lab-run list, 5 Oct 2026). Free placement, no target: a target would teach a position on the
 # line rather than a judgement of a sensation (docs/research/R35). The same words for every
 # scale, so nothing on it differs between the scales or the sessions.
@@ -67,6 +67,12 @@ training:
     practice is not a rating.
   intensity: *practice
   pleasantness: *practice
+
+# DRAFT (LOG N7.F11c3): written by the build, not ethics-sourced
+# Below the scale, where the practice line will be, while the experimenter explains the scale
+# aloud (`training` above is the second step). Without it the participant had a scale and no
+# way to tell that nothing was asked of them yet.
+training_listen: Listen to the experimenter.
 
 screens:
   # Approved 23 Aug 2026. Vocabulary follows Bilaga 3a, which describes the skin testing as
@@ -78,19 +84,32 @@ screens:
   # in experimenter_{sv,en}.yaml. The participant screen shows `standby` throughout.
   # Practical only. The participant has already read the information sheet, so the screen does
   # not re-explain the study -- it explains the buttons.
+  # DRAFT (LOG N7.F11c2): written by the build, not ethics-sourced. The line about the white
+  # circle is new (15 Oct 2026 pilot review): the warning cue precedes every stimulus and was
+  # never explained. It describes the cue as drawn, a filled near-white disc on the dark screen,
+  # and says only that it marks a start: not that something will be felt after it, because the
+  # estimation run cues its zero-pressure catch trials too, and a promised touch would prime
+  # reports on exactly the trials that measure false reports.
   welcome: |-
     Welcome.
     The two large buttons move the marker along the line.
     ▶ confirms your answer.
+    A white circle on the screen marks the start of each step.
     There are no right answers — mark what you feel. The experimenter does not see your answers.
 
     Press ▶ to begin.
   # The first screen of a session, up while the garment is fitted and before the welcome. S's
   # wording, 30 Sep 2026 (LOG N7.F3).
+  # (LOG N7.F11c11: the Swedish was reworded; this English is S's, unchanged.)
   session_starting: The session will start shortly.
+  # DRAFT (LOG N7.F11c8): written by the build, not ethics-sourced. Shown through every wait --
+  # the heat, the capsaicin, the gaps between blocks, the experimenter's decisions -- so it may
+  # not promise that anything starts "shortly", which by the second time is untrue. Nor that
+  # nothing is asked: the area mapping shows it while the participant says when the feeling
+  # changes, as the experimenter instructs aloud.
   standby: |-
-    Rest for a moment.
-    The next part starts shortly.
+    Rest for now.
+    The experimenter will tell you what comes next.
   session_end: |-
     That is the end of today's visit.
     Thank you.
@@ -119,6 +138,53 @@ screens:
     It works at any time.
 
     Press ▶ to continue.
+  # The task introductions (LOG N7.F11c1), the build's drafts of 15 Oct 2026 and not part of
+  # the 23 Aug 2026 approval above; each is marked DRAFT on its own key.
+  # One before each new kind of task in touch calibration and before the baseline ratings
+  # (15 Oct 2026 pilot review: seven tasks ran back to back with nothing saying the task had
+  # changed). The same in every session and condition. Nothing about how strong any touch will
+  # be: the estimation run's catch trials must stay unannounced.
+  # `intro_bracket` names the anchors in the order `touch_calibration.anchor_prompt_keys` asks
+  # for them, which a test holds it to.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_bracket: |-
+    Next you set how strong the touch is, with the two large buttons.
+    First until it is just noticeable, then until it is just uncomfortable.
+
+    Press ▶ to start.
+  # Not "a series of touches ... while you feel it": the run includes presentations with no
+  # pressure (catch trials), and saying each is a touch to be felt would prime a report of one,
+  # which is what `catch_felt_fraction` measures. The scale's own question and its "no sensation
+  # at all" anchor then let an empty period be rated as it is felt.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_estimation: |-
+    Next comes a series of short periods, one at a time.
+    Rate each one on the line.
+
+    Press ▶ to start.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_match: |-
+    Next, two touches take turns in two places on your arm.
+    Set the second so that it feels as strong as the first.
+
+    Press ▶ to start.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_compare: |-
+    Next you will feel two touches, one after the other, and choose which felt stronger.
+
+    Press ▶ to start.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_pleasant: |-
+    Next the touch moves along your arm.
+    Set it so that it feels as pleasant as possible.
+
+    Press ▶ to start.
+  # No count: `touch_block.baseline_scales` says how many.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_baseline: |-
+    Next, some questions about how you feel right now.
+
+    Press ▶ to start.
 
 participant_controls:
   # Named for the participant's own buttons, because `controls:` in the experimenter files is
@@ -154,6 +220,7 @@ choices:
     # SPEC.md 9 step 4. Approved 23 Aug 2026 as a text screen; what has gone since is only the
     # two lines the drawn buttons replace -- "Left button: the first. Right button: the second."
     # and "Press ▶ to confirm." The question is unchanged.
+    # (LOG N7.F11c11: the Swedish was reworded; this English is unchanged.)
     question: |-
       Two touches, one after the other.
       Which felt stronger?
@@ -179,10 +246,14 @@ audio_setup:
   #
   # `find_level`: S changed "until you can just hear it" to "until you can hear it easily" on
   # 5 Oct 2026, because "just" made it a threshold task.
+  # DRAFT (LOG N7.F11c6): written by the build, not ethics-sourced. The first line said a hiss
+  # could be heard, but the noise starts below audibility (`audio.white_noise_start_dbfs`), so
+  # the first presses changed nothing the participant could hear.
   find_level: |-
-    There is a quiet hiss in the headphones.
+    A hiss is playing in the headphones, too quietly to hear at first.
     Left button: quieter. Right button: louder.
     Turn it up until you can hear it easily, then press ▶.
+  # (LOG N7.F11c11: the Swedish was reworded; this English is unchanged.)
   # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. The question "Can you still
   # hear the garment?" was its own screen until 5 Oct 2026, which S found confusing; it is now
   # this screen's own instruction, and ▶ is the answer that the hiss covers it. A participant

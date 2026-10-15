@@ -21,6 +21,7 @@ from virtual_participant import EXAMPLES, Virtual, make_config, press
 
 from tatp import config as cfg
 from tatp import resume as resumption
+from tatp import session_runner
 from tatp.audio import AudioError
 from tatp.clock import Clock
 from tatp.pinprick import BrushTrial, F40Fit, LongProtocol, PinprickTrial, ladder, prior_for
@@ -191,6 +192,19 @@ def finished(app, loaded, tmp_path_factory):
     Only what it wrote: its windows are deleted when the first test using it ends
     (tests/conftest.py)."""
     runner = make_runner(loaded, tmp_path_factory.mktemp("full"))
+    # Every instruction the experimenter was shown, in order, for the tests of what they say.
+    runner.shown_instructions = []
+    # And what the countdown named as each was shown.
+    runner.shown_upcoming = []
+    real = runner.experimenter.set_instruction
+
+    def spy(text):
+        runner.shown_instructions.append(text)
+        upcoming = runner.session._upcoming
+        runner.shown_upcoming.append(None if upcoming is None else upcoming[1])
+        real(text)
+
+    runner.experimenter.set_instruction = spy
     Driver(runner.rig, runner).run()
     return runner
 
@@ -328,7 +342,7 @@ def test_a_touch_block_refuses_to_run_a_scale_never_trained(app, loaded, tmp_pat
     runner = make_runner(loaded, tmp_path)
     try:
         with pytest.raises(AssertionError, match="never trained"):
-            TouchBlock(runner.rig, runner.reference_channel)
+            TouchBlock(runner.rig, runner.reference_channel, 1)
     finally:
         runner.session.close()
 
@@ -342,6 +356,75 @@ def test_the_garment_is_off_for_the_rekindle_and_on_again_after(finished):
     assert off < on
     assert events[off]["phase"] == "rekindle"
     assert names.count("garment_activated") == 2, "at the intervention start and the rekindle"
+
+
+def _shown(finished, key, **values) -> int:
+    """Where the instruction `key` was first shown, in the order the session showed them."""
+    text = cfg.instruction(finished.session.config, key, **values)
+    return finished.shown_instructions.index(text)
+
+
+def test_the_rekindle_tells_the_experimenter_each_step(finished):
+    """15 Oct 2026 pilot review: the heat counted down, then the thermode removed with the
+    experimenter's go before the garment's touch starts again (LOG N7.F11b10)."""
+    heat = _shown(finished, "thermode_rekindle")
+    heating = _shown(finished, "rekindle_heating")
+    remove = _shown(finished, "rekindle_remove")
+    restart = finished.shown_instructions.index(
+        finished.experimenter.text["instructions"]["touch_start"], remove
+    )
+    assert heat < heating < remove < restart
+    events = _events(finished.session)
+    presses = [r for r in events if r["event"] == "proceed" and r["phase"] == "rekindle"]
+    assert len(presses) == 2, "the heat started, and the thermode removed"
+    reactivated = next(r for r in events if r["event"] == "garment_reactivated")
+    assert float(presses[-1]["t_session_s"]) <= float(reactivated["t_session_s"])
+
+
+def test_the_heat_and_the_capsaicin_say_what_is_on(finished):
+    assert _shown(finished, "thermode_start", minutes="0.5") < _shown(finished, "heat_on")
+    assert _shown(finished, "capsaicin_apply") < _shown(finished, "capsaicin_on")
+    assert _shown(finished, "capsaicin_on") < _shown(finished, "capsaicin_remove")
+
+
+def test_the_capsaicin_removal_is_logged_by_its_own_name(finished):
+    """The countdown during the capsaicin names its removal, not the phase after it, and the
+    log's scheduled step carries the same name (LOG N7.F11b17)."""
+    started = [r["detail"].split(";")[0] for r in _events(finished.session)
+               if r["event"] == "scheduled_step_started"]
+    assert "capsaicin_removal" in started and "post_sensitisation" not in started
+
+
+def test_each_block_says_what_it_is_before_it_starts(finished):
+    text = finished.experimenter.text
+    region = text["terms"]["regions"]["secondary"]
+    filament = finished.chosen_filament_label_g["post_sensitisation"]
+    n = finished.session.config.study1["pinprick"]["short_protocol_n_trials"]
+    for block in finished.session.schedule.blocks:
+        if block.type == "pinprick":
+            ready = cfg.instruction(finished.session.config, "ready_short",
+                                    n=n, filament=filament, region=region)
+            _shown(finished, "ready_pinprick_block", block=block.index, ready=ready)
+        else:
+            _shown(finished, "ready_touch_block", block=block.index)
+
+
+def test_the_first_pain_measure_is_introduced_once(finished):
+    """Before the pain scale's training, what the participant is told (LOG N7.F11b14)."""
+    config = finished.session.config
+    first = cfg.instruction(config, "ready_long_first")
+    assert finished.shown_instructions.count(first) >= 1
+    training = next(i for i, t in enumerate(finished.shown_instructions)
+                    if config.say["proportionality"]["pain"] in t)
+    assert finished.shown_instructions.index(first) < training
+    later = finished.shown_instructions[training:]
+    assert first not in later, "the later long protocols have the ordinary ready line"
+
+
+def test_the_gap_after_a_rating_does_not_leave_the_last_application_up(finished):
+    """LOG N7.F11b8: during the interval the instruction says to wait."""
+    between = finished.experimenter.text["instructions"]["between_applications"]
+    assert between in finished.shown_instructions
 
 
 def test_the_noise_stops_for_each_mapping_and_resumes(finished):
@@ -370,6 +453,22 @@ def test_every_scheduled_step_is_alerted_and_every_alert_logged(finished):
     for what in ("block 1", "block 2", "block 3", "block 4", "rekindle", "intervention"):
         assert sum(alert.startswith(what + " ") for alert in alerts) == 1, what
     assert "block 1 overdue" in alerts
+
+
+def test_the_rekindle_heat_end_is_alerted_and_the_next_block_is_not_delayed(finished):
+    """Spec-review of N7.F11b10: the touch restarts on the removal press, so the heat's end is
+    alerted like a scheduled step, and the next block's alerts are armed while the removal is
+    awaited -- the block's alert sounds at its time, never twice."""
+    events = _events(finished.session)
+    alerts = [(i, r["detail"]) for i, r in enumerate(events)
+              if r["event"] == "experimenter_alert"]
+    assert any(detail.startswith("rekindle_end ") for _, detail in alerts)
+    removed = next(i for i, r in enumerate(events) if r["event"] == "rekindle_thermode_removed")
+    after = finished.stages[[s.id for s in finished.stages].index("rekindle") + 1]
+    name = f"block {after.upcoming.block.index}"
+    theirs = [(i, detail) for i, detail in alerts if detail.startswith(name + " ")]
+    assert len(theirs) == 1, "once, not again when the block's own stage sets its alarms"
+    assert theirs[0][0] < removed, "sounded while the removal was awaited"
 
 
 def test_an_alert_sounds_ahead_of_a_step_that_is_not_yet_due(app, loaded, tmp_path):
@@ -586,6 +685,41 @@ def test_a_resume_during_the_rekindle_never_prompts_the_heat_again(app, loaded, 
     assert not early, "the garment stays off until the rekindle is over"
     runner.cancel()
     runner.session.close()
+
+
+def test_a_resume_after_the_thermode_came_off_only_restarts_the_touch(app, loaded, tmp_path):
+    """Code review of N7.F11b10: the removal was pressed before the crash, so neither the heat
+    nor the removal is asked for again; the heat-resume logic of N7.D14 is not reached."""
+    crashed = _crash_after(app, loaded, tmp_path, "", event="rekindle_thermode_removed")
+    runner = _resumed(loaded, tmp_path, crashed)
+    assert runner.resume.rekindle_thermode_removed
+    shown = []
+    real = runner.experimenter.set_instruction
+    runner.experimenter.set_instruction = lambda text: (shown.append(text), real(text))
+    Driver(runner.rig, runner, stop_when=lambda: "garment_activated" in [
+        r["event"] for r in _events(runner.session)
+    ]).run()
+    names = [r["event"] for r in _events(runner.session)]
+    assert "rekindle_resumed" in names
+    assert "rekindle_heat_confirmed" not in names, "the heat is not asked about"
+    assert "rekindle_thermode_removed" not in names, "nor the removal"
+    config = runner.session.config
+    for key in ("rekindle_resumed", "rekindle_remove", "thermode_rekindle"):
+        assert cfg.instruction(config, key) not in shown
+    runner.cancel()
+    runner.session.close()
+
+
+def test_once_the_heat_has_ended_the_countdown_moves_on(finished):
+    """Code review of N7.F11b10: while the thermode is waited for, the heat's end does not go
+    due and overdue in the alarm colours; the countdown is the next block's."""
+    config = finished.session.config
+    heating = finished.shown_instructions.index(cfg.instruction(config, "rekindle_heating"))
+    remove = finished.shown_instructions.index(cfg.instruction(config, "rekindle_remove"))
+    assert finished.shown_upcoming[heating] == "rekindle_end"
+    assert finished.shown_upcoming[remove] == "block"
+    events = [r["event"] for r in _events(finished.session)]
+    assert events.index("rekindle_thermode_removed") < events.index("garment_reactivated")
 
 
 def test_a_chain_that_resumes_from_itself_is_refused(tmp_path):
@@ -856,7 +990,7 @@ def test_with_the_fit_preview_on_an_f40_is_rerun_once_then_accepted(app, loaded,
     assert rows[0]["rerun_reason"] == "the driver re-runs once"
     f40_fits = [fit for fit in shown if isinstance(fit, F40Fit)]
     assert len(f40_fits) == 2, "the preview is shown for each run"
-    review = loaded.experimenter_text["instructions"]["f40_fit_review"]
+    review = cfg.instruction(runner.session.config, "f40_fit_review")
     said = [text for text, fit in zip(instructions, shown, strict=True)
             if isinstance(fit, F40Fit)]
     assert said == [review, review], "the decision due is said, not the last trial's"
@@ -976,3 +1110,180 @@ def test_the_touch_start_looks_the_same_to_the_experimenter_in_every_condition(
     for sequence in sequences:
         moved_s = sequence[-1][1] - sequence[0][1]
         assert display_s - EARLY_S <= moved_s < display_s + TIMING_TOLERANCE_S
+
+
+# -- around and between the tasks (15 Oct 2026 pilot review, LOG N7.F11c) --------------------
+
+
+def _confirmed_screens(session) -> list[str]:
+    return [r["detail"] for r in _events(session) if r["event"] == "message_confirmed"]
+
+
+def test_each_new_kind_of_task_is_introduced_and_confirmed(finished):
+    """Touch calibration ran seven tasks back to back with nothing saying the task had
+    changed (N7.F11c1). Each is now introduced, and the participant's ▶ starts it."""
+    intros = [s for s in _confirmed_screens(finished.session) if s.startswith("intro_")]
+    assert intros == [
+        "intro_bracket", "intro_estimation", "intro_match", "intro_compare", "intro_pleasant",
+        "intro_baseline",
+    ]
+
+
+def test_consecutive_ratings_are_separated_by_the_gap(finished):
+    """The next scale never replaces the last at once (UI_PRINCIPLES.md 1.10, N7.F11c7).
+    Timed in the blocks; the baseline's ratings come before t=0, with no session time, and
+    wait the same way."""
+    gap_s = float(finished.session.config.study1["touch_block"]["gap_s"])
+    confirmed_s = None
+    gaps = []
+    for row in _events(finished.session):
+        if not row["t_session_s"]:
+            continue
+        if row["event"] == "rating_confirmed":
+            confirmed_s = float(row["t_session_s"])
+        elif row["event"] == "rating_cued" and confirmed_s is not None:
+            gaps.append(float(row["t_session_s"]) - confirmed_s)
+            confirmed_s = None
+        elif row["event"] in ("stage_completed", "block_ended"):
+            confirmed_s = None
+    assert gaps, "a block or the baseline rates more than once"
+    assert min(gaps) >= gap_s * 0.95
+
+
+def test_the_intervention_end_waits_for_the_experimenter(finished):
+    """The experimenter tells the participant before the measures begin again (N7.F11c10)."""
+    events = [(r["event"], r["detail"]) for r in _events(finished.session)]
+    ended = events.index(("garment_deactivated", "the intervention has ended"))
+    done = events.index(("stage_completed", "intervention.end"))
+    assert ("proceed", "SessionRunner") in events[ended:done]
+
+
+def test_the_session_ends_on_the_experimenters_last_next_step(app, loaded, tmp_path,
+                                                              monkeypatch):
+    """Both windows vanished the moment the files closed, and nobody saw that the data were
+    saved (N7.F11c9). Now the files close, the screens say so, and Next step ends it."""
+    runner = make_runner(loaded, tmp_path)
+    quits = []
+
+    class Application:
+        @staticmethod
+        def instance():
+            return Application
+
+        @staticmethod
+        def quit():
+            quits.append(1)
+
+    monkeypatch.setattr(session_runner, "QApplication", Application)
+    Driver(runner.rig, runner).run()
+    session, participant = runner.session, runner.rig.participant
+    assert runner.completed and session.closed and not quits
+    assert participant.message.text == participant.text["screens"]["session_end"]
+    assert runner.experimenter.instruction.text() == (
+        cfg.instruction(session.config, "session_complete")
+    )
+    window = runner.experimenter
+    assert not window.garment_button.isEnabled() and not window.pause_button.isEnabled()
+    assert window.garment_button.isHidden() and window.pause_button.isHidden()
+    assert window.proceed_button.isEnabled()
+    rows = len(_events(session))
+    # Nothing is running to stop, and the files take no more rows.
+    participant.emergency_stop.emit()
+    runner.experimenter.pause_requested.emit()
+    assert len(_events(session)) == rows
+    assert participant.message.text == participant.text["screens"]["session_end"]
+    # At once: the second half of a double press on the Next step before. Ignored.
+    runner.experimenter.proceed_requested.emit()
+    assert not quits
+    lockout_s = loaded.study1["session_end"]["quit_lockout_s"]
+    now_s = session.clock.real_elapsed_s()
+    monkeypatch.setattr(session.clock, "real_elapsed_s", lambda: now_s + lockout_s)
+    runner.experimenter.proceed_requested.emit()
+    assert quits == [1]
+
+
+def test_a_resume_after_the_intervention_has_ended_does_not_start_the_touch(app, loaded,
+                                                                             tmp_path):
+    """A crash while the experimenter is telling the participant the touch has finished: the
+    resume waits for them again, and the garment is not started in between (N7.F11c10)."""
+    crashed = _crash_after(app, loaded, tmp_path, "the intervention has ended",
+                           event="garment_deactivated")
+    runner = _resumed(loaded, tmp_path, crashed)
+    assert runner.resume.in_progress == "intervention.end"
+    Driver(runner.rig, runner, stop_when=lambda: any(
+        r["event"] == "stage_completed" and r["detail"] == "intervention.end"
+        for r in _events(runner.session)
+    )).run()
+    names = [r["event"] for r in _events(runner.session)]
+    assert "garment_activated" not in names
+    assert "proceed" in names[names.index("garment_deactivated"):]
+    runner.cancel()
+    runner.session.close()
+
+
+def _pending_delivery_runner(loaded, tmp_path, condition):
+    """A runner in the intervention with every scale trained and a delivery for each
+    condition, ready for `_deliver`."""
+    runner = make_runner(loaded, tmp_path, condition=condition)
+    session = runner.session
+    session.start_sensitisation()
+    session.set_phase("intervention")
+    session.vas_trained.update(session.trained_scales)
+    levels = {channel: 30.0 for channel in session.garment.channels()}
+    runner.deliveries = {
+        name: Delivery("sweep_03cms", levels)
+        for name in loaded.study1["design"]["conditions"]
+    }
+    return runner
+
+
+@pytest.mark.parametrize("condition", ["participant_preferred", "ct_targeted"])
+def test_a_resume_while_a_delivery_is_starting_never_leaves_the_paused_screen_up(
+        app, loaded, tmp_path, monkeypatch, condition):
+    """A pause while a block waits for its go and the touch is still starting: the resume
+    starts the delivery again, ramping, which shows nothing of its own -- so the block's wait
+    puts standby up rather than leave the paused screen (N7.F11c8). Every delivery is held
+    before its cue, so the ramping state is the one tested, whatever the timers do."""
+    monkeypatch.setattr(session_runner._QuietDeliveryStart, "cue_then",
+                        lambda _delivery, _then: None)
+    runner = _pending_delivery_runner(loaded, tmp_path, condition)
+    session, window = runner.session, runner.rig.participant
+    interruptions = runner.rig.interruptions
+    runner._deliver(lambda: None)
+    runner.run_child(lambda: TouchBlock(runner.rig, runner.reference_channel, 1),
+                     lambda _: None)
+    interruptions.pause()
+    paused = loaded.participant_text["screens"]["paused"]
+    assert window.message.text == paused
+    interruptions.resume()
+    deadline = time.monotonic() + RUN_TIMEOUT_S
+    while interruptions.active is not None:
+        assert time.monotonic() < deadline, "the resume never finished"
+        QApplication.processEvents()
+        time.sleep(0.0005)
+    assert runner._delivery is not None and not runner._delivery.cueing
+    assert window.stack.currentWidget() is window.message
+    assert window.message.text == loaded.participant_text["screens"]["standby"]
+    runner.cancel()
+    session.close()
+
+
+def test_a_self_start_prompt_stays_up_while_a_block_waits_for_its_go(app, loaded, tmp_path):
+    """A block arriving before the self-start press took the prompt down (N7.F11c8): its wait
+    for the go now shows what the runner shows between steps, and after the press, standby."""
+    runner = _pending_delivery_runner(loaded, tmp_path, "participant_preferred")
+    session, window = runner.session, runner.rig.participant
+    self_start = loaded.participant_text["screens"]["self_start"]
+    runner._deliver(lambda: None)
+    deadline = time.monotonic() + RUN_TIMEOUT_S
+    while window.message.text != self_start:
+        assert time.monotonic() < deadline, "the self-start prompt never came up"
+        QApplication.processEvents()
+        time.sleep(0.0005)
+    runner.run_child(lambda: TouchBlock(runner.rig, runner.reference_channel, 1),
+                     lambda _: None)
+    assert window.message.text == self_start
+    press(window, "f5")
+    assert window.message.text == loaded.participant_text["screens"]["standby"]
+    runner.cancel()
+    session.close()

@@ -211,6 +211,28 @@ def test_a_failing_fit_is_put_to_the_experimenter_and_a_rerun_keeps_the_first(ri
     assert _events(session, "touchcal_stage1_rerun")
 
 
+def test_a_rerun_takes_down_the_warning_about_the_run_it_discards(rig):
+    """Code review of N7.F11b16: the first run's felt catch trials were still warned under the
+    second run's decision. Flat at 50 % on the first run, so its catch trials are felt too."""
+    window = rig.experimenter
+    warning_at_decision = []
+
+    def decide(trial):
+        warning_at_decision.append(window._warning_text)
+        return ("rerun", ("flat",)) if len(warning_at_decision) == 1 else ("accept", ())
+
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    virtual.decide = decide
+    virtual.before_step = lambda trial: (
+        _flat(rig)(trial) if procedure.run_index == 1 else None
+    )
+    virtual.run()
+    felt = window.text["warnings"]["catch_trials_felt"].split("(")[0]
+    assert felt in warning_at_decision[0]
+    assert felt not in window._warning_text, "the second run's catch trials were not felt"
+
+
 def test_an_estimate_that_cannot_be_inverted_cannot_be_accepted(rig):
     session = rig.session
     procedure = touchcal.TouchCalibration(rig)
@@ -258,13 +280,14 @@ def test_the_touch_preview_is_open_for_the_choice_and_closed_after(app, loaded, 
         seen = []
         virtual = Virtual(rig, procedure)
         virtual.decide = lambda trial: seen.append(
-            (window.fit_preview.isVisible(), window.fit_accept_button.isEnabled())
+            (window.fit_preview.isVisible(), not window.fit_accept_button.isHidden())
         ) or ("accept", ())
         virtual.run()
         assert seen and seen[0] == (True, True)
         assert not window.fit_preview.isVisible()
         assert window.fit_preview.plot.points == ()
-        assert not window.fit_accept_button.isEnabled()
+        # Hidden, not only disabled, once decided (15 Oct 2026 pilot review).
+        assert window.fit_accept_button.isHidden()
     finally:
         rig.session.close()
 
@@ -296,6 +319,14 @@ def test_felt_catch_trials_are_flagged(rig):
 def test_a_channel_winning_every_comparison_is_readjusted_then_accepted(rig):
     """docs/research/R33: an order-free winner in both pairs prompts one re-adjustment."""
     session = rig.session
+    shown = []
+    real = rig.experimenter.set_instruction
+
+    def spy(text):
+        shown.append(text)
+        real(text)
+
+    rig.experimenter.set_instruction = spy
 
     def choose(key, trial):
         if key != touchcal.COMPARISON_CHOICE:
@@ -320,6 +351,14 @@ def test_a_channel_winning_every_comparison_is_readjusted_then_accepted(rig):
     ]
     assert len(matches) == 4, "both start points again on re-adjustment"
     assert _events(session, "equalisation_mismatch")
+    # The re-adjustment is step 4's, and says so, rather than showing step 3 again
+    # (LOG N7.F11b6).
+    instructions = rig.experimenter.text["instructions"]
+    readjust = instructions["touchcal_readjust"].format(channel=1)
+    assert shown.count(readjust) == 1
+    assert shown.index(readjust) > shown.index(
+        instructions["touchcal_equalise"].format(channel=1, index=1, count=4)
+    )
 
 
 def test_a_mismatch_that_survives_readjustment_is_logged_and_the_session_goes_on(rig):
@@ -354,8 +393,12 @@ def test_uneven_offers_a_rebalance_which_reruns_steps_3_and_4(rig):
     def choose(key, trial):
         return next(answers) if key == touchcal.EVENNESS_CHOICE else "left"
 
+    participant = rig.participant
+    screens = []
+
     def decide(trial):
         decisions.append(trial.instruction)
+        screens.append(participant.message.text)
         return "rebalance", ()
 
     _calibrate(rig, choose=choose, decide=decide)
@@ -363,9 +406,52 @@ def test_uneven_offers_a_rebalance_which_reruns_steps_3_and_4(rig):
     assert [row["judgement"] for row in checks] == ["uneven", "even"]
     assert checks[0]["rebalance_offered"] == "true"
     assert decisions == ["touchcal_uneven"]
+    # Not a blank while the experimenter decides (LOG N7.F11c4).
+    assert screens == [participant.text["screens"]["standby"]]
     stages = [row["stage"] for row in _rows(session, "touchcal_adjust")]
     assert stages.count("channel_match") == 16
     assert stages.count("pleasantness") == 2, "the reference-scale level stands"
+    # Steps 3 and 4 introduced again when the rebalance returns to them (LOG N7.F11c1).
+    intros = [row["detail"] for row in _events(session, "message_confirmed")]
+    assert intros == [
+        "intro_bracket", "intro_estimation", "intro_match", "intro_compare", "intro_pleasant",
+        "intro_match", "intro_compare",
+    ]
+
+
+def test_step_1_asks_for_the_anchors_in_the_order_its_introduction_names_them(loaded):
+    """`screens.intro_bracket` says "first just noticeable, then just uncomfortable" in
+    words; reorder the anchors and that sentence must change with them (LOG N7.F11c1)."""
+    plans = touchcal.anchor_plans(loaded)
+    keys = list(dict.fromkeys(plan.target_key for plan in plans))
+    assert keys == ["just_noticeable", "just_uncomfortable"]
+    for language in ("sv", "en"):
+        text = cfg.load(language, language).participant_text
+        intro = text["screens"]["intro_bracket"]
+        names = [text["vas"]["intensity"]["anchors"][i]["label"] for i in (1, 2)]
+        assert 0 <= intro.index(names[0]) < intro.index(names[1]), language
+
+
+def test_the_match_shows_which_of_its_two_touches_is_playing(rig):
+    """Reference and test take turns; the screen names them and marks the one on (N7.F11c5)."""
+    participant, garment = rig.participant, rig.session.garment
+    seen = set()
+
+    def watch(trial):
+        if isinstance(trial, touchcal.MatchAdjustment):
+            control = participant.control
+            assert control.pair == (participant.text["choices"]["comparison"]["left"],
+                                    participant.text["choices"]["comparison"]["right"])
+            on = garment.status()["channels_on"]
+            expected = (0 if trial.plan.reference_channel in on
+                        else 1 if trial.plan.channel in on else None)
+            assert control.playing == expected
+            seen.add(expected)
+        elif isinstance(trial, touchcal.Adjustment):
+            assert participant.control.pair is None, "only the match names two touches"
+
+    _calibrate(rig, before_step=watch)
+    assert 0 in seen
 
 
 # -- interruptions ----------------------------------------------------------------------

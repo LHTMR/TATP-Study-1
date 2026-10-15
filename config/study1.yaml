@@ -275,6 +275,18 @@ touch_block:
   # Table 2's baseline relaxation and alertness, asked once at the end of touch calibration
   # with the garment off. Baseline intensity and pleasantness are the calibration itself.
   baseline_scales: [relaxation, alertness]
+  # The blank between one rating and the next, in a block and in the baseline: presentation,
+  # not a protocol interval. Without it the next scale replaced the last at once, and a
+  # participant could take it for their ▶ not having registered (UI_PRINCIPLES.md 1.10, which
+  # starts it at 0.5 s; pilot-tunable; docs/LOG.md N7.F11c7).
+  gap_s: 0.5
+
+session_end:
+  # Real seconds after "Session complete" appears during which Next step does not close the
+  # program: the Next step that closes a session with mapping distances missing is the one
+  # before it, and a double press would otherwise skip the screen saying the data are saved
+  # (docs/LOG.md N7.F11c9). Real time, because it is about the experimenter's hand.
+  quit_lockout_s: 1.0
 
 training:
   # SPEC.md 10.9. The pressure the stop rehearsal runs the fixed pattern at -- its own value,

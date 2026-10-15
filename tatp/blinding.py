@@ -9,9 +9,11 @@ labels; it cannot catch "this should help with the pain", which contains none of
 breaks SPEC.md 16 completely. `config/blinding.yaml` says so at more length. The wording review
 is what catches framing.
 
-The experimenter files are checked for condition labels only, for the other half of SPEC.md 16
+The experimenter files are checked for condition labels, for the other half of SPEC.md 16
 -- the experimenter is blind to condition too, and the label must not reach their screen either.
-They are not checked for the study name, which they may legitimately use.
+They are not checked for the study name, which they may legitimately use -- except their `say`
+section, which is every sentence the experimenter says aloud to the participant
+(LOG N7.F11b19), so it is held to the participant's list as well.
 
 One implementation, called by `tests/test_blinding_text.py` and by `tools/validate_session.py`,
 because SPEC.md 17.3 requires the validator's check to be the same code as the test's rather
@@ -28,6 +30,8 @@ import yaml
 from tatp.config import CONFIG_DIR
 
 TEXT_DIR = CONFIG_DIR / "text"
+# The experimenter text's section of sentences said aloud to the participant.
+SAY_SECTION = "say"
 
 
 def _load(path: Path):
@@ -62,12 +66,15 @@ def strings(node, trail: str = "") -> Iterator[tuple[str, str]]:
         yield trail, node
 
 
-def hits(path: Path, terms: list[str]) -> list[str]:
-    """Each occurrence of any of `terms` in the text file at `path`, as a readable line."""
+def hits(path: Path, terms: list[str], section: str | None = None) -> list[str]:
+    """Each occurrence of any of `terms` in the text file at `path`, as a readable line;
+    with `section`, only in that top-level section of it."""
     lowered = [term.lower() for term in terms]
+    data = _load(path)
+    node = data if section is None else {section: data.get(section, {})}
     return [
         f"{path.name}:{trail}: {term!r} in {value!r}"
-        for trail, value in strings(_load(path))
+        for trail, value in strings(node)
         for term in lowered
         if term in value.lower()
     ]
@@ -85,6 +92,8 @@ def violations(text_dir: Path = TEXT_DIR) -> list[str]:
     found = []
     for path in participant:
         found += hits(path, terms)
+    for path in experimenter:
+        found += hits(path, terms, SAY_SECTION)
     for path in participant + experimenter:
         found += hits(path, labels)
     return found

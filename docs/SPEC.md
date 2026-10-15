@@ -750,8 +750,8 @@ pairing of an invigoration word with a wakefulness word and is the natural Swedi
 
 **VAS training — proportionality** (Price et al. 1983), given once per scale at first use.
 Since S's lab-run list (5 Oct 2026) **the sentence is the experimenter's to say aloud**, shown on
-the experimenter screen (`vas_training_explain` in the experimenter text, both languages), not
-on the participant's. The participant then makes a **practice rating** — free placement, moved
+the experimenter screen (`say.proportionality` in the experimenter text, both languages, shown
+in the participant's language because it is said to them), not on the participant's. The participant then makes a **practice rating** — free placement, moved
 and confirmed as a real rating — which is logged as `vas_practice_rating` and never written to
 a ratings table (docs/research/R35, DATA_SCHEMA.md `log`).
 

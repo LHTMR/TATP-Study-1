@@ -45,6 +45,8 @@ STAGE_COMPLETED = "stage_completed"
 STAGE_STARTED = "stage_started"
 SCHEDULED_STEP_STARTED = "scheduled_step_started"
 REKINDLE = "rekindle"
+# The experimenter's Next step once the rekindle's thermode is off (docs/DATA_SCHEMA.md).
+REKINDLE_THERMODE_REMOVED = "rekindle_thermode_removed"
 SENSITISATION_STARTED = "sensitisation_started"
 MAPPING_PATH_STARTED = "mapping_path_started"
 PATH_MARKER = ", path "
@@ -139,6 +141,8 @@ class ResumeState:
     in_progress: str | None = None
     # Session time the rekindle's heat was launched, if it was (LOG N7.D14).
     rekindle_heat_t_s: float | None = None
+    # Whether the experimenter had said the rekindle's thermode was off (LOG N7.F11b10).
+    rekindle_thermode_removed: bool = False
     current_file: str = ""
     # The scales whose VAS training the participant had already confirmed (SPEC.md 10.6).
     vas_trained: frozenset[str] = frozenset()
@@ -173,6 +177,9 @@ def load(open_session: OpenSession, config, per_channel_pressure: bool) -> Resum
         completed_stages=frozenset(open_session.completed_stages),
         in_progress=_in_progress(chain),
         rekindle_heat_t_s=_rekindle_heat(chain),
+        rekindle_thermode_removed=any(
+            row["event"] == REKINDLE_THERMODE_REMOVED for row in _rows(chain, "log")
+        ),
         current_file=latest_file_name(chain),
         masking=None if setup is None else (
             float(setup["white_noise_level_dbfs"]),

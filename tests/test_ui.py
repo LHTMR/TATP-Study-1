@@ -11,8 +11,8 @@ from __future__ import annotations
 import time
 
 import pytest
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtGui import QFontInfo, QFontMetrics, QKeyEvent
 from PySide6.QtWidgets import QApplication, QLabel
 
 from tatp import config as cfg
@@ -21,6 +21,7 @@ from tatp.clock import Clock
 from tatp.responder import Action, Responder, ResponderError
 from tatp.session import Session
 from tatp.ui import experimenter as experimenter_ui
+from tatp.ui import widgets
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 from tatp.ui.vas import QT_KEYS
@@ -29,6 +30,9 @@ EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 SPIN_TIMEOUT_S = 5.0
 LAPTOP_WIDTH_PX = screenshots.LAPTOP_WIDTH_PX
 LAPTOP_HEIGHT_PX = screenshots.LAPTOP_HEIGHT_PX
+# The share of a banner's width a headline may take, leaving room for a machine that renders
+# the same font a little wider.
+BANNER_WIDTH_MARGIN = 0.95
 
 
 @pytest.fixture(scope="module")
@@ -559,6 +563,7 @@ def test_the_reduced_capability_banner_names_the_garment_in_words(app, session):
     assert window.reduced_capability_banner.isVisibleTo(window)
     name = text["terms"]["garments"][session.config.hardware["garment"]["driver"]]
     assert name in window.reduced_capability_banner.text()
+    assert name in window.reduced_capability_banner.toolTip()
     assert session.garment.driver_name not in window.reduced_capability_banner.text()
 
 
@@ -587,9 +592,11 @@ def test_the_window_fits_the_lab_laptop(app, language, banners):
 
 def test_no_banner_leaves_no_empty_band(app, session):
     """A laptop screen has no quarter to spare for banners that are not there (S's lab
-    review, 24 Sep 2026)."""
+    review, 24 Sep 2026). The open-items line is in the banner region since the 15 Oct 2026
+    pilot review, so none are open here either."""
     view = {**session.experimenter_view(), "placeholder_text": False,
-            "reduced_capability_device": False, "fit_preview_enabled": False, "demo": False}
+            "reduced_capability_device": False, "fit_preview_enabled": False, "demo": False,
+            "unresolved_open_items": []}
     window = ExperimenterWindow(session.config.experimenter_text, lambda: view)
     assert not window.banner_area.isVisibleTo(window)
 
@@ -612,10 +619,16 @@ def test_the_session_identity_and_phase_are_shown(experimenter, session):
 
 
 def test_the_unresolved_open_items_are_on_the_screen(experimenter, session):
+    """By number on one line, cut with an ellipsis when they do not all fit (since the 15 Oct
+    2026 pilot review); every one is in the tooltip."""
     window, held = experimenter
     assert window.open_items.isVisibleTo(window)
+    shown = window.open_items.text()
+    numbers = [item.number for item in session.config.unresolved]
+    assert numbers[0] in shown
+    assert all(number in shown for number in numbers) or shown.endswith("…")
     for item in session.config.unresolved:
-        assert item.number in window.open_items.text()
+        assert str(item) in window.open_items.toolTip()
     held["override"] = {"unresolved_open_items": []}
     window.refresh()
     assert not window.open_items.isVisibleTo(window)
@@ -690,25 +703,38 @@ def test_every_action_signal_has_a_control_that_emits_it(drawn):
         assert seen == [()], f"{widget.text()} did not emit"
 
 
-def test_resume_is_enabled_only_while_interrupted(drawn):
-    """Interruptions.resume raises when nothing is interrupted, so the button must not offer."""
+def _offered(window, widget) -> bool:
+    """Shown and pressable. A control not offered is hidden in a place kept for it, and
+    disabled too (S, 15 Oct 2026 pilot review), so a test of only one would miss half."""
+    return widget.isVisibleTo(window) and widget.isEnabled()
+
+
+def test_resume_is_offered_only_while_interrupted(drawn):
+    """Interruptions.resume raises when nothing is interrupted, so the button must not offer.
+    Was "enabled only": since the 15 Oct 2026 pilot review a control not offered is hidden,
+    and Pause and Resume each keep a slot of their own."""
     window, held = drawn
-    assert not window.resume_button.isEnabled()
-    assert window.pause_button.isEnabled()
+    assert not _offered(window, window.resume_button)
+    assert _offered(window, window.pause_button)
     for kind in ("emergency_stop", "pause"):
         held["view"] = _all_keys(interruption=kind)
         window.refresh()
-        assert window.resume_button.isEnabled()
-        assert not window.pause_button.isEnabled()
+        assert _offered(window, window.resume_button)
+        assert not window.pause_button.isVisibleTo(window)
+        # Next step stays in sight, greyed, while interrupted (LOG N7.U10a).
+        assert window.proceed_button.isVisibleTo(window)
         assert not window.proceed_button.isEnabled()
-        assert window.abort_button.isEnabled()
+        assert _offered(window, window.abort_button)
         seen = _emitted(window.resume_requested)
         window.resume_button.click()
         assert seen == [()]
-        assert window.alert.text() == window.text["status"][f"interrupted_{kind}"]
+        assert window.alert.text() == window.text["status"][f"interrupted_{kind}"].format(
+            controls=window.text["controls"]
+        )
     held["view"] = _all_keys()
     window.refresh()
-    assert not window.resume_button.isEnabled()
+    assert not window.resume_button.isVisibleTo(window)
+    assert _offered(window, window.proceed_button)
     assert window.alert.text() == ""
 
 
@@ -723,6 +749,153 @@ def test_the_interruption_line_fits_its_reserved_height(app, language):
         assert window.alert.heightForWidth(window.alert.width()) <= window.alert.height(), (
             f"status.interrupted_{kind} wraps past the reserved line in {language}"
         )
+
+
+class _Filled(dict):
+    """A value for every field an instruction has: two digits, where none is given."""
+
+    def __missing__(self, key):
+        return "00"
+
+
+LANGUAGE_PAIRS = [("sv", "sv"), ("en", "en"), ("sv", "en"), ("en", "sv")]
+
+
+def _instructions_to_show(config) -> dict[str, str]:
+    """Every instruction as `config.instruction` leaves it for the step to fill, the mapping
+    script with the first path's line as the screen shows them together."""
+    keys = [key for key in config.experimenter_text["instructions"]
+            if key not in ("monofilament", "mapping_script")]
+    shown = {key: cfg.instruction_template(config, key) for key in keys}
+    script = cfg.instruction_template(config, "mapping_script")
+    shown["mapping_ready"] = f"{script}\n\n{shown['mapping_ready']}"
+    return shown
+
+
+@pytest.mark.parametrize("participant, experimenter", LANGUAGE_PAIRS)
+def test_every_instruction_fits_its_region(app, participant, experimenter):
+    """Each instruction, filled with its longest values, fits the instruction region at some
+    size of the scale rather than running off its bottom (LOG N7.F11b). The sentences said
+    aloud are in the participant's language, so a Swedish one inside an English instruction
+    is measured too."""
+    config = cfg.load(participant, experimenter)
+    text = config.experimenter_text
+    terms = text["terms"]
+    window = ExperimenterWindow(text, lambda: _all_keys())
+    window.resize(1280, 800)
+    window.show()
+    longest_anchors = max(
+        (scale["anchors"] for scale in config.participant_text["vas"].values()), key=len
+    )
+    values = _Filled(
+        anchors=" / ".join(a["label"] for a in longest_anchors),
+        explanation=max(config.say["proportionality"].values(), key=len),
+        region=max(terms["regions"].values(), key=len),
+        path=max(terms["mapping_paths"].values(), key=len),
+        value=", ".join(terms["stage1"].values()),
+        filament="1.4",
+        ready=cfg.instruction_template(config, "ready_short"),
+    )
+    for key, template in _instructions_to_show(config).items():
+        window.set_instruction(template.format_map(values))
+        label = window.instruction
+        assert label.heightForWidth(window._left_width()) <= label.height(), (
+            f"instructions.{key} runs past its region ({participant} participant, "
+            f"{experimenter} experimenter)"
+        )
+
+
+@pytest.mark.parametrize("participant, experimenter", LANGUAGE_PAIRS)
+def test_every_instruction_names_buttons_by_their_labels(participant, experimenter):
+    """Code review of N7.F11b: an instruction names a button only through {controls[...]},
+    so renaming a control cannot leave a dangling name; and every instruction formats."""
+    config = cfg.load(participant, experimenter)
+    text = config.experimenter_text
+    labels = [label for label in text["controls"].values() if "{" not in label]
+    for key, raw in text["instructions"].items():
+        for label in labels:
+            assert label not in raw, f"instructions.{key} types the button {label!r}"
+        filled = cfg.instruction_template(config, key).format_map(_Filled())
+        assert "{" not in filled and "}" not in filled, f"instructions.{key}: {filled!r}"
+    for kind in ("emergency_stop", "pause"):
+        # The one button these name; "Paused" holds the word Pause, which is no button name.
+        assert text["controls"]["resume"] not in text["status"][f"interrupted_{kind}"]
+
+
+def test_a_warning_outlives_the_routine_status_and_one_stage_start(drawn):
+    """15 Oct 2026 pilot review: a warning set as the status was replaced by the next
+    "Waiting for..." within seconds. Several are raised as a stage ends, so one survives the
+    next stage's start and goes at the one after."""
+    window, _ = drawn
+    text = window.text
+    warning = text["warnings"]["substitution_unknown"].format(filament="2")
+    window.set_warning(warning)
+    window.set_status(text["instructions"]["await_participant"])
+    shown = window.status.text()
+    assert warning in shown and text["instructions"]["await_participant"] in shown
+    window.set_status(text["instructions"]["response_received"])
+    assert warning in window.status.text()
+    window.new_stage()
+    assert warning in window.status.text()
+    window.new_stage()
+    assert warning not in window.status.text()
+    assert window.status.text() == text["instructions"]["response_received"]
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_every_warning_the_status_region_carries_fits_it(app, language):
+    """The routine line gives way if both do not fit; the warning itself always fits."""
+    config = cfg.load(language, language)
+    text = config.experimenter_text
+    warnings = text["warnings"]
+    window = ExperimenterWindow(text, lambda: _all_keys())
+    window.resize(1280, 800)
+    window.show()
+    values = _Filled()
+    shown = [warnings[key].format_map(values) for key in (
+        "catch_trials_felt", "masking_at_ceiling", "masking_failed",
+        "masking_failed_after_earplugs", "equalisation_mismatch", "application_cap",
+        "substitution_unknown", "substitution_not_lower", "distance_implausible",
+    )]
+    shown.append(warnings["substitution_not_recorded"].format(
+        value="0.008", controls=text["controls"]
+    ))
+    # The long protocol can raise its two together, as `LongProtocol._warn` joins them.
+    out_of_range = warnings["out_of_range"].format(
+        value=max(text["terms"]["out_of_range"].values(), key=len)
+    )
+    shown.append(f"{out_of_range} {warnings['application_cap'].format_map(values)}")
+    shown.append(text["dialogs"]["fit_rerun_exhausted"])
+    window.set_status(text["instructions"]["await_participant"])
+    for filled in shown:
+        window.set_warning(filled)
+        assert filled in window.status.text()
+        assert window.status.heightForWidth(window._left_width()) <= window.status.height(), (
+            f"{filled!r} runs past the status region in {language}"
+        )
+
+
+def test_a_warning_is_dimmed_with_its_step_while_interrupted(drawn):
+    """The status region dims while the session is interrupted (N7.F11a); the warning's own
+    colour, set inside the text, dims with it, and comes back on the resume."""
+    window, held = drawn
+    window.set_warning("a warning")
+    assert widgets.WARNING_COLOUR in window.status.text()
+    held["view"] = _all_keys(interruption="emergency_stop")
+    window.refresh()
+    assert widgets.WARNING_COLOUR not in window.status.text()
+    assert widgets.DISABLED in window.status.text()
+    held["view"] = _all_keys()
+    window.refresh()
+    assert widgets.WARNING_COLOUR in window.status.text()
+
+
+def test_a_cleared_warning_leaves_the_status(drawn):
+    window, _ = drawn
+    window.set_status("received")
+    window.set_warning("a warning")
+    window.clear_warning()
+    assert window.status.text() == "received"
 
 
 def test_the_window_fits_the_screenshot_size(drawn):
@@ -741,18 +914,207 @@ def test_the_interruption_line_does_not_move_the_instruction(drawn):
     assert window.instruction.pos().y() == before
 
 
+def test_the_instruction_starts_at_the_same_place_in_every_step(drawn):
+    """It was centred in its column's spare height, so its first line jumped about 100 px
+    between a filament trial and a countdown (15 Oct 2026 pilot review; UI_PRINCIPLES.md
+    5.5)."""
+    window, _ = drawn
+    window.show()
+    window.set_instruction("x")
+    plain = window.instruction.mapTo(window, window.instruction.rect().topLeft())
+    window.set_target("primary", 3, filament=True)
+    window.set_status("y")
+    with_technique = window.instruction.mapTo(window, window.instruction.rect().topLeft())
+    assert plain == with_technique
+
+
+def test_nothing_moves_when_a_control_or_entry_is_offered(drawn):
+    """UI_PRINCIPLES.md 3.3: every control that comes and goes keeps its place."""
+    window, held = drawn
+    window.show()
+    watched = (window.proceed_button, window.abort_button, window.note, window.garment_button,
+               window.instruction)
+
+    def places():
+        return [widget.mapTo(window, widget.rect().topLeft()) for widget in watched]
+
+    before = places()
+    window.set_actions_enabled(rebalance=True, fit_decision=True, discard=True,
+                               substitution=True, skip_calibration=True)
+    window.set_mapping_phases(["post_sensitisation"])
+    window.set_target("primary", 3, filament=True)
+    assert places() == before
+    held["view"] = _all_keys(interruption="emergency_stop",
+                             hardware=_hardware(pressures={1: 40.0}, faults=["f"]))
+    window.refresh()
+    assert places() == before
+    # The garment button takes on its emphasis when it reads Connect without changing size,
+    # so Skip calibration above it stays put.
+    QApplication.processEvents()
+    skip = window.skip_button.mapTo(window, QPoint(0, 0))
+    height = window.garment_button.height()
+    held["view"] = _all_keys(hardware=_hardware(connected=False))
+    window.refresh()
+    QApplication.processEvents()
+    assert places() == before
+    assert window.garment_button.height() == height
+    assert window.skip_button.mapTo(window, QPoint(0, 0)) == skip
+
+
+def test_a_hidden_control_leaves_the_focus_with_the_window(drawn):
+    """Hiding the control that has the focus made Qt pass it on: after Pause, to Abort, so a
+    Space press opened the abort dialog. The window takes it, never a control or a text field
+    (under any_keyboard a focused field takes the participant's keys, docs/LOG.md N7.I1)."""
+    window, held = drawn
+    window.show()
+    window.activateWindow()
+    QApplication.processEvents()
+    window.pause_button.setFocus()
+    assert window.pause_button.hasFocus()
+    held["view"] = _all_keys(interruption="pause")
+    window.refresh()
+    assert QApplication.focusWidget() is window
+    window.resume_button.setFocus()
+    held["view"] = _all_keys()
+    window.refresh()
+    assert QApplication.focusWidget() is window
+    window.set_actions_enabled(substitution=True)
+    window.substitution.setFocus()
+    assert window.withdraw_substitution() == ""
+    assert QApplication.focusWidget() is window
+
+
+def test_withdrawing_the_substitution_hands_back_unrecorded_text(drawn):
+    window, _ = drawn
+    window.set_actions_enabled(substitution=True)
+    window.substitution.setText(" 15 ")
+    with pytest.raises(AssertionError, match="withdraw_substitution"):
+        window.set_actions_enabled(substitution=False)
+    assert window.withdraw_substitution() == "15"
+    assert window.substitution.text() == ""
+    assert not window.substitution.isVisibleTo(window)
+    window.refresh()
+    assert window.withdraw_substitution() == "", "handed back once only"
+
+
+def test_a_long_open_items_line_is_cut_visibly(app):
+    """One line, so a long list is cut -- with an ellipsis that says so, and the whole list in
+    the tooltip."""
+    loaded = cfg.load("sv", "sv")
+    items = [f"[L{n}] {'lång sammanfattning ' * 3}" for n in range(1, 61)]
+    window = ExperimenterWindow(loaded.experimenter_text,
+                                lambda: _all_keys(unresolved_open_items=items))
+    window.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+    window.refresh()
+    shown = window.open_items.text()
+    assert shown.endswith("…")
+    assert window.open_items.fontMetrics().horizontalAdvance(shown) <= (
+        LAPTOP_WIDTH_PX - 2 * experimenter_ui.MARGIN_PX
+    )
+    assert all(item in window.open_items.toolTip() for item in items)
+
+
+def test_next_step_looks_the_same_whatever_is_awaited(drawn):
+    """Its emphasis must not follow what a step awaits: at a touch start that could differ by
+    condition (SPEC.md 16)."""
+    window, _ = drawn
+    style = window.proceed_button.styleSheet()
+    assert style == widgets.primary_button_style()
+    for awaited in (dict(discard=True), dict(rebalance=True), dict(fit_decision=True),
+                    dict(discard=False, rebalance=False, fit_decision=False)):
+        window.set_actions_enabled(**awaited)
+        assert window.proceed_button.styleSheet() == style
+        assert _offered(window, window.proceed_button)
+
+
+def test_the_step_on_hold_is_dimmed_while_interrupted(drawn):
+    window, held = drawn
+    running = (window.instruction.styleSheet(), window.status.styleSheet())
+    held["view"] = _all_keys(interruption="emergency_stop")
+    window.refresh()
+    assert (window.instruction.styleSheet(), window.status.styleSheet()) != running
+    assert widgets.FOREGROUND not in window.instruction.styleSheet()
+    held["view"] = _all_keys()
+    window.refresh()
+    assert (window.instruction.styleSheet(), window.status.styleSheet()) == running
+
+
+def test_the_zone_diagram_is_shown_only_with_a_target(drawn):
+    window, _ = drawn
+    assert not window.zone.isVisibleTo(window) and not window.target.isVisibleTo(window)
+    window.set_target("secondary", 2)
+    assert window.zone.isVisibleTo(window) and window.target.isVisibleTo(window)
+    window.set_instruction("next")
+    assert not window.zone.isVisibleTo(window)
+
+
+def test_the_session_clock_is_secondary(drawn):
+    """Looked up, not watched: small and grey beside who and where (15 Oct 2026 pilot)."""
+    window, _ = drawn
+    assert window.elapsed.font().pointSize() == widgets.SIZE_SMALL
+    assert window.countdown.font().pointSize() == widgets.SIZE_LARGE
+
+
+def test_open_items_appearing_mid_session_are_refused(app, loaded):
+    """Like a banner (UI_PRINCIPLES.md 3.3): the banner region has no room kept for them."""
+    held = {"view": _all_keys()}
+    window = ExperimenterWindow(loaded.experimenter_text, lambda: held["view"])
+    assert not window.open_items.isVisibleTo(window)
+    held["view"] = _all_keys(unresolved_open_items=["[L3] audio"])
+    with pytest.raises(AssertionError, match="open items appeared"):
+        window.refresh()
+
+
+def test_open_items_sit_in_the_banner_region(experimenter):
+    window, _ = experimenter
+    assert window.open_items.parentWidget() is window.banner_area
+    assert window.banner_area.isVisibleTo(window)
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_every_banner_is_one_line_at_the_laptop_width(app, language):
+    """One line each, the detail in the tooltip (15 Oct 2026 pilot review). A banner is cut
+    rather than wrapped, so its headline must fit the narrowest screen the window is used on,
+    with the longest garment name.
+
+    Measured in the study's own font, which `tests/conftest.py` installs as the lab PC draws
+    it (`tatp/ui/application.py`), with a margin for rendering differences between machines.
+    """
+    loaded = cfg.load(language, language)
+    text = loaded.experimenter_text
+    window = ExperimenterWindow(text, _all_keys)
+    banners = text["banners"]
+    available = BANNER_WIDTH_MARGIN * (
+        LAPTOP_WIDTH_PX - 2 * experimenter_ui.MARGIN_PX - 2 * widgets.BANNER_PADDING_PX
+    )
+    font = window.placeholder_banner.font()
+    assert QFontInfo(font).family() == loaded.hardware["screens"]["font_families"][0]
+    font.setBold(True)
+    metrics = QFontMetrics(font)
+    headlines = [banners["placeholder_text"], banners["fit_preview"], banners["demo"]] + [
+        banners["reduced_capability"].format(value=name)
+        for name in text["terms"]["garments"].values()
+    ]
+    for headline in headlines:
+        assert metrics.horizontalAdvance(headline) <= available, headline
+    for key in ("placeholder_text", "reduced_capability", "fit_preview"):
+        assert banners[f"{key}_detail"], key
+
+
 def test_rebalance_and_the_fit_choice_wait_to_be_asked_for(drawn):
+    """Hidden, not only disabled, until asked for (15 Oct 2026 pilot review)."""
     window, _ = drawn
     for widget in (window.rebalance_button, window.fit_accept_button, window.fit_rerun_button):
-        assert not widget.isEnabled()
+        assert not widget.isVisibleTo(window) and not widget.isEnabled()
     window.set_actions_enabled(rebalance=True)
-    assert window.rebalance_button.isEnabled()
-    assert not window.fit_accept_button.isEnabled()
+    assert _offered(window, window.rebalance_button)
+    assert not window.fit_accept_button.isVisibleTo(window)
     window.set_actions_enabled(fit_decision=True)
-    assert window.fit_accept_button.isEnabled() and window.fit_rerun_button.isEnabled()
+    assert _offered(window, window.fit_accept_button)
+    assert _offered(window, window.fit_rerun_button)
     window.set_actions_enabled(rebalance=False, fit_decision=False)
-    assert not window.rebalance_button.isEnabled()
-    assert not window.fit_accept_button.isEnabled()
+    assert not window.rebalance_button.isVisibleTo(window)
+    assert not window.fit_accept_button.isVisibleTo(window)
 
 
 def test_an_experimenter_choice_enables_the_controls_it_waits_on(app, session, participant):
@@ -766,10 +1128,10 @@ def test_an_experimenter_choice_enables_the_controls_it_waits_on(app, session, p
         "touchcal_fit_review",
     )
     choice.start()
-    assert window.fit_accept_button.isEnabled()
-    assert not window.rebalance_button.isEnabled()
+    assert _offered(window, window.fit_accept_button)
+    assert not window.rebalance_button.isVisibleTo(window)
     window.fit_accept_button.click()
-    assert not window.fit_accept_button.isEnabled(), "disabled again once answered"
+    assert not window.fit_accept_button.isVisibleTo(window), "hidden again once answered"
 
 
 def test_abort_asks_for_confirmation_and_a_reason(drawn):
@@ -802,6 +1164,7 @@ def test_a_note_and_a_substitution_are_emitted_and_cleared(drawn):
     notes, substitutions = _emitted(window.note_entered), _emitted(window.substitution_entered)
     window.note.setText("  participant sneezed ")
     window.note_button.click()
+    window.set_actions_enabled(substitution=True)
     window.substitution.setText("15")
     window.substitution_button.click()
     assert notes == [("participant sneezed",)]
@@ -821,10 +1184,10 @@ def test_distances_are_entered_for_a_mapped_phase_and_never_block(drawn):
     window, _ = drawn
     distances = window.distances
     seen = _emitted(window.distances_entered)
-    assert not window.distances_button.isEnabled(), "nothing mapped yet"
+    assert not window.distances_button.isVisibleTo(window), "nothing mapped yet"
     assert not distances.enter_button.isEnabled()
     window.set_mapping_phases(["post_sensitisation"])
-    assert window.distances_button.isEnabled()
+    assert _offered(window, window.distances_button)
     window.distances_button.click()
     assert distances.isVisible() and not distances.isModal()
     distances.fields[0].setText("42,5")
@@ -882,7 +1245,10 @@ def test_the_countdown_states(drawn, event, key):
             phase=window.text["phases"]["rekindle"]
         )
     else:
-        assert window.countdown.text() == status[key].format(block=3)
+        # The block's type too, so the due line says what to get ready (LOG N7.F11b7).
+        assert window.countdown.text() == status[key].format(
+            block=3, type=window.text["terms"]["block_types"]["touch"]
+        )
 
 
 def test_the_countdown_is_redrawn_by_its_timer(app, loaded):
@@ -1113,7 +1479,7 @@ def test_a_fit_is_refused_while_the_preview_is_off_and_nothing_is_drawn(drawn):
     assert not preview.isVisible()
     assert preview.plot.points == ()
     assert preview.quality.text() == preview.derived.text() == ""
-    assert not window.fit_accept_button.isEnabled()
+    assert not window.fit_accept_button.isVisibleTo(window)
     shown = " ".join(_visible_texts(window) + _visible_texts(preview))
     for rating in ("23.5", "37.5", "58.5", "41.5", "71.5", "321"):
         assert rating not in shown
@@ -1129,7 +1495,8 @@ def test_the_enabled_preview_draws_the_fit_and_hides_it_again(app, loaded, make_
     preview = window.fit_preview
     assert preview.isVisible() and not preview.isModal()
     assert preview.plot.points and preview.plot.line
-    assert window.fit_accept_button.isEnabled() and window.fit_rerun_button.isEnabled()
+    assert _offered(window, window.fit_accept_button)
+    assert _offered(window, window.fit_rerun_button)
     assert preview.accept_button.isEnabled() and preview.rerun_button.isEnabled()
     assert preview.derived.text() and preview.quality.text()
     seen = _emitted(window.fit_accepted)
@@ -1140,7 +1507,7 @@ def test_the_enabled_preview_draws_the_fit_and_hides_it_again(app, loaded, make_
     assert not preview.isVisible()
     assert preview.plot.points == ()
     assert preview.derived.text() == preview.quality.text() == ""
-    assert not window.fit_accept_button.isEnabled()
+    assert not window.fit_accept_button.isVisibleTo(window)
 
 
 def test_the_main_window_never_carries_the_fit(drawn):

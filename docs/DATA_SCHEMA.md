@@ -127,6 +127,20 @@ logging `stage_skipped_completed` with the stage in `detail`: a file written bef
 rehearsal moved ahead of the masking check (October 2026) can have the masking check completed
 and the rehearsal not, and its session keys then keep that older order.
 
+The rekindle (§7.4) logs `scheduled_step_started` with `detail` starting `rekindle;` at the
+experimenter's Next step as the heat starts, and `rekindle_thermode_removed` (origin
+`experimenter`) at their Next step once the heat has ended and the thermode is off, just before
+the garment's touch starts again. A resume reads both back: after the first the heat is never
+prompted again (docs/LOG.md N7.D14), and after the second the removal is not asked for again
+either; the session logs `rekindle_resumed` and restarts the touch. The heat's end is alerted
+like a scheduled step, `experimenter_alert` with `detail` `rekindle_end due` and, if the
+removal is not confirmed within the overdue margin, `rekindle_end overdue`; the touch restarts
+at the removal press, so the time the touch is off includes the experimenter's response, and
+`garment_reactivated` records when it came back. The capsaicin's removal is the scheduled step
+`capsaicin_removal`: its `scheduled_step_started` detail starts `capsaicin_removal;` and its
+`experimenter_alert` rows read `capsaicin_removal due` and `capsaicin_removal overdue`. Until
+15 Oct 2026 all three said `post_sensitisation` instead.
+
 The VAS training (§10.6) is four events, each with the scale in `detail` (`pain`,
 `intensity`, `pleasantness`): `vas_training_shown` when the screen goes up (again after an
 interruption repeats it), `vas_training_explained` (origin `experimenter`) at the
@@ -169,6 +183,13 @@ An experimenter's note (§11) is `experimenter_note`, origin `experimenter`, the
 `detail`, at any point in the session, interruptions included. **Sessions before 15 October
 2026 have no notes:** the field was never connected to the log, so anything typed into it then
 was lost (docs/LOG.md N7.F10a).
+
+`substitution_not_recorded` (origin `experimenter`, severity `warning`, `detail`
+`trial <n>: <what was typed>`) is written when a filament trial ends with something typed in
+the filament-applied-instead entry and Record filament never pressed. It did **not** change
+what the trial's row records as applied. The entry is offered only during a
+filament trial and emptied when it ends, so the text is never carried to the next trial
+(docs/LOG.md N7.F11a3).
 
 `software_error` (severity `error`, the exception in `detail`) is written when an error nothing
 in the software caught stops the session: the garment goes to zero, the experimenter is told
