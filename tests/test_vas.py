@@ -603,7 +603,7 @@ def test_every_trained_scale_has_its_sentence_in_both_languages(configs):
     proportionality sentence is the experimenter's, for the same scales."""
     for config in configs.values():
         assert set(config.participant_text["training"]) == set(TRAINED_SCALES)
-        assert set(config.experimenter_text["vas_training_explain"]) == set(TRAINED_SCALES)
+        assert set(config.experimenter_text["say"]["proportionality"]) == set(TRAINED_SCALES)
 
 
 def test_proportionality_is_not_on_the_participant_screen(configs):
@@ -611,7 +611,7 @@ def test_proportionality_is_not_on_the_participant_screen(configs):
     for config in configs.values():
         participant = yaml.safe_dump(config.participant_text, allow_unicode=True, width=10**6)
         for scale in TRAINED_SCALES:
-            explanation = config.experimenter_text["vas_training_explain"][scale]
+            explanation = config.experimenter_text["say"]["proportionality"][scale]
             assert explanation not in participant
 
 
@@ -620,9 +620,10 @@ def test_an_explanation_for_a_scale_that_is_not_trained_is_refused(tmp_path):
     for language in ("sv", "en"):
         path = tmp_path / "config" / "text" / f"experimenter_{language}.yaml"
         text = yaml.safe_load(path.read_text(encoding="utf-8"))
-        text["vas_training_explain"]["relaxation"] = text["vas_training_explain"]["pain"]
+        proportionality = text["say"]["proportionality"]
+        proportionality["relaxation"] = proportionality["pain"]
         path.write_text(yaml.safe_dump(text, allow_unicode=True), encoding="utf-8")
-    with pytest.raises(cfg.ConfigError, match="vas_training_explain"):
+    with pytest.raises(cfg.ConfigError, match="say.proportionality"):
         cfg.load("en", "en", config_dir=tmp_path / "config")
 
 

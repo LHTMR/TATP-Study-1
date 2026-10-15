@@ -46,6 +46,8 @@ FIND_INSTRUCTION = "masking_check"
 MASK_INSTRUCTION = "masking_check_mask"
 MASK_EARPLUGS_INSTRUCTION = "masking_check_mask_earplugs"
 EARPLUGS = "earplugs"
+MASKING_DONE = "masking_done"
+STOP_REHEARSAL_DONE_INSTRUCTION = "stop_rehearsal_done"
 INSTRUCTIONS = {FIND_LEVEL: FIND_INSTRUCTION, MASK_LEVEL: MASK_INSTRUCTION}
 # Keys in the experimenter text file's `warnings`.
 MASKING_FAILED = "masking_failed"
@@ -198,7 +200,7 @@ class MaskingCheck(Procedure):
         else:
             audio.start_noise(audio.start_dbfs)
         # A warning from the round before earplugs is out of date once they are in.
-        self.experimenter.set_status("")
+        self.experimenter.clear_warning()
         self.run_trial(lambda: NoiseAdjustment(*self._windows(), FIND_LEVEL), self._found)
 
     # -- 2. start the garment ----------------------------------------------------------
@@ -253,9 +255,7 @@ class MaskingCheck(Procedure):
                 "masking_at_ceiling", severity="warning",
                 detail=f"confirmed at the ceiling, {level_dbfs:.1f} dBFS",
             )
-            self.experimenter.set_status(self.experimenter.text["warnings"][MASKING_AT_CEILING])
-        else:
-            self.experimenter.set_status("")
+            self.experimenter.set_warning(self.experimenter.text["warnings"][MASKING_AT_CEILING])
         self._done(confirmed=True)
 
     # -- 4. still audible: earplugs ----------------------------------------------------
@@ -267,7 +267,7 @@ class MaskingCheck(Procedure):
                 "masking_not_confirmed", severity="warning",
                 detail=f"still audible with earplugs after {self.attempts} attempts",
             )
-            self.experimenter.set_status(warnings[MASKING_FAILED_AFTER_EARPLUGS])
+            self.experimenter.set_warning(warnings[MASKING_FAILED_AFTER_EARPLUGS])
             self._done(confirmed=False)
             return
         self.session.garment.stop()
@@ -277,13 +277,13 @@ class MaskingCheck(Procedure):
             + (", at the ceiling" if self.session.audio.at_ceiling else ""),
         )
         self.session.audio.stop_noise("earplug exchange")
-        self.experimenter.set_status(warnings[MASKING_FAILED])
+        self.experimenter.set_warning(warnings[MASKING_FAILED])
 
         def hold_off() -> None:
             # A Next step this soon after the report is the same click again -- a double
             # click -- not "the earplugs are in", which takes longer than this to be true.
             self.participant.show_message(PAUSED_SCREEN)
-            self.experimenter.set_instruction(self.experimenter.text["instructions"][EARPLUGS])
+            self.experimenter.set_instruction(self.instruction_text(EARPLUGS))
             self.experimenter.refresh()
             self._after(self.earplugs_lockout_s, self._offer_earplugs)
 
@@ -325,12 +325,13 @@ class MaskingCheck(Procedure):
             detail=f"{result.level_dbfs:.1f} dBFS, confirmed {confirmed}, "
             f"{result.attempts} attempts, earplugs {result.earplugs_used}",
         )
+        def show() -> None:
+            self.participant.show_audio_setup(SETTLED)
+            # Next step does nothing here, so the instruction that offered it is replaced.
+            self.instruct(MASKING_DONE)
+
         self.run_trial(
-            lambda: MessageConfirm(
-                *self._windows(),
-                lambda: self.participant.show_audio_setup(SETTLED),
-                SETTLED,
-            ),
+            lambda: MessageConfirm(*self._windows(), show, SETTLED),
             lambda _: self.finish(result),
         )
 
@@ -405,9 +406,7 @@ class StopRehearsal(Procedure):
             self.awaiting = False
             self.press_detected = True
             self.session.log("stop_rehearsal_press_detected", origin="participant")
-            text = self.experimenter.text["instructions"]["stop_rehearsal_resume"]
-            self.experimenter.set_instruction(text)
-            self.experimenter.refresh()
+            self.instruct("stop_rehearsal_resume")
 
     def on_resumed(self) -> None:
         if not self.press_detected or self.done_shown:
@@ -418,12 +417,14 @@ class StopRehearsal(Procedure):
         # restored the garment in front of the participant, preceded by the cue. The done
         # screen follows; an interruption during it repeats it like any other step.
         self.done_shown = True
+
+        def show() -> None:
+            self.participant.show_message(STOP_REHEARSAL_DONE_SCREEN)
+            # The Resume this instruction asked for has been pressed.
+            self.instruct(STOP_REHEARSAL_DONE_INSTRUCTION)
+
         self.run_trial(
-            lambda: MessageConfirm(
-                *self._windows(),
-                lambda: self.participant.show_message(STOP_REHEARSAL_DONE_SCREEN),
-                STOP_REHEARSAL_DONE_SCREEN,
-            ),
+            lambda: MessageConfirm(*self._windows(), show, STOP_REHEARSAL_DONE_SCREEN),
             lambda _: self._end(),
         )
 

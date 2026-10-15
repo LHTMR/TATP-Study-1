@@ -227,6 +227,25 @@ def test_every_anchor_has_a_prompt_and_the_reference_channel(loaded):
     assert [p.anchor_percent for p in plans] == list(touch["anchors_pct"])
 
 
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_step_1_runs_as_its_instruction_tells_the_experimenter(loaded, language):
+    """`instructions.touchcal_bracket` says step 1 sets just noticeable, then just
+    uncomfortable, each from no touch (LOG N7.F11b6). That holds only with one adjustment per
+    anchor -- a second would start from the ceiling -- so a change here must change the text."""
+    plans = touchcal.anchor_plans(loaded)
+    fraction = float(loaded.study1["touch_calibration"]["start_offset_fraction"])
+    assert [p.target_key for p in plans] == ["just_noticeable", "just_uncomfortable"]
+    assert all(touchcal.start_pressure_kpa(p, fraction) == 0.0 for p in plans)
+    # The wording names the two anchors as the participant text does.
+    text = cfg.load(language, language)
+    bracket = text.experimenter_text["instructions"]["touchcal_bracket"]
+    anchors = text.participant_text["vas"]["intensity"]["anchors"]
+    labels = {anchor["pct"]: anchor["label"] for anchor in anchors}
+    for plan in plans:
+        label = labels[plan.anchor_percent]
+        assert label in bracket, f"{label!r} is not how {language} touchcal_bracket names it"
+
+
 # -- one adjustment end to end ------------------------------------------------------------
 
 

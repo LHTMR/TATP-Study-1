@@ -58,7 +58,7 @@ vas:
 # Övningsskattningen i VAS-övningen (SPEC.md 10.6), en nyckel per övad skala: en skala med en
 # nyckel här övas, och varje nyckel måste vara en skala. Visas under skalan, som ritas som den
 # skattas, när försöksledaren har förklarat etiketterna och proportionaliteten muntligt --
-# proportionalitetsmeningen är nu försöksledarens (`vas_training_explain`, S:s lista efter
+# proportionalitetsmeningen är nu försöksledarens (`say.proportionality`, S:s lista efter
 # labbkörningen 5 okt 2026). Fri placering, inget mål (docs/research/R35). Samma ord för varje
 # skala, så att ingenting skiljer sig mellan skalor eller besök.
 training:

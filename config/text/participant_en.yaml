@@ -57,7 +57,7 @@ vas:
 # The VAS training's practice rating (SPEC.md 10.6), one key per trained scale: a scale with a
 # key here is trained, and every key must be a scale. Shown below the scale, which is drawn as
 # it is rated, once the experimenter has explained the anchors and proportionality aloud -- the
-# proportionality sentence itself is now the experimenter's (`vas_training_explain`, S's
+# proportionality sentence itself is now the experimenter's (`say.proportionality`, S's
 # lab-run list, 5 Oct 2026). Free placement, no target: a target would teach a position on the
 # line rather than a judgement of a sensation (docs/research/R35). The same words for every
 # scale, so nothing on it differs between the scales or the sessions.

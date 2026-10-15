@@ -16,6 +16,7 @@ from collections.abc import Callable, Mapping
 
 from PySide6.QtCore import QObject, QTimer, Signal, SignalInstance
 
+from tatp.config import instruction
 from tatp.resume import VAS_TRAINING_CONFIRMED
 from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
@@ -111,8 +112,7 @@ class Trial(QObject):
 
     def instruct(self, key: str, **values: object) -> None:
         """What the experimenter should do now (SPEC.md 11), from the experimenter text."""
-        text = self.experimenter.text["instructions"][key]
-        self.experimenter.set_instruction(text.format(**values) if values else text)
+        self.experimenter.set_instruction(instruction(self.session.config, key, **values))
         self.experimenter.refresh()
 
     # -- the cue and the ramp ----------------------------------------------------------

@@ -211,6 +211,28 @@ def test_a_failing_fit_is_put_to_the_experimenter_and_a_rerun_keeps_the_first(ri
     assert _events(session, "touchcal_stage1_rerun")
 
 
+def test_a_rerun_takes_down_the_warning_about_the_run_it_discards(rig):
+    """Code review of N7.F11b16: the first run's felt catch trials were still warned under the
+    second run's decision. Flat at 50 % on the first run, so its catch trials are felt too."""
+    window = rig.experimenter
+    warning_at_decision = []
+
+    def decide(trial):
+        warning_at_decision.append(window._warning_text)
+        return ("rerun", ("flat",)) if len(warning_at_decision) == 1 else ("accept", ())
+
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    virtual.decide = decide
+    virtual.before_step = lambda trial: (
+        _flat(rig)(trial) if procedure.run_index == 1 else None
+    )
+    virtual.run()
+    felt = window.text["warnings"]["catch_trials_felt"].split("(")[0]
+    assert felt in warning_at_decision[0]
+    assert felt not in window._warning_text, "the second run's catch trials were not felt"
+
+
 def test_an_estimate_that_cannot_be_inverted_cannot_be_accepted(rig):
     session = rig.session
     procedure = touchcal.TouchCalibration(rig)
@@ -258,13 +280,14 @@ def test_the_touch_preview_is_open_for_the_choice_and_closed_after(app, loaded, 
         seen = []
         virtual = Virtual(rig, procedure)
         virtual.decide = lambda trial: seen.append(
-            (window.fit_preview.isVisible(), window.fit_accept_button.isEnabled())
+            (window.fit_preview.isVisible(), not window.fit_accept_button.isHidden())
         ) or ("accept", ())
         virtual.run()
         assert seen and seen[0] == (True, True)
         assert not window.fit_preview.isVisible()
         assert window.fit_preview.plot.points == ()
-        assert not window.fit_accept_button.isEnabled()
+        # Hidden, not only disabled, once decided (15 Oct 2026 pilot review).
+        assert window.fit_accept_button.isHidden()
     finally:
         rig.session.close()
 
@@ -296,6 +319,14 @@ def test_felt_catch_trials_are_flagged(rig):
 def test_a_channel_winning_every_comparison_is_readjusted_then_accepted(rig):
     """docs/research/R33: an order-free winner in both pairs prompts one re-adjustment."""
     session = rig.session
+    shown = []
+    real = rig.experimenter.set_instruction
+
+    def spy(text):
+        shown.append(text)
+        real(text)
+
+    rig.experimenter.set_instruction = spy
 
     def choose(key, trial):
         if key != touchcal.COMPARISON_CHOICE:
@@ -320,6 +351,14 @@ def test_a_channel_winning_every_comparison_is_readjusted_then_accepted(rig):
     ]
     assert len(matches) == 4, "both start points again on re-adjustment"
     assert _events(session, "equalisation_mismatch")
+    # The re-adjustment is step 4's, and says so, rather than showing step 3 again
+    # (LOG N7.F11b6).
+    instructions = rig.experimenter.text["instructions"]
+    readjust = instructions["touchcal_readjust"].format(channel=1)
+    assert shown.count(readjust) == 1
+    assert shown.index(readjust) > shown.index(
+        instructions["touchcal_equalise"].format(channel=1, index=1, count=4)
+    )
 
 
 def test_a_mismatch_that_survives_readjustment_is_logged_and_the_session_goes_on(rig):

@@ -78,7 +78,7 @@ from tatp.touchcal import (
 from tatp.touchcal_maths import Delivery
 from tatp.trials import MessageConfirm
 from tatp.ui.participant import STANDBY_SCREEN
-from tatp.units import S_PER_MIN
+from tatp.units import MIN_PER_H, S_PER_MIN
 
 # Keys in config/text/participant_*.yaml, not wording.
 WELCOME_SCREEN = "welcome"
@@ -107,6 +107,12 @@ NOTE_EVENT = "experimenter_note"
 SOFTWARE_ERROR_EVENT = "software_error"
 # `Session.set_upcoming` kinds.
 BLOCK, PHASE = "block", "phase"
+# What the countdown names, and the log calls the step, while the capsaicin is on and while the
+# rekindle heat is on: keys of the experimenter text's `phases`, not phases of the session.
+CAPSAICIN_REMOVAL = "capsaicin_removal"
+REKINDLE_END = "rekindle_end"
+# Keys in the experimenter text's `instructions`, not wording.
+READY_TOUCH_BLOCK = "ready_touch_block"
 FIRST_SESSION = 1
 
 
@@ -164,7 +170,10 @@ def stage_layout(schedule: Schedule) -> list[tuple[str, str, Upcoming | None]]:
     capsaicin = schedule.window(CAPSAICIN)
     add("capsaicin.apply", SENSITISATION,
         Upcoming(PHASE, CAPSAICIN, capsaicin.start_min * S_PER_MIN))
-    add("capsaicin.remove", CAPSAICIN, Upcoming(PHASE, POST_S, capsaicin.end_min * S_PER_MIN))
+    # Counted down as the capsaicin's removal, which is what is due then, not as the phase
+    # after it (15 Oct 2026 pilot review).
+    add("capsaicin.remove", CAPSAICIN,
+        Upcoming(PHASE, CAPSAICIN_REMOVAL, capsaicin.end_min * S_PER_MIN))
     time_point(POST_S)
 
     intervention = schedule.window(INTERVENTION)
@@ -231,8 +240,9 @@ class TouchBlock(Procedure):
     The same in every condition: what differs is the touch, which this class never looks at.
     """
 
-    def __init__(self, rig: Rig, channel: int):
+    def __init__(self, rig: Rig, channel: int, block_index: int):
         super().__init__(rig)
+        self.block_index = block_index
         touch_block = self.session.config.study1["touch_block"]
         repeated = list(touch_block["repeated_scales"])
         self.plan = repeated * int(touch_block["n_repetitions"]) + list(
@@ -251,7 +261,9 @@ class TouchBlock(Procedure):
     def begin(self) -> None:
         def prepare() -> None:
             self.rig.show_between()
-            self.experimenter.set_instruction(self.experimenter.text["instructions"]["ready"])
+            self.experimenter.set_instruction(
+                self.instruction_text(READY_TOUCH_BLOCK, block=self.block_index)
+            )
             self.experimenter.refresh()
 
         self.await_proceed(self._next, prepare)
@@ -259,9 +271,7 @@ class TouchBlock(Procedure):
     def _next(self) -> None:
         # "x/N answered", as in the estimation run: the same in every condition.
         self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touch_block"].format(
-                answered=self.done_count, total=len(self.plan)
-            )
+            self.instruction_text("touch_block", answered=self.done_count, total=len(self.plan))
         )
         scale = self.plan[self.done_count]
         self.run_trial(
@@ -314,6 +324,8 @@ class SessionRunner(Procedure):
         # The session time the timed wait now running ends at (`_wait_until`), for skip_wait.
         self.waiting_until_s: float | None = None
         self._alarms: list[tuple[float, str]] = []
+        # Every alert sounded, so a step whose alarms are set again does not sound one twice.
+        self._sounded: set[str] = set()
         self._alarm_timer = QTimer(self)
         self._alarm_timer.setSingleShot(True)
         self._alarm_timer.timeout.connect(self._fire_alarm)
@@ -343,6 +355,8 @@ class SessionRunner(Procedure):
         self._touch_after_block = False
         # Set for a session resumed after its rekindle heat was launched (LOG N7.D14).
         self._resumed_heat_t_s: float | None = None
+        # And whether its thermode had been removed too, so only the touch is left to restart.
+        self._resumed_thermode_removed = False
         self._stopping_for_error = False
         # Set when an error ended the program with the session open (`_leave_open`): nothing
         # afterwards may close it, or it could not be resumed.
@@ -431,6 +445,7 @@ class SessionRunner(Procedure):
         if self.session.phase != stage.phase:
             self.session.set_phase(stage.phase)
         self.session.log("stage_started", detail=stage.id)
+        self.experimenter.new_stage()
         # After the row, so what a listener logs falls inside the stage it belongs to.
         self.stage_started.emit(stage.id)
         # Each stage draws from a stream of its own, derived from the seed and the stage id
@@ -463,12 +478,10 @@ class SessionRunner(Procedure):
 
         self.run_child(make, done)
 
-    def _standby(self, instruction: str) -> Callable[[], None]:
+    def _standby(self, instruction: str, **values: object) -> Callable[[], None]:
         def prepare() -> None:
             self._show_between()
-            self.experimenter.set_instruction(
-                self.experimenter.text["instructions"][instruction]
-            )
+            self.experimenter.set_instruction(self.instruction_text(instruction, **values))
             self.experimenter.set_status("")
             self.experimenter.refresh()
 
@@ -501,10 +514,8 @@ class SessionRunner(Procedure):
         self.await_proceed(self._stage_done, prepare)
 
     def _welcome(self) -> None:
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["await_participant"]
-        )
-        self.experimenter.refresh()
+        # What happens next, which the experimenter is about to see from across the divider.
+        self.instruct("welcome")
         self.run_trial(
             lambda: MessageConfirm(
                 self.session, self.participant, self.experimenter,
@@ -556,7 +567,7 @@ class SessionRunner(Procedure):
             # experimenter's line is the ratings' own: the participant is reading about them.
             self.introduce(
                 BASELINE_INTRO_SCREEN,
-                self.experimenter.text["instructions"]["baseline_ratings"],
+                self.instruction_text("baseline_ratings"),
                 lambda: rate(0),
             )
 
@@ -650,20 +661,23 @@ class SessionRunner(Procedure):
             self.session.start_sensitisation()
             self._stage_done()
 
-        self.await_proceed(started, self._standby("thermode_start"))
+        heat_min = self.session.schedule.window(SENSITISATION).duration_min
+        self.await_proceed(started, self._standby("thermode_start", minutes=f"{heat_min:g}"))
 
     def _capsaicin_apply(self, at: Upcoming) -> None:
         def applied() -> None:
             self.session.set_phase(CAPSAICIN)
             self._stage_done()
 
-        self._arm(at, "capsaicin_apply", applied)
+        self._arm(at, "capsaicin_apply", applied, waiting="heat_on")
 
     def _capsaicin_remove(self, at: Upcoming) -> None:
-        self._arm(at, "capsaicin_remove", self._stage_done)
+        self._arm(at, "capsaicin_remove", self._stage_done, waiting="capsaicin_on")
 
     def _intervention_start(self, at: Upcoming) -> None:
-        self._arm(at, "intervention_start", lambda: self._deliver(self._stage_done))
+        hours = self.session.schedule.window(INTERVENTION).duration_min / MIN_PER_H
+        self._arm(at, "intervention_start", lambda: self._deliver(self._stage_done),
+                  hours=f"{hours:g}")
 
     def _intervention_end(self, at: Upcoming) -> None:
         """The touch off, then a wait for the experimenter: they tell the participant that it
@@ -838,13 +852,15 @@ class SessionRunner(Procedure):
                 filament = self.chosen_filament_label_g[POST_S]
                 self.run_child(
                     lambda: ShortProtocol(
-                        self.rig, SECONDARY, filament, self._cap((INTERVENTION, block.index))
+                        self.rig, SECONDARY, filament, self._cap((INTERVENTION, block.index)),
+                        block.index,
                     ),
                     self._block_ended,
                 )
             else:
                 self.run_child(
-                    lambda: TouchBlock(self.rig, self.reference_channel), self._block_ended
+                    lambda: TouchBlock(self.rig, self.reference_channel, block.index),
+                    self._block_ended,
                 )
 
         self._set_alarms(at, f"block {block.index}")
@@ -892,11 +908,22 @@ class SessionRunner(Procedure):
         def started() -> None:
             self._clear_alarms()
             self._launched(at)
-            heating(self.session.clock.t_session_s(), "thermode_rekindle")
+            heating(self.session.clock.t_session_s())
 
-        def heating(heat_t_s: float, instruction: str) -> None:
-            self._show_upcoming(self.stage_index + 1)
-            self._wait_until(heat_t_s + duration_s, ended, self._standby(instruction))
+        def heating(heat_t_s: float) -> None:
+            # Counted down to the heat's end, which is the next thing to act on, not to the
+            # next block (15 Oct 2026 pilot review).
+            end_s = heat_t_s + duration_s
+            standby = self._standby("rekindle_heating")
+
+            def prepare() -> None:
+                self.session.set_upcoming(PHASE, REKINDLE_END, end_s)
+                standby()
+
+            # The heat's end is a step like any scheduled one (SPEC.md 7.4): alerted as due,
+            # and as overdue if the thermode's removal is not confirmed within the margin.
+            self._set_alarms(Upcoming(PHASE, REKINDLE_END, end_s), REKINDLE_END)
+            self._wait_until(end_s, ended, prepare)
 
         def resumed_after_heat(heat_t_s: float) -> None:
             # docs/LOG.md N7.D14: the heat was already launched before the crash. It is never
@@ -910,12 +937,37 @@ class SessionRunner(Procedure):
             )
             def confirmed() -> None:
                 self.session.log("rekindle_heat_confirmed", origin="experimenter")
-                heating(heat_t_s, "rekindle_resumed")
+                heating(heat_t_s)
 
             self.await_proceed(confirmed, self._standby("rekindle_resumed"))
 
         def ended() -> None:
+            # The thermode comes off before the garment's touch starts again under it. The
+            # heat's end is past, so the countdown goes on to the next block rather than
+            # showing the heat's end due, then overdue, in the alarm colours. Its alerts are
+            # armed now, beside the heat's overdue one, so a slow removal cannot make the next
+            # block's due alert late.
+            following = self._next_upcoming(self.stage_index + 1)
+            if following is not None:
+                self._set_alarms(following, self._alarm_name(following), keep=True)
+            standby = self._standby("rekindle_remove")
+
+            def prepare() -> None:
+                self._show_upcoming(self.stage_index + 1)
+                standby()
+
+            self.await_proceed(removed, prepare)
+
+        def removed() -> None:
+            # Logged, so a resume after this press does not ask for it again. The next step
+            # sets its own alarms as it begins; one already sounded does not sound twice.
+            self.session.log(resumption.REKINDLE_THERMODE_REMOVED, origin="experimenter")
+            self._clear_alarms()
+            reactivate()
+
+        def reactivate() -> None:
             self.session.set_phase(INTERVENTION)
+            self._show_upcoming(self.stage_index + 1)
 
             def reactivated() -> None:
                 self.session.log("garment_reactivated", detail="after the rekindle")
@@ -925,6 +977,14 @@ class SessionRunner(Procedure):
 
         if self._resumed_heat_t_s is not None:
             heat_t_s, self._resumed_heat_t_s = self._resumed_heat_t_s, None
+            if self._resumed_thermode_removed:
+                # The heat and the thermode's removal are both done: only the touch is left.
+                self.session.log(
+                    "rekindle_resumed", severity="warning",
+                    detail="the thermode was removed before the crash; the touch starts again",
+                )
+                reactivate()
+                return
             resumed_after_heat(heat_t_s)
             return
         self._set_alarms(at, REKINDLE)
@@ -972,7 +1032,7 @@ class SessionRunner(Procedure):
         self.experimenter.set_mapping_phases([])
         self.experimenter.set_actions_enabled(closed=True)
         self.experimenter.set_instruction(
-            self.experimenter.text["instructions"][SESSION_COMPLETE_INSTRUCTION]
+            self.instruction_text(SESSION_COMPLETE_INSTRUCTION)
         )
         self.experimenter.set_status("")
         self.experimenter.refresh()
@@ -1113,8 +1173,12 @@ class SessionRunner(Procedure):
         self._schedule_alarm()
         return skipped_s
 
-    def _arm(self, at: Upcoming, instruction: str, then: Callable[[], None]) -> None:
-        """Wait until due, then wait for the experimenter's go, alerting either side of due."""
+    def _arm(self, at: Upcoming, instruction: str, then: Callable[[], None],
+             waiting: str = "waiting", **values: object) -> None:
+        """Wait until due, then wait for the experimenter's go, alerting either side of due.
+
+        `waiting` is the instruction until then, and `values` fill `instruction`.
+        """
 
         def go() -> None:
             self._clear_alarms()
@@ -1124,8 +1188,8 @@ class SessionRunner(Procedure):
         self._set_alarms(at, at.label_key)
         self._wait_until(
             at.due_s,
-            lambda: self.await_proceed(go, self._standby(instruction)),
-            self._standby("waiting"),
+            lambda: self.await_proceed(go, self._standby(instruction, **values)),
+            self._standby(waiting),
         )
 
     def _launched(self, at: Upcoming) -> None:
@@ -1138,30 +1202,43 @@ class SessionRunner(Procedure):
         )
 
     def _show_upcoming(self, from_index: int) -> None:
-        if self.session.clock.session_started:
-            for stage in self.stages[from_index:]:
-                if stage.upcoming is not None:
-                    at = stage.upcoming
-                    self.session.set_upcoming(at.kind, at.label_key, at.due_s, at.block)
-                    self.experimenter.refresh()
-                    return
-        self.session.clear_upcoming()
+        at = self._next_upcoming(from_index) if self.session.clock.session_started else None
+        if at is None:
+            self.session.clear_upcoming()
+        else:
+            self.session.set_upcoming(at.kind, at.label_key, at.due_s, at.block)
         self.experimenter.refresh()
 
-    def _set_alarms(self, at: Upcoming, what: str) -> None:
+    def _next_upcoming(self, from_index: int) -> Upcoming | None:
+        return next((stage.upcoming for stage in self.stages[from_index:]
+                     if stage.upcoming is not None), None)
+
+    @staticmethod
+    def _alarm_name(at: Upcoming) -> str:
+        """What an alert names its step by, as the step's own stage does."""
+        return f"{BLOCK} {at.block.index}" if at.kind == BLOCK else at.label_key
+
+    def _set_alarms(self, at: Upcoming, what: str, keep: bool = False) -> None:
         """The due alert ahead of time and the overdue one after. One already past sounds now,
-        and only the latest of those, so a late arrival is not a burst of alerts."""
+        and only the latest of those, so a late arrival is not a burst of alerts; one that has
+        already sounded never sounds again. `keep` adds these to the alarms already set, for
+        two steps awaited at once (the rekindle's thermode, and the step after it)."""
         now_s = self.session.clock.t_session_s()
         alarms = [
             (at.due_s - self.due_lead_s, f"{what} due"),
             (at.due_s + self.overdue_margin_s, f"{what} overdue"),
         ]
         past = [alarm for alarm in alarms if alarm[0] <= now_s]
-        self._alarms = [alarm for alarm in alarms if alarm[0] > now_s]
-        if past:
+        future = [alarm for alarm in alarms if alarm[0] > now_s]
+        self._alarms = sorted([*self._alarms, *future] if keep else future)
+        if past and past[-1][1] not in self._sounded:
             # Now, not on a timer: a step already late may be launched before a timer fires.
-            self.session.audio.experimenter_alert(past[-1][1])
+            self._sound(past[-1][1])
         self._schedule_alarm()
+
+    def _sound(self, reason: str) -> None:
+        self._sounded.add(reason)
+        self.session.audio.experimenter_alert(reason)
 
     def _schedule_alarm(self) -> None:
         self._alarm_timer.stop()
@@ -1171,7 +1248,7 @@ class SessionRunner(Procedure):
 
     def _fire_alarm(self) -> None:
         _, reason = self._alarms.pop(0)
-        self.session.audio.experimenter_alert(reason)
+        self._sound(reason)
         self.experimenter.refresh()
         self._schedule_alarm()
 
@@ -1237,6 +1314,7 @@ class SessionRunner(Procedure):
             # never prompted a second time (docs/LOG.md N7.D14).
             if state.in_progress == REKINDLE:
                 self._resumed_heat_t_s = state.rekindle_heat_t_s
+                self._resumed_thermode_removed = state.rekindle_thermode_removed
             self._run_stage(index)
         elif stage.phase == INTERVENTION and stage.id != "intervention.start" and not (
             # The intervention is over: the touch it would start would be stopped again at
