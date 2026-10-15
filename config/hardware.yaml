@@ -48,8 +48,8 @@ prototype_command_file:
 
 adjustment:
   # Accelerating two-button control (SPEC.md 10.3, comparison doc 7.5). All pilot-tunable.
-  # A tap gives fine positioning; a hold traverses the full range in about 6 s.
-  tap_max_duration_s: 0.15
+  # Every press moves at least one step, which gives fine positioning; a hold traverses the full
+  # range in about 6 s (tatp/touchcal.py, AdjustmentState).
   tap_step_kpa: 1.0
   hold_delay_s: 0.30
   hold_rate_initial_kpa_s: 5.0
@@ -106,9 +106,13 @@ responder:
     # outline triangle, which the wording's "▶" approximates (docs/LOG.md N5.11).
     emergency_stop: "!"
   # For a button whose printed symbol is coloured: the symbol's colour, and the filled disc it
-  # sits on. Only the stop is drawn with one. The yellow is matched by eye to the photo.
+  # sits on. Only the stop is drawn with a disc. The yellow is matched by eye to the photo.
   button_symbol_colours:
     emergency_stop: "#141414"
+    # The play button's "▶" wherever participant text names it, in the blue of its sticker's
+    # disc (S, lab run 5 Oct 2026), the same blue as the experimenter screen's TARGET_COLOUR.
+    # The participant's text only; the experimenter's buttons stay plain.
+    confirm: "#4fa3e0"
   button_symbol_discs:
     emergency_stop: "#f2b21b"
   emergency_stop_symbol_confirmed: 2026-09-25   # closes local item L12
@@ -166,8 +170,8 @@ audio:
                                      # rate, which is 48 kHz for both devices on the lab laptop
   tone_ramp_s: 0.01                  # raised-cosine onset/offset on every tone, so a cue does
                                      # not start with a click -- a second, louder cue
-  # The two-button control of SPEC.md 10.3, applied to the noise level. The tap and hold
-  # timings are adjustment.* -- they describe the participant's hand, not the quantity. These
+  # The two-button control of SPEC.md 10.3, applied to the noise level. The hold timings are
+  # adjustment.* -- they describe the participant's hand, not the quantity. These
   # two rates put the full start-to-ceiling range at about 6 s of continuous holding, matching
   # the pressure control. Pilot-tunable; not a sound-level limit (white_noise_max_dbfs is).
   noise_hold_rate_initial_db_s: 1.0
@@ -185,8 +189,11 @@ audio:
   white_noise_step_db: 1.0           # one tap of the two-button control
   masking_check_pressure_kpa: 40.0   # low, and MOVING -- the valve switching is the sound
                                      # being masked (SPEC.md 10.7). Confirm at bring-up.
-  masking_check_max_attempts: 3      # re-raise and re-ask this many times before continuing
-                                     # with a logged warning
+  earplugs_proceed_lockout_s: 2.0    # after the experimenter reports the garment still audible,
+                                     # Next step does nothing for this long, so the second click
+                                     # of a double click is not taken as "the earplugs are in".
+                                     # Well above a double click's gap, well below the time it
+                                     # takes to fit earplugs. Session time. Pilot-tunable.
   participant_cue_hz: 1000.0
   participant_cue_duration_s: 0.20
   participant_cue_over_noise_db: 12.0  # the cue is set this far above whatever noise level the

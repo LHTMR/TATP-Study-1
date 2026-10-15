@@ -57,8 +57,8 @@ written, with an empty value — an absent row and an empty value must not be co
 | `session_number` | - | 1, 2 or 3 |
 | `condition` | - | `participant_preferred`, `ct_targeted` or `sham`. Recorded, never displayed (§16) |
 | `limb` | - | `left` or `right`, from the allocation file |
-| `experimenter_initials` | - | §11 |
-| `experimenter_changed` | - | `true` if these differ from an earlier session for this participant |
+| `experimenter_initials` | - | §11. Upper case whatever was typed, so `sm` and `SM` are one experimenter. Files written before initials were made canonical (October 2026) may hold mixed case: upper-case the value when reading |
+| `experimenter_changed` | - | `true` if these differ from an earlier session for this participant, ignoring case |
 | `participant_language` | - | `sv` or `en` |
 | `experimenter_language` | - | `sv` or `en` |
 | `rng_seed` | - | Integer seed; each stage draws from `random.Random(f"{rng_seed}:{stage_id}")` (LOG N7.D13) |
@@ -96,12 +96,12 @@ written, with an empty value — an absent row and an empty value must not be co
 | `resumed_from_session_file` | - | Filename resumed from, else empty (§15) |
 | `clock_speed` | - | `Clock.speed`. `1.0` in every real session; anything else is a development run with every session-paced interval accelerated (§17.3), and must never be analysed as data |
 | `session_start_iso` | - | Process start, wall clock |
-| `white_noise_level_dbfs` | dBFS | The level the participant set in the masking check (§10.7). Per session, not configured. This key and the next five are written when their setup procedure ends, not at session start, so they follow the start keys; each value is also in `log` from the moment it is measured |
-| `masking_confirmed` | - | `true` when the participant reported the garment no longer audible |
-| `masking_attempts` | - | How many times the level was raised and re-asked, accumulated across an earplug restart. Above 1 means the first setting did not mask |
-| `earplugs_used` | - | `true` when earplugs were fitted under the headphones because raising the noise was not enough (§10.7) |
-| `stop_rehearsal_ran` | - | `true` once the emergency-stop rehearsal has run (§10.9); empty if it never did |
+| `stop_rehearsal_ran` | - | `true` once the emergency-stop rehearsal has run (§10.9); empty if it never did. This key and the next five are written when their setup procedure ends, not at session start, so they follow the start keys, in the order the procedures run (the rehearsal first since 5 Oct 2026); each value is also in `log` from the moment it is measured |
 | `stop_rehearsal_press_detected` | - | `true` when the participant's stop press was detected during the rehearsal; `false` if the experimenter moved on without one |
+| `white_noise_level_dbfs` | dBFS | The level the participant set in the masking check (§10.7). Per session, not configured |
+| `masking_confirmed` | - | `true` when the participant confirmed the noise covers the garment; `false` when the experimenter reported it still audible with earplugs in. A confirm at `audio.white_noise_max_dbfs` is still `true`, and is flagged by a `masking_at_ceiling` row (severity `warning`) in `log` and a warning on the experimenter screen, since a noise the participant could not raise further may only just cover the garment |
+| `masking_attempts` | - | How many times the participant set the masking level, accumulated across an earplug restart: 1 normally, 2 when earplugs were fitted. Before 5 Oct 2026, how many times the level was raised and re-asked. Each report that the garment was still audible is a `masking_reported_audible` row in `log` (origin `experimenter`, the level at the time in `detail`) |
+| `earplugs_used` | - | `true` when earplugs were fitted under the headphones because the participant could still hear the garment (§10.7) |
 | `fit_preview_reruns` | - | Total re-runs the experimenter chose with the fit preview on, across the session (§11.1); `0` when none. Written at close, with the keys below it, because a re-run can come at any time point |
 | `sensitisation_start_iso` | - | Session t=0; empty until sensitisation begins |
 | `session_end_iso` | - | Written at close |
@@ -121,14 +121,22 @@ on, in the order `tatp/session_runner.py` plans them -- and a stage is completed
 its `stage_completed` row exists. `sensitisation_started` has the exact session t=0 in
 `detail`, because the session file receives `sensitisation_start_iso` only at close; a resumed
 session logs `sensitisation_resumed` with the same value instead, and `session_resumed` naming
-the file it resumed from.
+the file it resumed from. A resumed session skips any later stage its file already completed,
+logging `stage_skipped_completed` with the stage in `detail`: a file written before the stop
+rehearsal moved ahead of the masking check (October 2026) can have the masking check completed
+and the rehearsal not, and its session keys then keep that older order.
 
-The VAS proportionality training (§10.6) is three events, each with the scale in `detail`
-(`pain`, `intensity`, `pleasantness`): `vas_training_shown` when the screen goes up (again
-after an interruption repeats it), `vas_training_explained` (origin `experimenter`) at the
-experimenter's Next step once they have explained the anchors aloud, and
-`vas_training_confirmed` (origin `participant`) when the participant then dismisses it with the
-play button, which does nothing before the explanation. The training was given exactly when `vas_training_confirmed` exists; `phase` and
+The VAS training (§10.6) is four events, each with the scale in `detail` (`pain`,
+`intensity`, `pleasantness`): `vas_training_shown` when the screen goes up (again after an
+interruption repeats it), `vas_training_explained` (origin `experimenter`) at the
+experimenter's Next step once they have explained the anchors and proportionality aloud, then
+the participant's practice rating, and `vas_training_confirmed` (origin `participant`) when
+they confirm it with the play button, which does nothing before the explanation.
+**The practice rating is never study data** (docs/research/R35): it is in no ratings table,
+only here, as `vas_practice_rating` (origin `participant`), logged just before
+`vas_training_confirmed`, with `detail` `<scale>: rating_percent=<x> rt_s=<s>
+first_press_side=<left|right> direction_changes=<n>` -- the same quantities a rating records,
+for checking in the pilot whether the practice predicts the first real rating. The training was given exactly when `vas_training_confirmed` exists; `phase` and
 `block_index` say where. A resume reads `vas_training_confirmed` back so a resumed session does
 not give it again. It is given in the sessions `training.vas_proportionality_sessions` lists,
 once per scale: intensity then pleasantness at the start of `touch_calibration`, and pain in
@@ -433,7 +441,7 @@ One row per estimation run — the fitted rating function and the targets read o
 | t_session_s | float | s | no | Seconds from session t=0 |
 | channel | int | - | yes | Reference channel |
 | run_index | int | - | yes | 1 for the first run; incremented for each re-run (§11.1) |
-| superseded | bool | - | yes | `true` if the experimenter re-ran after seeing this fit. The row is retained regardless — a procedure repeatable until it looks right is a forking path unless every attempt is kept |
+| superseded | bool | - | yes | `true` if the experimenter re-ran after seeing this fit, or skipped the calibration while it awaited their decision (`touchcal_channels.skipped`), so it was never accepted. The row is retained regardless — a procedure repeatable until it looks right is a forking path unless every attempt is kept |
 | rerun_reason | str | - | no | Free text the experimenter gave when re-running |
 | fit_form | str | - | yes | `log_pressure` or `linear_pressure` (§9 step 2) |
 | intercept | float | - | no | `a` in `rating ~ a + b·log(pressure)`. This and the six columns after it are empty when the run had no fit, because the step 1 bracket left nothing to sample (`stage1_failures` says `bracket_unusable`) |
@@ -511,20 +519,21 @@ Every value is on this channel, through its gain, and held inside [0, ceiling].
 | channel | int | - | yes | Channel |
 | reference_channel | int | - | yes | The reference, channel 3 (§9) |
 | gain | float | - | yes | Pressure this channel needs to feel like the reference, as a ratio (§9 step 3) |
-| gain_source | str | - | yes | `reference` (the reference itself, 1), `matched` (geometric mean of the settings over `match_level_kpa`), or `fallback_unit_gain` — the experimenter's recorded choice after a match that gave 0 kPa, delivered at the reference's pressure and not valid for analysis |
+| gain_source | str | - | yes | `reference` (the reference itself, 1), `matched` (geometric mean of the settings over `match_level_kpa`), `fallback_unit_gain` — the experimenter's recorded choice after a match that gave 0 kPa, delivered at the reference's pressure and not valid for analysis — or `skipped_unit_gain`, a channel not yet matched when the calibration was skipped, likewise at the reference's pressure |
 | match_settings_kpa | str | kPa | no | This channel's last step 3 settings, semicolon-separated. Empty for the reference |
 | match_level_kpa | float | kPa | yes | Reference pressure the channels were matched at, P50 (`docs/research/R31`) |
 | targets_source | str | - | yes | Where P20/P30/P80 came from: `fit`; `bracket_line`, the line through the step 1 settings; or `device_range`, the line from the smallest step to the ceiling. The last two are fallbacks and make the row not valid for analysis |
 | p20_kpa | float | kPa | yes | Reference-scale P20 as delivered |
 | p30_kpa | float | kPa | yes | Reference-scale lower bound of the pleasantness window |
 | p80_kpa | float | kPa | yes | Reference-scale upper bound |
-| pleasant_kpa | float | kPa | yes | Reference-scale pleasantness level, geometric mean of the two step 5 settings |
+| pleasant_kpa | float | kPa | yes | Reference-scale pleasantness level, geometric mean of the two step 5 settings; of P30 and P80 when the calibration was skipped before step 5 |
 | sham_kpa | float | kPa | yes | What the sham condition delivers on this channel |
 | ct_targeted_kpa | float | kPa | yes | What the CT-targeted condition delivers on this channel |
 | participant_preferred_kpa | float | kPa | yes | What the participant-preferred condition delivers on this channel; equal to `ct_targeted_kpa` by design (R31) |
-| participant_preferred_pattern | str | - | yes | The pattern chosen in the preference selection |
+| participant_preferred_pattern | str | - | yes | The pattern chosen in the preference selection; the fixed CT-targeted pattern (`patterns.fixed_ct_pattern`) when the calibration was skipped before it |
 | clamped | str | - | no | Semicolon-separated conditions whose level on this channel was held inside [0, ceiling] |
-| valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4), or when any fallback stood in for a measured value |
+| skipped | bool | - | yes | `true` when the experimenter ended the calibration early with Skip calibration, possible only on a pilot rig — the mock or the prototype, never the study garment (`docs/LOG.md` N7.F8b). Whatever was not yet measured is filled as the other columns say. A run skipped while its fit awaited the experimenter's decision has that fit's `touchcal_fit` row, `superseded`; one skipped during its estimation run has none. The skip is offered only once the current run has its own ratings, so a skipped calibration's fallback is always on that run's step 1 settings. The `log` has `touchcal_skipped` with the number of ratings given. Files written before 14 Oct 2026 lack the column; read its absence as `false` |
+| valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4), when any fallback stood in for a measured value, or when the calibration was `skipped` |
 
 ---
 

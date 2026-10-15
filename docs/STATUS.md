@@ -1,10 +1,11 @@
 # STATUS
 
-**Last updated:** 14 October 2026.
+**Last updated:** 15 October 2026.
 **Milestone:** 6 (pilotable), in progress, in lab piloting. Everything to date is in `main`.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
-back (`CLAUDE.md`, Committing). `accel/integration` is finished and no longer used. Open:
-`pilot/remote-raw-input`, the remote told from the experimenter's keyboard (LOG N7.D22).
+back (`CLAUDE.md`, Committing). Open: `pilot/remote-raw-input`, L15 (the participant's stop lost
+in a focused experimenter text field), the remote told from the experimenter's keyboard by
+Windows Raw Input (LOG N7.D22).
 
 ---
 
@@ -13,126 +14,112 @@ back (`CLAUDE.md`, Committing). `accel/integration` is finished and no longer us
 **The build runs a whole session**, against the mock garment or the prototype sleeve. The garment
 is chosen at launch. `run_session.py` with no arguments opens the launcher (§4.1).
 
-**S's first lab run (30 Sep 2026) and what came of it** (`docs/LOG.md` N7.F1–N7.F4):
-- **The remote's keys were swapped.** A key probe on the lab R400 showed ▶ sends `f5` and
-  `escape` in turn, and "!" sends `period`. The config had them the other way round, so ▶ fired
-  the emergency stop. Both of ▶'s keys now confirm, and `period` is the stop. SPEC §10.1 and the
-  SOP are corrected. Most of the run's other findings follow from this: the stop screen's
-  "Please wait" in audio setup, and the session advancing on random presses (N7.F1).
-- **Pilot codes 901–910** each repeat participant 1–10's allocation. They are generated, so
-  regenerating the file keeps them (N7.F2).
-- **The first participant screen** says "The session will start shortly." (N7.F3).
-- **Instruments and environment has a Close button** (N7.F3).
-- **Launcher entry 5, Check the hardware.** It checks the remote's buttons, the screens, the sound
-  devices with every output listed, and each garment channel, through the session's own code. It
-  adds no sound level or pressure (N7.F4).
+**S's 5 Oct issue list is fixed** (15 Oct 2026), in four branches, each reviewed with
+code-review high and spec-review and merged into `main` with `make check` passing:
+- **Audio setup** (`docs/LOG.md` N7.F6a–e):
+  - step 1 says "until you can hear it easily", and the rehearsal's last line "It works at any time.";
+  - **the noise could not be turned down because a press of 150–300 ms moved nothing**, and an
+    R400 press lasts about 200 ms. Every press of the two-button control now moves at least one
+    step. This also changes the pressure adjustment in touch calibration;
+  - the "Can you still hear the garment?" screen is gone: the participant tells the
+    experimenter, whose Next step starts the earplug path;
+  - the stop rehearsal now comes before the masking check;
+  - the stop during setup not being shown was N7.F5's repaint bug, now tested.
+- **Rating scales** (N7.F7a–b):
+  - "twice as far" is the experimenter's to say;
+  - the participant makes a practice rating, which is never study data (R35);
+  - holding a button accelerates the marker.
+- **Touch calibration** (N7.F8a–c):
+  - the long pause was the ramp to the next amplitude running after the 8–12 s gap; it now
+    runs inside it;
+  - Skip calibration, for the mock and the prototype only;
+  - the experimenter sees "x/N answered".
+- **General** (N7.F9a–b):
+  - experimenter initials are case-insensitive;
+  - the ▶ in participant text is blue.
 
-**S's second lab run (5 Oct 2026)** (`docs/LOG.md` N7.F5):
-- **The stall after the first Next step was a repaint bug.** One participant message replacing
-  another was never redrawn, so the welcome never appeared. Fixed for every participant screen.
-  The first run's "waiting for the participant's response" over "Rest for a moment" was the same
-  bug.
-- **Run a session** fits the laptop: the form scrolls and the buttons stay visible. Browse for
-  the pattern folder opens in `config/patterns`, and Close is now Cancel.
+**Earlier lab runs:** 30 Sep (N7.F1–F4: the remote's keys remapped, pilot codes 901–910, Check
+the hardware) and 5 Oct (N7.F5: the repaint stall, Run a session fits the laptop).
 
-**Earlier Milestone 6 work** (N7.U10–N7.U19, N7.T1–N7.T4):
-- VAS proportionality training;
-- the UI-review calls;
-- the validator timing fix;
-- the data upload;
-- the ▶ double-tap lockout;
-- the lost-link log;
-- the REDCap checkbox.
-
-**`make check` passes:** 1025 tests, ruff, the validator (35 checks) and 172 screens.
-
-**The acceleration push is over (14 Oct 2026)** and its way of deciding is now standing practice
-(`CLAUDE.md`, Deciding). The Mac's Milestone 2 line was
-merged keeping the lab's tree (`ae3fd1e`); its two unsuperseded parts were ported: the lost-taps
-fix (adjustment presses timed from their key events) and the RNG question, decided as keep
-`random.Random` with a test pinning its stream (LOG N3.7). The lab-run commits were reviewed
-(code-review high, spec-review) and their fixes landed in `8589ade` before the merge to `main`.
+**`make check` passes:** 1093 tests, ruff, the validator (36 checks) and 168 screens.
 
 **For S, before the pilot.** Everything is in `docs/LOG.md` §7:
 - **Screens to review:**
-  - new: `experimenter_{en,sv}_launcher_hardware_check` and
-    `participant_{en,sv}_screen_session_starting`;
-  - re-approved: `experimenter_{en,sv}_launcher` and `_launcher_instruments` (N7.F3, N7.F4),
-    and `experimenter_{en,sv}_launcher_session` and `_launcher_session_checked` (N7.F5);
-  - earlier: N7.U10, N7.T3, N7.U19, N7.U17;
+  - from the 5 Oct fixes:
+    - the audio screens `participant_{en,sv}_audio_setup_{find_level,mask_level}` and
+      `_screen_stop_rehearsal_done` (N7.F6a, N7.F6c);
+    - the VAS training screens `participant_{en,sv}_vas_training_{intensity,pain,pleasantness}`
+      and the new `_vas_training_pain_practice` (N7.F7a);
+    - the new `experimenter_{en,sv}_touchcal_estimation_skip` (N7.F8b);
+    - every screen with a blue ▶ (N7.F9b);
+  - from the earlier runs: N7.F3, N7.F4, N7.F5, N7.U10, N7.T3, N7.U19, N7.U17;
   - still unreviewed: N7.U1, N7.U2, N7.U4, N7.C24 and N7.E9.
 - **Drafted wording:**
-  - the hardware check (N7.F4) and the Swedish "Sessionen börjar snart." (N7.F3);
-  - earlier: N7.T1, N7.T2, N7.U10, N7.U16, N7.U17;
+  - from the 5 Oct fixes:
+    - the audio steps and warnings (N7.F6a, N7.F6c);
+    - the practice line and the experimenter's training text (N7.F7a);
+    - Skip calibration and "x/N answered" (N7.F8b, N7.F8c);
+  - from the earlier runs: N7.F3, N7.F4, N7.T1, N7.T2, N7.U10, N7.U16, N7.U17;
   - still unreviewed: N7.U1, N7.U2, N7.U4 and N7.C1.
 - **Decisions to check:**
-  - the UI-review calls (N7.U10);
-  - VAS training in every session (N7.T4, R34);
-  - blinding choices N7.E4 and N7.D17;
-  - low-confidence decisions N7.C2, N7.B2 and N7.D8.
-- **Open items still S's:** L11, the rehearsal pressure; L13, the noise ceiling and the cue; L3,
-  alert metering; L14, a lost sleeve link; **L15, the participant's stop typed into a focused
-  experimenter text field: fixed by N7.D22, closes when the lab check N2.10 passes.**
+  - free placement and log-only recording of the VAS practice (N7.F7a, R35);
+  - the hold's speeds (N7.F7b);
+  - the 2 s earplugs lockout (N7.F6c);
+  - three ratings before Skip is offered (N7.F8b);
+  - the earlier ones: N7.U10, N7.T4, N7.E4, N7.D17, N7.C2, N7.B2, N7.D8.
+- **Open items still S's:**
+  - L11, the rehearsal pressure;
+  - L13, the noise ceiling and the cue;
+  - L3, alert metering;
+  - L14, a lost sleeve link;
+  - **L15, the participant's stop typed into a focused experimenter text field.** Fixed in
+    `pilot/remote-raw-input` (N7.D22); closes when the lab check N2.10 passes.
 
 ---
 
 ## Next steps
 
-1. **Fix S's 5 Oct issue list.** Not started. S will say when to begin. Participant wording:
-   check the ethics folder first, otherwise draft it (`CLAUDE.md`, Deciding).
-   - **General:**
-     - experimenter initials case-insensitive;
-     - the arrow button blue (ask S which screen or screens).
-   - **Audio calibration:**
-     - step 1 says to turn the hiss up until it can *just* be heard, which is a threshold task.
-       Change it to "until you can hear it easily";
-     - tell the participant when they pressed the emergency stop;
-     - emergency-stop training moves before audio noise calibration (a SPEC order change, so
-       update SPEC and log it);
-     - if the noise does not mask the garment, prompt the participant to tell the experimenter
-       (who can offer ear plugs). The separate "does it cover the sound?" screen is confusing,
-       so merge it into the flow;
-     - bug: the noise cannot be turned down in the second step;
-     - "any part of the visit" becomes "at any time".
-   - **Rating-scale training:**
-     - "a mark twice as long" comes off the participant screen. The experimenter gets text to
-       explain it instead;
-     - the participant practises making a rating, not just pressing continue.
-   - **Rating scales:** holding a key accelerates the marker along the line (rate and ramp in
-     `config/`).
-   - **Touch calibration:**
-     - a long delay between a response and the next stimulus (check whether it is a configured
-       interval or real lag);
-     - with the mock or prototype garment only, the experimenter can skip to the next event
-       after a few ratings. It must be impossible with the real garment;
-     - the experimenter sees progress as "x/N answered".
-2. **Re-run the lab session with the remapped remote, starting with Check the hardware.**
-   - **Sound:** `audio.participant_device` is `Bose QC Headphones WASAPI`, the Bluetooth device.
-     On a cable the sound goes to the laptop's own headphone output, which is a different
-     device. The check lists every output by name. Set `participant_device` to whichever the
-     study will use.
-   - **Confirm the session now runs past the welcome** (N7.F5), then re-check the first run's
-     other report, that the participant was not told of a stop in setup. It may have been the
-     same repaint bug: the stop screen is a message too.
+1. **Re-run the lab session, starting with Check the hardware.**
+   - **Sound:** `audio.participant_device` is `Bose QC Headphones WASAPI`, the Bluetooth
+     device. On a cable the sound goes to the laptop's own headphone output, which is a
+     different device. Set `participant_device` to whichever the study will use.
+   - **The 5 Oct fixes, in the lab:**
+     - the noise turns down with single presses in step 2;
+     - the stop rehearsal comes first, and the masking step's "tell the experimenter" flow
+       works, including the earplug path;
+     - in the 5 Oct log, check `noise_level_confirmed find_level`. If it was −60.0 dBFS, the
+       participant was at the control's floor, which is audible at the lab volume (N7.F6b, L3);
+     - **R400 hold check (N7.F7b):** hold a large button on a VAS. The marker should start
+       slowly and speed up, and a tap should move one step. If the hold does not accelerate,
+       log one key-probe hold with stamps and widen `vas.hold_regrip_max_s`;
+     - the VAS practice rating, and "twice as far" said by the experimenter;
+     - in touch calibration, whether the pause between touches still feels long now that the
+       ramp runs inside the gap (R32's criterion before shortening it), Skip calibration, and
+       "x/N answered".
    - **Then the rest of the pilot checks:**
      - the participant screen on the HP at 1.5;
-     - the VAS training flow;
-     - the remote routing (N7.I1), including that Esc or F5 on the experimenter's keyboard now
+     - the remote routing (N7.I1), including that Esc or F5 on the experimenter's keyboard
        counts as ▶;
      - whether the alerts are audible over the noise;
      - taps on the adjustment are never lost or misread (N2.9).
-3. **Run `make check` on `pilot/remote-raw-input` with no other session using the PC**, then
-   merge it and run the lab check N2.10 with the R400 and the laptop keyboard. It is reviewed
-   and its own tests pass, but on 14-15 Oct other sessions held the CPU at 99%, and under that
-   load `main`'s own code stalls at the same steps (`test_session_runner` at the masking
-   check's choice, the validator's `rates_randomly`), so the gate could not be judged. If it fails, `responder.key_source: any_keyboard` restores the old
-   routing.
-4. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
-5. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
+2. **L15:** merge `pilot/remote-raw-input` once its re-review findings are fixed and
+   `make check` passes on a quiet machine (other sessions' test runs at 99% CPU stall `main`'s
+   own code too), then run the lab check N2.10 with the R400 and the laptop keyboard. If that
+   fails, `responder.key_source: any_keyboard` restores the old routing.
+3. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
+4. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
    Milestone 6 done.
-6. **Left open, not blocking:**
+5. **Left open, not blocking:**
    - the mock's injected faults never lose the link (N7.U8 (2));
-   - the emergency stop does not stop the white noise.
+   - the emergency stop does not stop the white noise;
+   - the hold-acceleration integral is duplicated in `VasState._travel` and
+     `touchcal.AdjustmentState` (N7.F7b). Merge them;
+   - **the screenshot tolerance (0.2 %) hides glyph-sized changes:** the blue ▶ passed it
+     unchanged. Compare exactly when a change is that small;
+   - `--approve-matching` keeps only the last pattern given, so name one per run;
+   - under heavy load (several `make check` runs at once) the validator's `rates_randomly` can
+     miss its 120 s limit, and session-runner tests can stall in setup. Both pass on a quiet
+     machine. Run one gate at a time.
 
 ---
 

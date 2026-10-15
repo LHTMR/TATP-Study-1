@@ -62,7 +62,7 @@ from tatp import config as cfg
 from tatp import schedule as sched
 from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
-from tatp.session import DRIVERS, with_session_choices
+from tatp.session import DRIVERS, canonical_initials, with_session_choices
 from tatp.ui.application import application, scale_screens
 from tatp.ui.widgets import (
     DISCONNECTED_COLOUR,
@@ -383,7 +383,7 @@ class SessionDialog(QDialog):
         return argparse.Namespace(
             participant=self.participant.text().strip(),
             session=self.session_number.currentData(),
-            experimenter=self.experimenter.text().strip(),
+            experimenter=canonical_initials(self.experimenter.text()),
             patterns=Path(self.pattern_folder.text().strip()),
             participant_language=self.participant_language.currentData(),
             experimenter_language=self.experimenter_language.currentData(),

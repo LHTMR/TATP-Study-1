@@ -561,7 +561,9 @@ change.
   down and confirm. A fixed rate cannot serve both reach and precision over 0–250 kPa: 25 kPa/s
   needs 10 s to traverse the range, 50 kPa/s crosses it in 5 s but moves 2.5 kPa per 50 ms tick.
   Instead the rate accelerates with hold duration. Suggested starting values, all in config and all
-  pilot-tunable: a tap under ~150 ms moves **1 kPa** (0.4 % of range); holding starts at
+  pilot-tunable: every press moves at least **1 kPa** (0.4 % of range), however short (since
+  5 Oct 2026; before then only a tap under ~150 ms did, and a press between that and the hold
+  delay moved nothing — SPEC.md 10.3); holding starts at
   **5 kPa/s** after a 300 ms delay and ramps linearly to **50 kPa/s** over 1.5 s, then holds there.
   That gives fine positioning on taps and short holds, and traverses the full range in about **6 s**
   of continuous holding. Log every button-down and button-up event with timestamps, not just the

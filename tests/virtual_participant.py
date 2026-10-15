@@ -55,9 +55,9 @@ def make_config(loaded: cfg.Config, tmp_path, **study1_overrides) -> cfg.Config:
     return cfg.Config(**{**loaded.__dict__, "hardware": hardware, "study1": study1})
 
 
-def make_rig(config: cfg.Config) -> Rig:
+def make_rig(config: cfg.Config, clock_speed: float = CLOCK_SPEED) -> Rig:
     session = Session(
-        config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=CLOCK_SPEED), rng_seed=7
+        config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=clock_speed), rng_seed=7
     )
     session.start()
     participant = ParticipantWindow(config, Responder(config.hardware), session.clock)
@@ -124,8 +124,7 @@ class Virtual:
         trial = self.current()
         if trial is None:
             vas = window.vas
-            explaining = vas.training and not vas.training_accepting
-            if window.stack.currentWidget() is vas and explaining:
+            if window.stack.currentWidget() is vas and vas.explaining:
                 # The experimenter has explained the anchors: their go (SPEC.md 10.6).
                 rig.experimenter.proceed_requested.emit()
             return
@@ -158,6 +157,8 @@ class Virtual:
         ):
             press(window, "f5")
         elif isinstance(trial, VasTraining) and trial._connections:
+            # The practice rating: reveal the marker, then confirm.
+            press(window.vas, "pagedown")
             press(window.vas, "f5")
         elif isinstance(trial, ExperimenterChoice):
             name, args = self.decide(trial)

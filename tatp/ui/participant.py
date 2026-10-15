@@ -56,6 +56,7 @@ from tatp.ui.vas import (
     QUESTION_Y_FRACTION,
     SIDE_MARGIN_FRACTION,
     VasWidget,
+    draw_prose,
 )
 from tatp.units import MS_PER_S
 
@@ -68,10 +69,6 @@ EMERGENCY_STOP_SCREEN = "emergency_stop"
 # The one screen that draws the stop button, because pointing at it is its purpose (SPEC.md
 # 10.9). A key in the participant text file, not wording.
 STOP_REHEARSAL_SCREEN = "stop_rehearsal"
-# The participant text key of the training screen's continue line, and the blank line that
-# sets it apart as the message screens set theirs.
-TRAINING_CONTINUE = "training_continue"
-TRAINING_PARAGRAPH_BREAK = "\n\n"
 
 MESSAGE_POINT_SIZE = 26
 CUE_RADIUS_FRACTION = 0.09
@@ -116,8 +113,9 @@ class _MessageScreen(QWidget):
     is a search on every one of them.
     """
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, responder: Responder, parent: QWidget | None = None):
         super().__init__(parent)
+        self.responder = responder
         self.text = ""
         # Weight rather than wording is what marks the stop screen out from a rest screen
         # (UI_PRINCIPLES.md 5.6). Not colour: an alarming screen is the wrong thing to show
@@ -141,7 +139,7 @@ class _MessageScreen(QWidget):
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
         top = int(self.height() * QUESTION_Y_FRACTION)
         box = self.rect().adjusted(margin, top, -margin, 0)
-        painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.text)
+        draw_prose(painter, box, self.text, self.responder)
         if self.stop_symbol is not None:
             painter.setRenderHint(QPainter.Antialiasing)
             _draw_symbol_button(
@@ -356,7 +354,7 @@ class _ControlScreen(QWidget):
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
         top = int(self.height() * ADJUST_CONFIRM_Y_FRACTION)
         box = self.rect().adjusted(margin, top, -margin, 0)
-        painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.confirm)
+        draw_prose(painter, box, self.confirm, self.responder)
         painter.end()
 
 
@@ -369,7 +367,7 @@ def _draw_top_text(painter: QPainter, widget: QWidget, text: str) -> None:
     margin = int(widget.width() * SIDE_MARGIN_FRACTION)
     top = int(widget.height() * QUESTION_Y_FRACTION)
     box = widget.rect().adjusted(margin, top, -margin, 0)
-    painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, text)
+    draw_prose(painter, box, text, widget.responder)
 
 
 def _button_rect(widget: QWidget, side: str) -> QRect:
@@ -467,7 +465,7 @@ def _draw_button(
         label_width,
         widget.height() - rect.bottom() - BUTTON_LABEL_GAP_PX,
     )
-    painter.drawText(label_box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, label)
+    draw_prose(painter, label_box, label, responder)
 
 
 class ParticipantWindow(QWidget):
@@ -491,8 +489,9 @@ class ParticipantWindow(QWidget):
     # asks for the self-start press (SPEC.md 12.3). Emitted on any message screen; what it
     # means is up to whoever is listening, and nothing listens on a screen that asks nothing.
     message_confirmed = Signal()
-    # The play button on the VAS proportionality training (SPEC.md 10.6).
-    vas_training_confirmed = Signal()
+    # The play button on the VAS training's practice rating (SPEC.md 10.6), with the practice
+    # VasResponse. Separate from `confirmed` so a practice can never be recorded as a rating.
+    vas_training_confirmed = Signal(object)
     # A play-button press ignored as carried over from the screen before (docs/LOG.md N7.U15).
     confirm_carried_over = Signal()
     # The visual warning cue has just gone up (SPEC.md 10.5). The rig sounds the audible cue
@@ -521,7 +520,7 @@ class ParticipantWindow(QWidget):
         self._confirm_lockout_s = float(responder_config["repeat_confirm_lockout_s"])
         self._confirm_accepted_s: float | None = None
 
-        self.message = _MessageScreen()
+        self.message = _MessageScreen(responder)
         self.message.stop_colour = QColor(
             responder_config["button_symbol_colours"]["emergency_stop"]
         )
@@ -673,17 +672,17 @@ class ParticipantWindow(QWidget):
         self._show(self.vas)
 
     def show_vas_training(self, scale: str, accepting: bool) -> None:
-        """The proportionality training for `scale` (SPEC.md 10.6): the scale as it is rated
-        with `training.<scale>` below it.
+        """The VAS training for `scale` (SPEC.md 10.6): the scale as it is rated.
 
-        While the experimenter explains the anchors, that is all, and ▶ does nothing. Once they
-        have (`accepting`), `training_continue` follows the sentence and ▶ emits
-        `vas_training_confirmed`.
+        While the experimenter explains the anchors and proportionality aloud, that is all, and
+        no button but the emergency stop does anything. Once they have (`accepting`), it is a
+        practice rating with `training.<scale>` below it, and ▶ with the marker shown emits
+        `vas_training_confirmed` with the practice response -- never `confirmed`.
         """
-        sentence = self.text["training"][scale]
         if accepting:
-            sentence = TRAINING_PARAGRAPH_BREAK.join((sentence, self.text[TRAINING_CONTINUE]))
-        self.vas.show_training(scale, self.text["vas"][scale], sentence, accepting)
+            self.vas.show_practice(scale, self.text["vas"][scale], self.text["training"][scale])
+        else:
+            self.vas.show_explanation(scale, self.text["vas"][scale])
         self._show(self.vas)
 
     def _show(self, screen: QWidget, adjusting: bool = False, choosing: bool = False) -> None:

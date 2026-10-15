@@ -50,8 +50,12 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "vas.start_pct_after_left_press", NUMBER, 0, 100),
     ("study1.yaml", "vas.start_pct_after_right_press", NUMBER, 0, 100),
     ("study1.yaml", "vas.move_step_pct", NUMBER, 0, 100),
-    ("study1.yaml", "vas.hold_repeat_delay_s", NUMBER, 0, None),
-    ("study1.yaml", "vas.hold_repeat_interval_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_delay_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_rate_initial_pct_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_rate_final_pct_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_ramp_duration_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_tick_interval_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_regrip_max_s", NUMBER, 0, None),
     ("study1.yaml", "vas.no_response_warning_s", NUMBER, 0, None),
     ("study1.yaml", "choice.feedback_s", NUMBER, 0, None),
     ("study1.yaml", "choice.gap_s", NUMBER, 0, None),
@@ -129,6 +133,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "touch_calibration.equalisation_pairs_to_flag", int, 1, None),
     ("study1.yaml", "touch_calibration.equalisation_readjust_max_passes", int, 0, None),
     ("study1.yaml", "touch_calibration.evenness_max_rebalances", int, 0, None),
+    ("study1.yaml", "touch_calibration.pilot_skip_min_ratings", int, 1, None),
     ("study1.yaml", "patterns.condition_pattern", dict, None, None),
     ("study1.yaml", "patterns.preference_candidates", list, None, None),
     ("study1.yaml", "patterns.fixed_ct_pattern", str, None, None),
@@ -147,7 +152,6 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "prototype_command_file.max_steps", int, 1, None),
     ("hardware.yaml", "prototype_command_file.max_step_ms", int, 1, None),
     ("hardware.yaml", "prototype_command_file.mask_bits", int, 1, None),
-    ("hardware.yaml", "adjustment.tap_max_duration_s", NUMBER, 0, None),
     ("hardware.yaml", "adjustment.tap_step_kpa", NUMBER, 0, None),
     ("hardware.yaml", "adjustment.hold_delay_s", NUMBER, 0, None),
     ("hardware.yaml", "adjustment.hold_rate_initial_kpa_s", NUMBER, 0, None),
@@ -167,6 +171,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "responder.button_symbols.confirm", str, None, None),
     ("hardware.yaml", "responder.button_symbols.emergency_stop", str, None, None),
     ("hardware.yaml", "responder.button_symbol_colours.emergency_stop", str, None, None),
+    ("hardware.yaml", "responder.button_symbol_colours.confirm", str, None, None),
     ("hardware.yaml", "responder.button_symbol_discs.emergency_stop", str, None, None),
     ("hardware.yaml", "screens.participant_fullscreen", bool, None, None),
     ("hardware.yaml", "screens.experimenter_refresh_interval_s", NUMBER, 0, None),
@@ -182,7 +187,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "audio.white_noise_max_dbfs", NUMBER, None, 0),
     ("hardware.yaml", "audio.white_noise_step_db", NUMBER, 0, None),
     ("hardware.yaml", "audio.masking_check_pressure_kpa", NUMBER, 0, None),
-    ("hardware.yaml", "audio.masking_check_max_attempts", int, 1, None),
+    ("hardware.yaml", "audio.earplugs_proceed_lockout_s", NUMBER, 0, None),
     ("hardware.yaml", "audio.participant_cue_hz", NUMBER, 0, None),
     ("hardware.yaml", "audio.participant_cue_duration_s", NUMBER, 0, None),
     ("hardware.yaml", "audio.participant_cue_over_noise_db", NUMBER, 0, None),
@@ -456,6 +461,19 @@ def load(
         strays = sorted(set(text["training"]) - set(text["vas"]))
         if strays:
             raise ConfigError(f"{name}: training keys {strays} are not scales under `vas`")
+        # The experimenter explains proportionality for exactly the scales that are trained.
+        explained = TEXT_FILES[("experimenter", lang)]
+        if set(loaded[explained]["vas_training_explain"]) != set(text["training"]):
+            raise ConfigError(
+                f"{explained}: vas_training_explain keys "
+                f"{sorted(loaded[explained]['vas_training_explain'])} are not the trained "
+                f"scales {sorted(text['training'])}"
+            )
+
+    # A VAS hold is redrawn every tick; at zero the timer would spin the event loop flat out.
+    # The schema's minimums are inclusive, so this one is checked here.
+    if loaded["study1.yaml"]["vas"]["hold_tick_interval_s"] <= 0:
+        raise ConfigError("study1.yaml: 'vas.hold_tick_interval_s' must be above 0")
 
     config = Config(
         study1=loaded["study1.yaml"],

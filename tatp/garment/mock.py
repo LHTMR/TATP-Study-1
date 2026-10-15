@@ -19,6 +19,8 @@ class MockGarment(GarmentController):
     # like every driver's capabilities, rather than configured or queried (SPEC.md 12.1).
     n_channels = 5
     per_channel_pressure = True
+    # It touches nobody, so it is never the study garment (`GarmentController.pilot_rig`).
+    pilot_rig = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -7,10 +7,11 @@ runner itself only ever repeats one of its own waits.
 **The session is a list of stages**, each one protocol at a time point, one scheduled block,
 the rekindle, or one timed step. `_plan` builds it once from the configuration, and a stage logs
 `stage_completed` with its id when it ends. That log line is what "completed" means for a
-resume (`tatp/resume.py`): a resumed session starts at the first stage it does not find there.
+resume (`tatp/resume.py`): a resumed session starts at the first stage it does not find there,
+and skips any later stage it does find.
 
-1. **Setup** -- the garment fitted, the welcome screen, the masking check (SPEC.md 10.7) and the
-   stop rehearsal (10.9).
+1. **Setup** -- the garment fitted, the welcome screen, the stop rehearsal (SPEC.md 10.9) and
+   the masking check (10.7).
 2. **Touch calibration** (9), then the baseline relaxation and alertness ratings (Bilaga 1
    Table 2).
 3. **Pre-sensitisation** -- the long protocol on the secondary region, the short protocol on the
@@ -138,8 +139,9 @@ def stage_layout(schedule: Schedule) -> list[tuple[str, str, Upcoming | None]]:
 
     add("setup.garment", SETUP)
     add("setup.welcome", SETUP)
-    add("setup.masking_check", SETUP)
+    # The stop is rehearsed before the masking check (S, 5 Oct 2026; SPEC.md 10.9).
     add("setup.stop_rehearsal", SETUP)
+    add("setup.masking_check", SETUP)
     # Its own phase is set by the calibration itself.
     add("touch_calibration", SETUP)
     add("touch_calibration.baseline", TOUCH_CALIBRATION)
@@ -278,6 +280,8 @@ class SessionRunner(Procedure):
 
         self.stages = self._plan()
         self.stage_index = 0
+        # Stages a resumed session found completed (`_resume`); empty for a fresh session.
+        self._completed: frozenset[str] = frozenset()
         self._launch: Callable[[], None] | None = None
         self._alarms: list[tuple[float, str]] = []
         self._alarm_timer = QTimer(self)
@@ -399,7 +403,14 @@ class SessionRunner(Procedure):
     def _stage_done(self, _result: object = None) -> None:
         stage = self.stages[self.stage_index]
         self.session.log("stage_completed", detail=stage.id)
-        self._run_stage(self.stage_index + 1)
+        index = self.stage_index + 1
+        # A resumed session completed some stages before the crash, and not always only ones
+        # before the restart point: a file from before the setup order changed (5 Oct 2026)
+        # has the masking check done and the rehearsal not. Those are reloaded, never rerun.
+        while self.stages[index].id in self._completed:
+            self.session.log("stage_skipped_completed", detail=self.stages[index].id)
+            index += 1
+        self._run_stage(index)
 
     def _protocol(self, make: Callable[[], Procedure], then=None) -> None:
         """Run a protocol as this stage; `then(result)` before the next stage begins."""
@@ -1006,6 +1017,7 @@ class SessionRunner(Procedure):
         reloaded, not redone, and the session goes on from the first stage that was not."""
         state = self.resume
         done = state.completed_stages
+        self._completed = frozenset(done)
         self.session.log(
             "session_resumed", severity="warning",
             detail=f"from {state.open.session_file.name}; {len(done)} stages completed",
@@ -1020,12 +1032,13 @@ class SessionRunner(Procedure):
             self.session.resume_sensitisation(
                 state.open.sensitisation_start_iso, state.clock_speed
             )
+        # In the session's order, so the file keeps DATA_SCHEMA.md's key order.
+        if "setup.stop_rehearsal" in done and state.stop_rehearsal_press_detected is not None:
+            self.session.record_stop_rehearsal(state.stop_rehearsal_press_detected)
         if "setup.masking_check" in done:
             assert state.masking is not None, "a completed masking check recorded its result"
             self.session.record_masking(*state.masking)
             self.session.audio.start_noise(state.masking[0])
-        if "setup.stop_rehearsal" in done and state.stop_rehearsal_press_detected is not None:
-            self.session.record_stop_rehearsal(state.stop_rehearsal_press_detected)
         # SPEC.md 10.6: training already given in this session is not given again.
         self.session.vas_trained.update(state.vas_trained)
         if "touch_calibration" in done:

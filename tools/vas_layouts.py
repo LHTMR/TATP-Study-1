@@ -51,7 +51,7 @@ def main() -> int:
                 written.append(path)
 
             window.show_vas(MARKER_SCALE)
-            window.vas.state.press(Action.INCREASE)
+            window.vas.state.press(Action.INCREASE, window.clock.real_elapsed_s())
             window.vas.state.percent = MARKER_PCT
             window.vas.update()
             path = folder / f"{language}_{MARKER_SCALE}_at_{MARKER_PCT:g}pct.png"

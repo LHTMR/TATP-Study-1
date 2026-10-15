@@ -40,6 +40,8 @@ class ArduinoMosfetGarment(GarmentController):
     # Five channels, like the sleeve (SPEC.md 12.1: declared, not queried).
     n_channels = 5
     per_channel_pressure = False
+    # The prototype is piloted, never used for the study (SPEC.md 12.4).
+    pilot_rig = True
 
     serial_factory = staticmethod(serial.Serial)
 

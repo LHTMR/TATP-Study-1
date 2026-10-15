@@ -8,16 +8,33 @@ from __future__ import annotations
 
 import shutil
 
+import numpy as np
 import pytest
 import yaml
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QFontMetrics, QKeyEvent
+from PySide6.QtCore import QEvent, QRect, Qt
+from PySide6.QtGui import (
+    QColor,
+    QFocusEvent,
+    QFont,
+    QFontMetrics,
+    QImage,
+    QKeyEvent,
+    QPainter,
+)
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
 from tatp.clock import Clock
 from tatp.responder import Action, Responder
 from tatp.ui import vas as vas_module
+from tatp.ui.participant import (
+    ADJUST_CONFIRM_Y_FRACTION,
+    BUTTON_LABEL_POINT_SIZE,
+    BUTTON_LABEL_WIDTH_FRACTION,
+    BUTTON_Y_FRACTION,
+    MESSAGE_POINT_SIZE,
+    _MessageScreen,
+)
 from tatp.ui.vas import (
     ANCHOR_POINT_SIZE,
     INTRODUCTION_POINT_SIZE,
@@ -26,12 +43,16 @@ from tatp.ui.vas import (
     LINE_Y_FRACTION,
     MARKER_GAP_PX,
     MARKER_HEIGHT_PX,
+    MAX_PCT,
     QT_KEYS,
     QUESTION_POINT_SIZE,
+    QUESTION_Y_FRACTION,
+    SIDE_MARGIN_FRACTION,
     STUDY_LAYOUT,
     TEXT_TO_SCALE_GAP_PX,
     TICK_RISE_PX,
     TICK_WIDTH_PX,
+    TRAINING_Y_FRACTION,
     VasState,
     VasWidget,
 )
@@ -45,6 +66,9 @@ class FakeClock(Clock):
         self.now = 0.0
 
     def elapsed_s(self) -> float:
+        return self.now
+
+    def real_elapsed_s(self) -> float:
         return self.now
 
 
@@ -74,7 +98,7 @@ def test_the_marker_is_hidden_until_the_first_press(state):
 
 def test_the_first_press_puts_the_marker_on_the_side_that_was_pressed(state):
     state.cue()
-    state.press(Action.DECREASE)
+    state.press(Action.DECREASE, 0.0)
     assert state.visible
     assert state.percent == state.start_left_pct == 25.0
     assert state.first_press_side == "left"
@@ -82,41 +106,41 @@ def test_the_first_press_puts_the_marker_on_the_side_that_was_pressed(state):
 
 def test_the_right_button_starts_on_the_right(state):
     state.cue()
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     assert state.percent == state.start_right_pct == 75.0
     assert state.first_press_side == "right"
 
 
 def test_the_first_press_reveals_rather_than_moves(state):
     state.cue()
-    state.press(Action.INCREASE)
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
+    state.press(Action.INCREASE, 0.0)
     assert state.percent == pytest.approx(state.start_right_pct + state.step_pct)
 
 
 def test_the_marker_cannot_leave_the_line(state):
     state.cue()
-    state.press(Action.DECREASE)
+    state.press(Action.DECREASE, 0.0)
     for _ in range(200):
-        state.press(Action.DECREASE)
+        state.press(Action.DECREASE, 0.0)
     assert state.percent == 0.0
     for _ in range(400):
-        state.press(Action.INCREASE)
+        state.press(Action.INCREASE, 0.0)
     assert state.percent == 100.0
 
 
 def test_direction_changes_are_counted(state):
     state.cue()
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     assert state.direction_changes == 0
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     assert state.direction_changes == 0
-    state.press(Action.DECREASE)
+    state.press(Action.DECREASE, 0.0)
     # The first press has a direction even though it does not move, so this is a real reversal.
     assert state.direction_changes == 1
-    state.press(Action.DECREASE)
+    state.press(Action.DECREASE, 0.0)
     assert state.direction_changes == 1
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     assert state.direction_changes == 2
 
 
@@ -124,7 +148,7 @@ def test_reaction_time_runs_from_the_rating_cue(state):
     state.clock.now = 100.0
     state.cue()
     state.clock.now = 101.5
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     state.clock.now = 103.25
     response = state.confirm()
     assert response.rt_s == pytest.approx(3.25)
@@ -134,12 +158,12 @@ def test_reaction_time_runs_from_the_rating_cue(state):
 
 def test_a_press_before_the_cue_is_a_defect_not_a_rating(state):
     with pytest.raises(RuntimeError, match="before it was cued"):
-        state.press(Action.INCREASE)
+        state.press(Action.INCREASE, 0.0)
 
 
 def test_cueing_again_clears_the_previous_response(state):
     state.cue()
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     state.cue()
     assert not state.visible
     assert state.direction_changes == 0
@@ -152,6 +176,141 @@ def test_waiting_time_is_reported_and_never_auto_advances(state):
     assert state.waiting_s == pytest.approx(90.0)
     assert state.waiting_s > state.no_response_warning_s
     assert state.confirm() is None, "waiting does not produce a rating"
+
+
+# -- holding a button: the accelerating hold (S's lab-run list, 5 Oct 2026) --------------
+
+
+def _revealed_and_held(state, at_s=0.0):
+    """The marker shown at 75 %, then a second right press held from `at_s`."""
+    state.cue()
+    state.press(Action.INCREASE, 0.0)
+    state.press(Action.INCREASE, at_s)
+    return state.percent
+
+
+def test_a_tap_with_a_time_is_the_same_single_step(state):
+    """Single taps behave exactly as before: one step, on the press, nothing on release."""
+    before = _revealed_and_held(state)
+    assert before == pytest.approx(state.start_right_pct + state.step_pct)
+    state.tick(state.hold_delay_s / 2)
+    state.release(Action.INCREASE, state.hold_delay_s / 2)
+    assert state.percent == pytest.approx(before)
+
+
+def test_a_hold_accelerates_from_the_initial_to_the_final_rate(state):
+    start = _revealed_and_held(state, at_s=0.0)
+    early_s = 0.1
+    state.tick(state.hold_delay_s + early_s)
+    assert state.percent - start == pytest.approx(
+        state.rate_initial_pct_s * early_s, rel=0.2
+    ), "a hold begins at the initial rate"
+    # The rest of the ramp by its rate: the marker reaches the end of the line before the ramp
+    # ends, from either start position.
+    assert state.rate_pct_s(state.ramp_duration_s / 2) == pytest.approx(
+        (state.rate_initial_pct_s + state.rate_final_pct_s) / 2
+    )
+    assert state.rate_pct_s(state.ramp_duration_s) == state.rate_final_pct_s
+    assert state.rate_pct_s(state.ramp_duration_s * 3) == state.rate_final_pct_s
+    assert state._travel(state.ramp_duration_s * 2) - state._travel(
+        state.ramp_duration_s
+    ) == pytest.approx(state.rate_final_pct_s * state.ramp_duration_s)
+    assert state.rate_final_pct_s > state.rate_initial_pct_s
+
+
+def test_the_distance_depends_on_the_hold_not_on_the_ticks(state, loaded):
+    # Short enough that neither reaches the end of the line, where both would read 100 %.
+    held_s = state.hold_delay_s + state.ramp_duration_s / 3
+    start = _revealed_and_held(state)
+    state.tick(held_s)
+    one_tick = state.percent
+    assert start < one_tick < MAX_PCT
+    other = VasState(loaded.study1["vas"], FakeClock())
+    _revealed_and_held(other)
+    for index in range(1, 101):
+        other.tick(held_s * index / 100)
+    assert other.percent == pytest.approx(one_tick)
+
+
+def test_a_hold_crosses_the_line_faster_than_the_old_fixed_rate(state):
+    """The point of the change: the old hold took about 8 s for the whole line."""
+    state.cue()
+    state.press(Action.DECREASE, 0.0)
+    state.press(Action.DECREASE, 0.0)
+    for index in range(1, 1000):
+        state.tick(index * 0.01)
+        if state.percent == 0.0:
+            break
+    assert index * 0.01 < 2.0, "a hold from 25 % to 0 % took two seconds or more"
+    assert state.percent == 0.0, "the marker cannot leave the line"
+
+
+def test_a_tap_released_late_by_a_stall_is_still_one_step(state):
+    """A stall can let a tick run before the release is handled. The release's own time says
+    it was a tap, so the hold travel is taken back (docs/LOG.md N2.9)."""
+    tapped = _revealed_and_held(state)
+    state.tick(state.hold_delay_s + 0.5)  # the tick the stall let through
+    assert state.percent > tapped
+    state.release(Action.INCREASE, state.hold_delay_s / 3)
+    assert state.percent == pytest.approx(tapped)
+
+
+def test_a_device_repeat_after_a_hold_carries_the_hold_on(state):
+    """A held button may arrive as fresh down/up pairs (docs/LOG.md N7.F1)."""
+    _revealed_and_held(state)
+    released_s = state.hold_delay_s + 0.5
+    state.tick(released_s)
+    state.release(Action.INCREASE, released_s)
+    held_at = state.percent
+    changes = state.direction_changes
+    pressed_s = released_s + state.regrip_max_s / 2
+    assert state.regrips(Action.INCREASE, pressed_s)
+    state.press(Action.INCREASE, pressed_s, regrip=True)
+    assert state.percent == pytest.approx(held_at), "a repeat is not a tap"
+    state.tick(released_s + 0.2)
+    assert state.percent > held_at, "the hold carries on"
+    assert state.direction_changes == changes
+
+
+def test_a_press_after_a_hold_that_let_go_long_enough_ago_is_a_tap(state):
+    _revealed_and_held(state)
+    released_s = state.hold_delay_s + 0.5
+    state.tick(released_s)
+    state.release(Action.INCREASE, released_s)
+    held_at = state.percent
+    assert not state.regrips(Action.INCREASE, released_s + state.regrip_max_s * 2)
+    state.press(Action.INCREASE, released_s + state.regrip_max_s * 2)
+    assert state.percent == pytest.approx(held_at + state.step_pct)
+
+
+def test_a_tap_after_a_tap_is_always_a_tap(state):
+    """However quickly: only a hold can be carried on, so taps are never lost or merged."""
+    tapped = _revealed_and_held(state)
+    state.release(Action.INCREASE, 0.0)
+    for index in range(1, 11):
+        state.press(Action.INCREASE, 0.0)
+        state.release(Action.INCREASE, 0.0)
+        assert state.percent == pytest.approx(tapped + index * state.step_pct)
+
+
+def test_the_other_button_after_a_hold_is_a_tap_and_a_reversal(state):
+    _revealed_and_held(state)
+    released_s = state.hold_delay_s + 0.5
+    state.tick(released_s)
+    state.release(Action.INCREASE, released_s)
+    held_at = state.percent
+    assert not state.regrips(Action.DECREASE, released_s + state.regrip_max_s / 2)
+    state.press(Action.DECREASE, released_s + state.regrip_max_s / 2)
+    assert state.percent == pytest.approx(held_at - state.step_pct)
+    assert state.direction_changes == 1
+
+
+def test_confirming_ends_a_hold(state):
+    _revealed_and_held(state)
+    state.tick(state.hold_delay_s + 0.5)
+    response = state.confirm()
+    state.tick(state.hold_delay_s + 2.0)
+    assert state.percent == response.rating_percent
 
 
 # -- the widget ------------------------------------------------------------------------
@@ -433,16 +592,38 @@ TRAINED_SCALES = ("pain", "intensity", "pleasantness")
 
 def _show_training(widget, config, scale, accepting=True):
     text = config.participant_text
-    sentence = text["training"][scale]
     if accepting:
-        sentence = f"{sentence}\n\n{text['training_continue']}"
-    widget.show_training(scale, text["vas"][scale], sentence, accepting)
+        widget.show_practice(scale, text["vas"][scale], text["training"][scale])
+    else:
+        widget.show_explanation(scale, text["vas"][scale])
 
 
 def test_every_trained_scale_has_its_sentence_in_both_languages(configs):
-    """The scales the spec names, and no others: relaxation and alertness have none."""
+    """The scales the spec names, and no others: relaxation and alertness have none. The
+    proportionality sentence is the experimenter's, for the same scales."""
     for config in configs.values():
         assert set(config.participant_text["training"]) == set(TRAINED_SCALES)
+        assert set(config.experimenter_text["vas_training_explain"]) == set(TRAINED_SCALES)
+
+
+def test_proportionality_is_not_on_the_participant_screen(configs):
+    """S's lab-run list (5 Oct 2026): "a mark twice as far" is said by the experimenter."""
+    for config in configs.values():
+        participant = yaml.safe_dump(config.participant_text, allow_unicode=True, width=10**6)
+        for scale in TRAINED_SCALES:
+            explanation = config.experimenter_text["vas_training_explain"][scale]
+            assert explanation not in participant
+
+
+def test_an_explanation_for_a_scale_that_is_not_trained_is_refused(tmp_path):
+    shutil.copytree(cfg.CONFIG_DIR, tmp_path / "config")
+    for language in ("sv", "en"):
+        path = tmp_path / "config" / "text" / f"experimenter_{language}.yaml"
+        text = yaml.safe_load(path.read_text(encoding="utf-8"))
+        text["vas_training_explain"]["relaxation"] = text["vas_training_explain"]["pain"]
+        path.write_text(yaml.safe_dump(text, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(cfg.ConfigError, match="vas_training_explain"):
+        cfg.load("en", "en", config_dir=tmp_path / "config")
 
 
 def test_a_training_key_that_is_not_a_scale_is_refused(tmp_path):
@@ -457,18 +638,20 @@ def test_a_training_key_that_is_not_a_scale_is_refused(tmp_path):
         cfg.load("en", "en", config_dir=tmp_path / "config")
 
 
-def test_play_is_ignored_until_the_anchors_have_been_explained(widget, loaded):
-    """While the experimenter explains, ▶ does nothing; after their go it dismisses."""
-    confirmed = []
-    widget.training_confirmed.connect(lambda: confirmed.append(1))
+def test_nothing_but_the_stop_works_while_the_experimenter_explains(widget, loaded):
+    confirmed, empty, responses, stops = [], [], [], []
+    widget.training_confirmed.connect(confirmed.append)
+    widget.pressed_without_marker.connect(lambda: empty.append(1))
+    widget.confirmed.connect(responses.append)
+    widget.emergency_stop.connect(lambda: stops.append(1))
     _show_training(widget, loaded, "pain", accepting=False)
-    assert loaded.participant_text["training_continue"] not in widget.training
-    _press(widget, "f5")
-    assert confirmed == [], "▶ dismissed the training before the anchors were explained"
-    _show_training(widget, loaded, "pain", accepting=True)
-    assert widget.training.endswith(loaded.participant_text["training_continue"])
-    _press(widget, "f5")
-    assert confirmed == [1]
+    assert widget.training == "", "nothing below the scale while the experimenter explains"
+    for name in ("pagedown", "pageup", "f5"):
+        _press(widget, name)
+    assert not widget.state.visible, "a marker appeared while the experimenter explained"
+    assert confirmed == empty == responses == []
+    _press(widget, "period")
+    assert stops == [1]
 
 
 @pytest.mark.parametrize("scale", TRAINED_SCALES)
@@ -486,18 +669,25 @@ def test_the_training_text_clears_the_scale_and_the_screen_edge(by_language, sca
     assert widget.heading_clearance() >= TEXT_TO_SCALE_GAP_PX
 
 
-def test_the_training_screen_asks_only_for_the_play_button(widget, loaded):
-    confirmed, empty, responses = [], [], []
-    widget.training_confirmed.connect(lambda: confirmed.append(1))
+def test_the_practice_is_a_rating_that_is_never_confirmed_as_one(widget, loaded):
+    """The participant moves the marker and confirms, as on a rating -- and the response goes
+    out on `training_confirmed` only, never on `confirmed`, which ratings are recorded from."""
+    practised, empty, responses = [], [], []
+    widget.training_confirmed.connect(practised.append)
     widget.pressed_without_marker.connect(lambda: empty.append(1))
     widget.confirmed.connect(responses.append)
     _show_training(widget, loaded, "pain")
+    assert widget.practising and widget.training == loaded.participant_text["training"]["pain"]
+    _press(widget, "f5")
+    assert empty == [1] and practised == [], "a confirm with no marker is not a practice"
     _press(widget, "pagedown")
     _press(widget, "pageup")
-    assert not widget.state.visible, "the training screen must never show a marker"
+    _press(widget, "pageup")
     _press(widget, "f5")
-    assert confirmed == [1]
-    assert empty == [] and responses == []
+    assert responses == []
+    (practice,) = practised
+    assert practice.rating_percent == pytest.approx(75.0 - 2 * widget.state.step_pct)
+    assert practice.first_press_side == "right" and practice.direction_changes == 1
 
 
 def test_the_emergency_stop_works_on_the_training_screen(widget, loaded):
@@ -511,7 +701,7 @@ def test_the_emergency_stop_works_on_the_training_screen(widget, loaded):
 def test_a_rating_after_the_training_is_an_ordinary_rating(widget, loaded):
     _show_training(widget, loaded, "pain")
     widget.show_scale("pain", loaded.participant_text["vas"]["pain"])
-    assert widget.training == ""
+    assert widget.training == "" and not widget.practising and not widget.explaining
     got = []
     widget.confirmed.connect(got.append)
     _press(widget, "pagedown")
@@ -558,13 +748,176 @@ def test_the_emergency_stop_key_is_wired(widget):
 
 
 def test_auto_repeat_events_are_ignored(widget):
-    """Hold-to-repeat is driven by the widget's own timer, not by the platform's key repeat."""
+    """A hold is driven by the widget's own timer, not by the platform's key repeat."""
     _press(widget, "pagedown")
     before = widget.state.percent
     widget.keyPressEvent(
         QKeyEvent(QEvent.KeyPress, QT_KEYS["pagedown"], Qt.NoModifier, autorep=True)
     )
     assert widget.state.percent == before
+
+
+def _key(widget, kind, name, stamp_ms, autorep=False):
+    event = QKeyEvent(kind, QT_KEYS[name], Qt.NoModifier, autorep=autorep)
+    event.setTimestamp(stamp_ms)
+    (widget.keyPressEvent if kind == QEvent.KeyPress else widget.keyReleaseEvent)(event)
+
+
+def test_a_held_key_accelerates_through_the_widget_and_its_repeats_add_nothing(widget):
+    """The keyboard's own auto-repeat: one press, repeats flagged as such, one release."""
+    clock = widget.clock
+    _press(widget, "pagedown")  # reveals at 75 %
+    clock.now = 10.0
+    _key(widget, QEvent.KeyPress, "pageup", 1000)
+    tapped = widget.state.percent
+    assert tapped == pytest.approx(75.0 - widget.state.step_pct)
+    assert widget._tick.isActive()
+    for index in range(1, 11):
+        clock.now = 10.0 + widget.state.hold_delay_s + index * 0.05
+        _key(widget, QEvent.KeyPress, "pageup", 1000 + index * 50, autorep=True)
+        widget._on_tick()
+    moved = tapped - widget.state.percent
+    expected = widget.state._travel(0.5)
+    assert moved == pytest.approx(expected), "the repeats moved the marker as well as the hold"
+    _key(widget, QEvent.KeyRelease, "pageup", 1000 + 800)
+    assert not widget._tick.isActive()
+    clock.now += 1.0
+    widget._on_tick()
+    assert tapped - widget.state.percent == pytest.approx(expected), "it moved after release"
+
+
+def test_a_hold_that_arrives_as_repeated_presses_still_accelerates(widget):
+    """The other way a remote can repeat: fresh down/up pairs, close together, after the
+    first press has already been held past the delay."""
+    clock = widget.clock
+    _press(widget, "pagedown")
+    clock.now = 10.0
+    _key(widget, QEvent.KeyPress, "pageup", 1000)
+    tapped = widget.state.percent
+    delay_ms = int(widget.state.hold_delay_s * 1000)
+    stamp = 1000 + delay_ms + 100
+    clock.now = 10.0 + (stamp - 1000) / 1000
+    widget._on_tick()
+    _key(widget, QEvent.KeyRelease, "pageup", stamp)
+    for _ in range(10):
+        stamp += 15
+        _key(widget, QEvent.KeyPress, "pageup", stamp)
+        stamp += 15
+        clock.now = 10.0 + (stamp - 1000) / 1000
+        widget._on_tick()
+        _key(widget, QEvent.KeyRelease, "pageup", stamp)
+    held_s = (stamp - 1000) / 1000 - widget.state.hold_delay_s
+    assert tapped - widget.state.percent == pytest.approx(widget.state._travel(held_s))
+
+
+def test_taps_through_the_widget_are_one_step_each_however_fast(widget):
+    """Single taps behave exactly as before: the virtual participant's taps, with one stamp
+    for both edges, and a person's quick ones, each move one step."""
+    _press(widget, "pagedown")
+    start = widget.state.percent
+    for index in range(1, 21):
+        _key(widget, QEvent.KeyPress, "pagedown", 5000 + index * 40)
+        _key(widget, QEvent.KeyRelease, "pagedown", 5000 + index * 40 + 20)
+        assert widget.state.percent == pytest.approx(start + index * widget.state.step_pct)
+
+
+# -- review findings on the hold (integrator, 15 Oct 2026) -----------------------------------
+
+
+def _hold_from(widget, start_s=10.0, stamp_ms=1000):
+    """The marker revealed at 75 %, then the left button pressed at `start_s` and held."""
+    _press(widget, "pagedown")
+    widget.clock.now = start_s
+    _key(widget, QEvent.KeyPress, "pageup", stamp_ms)
+    return widget.state.percent
+
+
+def test_a_stalled_tick_cannot_carry_a_hold_past_its_release(widget):
+    """The marker is where the hold put it at the release's own time, whatever ran late."""
+    tapped = _hold_from(widget)
+    widget.clock.now = 12.0  # a stall lets a tick run 1.2 s after the button went up
+    widget._on_tick()
+    _key(widget, QEvent.KeyRelease, "pageup", 1800)
+    assert tapped - widget.state.percent == pytest.approx(widget.state._travel(0.5))
+
+
+def test_a_clean_release_keeps_the_travel_since_the_last_tick(widget):
+    tapped = _hold_from(widget)
+    widget.clock.now = 10.78
+    widget._on_tick()
+    widget.clock.now = 10.8
+    _key(widget, QEvent.KeyRelease, "pageup", 1800)
+    assert tapped - widget.state.percent == pytest.approx(widget.state._travel(0.5), rel=1e-9)
+
+
+def test_a_tap_just_after_a_hold_is_judged_on_the_stamps(widget):
+    """Pressed 0.2 s after the hold let go by the device's stamps, it is a tap, even when its
+    handler runs only 10 ms after the release's."""
+    _hold_from(widget)
+    widget.clock.now = 10.8
+    widget._on_tick()
+    _key(widget, QEvent.KeyRelease, "pageup", 1800)
+    held_at = widget.state.percent
+    widget.clock.now = 10.81
+    _key(widget, QEvent.KeyPress, "pageup", 2000)
+    assert widget.state.percent == pytest.approx(held_at - widget.state.step_pct)
+
+
+@pytest.mark.parametrize("ending", ("focus_out", "hide", "show_scale"))
+def test_a_hold_whose_release_never_arrives_ends(widget, loaded, ending):
+    """A release routed to an experimenter text field, or lost when an emergency stop's screen
+    takes the focus, must not leave the marker running to the end of the line."""
+    widget.show()
+    _hold_from(widget)
+    if ending == "focus_out":
+        widget.focusOutEvent(QFocusEvent(QEvent.FocusOut))
+    elif ending == "hide":
+        widget.hide()
+    else:
+        widget.show_scale("pain", loaded.participant_text["vas"]["pain"])
+    stopped_at = widget.state.percent
+    assert widget.state.held is None
+    assert not widget._tick.isActive()
+    widget.clock.now = 20.0
+    widget._on_tick()
+    assert widget.state.percent == stopped_at
+
+
+def test_the_timer_waits_out_the_hold_delay(widget):
+    _hold_from(widget)
+    assert widget._tick.interval() == round(widget.state.hold_delay_s * 1000)
+
+
+def test_a_hold_repaints_only_when_the_marker_moves(widget, monkeypatch):
+    _hold_from(widget)
+    painted = []
+    monkeypatch.setattr(widget, "update", lambda *args: painted.append(1))
+    widget.clock.now = 10.0 + widget.state.hold_delay_s / 2
+    widget._on_tick()
+    assert painted == [], "repainted during the hold delay"
+    widget.clock.now = 30.0
+    widget._on_tick()
+    assert widget.state.percent == 0.0 and painted == [1]
+    widget.clock.now = 31.0
+    widget._on_tick()
+    assert painted == [1], "repainted with the marker clamped at the end of the line"
+
+
+def test_a_press_always_says_when(state):
+    state.cue()
+    with pytest.raises(TypeError):
+        state.press(Action.INCREASE)
+
+
+def test_a_tick_interval_of_zero_is_refused(tmp_path):
+    shutil.copytree(cfg.CONFIG_DIR, tmp_path / "config")
+    path = tmp_path / "config" / "study1.yaml"
+    text = path.read_text(encoding="utf-8")
+    old = "hold_tick_interval_s: 0.02"
+    assert old in text
+    path.write_text(text.replace(old, "hold_tick_interval_s: 0"), encoding="utf-8")
+    with pytest.raises(cfg.ConfigError, match="hold_tick_interval_s"):
+        cfg.load("en", "en", config_dir=tmp_path / "config")
 
 
 def test_the_widget_renders_headless(widget):
@@ -574,3 +927,149 @@ def test_the_widget_renders_headless(widget):
     assert pixmap.width() == 1280
     assert pixmap.height() == 800
     assert not pixmap.isNull()
+
+
+# -- the play symbol in participant text (S, lab run 5 Oct 2026) ----------------------------
+
+
+# Each (point size, box width as a fraction of the screen's width, box top as a fraction of its
+# height) a participant screen draws text with: the message and question text, the adjustment's
+# confirm sentence, a drawn button's label, an RSQ introduction, the training sentence.
+PROSE_PLACES = (
+    (MESSAGE_POINT_SIZE, 1 - 2 * SIDE_MARGIN_FRACTION, QUESTION_Y_FRACTION),
+    (MESSAGE_POINT_SIZE, 1 - 2 * SIDE_MARGIN_FRACTION, ADJUST_CONFIRM_Y_FRACTION),
+    (BUTTON_LABEL_POINT_SIZE, BUTTON_LABEL_WIDTH_FRACTION, BUTTON_Y_FRACTION),
+    (INTRODUCTION_POINT_SIZE, 1 - 2 * SIDE_MARGIN_FRACTION, QUESTION_Y_FRACTION),
+    (QUESTION_POINT_SIZE, 1 - 2 * SIDE_MARGIN_FRACTION, TRAINING_Y_FRACTION),
+)
+# The lab window at 100 %, and the lab laptop's 1920 x 1080 panel at 150 %, whose fractional
+# metrics are where a layout that only approximates `drawText`'s rounding would show.
+PROSE_SCREENS = ((1280, 800, 1.0), (1920, 1080, 1.0), (1280, 720, 1.5))
+
+
+def _render(draw, box: QRect, point_size: int, ratio: float) -> QImage:
+    image = QImage(
+        round(box.width() * ratio), round(box.height() * ratio), QImage.Format_ARGB32
+    )
+    image.setDevicePixelRatio(ratio)
+    image.fill(vas_module.BACKGROUND)
+    painter = QPainter(image)
+    font = QFont()
+    font.setPointSize(point_size)
+    painter.setFont(font)
+    painter.setPen(vas_module.FOREGROUND)
+    draw(painter)
+    painter.end()
+    return image
+
+
+def _pixels(image: QImage) -> np.ndarray:
+    """BGRA as one array, copied out of the image in one go rather than read pixel by pixel."""
+    data = np.frombuffer(image.constBits(), dtype=np.uint8, count=image.sizeInBytes())
+    rows = data.reshape(image.height(), image.bytesPerLine() // 4, 4)
+    return rows[:, : image.width()].copy()
+
+
+def _participant_texts(node):
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for value in node.values():
+            yield from _participant_texts(value)
+
+
+def _prose_cases(language: str):
+    path = cfg.CONFIG_DIR / "text" / f"participant_{language}.yaml"
+    texts = sorted(set(_participant_texts(yaml.safe_load(path.read_text(encoding="utf-8")))))
+    for width_px, height_px, ratio in PROSE_SCREENS:
+        for point_size, width_fraction, top_fraction in PROSE_PLACES:
+            top = int(height_px * top_fraction)
+            box = QRect(0, 0, int(width_px * width_fraction), height_px - top)
+            for text in texts:
+                yield text, box, point_size, ratio
+
+
+def _drawtext_and_prose(responder, text, box, point_size, ratio) -> tuple[QImage, QImage]:
+    plain = _render(lambda p: p.drawText(box, vas_module.PROSE_FLAGS, text),
+                    box, point_size, ratio)
+    prose = _render(lambda p: vas_module.draw_prose(p, box, text, responder),
+                    box, point_size, ratio)
+    return plain, prose
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_participant_text_is_laid_out_exactly_as_drawtext_would(app, loaded, language):
+    """Every participant string, wherever a screen draws it: the screens' clearance checks
+    measure with `boundingRect`, which knows only `drawText`'s layout. With the symbol's colour
+    set to the text's, the two must be the same image."""
+    responder = Responder(loaded.hardware)
+    responder.confirm_colour = vas_module.FOREGROUND.name()
+    for case in _prose_cases(language):
+        plain, prose = _drawtext_and_prose(responder, *case)
+        assert prose == plain, case
+
+
+def _symbol_in_box(text: str, symbol: str, box: QRect, point_size: int) -> bool:
+    """Whether the symbol's line is laid out inside the box. The places are crossed with every
+    string, so a long message meets a box it is never drawn in, and its symbol is clipped."""
+    line_end = text.find("\n", text.index(symbol))
+    through_symbol = text if line_end < 0 else text[:line_end]
+    font = QFont()
+    font.setPointSize(point_size)
+    laid_out = QFontMetrics(font).boundingRect(box, vas_module.PROSE_FLAGS, through_symbol)
+    return laid_out.height() <= box.height()
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_only_the_play_symbol_changes_colour(app, loaded, language):
+    responder = Responder(loaded.hardware)
+    symbol = responder.symbol_for(Action.CONFIRM)
+    named = 0
+    for case in _prose_cases(language):
+        plain_image, prose_image = _drawtext_and_prose(responder, *case)
+        if symbol not in case[0] or not _symbol_in_box(case[0], symbol, case[1], case[2]):
+            assert prose_image == plain_image, case
+            continue
+        named += 1
+        plain, prose = _pixels(plain_image), _pixels(prose_image)
+        changed = (plain != prose).any(axis=2)
+        assert changed.any(), case
+        # The grey text has equal channels; only the blue glyph tints a pixel blue.
+        blue, red = prose[..., 0], prose[..., 2]
+        assert (blue[changed] > red[changed]).all(), case
+    assert named, f"no participant text names {symbol}"
+
+
+def test_a_message_screen_colours_the_symbol_from_its_first_paint(app, loaded):
+    """No state in which the screen exists but does not yet know the symbol: Qt swallows an
+    exception raised in a paint handler and leaves the participant a blank screen."""
+    responder = Responder(loaded.hardware)
+    screen = _MessageScreen(responder)
+    screen.resize(1280, 800)
+    screen.text = f"Press {responder.symbol_for(Action.CONFIRM)} to continue."
+    pixels = _pixels(screen.grab().toImage().convertToFormat(QImage.Format_ARGB32))
+    blue = QColor(responder.confirm_colour)
+    assert ((pixels[..., 0] == blue.blue()) & (pixels[..., 1] == blue.green())
+            & (pixels[..., 2] == blue.red())).any()
+    screen.deleteLater()
+
+
+def test_prose_is_clipped_to_its_box_as_drawtext_is(app, loaded):
+    """Text that overflows its box must not paint over what is below it -- the VAS line, the
+    anchors. `drawText` clips at the box and stops laying lines out past it."""
+    responder = Responder(loaded.hardware)
+    responder.confirm_colour = vas_module.FOREGROUND.name()
+    symbol = responder.symbol_for(Action.CONFIRM)
+    text = "\n".join(f"Line {n}: press {symbol}." for n in range(8))
+    box = QRect(0, 0, 400, 120)
+    tall = QRect(0, 0, 400, 600)
+
+    def inside(draw):
+        return _render(draw, tall, QUESTION_POINT_SIZE, 1.0)
+
+    plain = inside(lambda p: p.drawText(box, vas_module.PROSE_FLAGS, text))
+    prose = inside(lambda p: vas_module.draw_prose(p, box, text, responder))
+    empty = inside(lambda p: None)
+    below = _pixels(prose)[box.bottom() + 1:]
+    assert (below == _pixels(empty)[box.bottom() + 1:]).all(), "drawn past the box"
+    assert prose == plain

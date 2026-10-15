@@ -96,6 +96,9 @@ DIALOG_WIDTH_PX = 720
 SAMPLE_ELAPSED_S = 3725.0
 SAMPLE_SITE = 3
 SAMPLE_CHANNEL = 2
+# Part-way through the estimation run: ten amplitudes and two catch trials (R32).
+SAMPLE_ANSWERED = 3
+SAMPLE_PRESENTATIONS = 12
 SAMPLE_PATH = "lateral"
 SAMPLE_DISTANCES = ("42", "37,5")
 SAMPLE_BLOCK = {"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch"}
@@ -270,19 +273,22 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         window.show_vas_training(scale, accepting=False)
         yield Shot(
             f"participant_{language}_vas_training_{scale}",
-            f"The proportionality training for `{scale}` (SPEC.md 10.6) while the experimenter "
-            f"explains the anchors: the scale exactly as it is rated, with no marker, and "
-            f"`training.{scale}` below it; no continue line, and ▶ does nothing, {language}.",
+            f"The VAS training for `{scale}` (SPEC.md 10.6) while the experimenter explains "
+            f"the anchors and proportionality aloud: the scale exactly as it is rated, with no "
+            f"marker and nothing below it; only the stop button does anything, {language}.",
             _grab(window),
         )
 
-    # One scale is enough for the second state: the continue line is drawn by the same code
-    # under every scale's sentence.
+    # One scale is enough for the practice: its line is the same under every scale. Photographed
+    # after the first press, so the marker the participant is practising with is in the shot.
     window.show_vas_training(VARIANT_SCALE, accepting=True)
+    window.vas.state.press(Action.INCREASE, window.clock.real_elapsed_s())
     yield Shot(
-        f"participant_{language}_vas_training_{VARIANT_SCALE}_accepting",
-        f"The `{VARIANT_SCALE}` training once the experimenter has pressed Next step: "
-        f"`training_continue` under the sentence, and ▶ now dismisses it, {language}.",
+        f"participant_{language}_vas_training_{VARIANT_SCALE}_practice",
+        f"The `{VARIANT_SCALE}` training once the experimenter has pressed Next step: a "
+        f"practice rating, `training.{VARIANT_SCALE}` below the scale, the marker shown after "
+        f"a right press; ▶ confirms the practice, which is never recorded as a rating, "
+        f"{language}.",
         _grab(window),
     )
 
@@ -308,7 +314,7 @@ def _choice_shots(window: ParticipantWindow, text: dict, language: str) -> Itera
         )
 
         # Only a choice between two stimuli emphasises a button; a question about something
-        # already happening (`still_audible`, `evenness`) never reaches that state.
+        # already happening (`evenness`) never reaches that state.
         if key in PAIRED_CHOICES:
             window.emphasise_choice("left")
             yield Shot(
@@ -344,7 +350,7 @@ def _vas_variant_shots(window: ParticipantWindow, language: str) -> Iterator[Sho
     for side, action in (("left", Action.DECREASE), ("right", Action.INCREASE)):
         window.show_vas(VARIANT_SCALE)
         state.cue()
-        state.press(action)
+        state.press(action, window.clock.real_elapsed_s())
         yield Shot(
             f"participant_{language}_vas_{VARIANT_SCALE}_first_press_{side}",
             f"The marker where a first {side} press puts it -- SPEC.md 10.2's rule that the "
@@ -355,7 +361,7 @@ def _vas_variant_shots(window: ParticipantWindow, language: str) -> Iterator[Sho
     for percent in MARKER_POSITIONS:
         window.show_vas(VARIANT_SCALE)
         state.cue()
-        state.press(Action.INCREASE)
+        state.press(Action.INCREASE, window.clock.real_elapsed_s())
         # Set directly rather than pressing there. The pixels are the point, and stepping to
         # 5 % at move_step_pct would be a hundred presses photographing nothing new.
         state.percent = percent
@@ -571,6 +577,20 @@ def _experimenter_states(text: dict) -> dict:
                 instructions["touchcal_stage1_exhausted"].format(
                     value=text["terms"]["stage1"]["flat"]
                 )
+            ),
+        ),
+        "touchcal_estimation_skip": (
+            "The estimation run with the mock or prototype garment: how many ratings are "
+            "answered, and Skip calibration under the garment, shown only on a pilot rig once "
+            "a few ratings are in (docs/LOG.md N7.F8b, N7.F8c). Nothing else has moved.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: (
+                window.set_instruction(
+                    instructions["touchcal_estimation"].format(
+                        answered=SAMPLE_ANSWERED, total=SAMPLE_PRESENTATIONS
+                    )
+                ),
+                window.set_actions_enabled(skip_calibration=True),
             ),
         ),
         "awaiting_rebalance": (

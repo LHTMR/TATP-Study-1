@@ -53,20 +53,20 @@ vas:
       - {pct: 0.0, label: completely disagree}
       - {pct: 100.0, label: completely agree}
 
+# DRAFT (LOG N7.F7a): written by the build, not ethics-sourced
+# The VAS training's practice rating (SPEC.md 10.6), one key per trained scale: a scale with a
+# key here is trained, and every key must be a scale. Shown below the scale, which is drawn as
+# it is rated, once the experimenter has explained the anchors and proportionality aloud -- the
+# proportionality sentence itself is now the experimenter's (`vas_training_explain`, S's
+# lab-run list, 5 Oct 2026). Free placement, no target: a target would teach a position on the
+# line rather than a judgement of a sensation (docs/research/R35). The same words for every
+# scale, so nothing on it differs between the scales or the sessions.
 training:
-  # Proportionality instruction (Price et al. 1983), given once per scale at first use.
-  # Wording from Bilaga 1: "a mark twice as far along the line indicates it is twice as
-  # painful", and for touch "twice as pleasant/intense".
-  pain: A mark twice as far along the line means it was twice as painful.
-  intensity: A mark twice as far along the line means the touch felt twice as intense.
-  pleasantness: A mark twice as far along the line means the touch felt twice as pleasant.
-
-# DRAFT (LOG N7.T1): written by the build, not ethics-sourced
-# The line under each scale's `training` sentence on the training screen, which shows the scale
-# as it is rated with the sentence below it (SPEC.md 10.6). Kept out of `training`, whose every
-# key must be a scale. The same words as the approved "Press ▶ to continue." closing
-# `stop_rehearsal_done` and `audio_setup.settled`.
-training_continue: Press ▶ to continue.
+  pain: &practice >-
+    Practice: move the marker with the two large buttons, both ways, then press ▶. This
+    practice is not a rating.
+  intensity: *practice
+  pleasantness: *practice
 
 screens:
   # Approved 23 Aug 2026. Vocabulary follows Bilaga 3a, which describes the skin testing as
@@ -107,7 +107,8 @@ screens:
   # BECAUSE the participant pressed. Do not soften it to "press to continue".
   self_start: Press ▶ when you're ready for the touch to start.
   # SPEC.md 10.9, the emergency stop rehearsal. Approved by S 10 Sep 2026 and copied from the
-  # spec verbatim. The first is drawn with the stop button under it -- "this button" points at
+  # spec verbatim; S shortened "at any time, in any part of the visit" to "at any time" on
+  # 5 Oct 2026. The first is drawn with the stop button under it -- "this button" points at
   # it; the screen between the two is the real `emergency_stop`, unchanged.
   stop_rehearsal: |-
     The touch is running now.
@@ -115,7 +116,7 @@ screens:
     Nothing is lost — we carry straight on afterwards.
   stop_rehearsal_done: |-
     That is the stop button.
-    It works at any time, in any part of the visit.
+    It works at any time.
 
     Press ▶ to continue.
 
@@ -158,12 +159,6 @@ choices:
       Which felt stronger?
     left: The first
     right: The second
-  still_audible:
-    # SPEC.md 10.7, the masking check. Approved by S 23 Aug 2026 under `audio_setup`, and moved
-    # here unchanged when audio.py was built (docs/LOG.md N5.12): it is a choice screen.
-    question: Can you still hear the garment?
-    left: Yes, I can hear it
-    right: No, the hiss covers it
   # DRAFT (LOG N7.C1): written by the build, not ethics-sourced
   evenness:
     # SPEC.md 9, the end-of-calibration evenness check, asked while the pattern plays. "The
@@ -181,16 +176,24 @@ audio_setup:
   # up until it covers a sound, and needs to know what they are listening for, not what it is
   # called. Nothing here says why the noise is there, because the reason is that the garment
   # must not be identifiable by ear -- which is a blinding matter (SPEC.md 16).
+  #
+  # `find_level`: S changed "until you can just hear it" to "until you can hear it easily" on
+  # 5 Oct 2026, because "just" made it a threshold task.
   find_level: |-
     There is a quiet hiss in the headphones.
     Left button: quieter. Right button: louder.
-    Turn it up until you can just hear it, then press ▶.
+    Turn it up until you can hear it easily, then press ▶.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. The question "Can you still
+  # hear the garment?" was its own screen until 5 Oct 2026, which S found confusing; it is now
+  # this screen's own instruction, and ▶ is the answer that the hiss covers it. A participant
+  # who can still hear the garment says so, and the experimenter offers earplugs (SPEC.md
+  # 10.7). The button line is repeated from `find_level` so turning down is not left implicit.
   mask_level: |-
     The garment is working now, and you may be able to hear it.
-    Turn the hiss up until it covers that sound.
-    Stop before the hiss itself becomes uncomfortable.
-    Press ▶ when it is right.
-  # `still_audible` is under `choices` (docs/LOG.md N5.12).
+    Left button: quieter. Right button: louder.
+    Turn the hiss up until it covers that sound, but stop before the hiss itself becomes uncomfortable.
+    If you can still hear the garment, tell the experimenter.
+    Press ▶ when the hiss covers it.
   settled: |-
     That is the sound level set for today.
     It stays the same for the rest of the visit.

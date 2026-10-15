@@ -104,20 +104,39 @@ instructions:
   response_received: Svar mottaget.
   # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. Övningen i proportionalitet på
   # VAS (SPEC.md 10.6), före en skalas första skattning; densamma i alla betingelser.
-  vas_training: 'Övning på skattningsskalan: förklara etiketterna längs linjen högt, och tryck sedan på Nästa steg.'
-  # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. Efter det Nästa steg, medan
-  # deltagarens skärm ber om ▶.
-  vas_training_wait: 'Övning på skattningsskalan: väntar på att deltagaren trycker på ▶.'
+  # Omformulerad (LOG N7.F7a): proportionalitetsmeningen sägs högt här, den visas inte för
+  # deltagaren.
+  vas_training: >-
+    Övning på skattningsskalan: förklara etiketterna längs linjen högt, och förklara att
+    "{explanation}" Tryck sedan på Nästa steg.
+  # DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. Efter det Nästa steg, medan
+  # deltagaren gör en övningsskattning. Visar aldrig var markören hamnade.
+  vas_training_wait: >-
+    Övning på skattningsskalan: deltagaren gör en övningsskattning och bekräftar den med ▶.
+    Den sparas inte som en skattning.
   # Förberedelser och beröringskalibrering (SPEC.md 9, 10.7, 10.9). Ingen nämner ett mönster
   # eller en betingelse.
   masking_check: 'Ljudinställning: deltagaren ställer in brusnivån mot plagget.'
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. Maskeringssteget (SPEC.md
+  # 10.7): deltagaren ombeds säga till om hen fortfarande hör plagget, och försöksledarens
+  # Nästa steg är det som registrerar det.
+  masking_check_mask: >-
+    Ljudinställning: plagget är igång och deltagaren höjer bruset för att dölja det. Om
+    deltagaren säger att hen fortfarande hör plagget, tryck på Nästa steg. Bruset stängs av så
+    att du kan erbjuda öronproppar.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. Samma steg med öronproppar.
+  masking_check_mask_earplugs: >-
+    Ljudinställning, med öronproppar: deltagaren höjer bruset för att dölja plagget. Om
+    deltagaren säger att hen fortfarande hör det, tryck på Nästa steg. Sessionen fortsätter och
+    registreras som inte helt maskerad.
   earplugs: Sätt öronpropparna under hörlurarna och tryck sedan på Nästa steg.
   stop_rehearsal: >-
     Övning med stoppknappen: deltagaren trycker nu på stoppknappen. När stoppskärmen visas,
     tryck på Återuppta. Tryck på Nästa steg bara om deltagaren inte kan trycka.
   stop_rehearsal_resume: Stoppet registrerades. Tryck på Återuppta för att fortsätta inför deltagaren.
   touchcal_bracket: 'Beröringskalibrering, steg 1: deltagaren ställer in beröringen på mittkanalen.'
-  touchcal_estimation: 'Beröringskalibrering, steg 2: deltagaren skattar en serie beröringar.'
+  # DRAFT (LOG N7.F8c): the progress, "x/N answered" (S, 5 Oct 2026).
+  touchcal_estimation: 'Beröringskalibrering, steg 2: deltagaren skattar en serie beröringar. {answered}/{total} besvarade.'
   touchcal_match: 'Beröringskalibrering, steg 3: deltagaren matchar kanal {channel} mot mittkanalen.'
   touchcal_equalise: 'Beröringskalibrering, steg 4: deltagaren jämför kanal {channel} med mittkanalen.'
   touchcal_pleasantness: 'Beröringskalibrering, steg 5: deltagaren ställer in den behagligaste nivån.'
@@ -159,6 +178,16 @@ instructions:
     värmen i själva verket inte gavs, ge den nu och skriv en anteckning. Plagget förblir avstängt
     tills återuppvärmningen är klar.
 
+# DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. Vad försöksledaren säger om
+# proportionalitet i VAS-övningen (SPEC.md 10.6), visat i `instructions.vas_training` som
+# {explanation}. Det stod på deltagarens skärm fram till S:s lista efter labbkörningen (5 okt
+# 2026); det är deltagartextens tidigare mening (SPEC.md 10.6). En nyckel per övad skala,
+# samma skalor som deltagartextens `training`.
+vas_training_explain:
+  pain: Ett märke dubbelt så långt ut på linjen betyder att det gjorde dubbelt så ont.
+  intensity: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så intensiv.
+  pleasantness: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så behaglig.
+
 controls:
   proceed: Nästa steg
   pause: Pausa
@@ -173,6 +202,9 @@ controls:
   # SPEC.md 11.1, visas endast när fit_preview.enabled är på.
   fit_accept: Godkänn den här skattningen
   fit_rerun: Gör om proceduren
+  # DRAFT (LOG N7.F8b): written by the build. Shown only with the mock or prototype garment,
+  # after a few touch-calibration ratings; ends the calibration, recorded as skipped.
+  skip_calibration: Hoppa över kalibreringen
   # Fritextfälten (SPEC.md 8.2, 8.4, 11). Inget av dem avbryter någonsin sessionen.
   add_note: Lägg till anteckning
   substitution: Filament använt i stället (g)
@@ -238,15 +270,21 @@ warnings:
     Fler än tillåten andel av kontrollförsöken utan tryck rapporterades som kända ({value}).
   schedule: 'Schemavarning, block {block}: {value}'
   no_response: Inget svar på {value} s.
-  # SPEC.md 10.7 steg 5. Att höja bruset hjälper inte längre, så åtgärden är fysisk. Hörbar
-  # larmsignal också, eftersom försöksledaren kan titta på deltagaren i stället för skärmen.
+  # SPEC.md 10.7 steg 4. Att höja bruset har inte hjälpt, så åtgärden är fysisk.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. Omformulerad 5 okt 2026:
+  # försöksledaren rapporterar det nu själv, så texten säger inte längre att bruset inte kan
+  # höjas mer.
   masking_failed: >-
-    Deltagaren hör fortfarande plagget och bruset kan inte höjas mer. Erbjud öronproppar under
-    hörlurarna. Bruset har stängts av så att ni kan prata, och kontrollen börjar om från början
-    när propparna sitter på plats.
+    Deltagaren hör fortfarande plagget. Erbjud öronproppar under hörlurarna. Bruset har stängts
+    av så att ni kan prata, och kontrollen börjar om från början när propparna sitter på plats.
   masking_failed_after_earplugs: >-
     Fortfarande hörbart med öronproppar. Sessionen fortsätter och registreras som inte helt
     maskerad.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. SPEC.md 10.7 steg 3:
+  # deltagaren bekräftade vid brusets tak, så bruset kanske bara precis döljer plagget.
+  masking_at_ceiling: >-
+    Deltagaren bekräftade bruset på högsta nivå, så det döljer kanske bara precis plagget. Detta
+    registreras.
   equalisation_mismatch: >-
     Kanal {channel} matchar fortfarande inte mittkanalen efter omjustering. Sessionen fortsätter
     och detta registreras.

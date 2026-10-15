@@ -1,19 +1,23 @@
 """The two setup procedures before touch calibration. SPEC.md 10.7, 10.9.
 
-**The masking check** (SPEC.md 10.7). The participant sets their own white-noise level and
-checks it against the garment: find the noise, start the fixed CT-targeted pattern, raise the
-noise until it covers the garment, then say whether the garment is still audible. When raising
-can no longer help, the experimenter is alerted audibly and on screen, the noise stops for the
-earplug exchange and the participant sees `paused`; after earplugs the check restarts from the
-beginning, the attempt count carrying on rather than resetting. A session that still cannot be
-masked continues, recorded as not masked -- a limitation in the data, not a refusal.
+**The emergency stop rehearsal** (SPEC.md 10.9) comes first (S, 5 Oct 2026), so the participant
+knows the stop before anything else is asked of them. The participant presses the real stop
+with the garment running and watches the session resume. It fires the real path: the stop is
+`tatp/interruption.py`'s, which zeroes the garment, logs the press and shows the stop screen
+exactly as it would at any other moment. This is the one procedure that expects a stop, so it
+is the one that overrides `on_interrupted` and `on_resumed` (`tatp/procedure.py`): for it the
+stop is the step completing, not the step being abandoned. The noise has not started yet, so
+its warning cue is the visual one alone (`Audio.participant_cue`).
 
-**The emergency stop rehearsal** (SPEC.md 10.9), straight after. The participant presses the
-real stop with the garment running and watches the session resume. It fires the real path: the
-stop is `tatp/interruption.py`'s, which zeroes the garment, logs the press and shows the stop
-screen exactly as it would at any other moment. This is the one procedure that expects a stop,
-so it is the one that overrides `on_interrupted` and `on_resumed` (`tatp/procedure.py`): for it
-the stop is the step completing, not the step being abandoned.
+**The masking check** (SPEC.md 10.7), straight after. The participant sets their own
+white-noise level and checks it against the garment: find the noise, start the fixed
+CT-targeted pattern, then raise the noise until it covers the garment and confirm. That
+confirm is the answer that the garment is covered: there is no separate question, which S
+found confusing (5 Oct 2026). A participant who can still hear the garment tells the
+experimenter, whose Next step records it; the noise then stops for the earplug exchange and the
+participant sees `paused`, and after earplugs the check restarts from the beginning, the
+attempt count carrying on. Reported again with earplugs in, the session continues, recorded as
+not masked -- a limitation in the data, not a refusal.
 
 Both run the fixed pattern, `patterns.fixed_ct_pattern`, identical in every session, so neither
 carries the condition into a phase the experimenter is present for (SPEC.md 16).
@@ -29,16 +33,24 @@ from tatp.interruption import EMERGENCY_STOP
 from tatp.procedure import Procedure
 from tatp.responder import Action
 from tatp.touchcal import AdjustmentState, PressTiming
-from tatp.trials import Choice, Cue, ExperimenterChoice, MessageConfirm, Ramp, Trial
-from tatp.ui.participant import SIDES
+from tatp.trials import Cue, ExperimenterChoice, MessageConfirm, Ramp, Trial
 from tatp.units import MS_PER_S
 
 # Keys in the participant text file.
 FIND_LEVEL = "find_level"
 MASK_LEVEL = "mask_level"
 SETTLED = "settled"
-STILL_AUDIBLE = "still_audible"
 PAUSED_SCREEN = "paused"
+# Keys in the experimenter text file's `instructions`.
+FIND_INSTRUCTION = "masking_check"
+MASK_INSTRUCTION = "masking_check_mask"
+MASK_EARPLUGS_INSTRUCTION = "masking_check_mask_earplugs"
+EARPLUGS = "earplugs"
+INSTRUCTIONS = {FIND_LEVEL: FIND_INSTRUCTION, MASK_LEVEL: MASK_INSTRUCTION}
+# Keys in the experimenter text file's `warnings`.
+MASKING_FAILED = "masking_failed"
+MASKING_FAILED_AFTER_EARPLUGS = "masking_failed_after_earplugs"
+MASKING_AT_CEILING = "masking_at_ceiling"
 STOP_REHEARSAL_SCREEN = "stop_rehearsal"
 STOP_REHEARSAL_DONE_SCREEN = "stop_rehearsal_done"
 # The experimenter's action, as `ExperimenterChoice` names it.
@@ -48,12 +60,11 @@ PROCEED = "proceed"
 def noise_control(adjustment: dict, audio: dict) -> dict:
     """The accelerating control of SPEC.md 10.3, in decibels.
 
-    The tap and hold timings describe the participant's hand and are the pressure control's
-    own; the step and the rates are the noise's (`audio.white_noise_step_db`,
+    The hold timings describe the participant's hand and are the pressure control's own; the
+    step and the rates are the noise's (`audio.white_noise_step_db`,
     `audio.noise_hold_rate_*_db_s`).
     """
     return {
-        "tap_max_duration_s": adjustment["tap_max_duration_s"],
         "tap_step": audio["white_noise_step_db"],
         "hold_delay_s": adjustment["hold_delay_s"],
         "hold_rate_initial_per_s": audio["noise_hold_rate_initial_db_s"],
@@ -68,11 +79,18 @@ class NoiseAdjustment(Trial):
     The range is `white_noise_start_dbfs` to `white_noise_max_dbfs`: the ceiling is the top of
     the control, and `Audio.set_noise_level` enforces it again whatever asks. Every button edge
     is logged, as for the pressure adjustment (SPEC.md 10.3). Finishes with the level set.
+
+    The masking step can instead be finished by `report_still_audible`, with None: the
+    participant has said they can still hear the garment, and the experimenter's Next step,
+    which is the procedure's (`MaskingCheck`), reports it (SPEC.md 10.7).
     """
 
     def __init__(self, session, participant, experimenter, screen_key: str):
         super().__init__(session, participant, experimenter)
         self.screen_key = screen_key
+        # What the experimenter is told, from the step. The procedure replaces it for the
+        # masking step with earplugs in, where Next step means something else.
+        self.instruction = INSTRUCTIONS[screen_key]
         audio = session.audio
         self.state = AdjustmentState(
             noise_control(
@@ -94,7 +112,7 @@ class NoiseAdjustment(Trial):
         self.listen(self.participant.adjust_released, self._released)
         self.listen(self.participant.adjust_confirmed, self._confirmed)
         self.participant.show_level_adjustment(self.screen_key)
-        self.instruct("masking_check")
+        self.instruct(self.instruction)
         self._tick.start()
 
     def _now(self) -> float:
@@ -127,6 +145,13 @@ class NoiseAdjustment(Trial):
         )
         self.done(level)
 
+    def report_still_audible(self) -> None:
+        self.session.log(
+            "masking_reported_audible", origin="experimenter",
+            detail=f"{self.screen_key}: {self.session.audio.noise_level_dbfs:.1f} dBFS",
+        )
+        self.done(None)
+
     def _log(self, event: str, action_value: str) -> None:
         self.session.log(
             event, origin="participant",
@@ -149,17 +174,16 @@ class MaskingResult:
 
 
 class MaskingCheck(Procedure):
-    """SPEC.md 10.7, steps 1 to 5. Leaves the noise running at the level chosen."""
+    """SPEC.md 10.7, steps 1 to 4. Leaves the noise running at the level chosen."""
 
     def __init__(self, rig):
         super().__init__(rig)
         audio = self.session.config.hardware["audio"]
         self.pressure_kpa = float(audio["masking_check_pressure_kpa"])
-        self.max_attempts = int(audio["masking_check_max_attempts"])
+        self.earplugs_lockout_s = float(audio["earplugs_proceed_lockout_s"])
         pattern_name = self.session.config.study1["patterns"]["fixed_ct_pattern"]
         self.pattern = self.session.patterns[pattern_name]
         self.attempts = 0
-        self.round_attempts = 0
         self.earplugs_used = False
 
     # -- 1. find the noise -------------------------------------------------------------
@@ -173,15 +197,14 @@ class MaskingCheck(Procedure):
             audio.set_noise_level(audio.start_dbfs)
         else:
             audio.start_noise(audio.start_dbfs)
-        self.round_attempts = 0
-        self.run_trial(
-            lambda: NoiseAdjustment(*self._windows(), FIND_LEVEL), self._found
-        )
+        # A warning from the round before earplugs is out of date once they are in.
+        self.experimenter.set_status("")
+        self.run_trial(lambda: NoiseAdjustment(*self._windows(), FIND_LEVEL), self._found)
 
     # -- 2. start the garment ----------------------------------------------------------
 
     def _found(self, level_dbfs: float) -> None:
-        self.session.log("masking_threshold", detail=f"just audible at {level_dbfs:.1f} dBFS")
+        self.session.log("masking_threshold", detail=f"easily heard at {level_dbfs:.1f} dBFS")
         levels = {channel: self.pressure_kpa for channel in self.pattern.channel_ids}
         self.run_trial(
             lambda: Ramp(*self._windows(), levels),
@@ -190,32 +213,52 @@ class MaskingCheck(Procedure):
 
     def _garment_on(self, _) -> None:
         self.session.garment.play_pattern(self.pattern)
-        self._raise()
+        self._mask()
 
-    # -- 3 and 4. raise to mask, then check --------------------------------------------
+    # -- 3. raise to mask: the confirm is the answer -----------------------------------
 
-    def _raise(self) -> None:
-        self.run_trial(lambda: NoiseAdjustment(*self._windows(), MASK_LEVEL), self._raised)
-
-    def _raised(self, level_dbfs: float) -> None:
+    def _mask(self) -> None:
+        # Counted here, not in the trial, so a step repeated after an interruption is the same
+        # attempt rather than a new one.
         self.attempts += 1
-        self.round_attempts += 1
+
+        def make() -> NoiseAdjustment:
+            # The report is the procedure's own Next step, set again each time the step runs:
+            # so it is logged `proceed`, and ignored while an interruption is in force.
+            self.on_proceed(self._reported_audible)
+            trial = NoiseAdjustment(*self._windows(), MASK_LEVEL)
+            if self.earplugs_used:
+                trial.instruction = MASK_EARPLUGS_INSTRUCTION
+            return trial
+
+        self.run_trial(make, self._masked)
+
+    def _reported_audible(self) -> None:
+        self._trial.report_still_audible()
+
+    def _masked(self, level_dbfs: float | None) -> None:
+        self.on_proceed(None)
+        if level_dbfs is None:
+            self._escalate()
+            return
         self.session.log(
             "masking_attempt",
-            detail=f"attempt {self.attempts} at {level_dbfs:.1f} dBFS",
+            detail=f"attempt {self.attempts}: covered at {level_dbfs:.1f} dBFS",
         )
-        self.run_trial(lambda: Choice(*self._windows(), STILL_AUDIBLE), self._answered)
-
-    def _answered(self, side: str) -> None:
-        # The affirmative is on the left (SPEC.md 10.7): "yes, I can still hear it".
-        if side != SIDES[0]:
-            self._done(confirmed=True)
-        elif self.round_attempts < self.max_attempts and not self.session.audio.at_ceiling:
-            self._raise()
+        if self.session.audio.at_ceiling:
+            # The confirm keeps its meaning, but a level the participant could not raise
+            # further may be covering the garment only just, or not: visible in the data and
+            # to the experimenter, who can ask.
+            self.session.log(
+                "masking_at_ceiling", severity="warning",
+                detail=f"confirmed at the ceiling, {level_dbfs:.1f} dBFS",
+            )
+            self.experimenter.set_status(self.experimenter.text["warnings"][MASKING_AT_CEILING])
         else:
-            self._escalate()
+            self.experimenter.set_status("")
+        self._done(confirmed=True)
 
-    # -- 5. escalate -------------------------------------------------------------------
+    # -- 4. still audible: earplugs ----------------------------------------------------
 
     def _escalate(self) -> None:
         warnings = self.experimenter.text["warnings"]
@@ -224,22 +267,33 @@ class MaskingCheck(Procedure):
                 "masking_not_confirmed", severity="warning",
                 detail=f"still audible with earplugs after {self.attempts} attempts",
             )
-            self.experimenter.set_status(warnings["masking_failed_after_earplugs"])
+            self.experimenter.set_status(warnings[MASKING_FAILED_AFTER_EARPLUGS])
             self._done(confirmed=False)
             return
         self.session.garment.stop()
         self.session.log(
             "masking_escalated", severity="warning",
-            detail=f"after {self.attempts} attempts"
+            detail=f"still audible after {self.attempts} attempts"
             + (", at the ceiling" if self.session.audio.at_ceiling else ""),
         )
-        self.session.audio.experimenter_alert("masking check failed")
         self.session.audio.stop_noise("earplug exchange")
-        self.experimenter.set_status(warnings["masking_failed"])
+        self.experimenter.set_status(warnings[MASKING_FAILED])
+
+        def hold_off() -> None:
+            # A Next step this soon after the report is the same click again -- a double
+            # click -- not "the earplugs are in", which takes longer than this to be true.
+            self.participant.show_message(PAUSED_SCREEN)
+            self.experimenter.set_instruction(self.experimenter.text["instructions"][EARPLUGS])
+            self.experimenter.refresh()
+            self._after(self.earplugs_lockout_s, self._offer_earplugs)
+
+        self.step(hold_off)
+
+    def _offer_earplugs(self) -> None:
         self.run_trial(
             lambda: ExperimenterChoice(
                 *self._windows(), {PROCEED: self.experimenter.proceed_requested},
-                "earplugs",
+                EARPLUGS,
                 show=lambda: self.participant.show_message(PAUSED_SCREEN),
             ),
             self._earplugs_fitted,

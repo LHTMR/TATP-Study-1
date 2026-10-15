@@ -98,6 +98,22 @@ def test_different_initials_are_warned_with_the_existing_warning(config):
     assert findings == [pre.Finding(pre.WARN, "warnings.experimenter_changed", "SM")]
 
 
+def test_initials_differing_only_in_case_are_the_same_experimenter(config):
+    """S, lab run 5 Oct. Including a file written before initials were made canonical."""
+    session = _session(config, number=1, initials="sm")
+    assert session.experimenter_initials == "SM"
+    _with_pre_s_estimate(session)
+    path = session.files.path("session")
+    recorded = path.read_text(encoding="utf-8")
+    assert "experimenter_initials,SM" in recorded
+    path.write_text(
+        recorded.replace("experimenter_initials,SM", "experimenter_initials,sm"),
+        encoding="utf-8",
+    )
+    for typed in ("SM", "sm", " Sm "):
+        assert pre.preflight(config, "01", 2, typed, pre.data_folder_for(config)) == []
+
+
 def test_a_previous_session_without_an_estimate_is_warned_at_launch(config):
     """SPEC.md 8.2: the fallback prior is visible before the session, not only in its log."""
     _session(config, number=1, abort="")
