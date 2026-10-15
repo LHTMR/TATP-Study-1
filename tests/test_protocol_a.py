@@ -406,6 +406,28 @@ def test_discard_is_offered_only_while_there_is_something_to_discard(rig):
     assert experimenter.discard_button.isHidden(), "the protocol has ended"
 
 
+def test_a_recalibration_in_the_protocols_place_withdraws_discard_and_gives_it_back(rig):
+    """Code review of N7.F12a1: while a re-calibration runs in the protocol's place
+    (`Procedure.detour`), Discard is not offered, and a press is ignored rather than starting
+    the interval under the calibration; the abandoned interval gets it back."""
+    experimenter, participant = rig.experimenter, rig.participant
+    protocol = _long(rig)
+    protocol.start()
+    experimenter.proceed_requested.emit()
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    _answer(participant, _observer(protocol._trial))
+    held = protocol._discardable
+    assert held is not None and not experimenter.discard_button.isHidden()
+    protocol.suspend_offers()
+    assert experimenter.discard_button.isHidden()
+    experimenter.discard_requested.emit()
+    assert "discard_ignored" in _events(rig.session)
+    assert _rows(rig.session, "discards") == []
+    protocol.restore_offers()
+    assert protocol._discardable == held and not experimenter.discard_button.isHidden()
+    protocol.cancel()
+
+
 def test_the_substitution_entry_is_offered_only_while_a_filament_trial_listens(rig):
     """A filament typed outside a filament trial reached no listener and was cleared and lost
     (15 Oct 2026 pilot review). The trial that listens is the one that offers the entry."""

@@ -67,6 +67,7 @@ from tatp.pinprick import (
 )
 from tatp.procedure import Procedure, Rig
 from tatp.schedule import Block, Schedule
+from tatp.session import CONDITION_PHASES
 from tatp.setup_checks import MaskingCheck, StopRehearsal
 from tatp.touchcal import (
     SELF_START_SCREEN,
@@ -77,7 +78,6 @@ from tatp.touchcal import (
 )
 from tatp.touchcal_maths import Delivery
 from tatp.trials import MessageConfirm
-from tatp.ui.experimenter import RECALIBRATE_REBALANCE, RECALIBRATE_RESTART
 from tatp.ui.participant import STANDBY_SCREEN
 from tatp.units import MIN_PER_H, S_PER_MIN
 
@@ -359,14 +359,23 @@ class SessionRunner(Procedure):
         # And whether its thermode had been removed too, so only the touch is left to restart.
         self._resumed_thermode_removed = False
         self._stopping_for_error = False
-        # Re-calibration during the intervention (docs/LOG.md N7.F12a1): the calibration that
-        # governs the touch, which is run again for it (None after a crash-resume, until one
-        # runs); whether it is running; the phase to go back to; and whether a stop came while
-        # the touch was on, so that its plain resume is recorded as the choice it was.
+        # Re-calibration, which the runner alone owns (docs/LOG.md N7.F12a1): the calibration
+        # that governs the touch, run again for it (None after a crash-resume, until one runs);
+        # the touch calibration's preference, which a re-calibration during the intervention
+        # keeps; whether one runs there, the procedure it runs in place of, and the phase to go
+        # back to; where a stop came while touch was calibrated or delivered, so that its plain
+        # resume is recorded as the choice it was; whether the touch is starting again in a
+        # step of its own after one; when a wait that will stop the touch falls due; and the
+        # run numbers a resumed session's files already have.
         self._calibration: TouchCalibration | None = None
+        self._preference: str | None = None if resume is None else resume.preferred_pattern
         self._recalibrating = False
+        self._detoured: Procedure | None = None
         self._phase_before_recalibration = INTERVENTION
-        self._stopped_with_touch = False
+        self._stop_where: str | None = None
+        self._touch_restarting = False
+        self._touch_off_due_s: float | None = None
+        self._runs_before = 0 if resume is None else resume.touchcal_runs
         # Set when an error ended the program with the session open (`_leave_open`): nothing
         # afterwards may close it, or it could not be resumed.
         self.left_open = False
@@ -385,17 +394,19 @@ class SessionRunner(Procedure):
     def connect_actions(self) -> None:
         self.experimenter.garment_disconnect_requested.connect(self._disconnect_garment)
         self.experimenter.garment_connect_requested.connect(self._connect_garment)
-        # Before any touch calibration's own, which answers for itself while it runs.
         self.experimenter.recalibration_requested.connect(self._recalibrate)
+        # After `Interruptions`' own, connected with the rig. Offers are worked out afresh
+        # from the state at each, never withdrawn blindly, so the order the slots run in
+        # cannot leave them wrong (a resume with nothing to restore ends at once).
         self.participant.emergency_stop.connect(self._stopped_now)
-        self.experimenter.resume_requested.connect(self._resume_pressed)
+        self.experimenter.resume_requested.connect(self._offer_recalibration)
 
     def disconnect_actions(self) -> None:
         self.experimenter.garment_disconnect_requested.disconnect(self._disconnect_garment)
         self.experimenter.garment_connect_requested.disconnect(self._connect_garment)
         self.experimenter.recalibration_requested.disconnect(self._recalibrate)
         self.participant.emergency_stop.disconnect(self._stopped_now)
-        self.experimenter.resume_requested.disconnect(self._resume_pressed)
+        self.experimenter.resume_requested.disconnect(self._offer_recalibration)
 
     # == the plan ==============================================================================
 
@@ -541,22 +552,28 @@ class SessionRunner(Procedure):
         )
 
     def _touch_calibration(self) -> None:
-        def make() -> TouchCalibration:
-            calibration = TouchCalibration(self.rig)
-            self._preview(calibration)
-            # Kept: a re-calibration during the intervention runs it again.
-            self._calibration = calibration
-            return calibration
-
         def calibrated(result) -> None:
             # Every condition's delivery, computed identically; which one is used is decided
             # only when the intervention starts (SPEC.md 16).
-            self.deliveries = {
-                condition: result.for_condition(condition)
-                for condition in self.session.config.study1["design"]["conditions"]
-            }
+            self._calibrated(result)
+            self._offer_recalibration()
 
-        self._protocol(make, calibrated)
+        self._protocol(self._new_calibration, calibrated)
+
+    def _new_calibration(self) -> TouchCalibration:
+        """Kept: a re-calibration during the intervention runs it again."""
+        calibration = TouchCalibration(self.rig, self._runs_before)
+        self._preview(calibration)
+        calibration.recalibration_changed.connect(self._offer_recalibration)
+        self._calibration = calibration
+        return calibration
+
+    def _calibrated(self, result) -> None:
+        self._preference = result.preferred_pattern
+        self.deliveries = {
+            condition: result.for_condition(condition)
+            for condition in self.session.config.study1["design"]["conditions"]
+        }
 
     def _baseline(self) -> None:
         """Bilaga 1 Table 2's baseline relaxation and alertness, with the garment off."""
@@ -706,6 +723,9 @@ class SessionRunner(Procedure):
             self._stop_touch("the intervention has ended")
             self.await_proceed(self._stage_done, self._standby("intervention_end"))
 
+        # A re-calibration that ends after this is due does not start the touch again only
+        # for this to stop it (`_recalibrated`).
+        self._touch_off_due_s = at.due_s
         self._wait_until(at.due_s, ended, self._standby("waiting"))
 
     # == the intervention ======================================================================
@@ -793,10 +813,10 @@ class SessionRunner(Procedure):
         if self._redeliver:
             self._redeliver = False
             self._restart_touch()
-        if self._stopped_with_touch:
-            self._stopped_with_touch = False
-            touchcal.log_recalibration(self.session, resumption.RESUME_CHOICE,
-                                       touchcal.FROM_STOP, self.stages[self.stage_index].id, "")
+        if self._stop_where is not None:
+            where, self._stop_where = self._stop_where, None
+            touchcal.log_recalibration(self.session, resumption.RESUME_CHOICE, EMERGENCY_STOP,
+                                       where, "", self._in_intervention())
         self._offer_recalibration()
 
     def _restart_touch(self) -> None:
@@ -804,9 +824,11 @@ class SessionRunner(Procedure):
 
         A delivery puts its cue, and any self-start prompt, on the participant's screen, and
         inside a block that screen belongs to the block's own trial. So in a block the touch
-        stays off until the block ends, and that is logged (docs/LOG.md N7.D17).
+        stays off until the block ends, and that is logged (docs/LOG.md N7.D17) -- except
+        while it is being started again in a step of its own after a re-calibration, when no
+        trial has the screen (`_touch_back_then`).
         """
-        if self.session.block_index is None:
+        if self.session.block_index is None or self._touch_restarting:
             self._start_delivery()
             return
         self._touch_after_block = True
@@ -829,13 +851,17 @@ class SessionRunner(Procedure):
     def _stop_touch(self, why: str) -> None:
         """The condition's touch off: for the rekindle and at the intervention's end."""
         self._touch_on = False
+        self._touch_off_due_s = None
         self._cancel_delivery()
         if self.session.garment.connected:
             self.session.garment.stop()
         self.session.log("garment_deactivated", detail=why)
         self._offer_recalibration()
 
-    # == re-calibration during the intervention, docs/LOG.md N7.F12a1 ========================
+    # == re-calibration, docs/LOG.md N7.F12a1 ==================================================
+    # The runner is its one owner: what is offered, the choice and its record, the
+    # interruption it ends or makes, and, in the intervention, the calibration run again. A
+    # touch calibration that is running says what it can offer and takes the path chosen.
 
     def _innermost(self) -> Procedure:
         procedure: Procedure = self
@@ -843,108 +869,158 @@ class SessionRunner(Procedure):
             procedure = procedure._child
         return procedure
 
-    def _calibrating(self) -> bool:
-        """A touch calibration is running -- the stage, or a re-calibration -- and answers for
-        itself: what it offers, and what is chosen."""
-        return isinstance(self._innermost(), TouchCalibration)
+    def _calibration_running(self) -> TouchCalibration | None:
+        """The touch calibration running now, the stage or a re-calibration, if any."""
+        innermost = self._innermost()
+        return innermost if isinstance(innermost, TouchCalibration) else None
+
+    def _in_intervention(self) -> bool:
+        """For the session file's count: a re-calibration chosen inside one there counts too,
+        though its phase is `touch_calibration`."""
+        return self.session.phase in CONDITION_PHASES or self._recalibrating
+
+    def _recalibration_where(self) -> str:
+        """`<where>` of the `recalibration` event: the stage, and the calibration's step while
+        one runs."""
+        stage = self.stages[self.stage_index].id
+        calibration = self._calibration_running()
+        if calibration is None:
+            return stage
+        return f"{stage}{resumption.WHERE_STEP_SEPARATOR}{calibration.step_name}"
+
+    def _recalibration_offers(self) -> tuple[bool, bool]:
+        """(rebalance, restart) now. While touch is being calibrated, what the calibration can
+        take; while the condition's touch is on, Restart, and Rebalance once this process has
+        a calibration with targets to rebalance against (after a crash-resume, the first is a
+        restart). Never past the limit, while paused, or while a resume is under way, which is
+        then the only way on. Identical in every condition (SPEC.md 16)."""
+        interruptions = self.rig.interruptions
+        if (self.session.closed or interruptions.resuming
+                or interruptions.active not in (None, EMERGENCY_STOP)
+                or not touchcal.recalibration_allowed(self.session)):
+            return False, False
+        calibration = self._calibration_running()
+        if calibration is not None:
+            return calibration.recalibration_offers()
+        if not self._touch_on:
+            return False, False
+        return self._calibration is not None and bool(self._calibration.targets), True
 
     def _offer_recalibration(self) -> None:
-        """While the condition's touch is on: Restart calibration, and Rebalance channels once
-        this process has a calibration with targets to rebalance against, so after a
-        crash-resume the first is a restart. Identical in every condition (SPEC.md 16)."""
-        if self._calibrating():
-            return
-        offered = self._touch_on and not self.session.closed
-        allowed = offered and touchcal.recalibration_allowed(self.session)
+        rebalance, restart = self._recalibration_offers()
+        touch = self._calibration_running() is not None or self._touch_on
         self.experimenter.set_actions_enabled(
-            recalibrate_rebalance=(allowed and self._calibration is not None
-                                   and bool(self._calibration.targets)),
-            recalibrate_restart=allowed,
-            recalibration_used=offered and touchcal.recalibrations_used_up(self.session),
+            recalibrate_rebalance=rebalance, recalibrate_restart=restart,
+            recalibration_used=(touch and not self.session.closed
+                                and touchcal.recalibrations_used_up(self.session)),
         )
 
     def _stopped_now(self) -> None:
-        """A stop with the touch on: its resume is a choice, recorded; and offered again if it
-        came during a resume's cue, which hid the choice."""
-        if self.session.closed or self._calibrating():
+        """A stop while touch was calibrated or delivered: its plain resume is a choice,
+        recorded where the stop came; and a stop during a resume's cue, which cancels the
+        resume, offers the choice again."""
+        if self.session.closed:
             return
-        self._stopped_with_touch = self._touch_on
+        if self._stop_where is None and (
+            self._calibration_running() is not None or self._touch_on
+        ):
+            self._stop_where = self._recalibration_where()
         self._offer_recalibration()
 
-    def _resume_pressed(self) -> None:
-        """Until the resume has restored the garment, it is the only way on."""
-        if not self._calibrating():
-            self.experimenter.set_actions_enabled(
-                recalibrate_rebalance=False, recalibrate_restart=False,
-                recalibration_used=False,
-            )
-
     def _recalibrate(self, choice: str, reason: str) -> None:
-        """Rebalance or restart during the intervention, from the controls or in place of
-        Resume after a stop (S, 15 Oct 2026; docs/LOG.md N7.F12a1).
+        """Rebalance or restart, from the controls or in place of Resume after a stop (S,
+        15 Oct 2026; docs/LOG.md N7.F12a1).
 
-        The garment goes to zero and the innermost procedure's step is abandoned, as a stop
-        abandons it (`Interruptions.take_over`), or the stop ends unrestored. The calibration
-        in use runs again from the path chosen, in place of that step (`Procedure.detour`), in
-        phase `touch_calibration`. The session clock does not stop: alerts sound, and a block
-        that falls due waits, armed, for the re-calibration to end. Then every condition's
-        delivery is recomputed from the new result, the touch starts again as after a stop,
-        and the abandoned step is repeated. Identical in every condition.
+        A choice no longer offered -- the state moved on while the dialog was open -- is
+        logged and ignored. Otherwise it is logged and counted, and the garment goes to zero:
+        the step in progress is abandoned as a stop abandons it (`Interruptions.take_over`),
+        or the stop ends unrestored. A touch calibration running takes the path itself. In
+        the intervention the calibration in use runs again from that path in place of the
+        abandoned step (`Procedure.detour`), in phase `touch_calibration`, keeping the
+        stage's preference; the session clock does not stop, so alerts sound, and a step that
+        falls due meanwhile waits for it. Identical in every condition.
         """
-        if self._calibrating():
+        rebalance, restart = self._recalibration_offers()
+        if not (rebalance if choice == touchcal.REBALANCE else restart):
+            self.session.log("recalibration_ignored", origin="experimenter",
+                             severity="warning", detail=f"{choice}: no longer offered")
+            self._offer_recalibration()
             return
+        assert reason in self.experimenter.text["dialogs"]["recalibration_reasons"], reason
         interruptions = self.rig.interruptions
         stopped = interruptions.active == EMERGENCY_STOP
-        # Stage boundary (CLAUDE.md): offered only while all of this holds.
-        assert self._touch_on and (stopped or interruptions.active is None), (
-            f"a {choice} with the touch {'on' if self._touch_on else 'off'} while "
-            f"{interruptions.active} is in force"
-        )
-        assert touchcal.recalibration_allowed(self.session), "past recalibrations_max"
-        assert reason in self.experimenter.text["dialogs"]["recalibration_reasons"], reason
-        assert choice in (RECALIBRATE_REBALANCE, RECALIBRATE_RESTART), choice
-        assert choice != RECALIBRATE_REBALANCE or (
-            self._calibration is not None and self._calibration.targets
-        ), "a rebalance with no calibration in this process"
+        calibration = self._calibration_running()
         touchcal.log_recalibration(
-            self.session, choice, touchcal.FROM_STOP if stopped else touchcal.FROM_CONTROLS,
-            self.stages[self.stage_index].id, reason,
+            self.session, choice, EMERGENCY_STOP if stopped else touchcal.FROM_CONTROLS,
+            self._recalibration_where(), reason, self._in_intervention(),
         )
-        self._stopped_with_touch = False
-        self._recalibrating = True
-        self.experimenter.set_actions_enabled(
-            recalibrate_rebalance=False, recalibrate_restart=False, recalibration_used=False
-        )
+        self._stop_where = None
         innermost = self._innermost()
         if stopped:
             interruptions.end_without_restore(choice)
         else:
             interruptions.take_over(choice)
+        if calibration is not None:
+            calibration.recalibrate(choice, reason)
+            self._offer_recalibration()
+            return
+        self._recalibrating = True
         # The condition's touch stays off until the new calibration's (`_recalibrated`).
         self._cancel_delivery()
         self._redeliver = False
         self._touch_after_block = False
         self._phase_before_recalibration = self.session.phase
         if self._calibration is None:
-            self._calibration = TouchCalibration(self.rig)
-            self._preview(self._calibration)
+            self._new_calibration()
         calibration = self._calibration
-        calibration.recalibrate_on_start(choice, reason)
+        assert self._preference is not None, "the intervention began with no preference"
+        calibration.recalibrate_on_start(choice, reason, self._preference)
+        self._detoured = innermost
         innermost.detour(lambda: calibration, self._recalibrated)
+        self._offer_recalibration()
 
-    def _recalibrated(self, result) -> None:
-        """The new calibration governs the touch from now: every condition's delivery from it,
-        computed identically, and the touch started again -- at once, or after the block in
-        progress, as after a stop (`_restart_touch`)."""
+    def _recalibrated(self, result, go_on: Callable[[], None]) -> None:
+        """The new calibration governs the touch from now, every condition's delivery
+        computed from it identically. The touch starts again before the abandoned step is
+        repeated (`_touch_back_then`) -- inside a block too, whose ratings and measures are
+        made under it -- unless that step is a wait that will stop the touch, already due."""
         self._recalibrating = False
         self.session.set_phase(self._phase_before_recalibration)
-        self.deliveries = {
-            condition: result.for_condition(condition)
-            for condition in self.session.config.study1["design"]["conditions"]
-        }
-        if self.session.garment.connected:
-            self._restart_touch()
+        self._calibrated(result)
         self._offer_recalibration()
+        procedure, self._detoured = self._detoured, None
+        due = self._touch_off_due_s
+        ending = due is not None and self.session.clock.t_session_s() >= due
+        if self._touch_on and self.session.garment.connected and not ending:
+            self._touch_back_then(procedure, go_on)
+        else:
+            go_on()
+
+    def _touch_back_then(self, procedure: Procedure, go_on: Callable[[], None]) -> None:
+        """The condition's touch started again, as `_deliver` starts it -- `touch_start` for
+        `touch_start_display_s` on the experimenter's side in every condition, and the
+        delivery's cue, and in the participant-preferred condition its self-start prompt, on
+        the participant's -- then `go_on`, once a delivery not waiting on the participant has
+        started the touch. A step of `procedure`, so a stop meanwhile repeats it."""
+
+        def begin() -> None:
+            self._touch_restarting = True
+            if self._delivery is None:
+                self._start_delivery()
+            self._show_between()
+            self.experimenter.set_instruction(
+                self.experimenter.text["instructions"][TOUCH_START_INSTRUCTION]
+            )
+            self.experimenter.set_status("")
+            self.experimenter.refresh()
+            procedure._after(self.touch_start_display_s,
+                             lambda: self._once_delivery_settles(back))
+
+        def back() -> None:
+            self._touch_restarting = False
+            go_on()
+
+        procedure.step(begin)
 
     def _disconnect_garment(self) -> None:
         """The experimenter's Disconnect (SPEC.md 11). The session goes on; nothing is lost."""
@@ -1124,6 +1200,7 @@ class SessionRunner(Procedure):
             resumed_after_heat(heat_t_s)
             return
         self._set_alarms(at, REKINDLE)
+        self._touch_off_due_s = at.due_s  # as at the intervention's end
         self._wait_until(at.due_s, armed, self._standby("waiting"))
 
     # == the end ===============================================================================

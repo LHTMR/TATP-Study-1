@@ -258,20 +258,33 @@ class Procedure(QObject):
         child.start()
 
     def detour(
-        self, make_child: Callable[[], Procedure], then: Callable[[object], None]
+        self,
+        make_child: Callable[[], Procedure],
+        then: Callable[[object, Callable[[], None]], None],
     ) -> None:
-        """Run a procedure in place of the step an interruption has just abandoned, then
-        `then(result)`, then that step again, as a resume would have: the re-calibration during
-        the intervention (docs/LOG.md N7.F12a1), in whichever procedure is innermost."""
+        """Run a procedure in place of the step an interruption has just abandoned: the
+        re-calibration during the intervention (docs/LOG.md N7.F12a1), in whichever procedure
+        is innermost. What this one offers the experimenter is withdrawn meanwhile
+        (`suspend_offers`). Then `then(result, go_on)`, where `go_on()` gives the offers back
+        and runs the abandoned step again, as a resume would have, now or after a step of
+        its own."""
         step = self._step
+        self.suspend_offers()
 
-        def done(result: object) -> None:
-            then(result)
+        def go_on() -> None:
+            self.restore_offers()
             self._step = step
             if step is not None:
                 step()
 
-        self.run_child(make_child, done)
+        self.run_child(make_child, lambda result: then(result, go_on))
+
+    def suspend_offers(self) -> None:
+        """Withdraw what this procedure offers the experimenter while another runs in its
+        place (`detour`). Nothing, unless a procedure offers something of its own."""
+
+    def restore_offers(self) -> None:
+        """Undo `suspend_offers`, as the abandoned step comes back."""
 
     def train_then(self, scales, then: Callable[[], None]) -> None:
         """The proportionality training for each of `scales` still due, then `then` (10.6).

@@ -105,7 +105,7 @@ written, with an empty value — an absent row and an empty value must not be co
 | `earplugs_used` | - | `true` when earplugs were fitted under the headphones because the participant could still hear the garment (§10.7) |
 | `fit_preview_reruns` | - | Total re-runs the experimenter chose with the fit preview on, across the session (§11.1); `0` when none. Written at close, with the keys below it, because a re-run can come at any time point |
 | `intervention_emergency_stops` | - | How many times the participant's emergency stop interrupted the session during the intervention (phase `intervention` or `rekindle`), counted the same way in every condition: an intercurrent event for analysis (`docs/research/R36`). A press while already stopped is not counted again. Across a crash, the resumed session's file counts the earlier files' stops too. `0` when none. Never displayed. Written at close; files before 15 Oct 2026 lack it. A stop during a re-calibration is logged in phase `touch_calibration` and is not counted here |
-| `intervention_recalibrations` | - | How many re-calibrations (a rebalance or a restart, `log` event `recalibration`) were begun during the intervention, from the controls or after a stop: a change of the treatment delivered, so an intercurrent event (docs/LOG.md N7.F12a1). Counted as `intervention_emergency_stops` is, across a crash too. `0` when none. Never displayed. Written at close; files before 15 Oct 2026 lack it |
+| `intervention_recalibrations` | - | How many re-calibrations (a rebalance or a restart, `log` event `recalibration`) were begun during the intervention, from the controls or after a stop: a change of the treatment delivered, so an intercurrent event (docs/LOG.md N7.F12a1). One chosen inside a re-calibration there counts too, though its phase is `touch_calibration`: counted by the stage in its `<where>`, not by phase. Carried across a crash. `0` when none. Never displayed. Written at close; files before 15 Oct 2026 lack it |
 | `sensitisation_start_iso` | - | Session t=0; empty until sensitisation begins |
 | `session_end_iso` | - | Written at close |
 | `abort_reason` | - | Empty unless the session was aborted |
@@ -194,14 +194,18 @@ from the controls or in place of Resume after a stop. Each is a `recalibration` 
 `<choice>; <trigger>; <where>; <reason>; <count>`:
 
 - `<choice>`: `resume` (the abandoned step repeated, as after any stop), `rebalance` (steps 3
-  and 4 for every test channel, then the evenness check and the preference selection; new
-  `touchcal_adjust` rows with the next `pass_index`) or `restart` (a new run from step 1 with
-  the next `run_index`, everything after it included; see `touchcal_fit`).
+  and 4 for every test channel, then the evenness check, then on; new `touchcal_adjust` rows
+  with the next `pass_index`) or `restart` (a new run from step 1 with the next `run_index`,
+  everything after it included; see `touchcal_fit`). During the intervention neither asks the
+  preference selection (step 6) again: the touch calibration's choice is kept, logged
+  `preference_kept`, so the participant-preferred condition's pattern cannot change there.
 - `<trigger>`: `emergency_stop`, or `controls` for one chosen with the session running.
-- `<where>`: in touch calibration the step, each with its introduction screen: `training`,
-  `step1_bracket`, `step2_estimation`, `fit_decision`, `step3_match`, `step4_compare` (a channel
-  matched again inside step 4 included), `step5_pleasantness`, `evenness` or
-  `step6_preference`; in the intervention the stage's id, as `stage_started` has it.
+- `<where>`: the stage's id, as `stage_started` has it, and while a touch calibration runs,
+  `/` and its step, each step with its introduction screen: `training`, `step1_bracket`,
+  `step2_estimation`, `fit_decision`, `step3_match`, `step4_compare` (a channel matched again
+  inside step 4 included), `step5_pleasantness`, `evenness` or `step6_preference`. So
+  `touch_calibration/step3_match` in the stage, `block.2` in the intervention, and
+  `block.2/step1_bracket` for one chosen inside a re-calibration there.
 - `<reason>`: empty for `resume`; otherwise the key of the reason chosen: `channel_uneven` ("a
   channel felt wrong or uneven"), `too_strong` ("the touch was too strong overall") or `other`.
 - `<count>`: empty for `resume`; otherwise this re-calibration's number in the session, a crash
@@ -213,11 +217,15 @@ garment not restored: <choice>`; from the controls, `interrupted_for_recalibrati
 Either way no `garment_restored` follows: the garment stays at zero until the re-calibration's
 own cue. During the intervention the re-calibration runs in phase `touch_calibration` (log rows,
 `phase_changed`), with the session clock running: alerts sound, and a block that falls due
-waits, armed, until it ends. Then every condition's delivery is recomputed from it, a new
-`touchcal_channels` set is written, the touch starts again (`garment_activated`; inside a block,
-after the block, as after a stop, `touch_restart_deferred`), and the abandoned step is repeated.
-A re-calibration chosen during another counts as its own, but not again as an intervention one
-in the session file.
+waits, armed, until it ends. Then every condition's delivery is recomputed from it and a new
+`touchcal_channels` set is written. The condition's touch starts again before the abandoned
+step is repeated -- inside a block too, whose ratings and measures are made under it -- with
+its cue (`warning_cue`, then `garment_activated`; in the participant-preferred condition the
+self-start prompt), the experimenter shown the touch start for the same time in every
+condition; unless the step is a wait for the rekindle or the intervention's end that fell due
+meanwhile, which stops the touch. A re-calibration chosen inside another during the
+intervention is counted as an intervention one too. A choice no longer offered when the
+dialog is confirmed is logged `recalibration_ignored` (severity `warning`) and does nothing.
 
 `substitution_not_recorded` (origin `experimenter`, severity `warning`, `detail`
 `trial <n>: <what was typed>`) is written when a filament trial ends with something typed in
@@ -520,7 +528,7 @@ One row per estimation run — the fitted rating function and the targets read o
 | timestamp_iso | iso8601 | - | yes | Wall clock at the fit |
 | t_session_s | float | s | no | Seconds from session t=0 |
 | channel | int | - | yes | Reference channel |
-| run_index | int | - | yes | 1 for the first run; incremented for each re-run (§11.1), and for each restart in a re-calibration (`log`, `recalibration`), in the intervention too |
+| run_index | int | - | yes | 1 for the first run; incremented for each re-run (§11.1), and for each restart in a re-calibration (`log`, `recalibration`), in the intervention too. A resumed session goes on from the highest number in the files it continues, so the chain never has two runs of one number (from 15 Oct 2026) |
 | superseded | bool | - | yes | `true` if the experimenter re-ran after seeing this fit, or skipped the calibration while it awaited their decision (`touchcal_channels.skipped`), so it was never accepted, or restarted the calibration in a re-calibration before this run's calibration was ever used. The row is retained regardless — a procedure repeatable until it looks right is a forking path unless every attempt is kept. **A run restarted after its fit had been accepted, but before it was used, has two rows**: the accepted one, `false`, and a later copy, `true`, with the `rerun_reason`; the later row supersedes it. A run restarted before its fit has no row. A run whose calibration governed the touch is never superseded, though a later one may replace it: `touchcal_channels` says which governed when |
 | rerun_reason | str | - | no | Free text the experimenter gave when re-running; for a restart in a re-calibration, `recalibration: <reason>` with the reason's key (`log`, `recalibration`) |
 | fit_form | str | - | yes | `log_pressure` or `linear_pressure` (§9 step 2) |
@@ -640,9 +648,10 @@ calibrated level. A rebalance re-runs steps 3 and 4 and asks again, so there can
 
 One row per preference selection (§9 step 6) — every session, in every condition, so its presence
 is not a tell (§16). **Recorded, never displayed:** in the participant-preferred condition the
-chosen pattern is the condition's pattern. A re-calibration (`log`, `recalibration`) asks again,
-so a session can have more than one; the pattern used from then on is the one its
-`touchcal_channels` set names.
+chosen pattern is the condition's pattern. A re-calibration during touch calibration
+(`log`, `recalibration`) that reaches step 6 again asks again, so a session can have more than
+one; the calibration's choice is the last. One during the intervention never asks: it keeps
+the touch calibration's (`preference_kept`).
 
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|

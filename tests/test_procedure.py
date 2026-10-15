@@ -462,3 +462,71 @@ def test_the_rig_plays_patterns(rig):
     garment = rig.session.garment
     garment.play_pattern(rig.session.patterns["sweep_20cms"])
     _spin(lambda: garment.status()["channels_on"])
+
+
+# -- a detour, for a re-calibration (docs/LOG.md N7.F12a1) ---------------------------------
+
+
+class Offering(TwoTrials):
+    """Records when what it offers is withdrawn and given back."""
+
+    def __init__(self, rig):
+        super().__init__(rig)
+        self.calls: list[str] = []
+
+    def suspend_offers(self) -> None:
+        self.calls.append("suspend")
+
+    def restore_offers(self) -> None:
+        self.calls.append("restore")
+
+
+class OneTrial(Procedure):
+    """Finishes with its one trial's result; can be run again."""
+
+    def __init__(self, rig):
+        super().__init__(rig)
+        self.made: list[FakeTrial] = []
+
+    def begin(self) -> None:
+        def make() -> FakeTrial:
+            self.made.append(FakeTrial("child"))
+            return self.made[-1]
+
+        self.run_trial(make, self.finish)
+
+
+def test_a_detour_runs_in_place_of_the_abandoned_step_then_repeats_it(rig):
+    procedure = Offering(rig)
+    procedure.start()
+    _spin(lambda: procedure.made)
+    first = procedure.made[0]
+    rig.interruptions.take_over("restart")
+    assert first.cancelled, "the step in progress is abandoned"
+    child = OneTrial(rig)
+    returned = []
+    procedure.detour(lambda: child, lambda result, go_on: returned.append((result, go_on)))
+    assert procedure.calls == ["suspend"], "its offers withdrawn while the detour runs"
+    child.made[0].respond()
+    (result, go_on), = returned
+    assert result == "child" and len(procedure.made) == 1, "nothing repeated until go_on"
+    go_on()
+    assert procedure.calls == ["suspend", "restore"]
+    assert len(procedure.made) == 2 and procedure.made[1].label == "first", "the step again"
+
+
+def test_a_procedure_run_again_reports_only_to_its_new_caller(rig):
+    """`run_child`'s connection is once only: a calibration run again for a re-calibration
+    must not finish the stage that first ran it (docs/LOG.md N7.F12a1)."""
+    parent = Offering(rig)
+    parent.start()
+    _spin(lambda: parent.made)
+    child = OneTrial(rig)
+    first_done, second_done = [], []
+    parent.run_child(lambda: child, first_done.append)
+    child.made[-1].respond()
+    assert first_done == ["child"]
+    rig.interruptions.take_over("rebalance")
+    parent.detour(lambda: child, lambda result, go_on: second_done.append(result))
+    child.made[-1].respond()
+    assert first_done == ["child"] and second_done == ["child"]

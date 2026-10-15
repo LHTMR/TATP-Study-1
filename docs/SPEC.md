@@ -606,12 +606,15 @@ without a code change.
 not supposed to be uncomfortable, so if it becomes so it is adjusted to salvage the rest of the
 session. During touch calibration and during the intervention while the condition's touch is
 on (touch blocks and pinprick blocks included), the experimenter can **rebalance the channels**
-(steps 3–4, the evenness check and step 6 again; only once a fit exists) or **restart the
+(steps 3–4 and the evenness check again; only once a fit exists) or **restart the
 calibration** (a new run from step 1, without the VAS training), from the controls or in place
-of Resume after an emergency stop, with a reason from a fixed list. The garment goes to zero
-and the step in progress is abandoned as a stop abandons it; the re-calibration runs; every
-condition's delivery is recomputed from it identically; the touch starts again with its cue
-(inside a block, after the block, as after a stop); and the abandoned step is repeated. The
+of Resume after an emergency stop, with a reason from a fixed list. During the intervention
+step 6 is not asked again: the touch calibration's preference stands, so the
+participant-preferred condition's pattern cannot change mid-intervention. The garment goes to
+zero and the step in progress is abandoned as a stop abandons it; the re-calibration runs;
+every condition's delivery is recomputed from it identically; the touch starts again with its
+cue, as at any touch start, before the abandoned step is repeated -- inside a block too, since
+the block's ratings and measures are made under the touch. The
 session clock is not paused: alerts sound, and a block that falls due waits, armed, for the
 re-calibration to end. A restart during the intervention includes the "just uncomfortable"
 bracket, on sensitised skin. `touch_calibration.recalibrations_max` limits them per session

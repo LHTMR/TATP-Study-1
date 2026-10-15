@@ -548,9 +548,9 @@ dialogs:
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The re-calibrations, the
   # same in every condition and wherever they are offered.
-  recalibrate_rebalance: 'Balansera om kanalerna nu? Plagget går till noll och det som pågår avbryts. Deltagaren ställer in var och en av de andra kanalerna mot mittkanalen igen och jämför dem (steg 3 och 4), och sedan kommer frågan om jämnhet och valet av mönster; en behaglighetsnivå som redan är inställd behålls. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
+  recalibrate_rebalance: 'Balansera om kanalerna nu? Plagget går till noll och det som pågår avbryts. Deltagaren ställer in var och en av de andra kanalerna mot mittkanalen igen och jämför dem (steg 3 och 4), och sedan kommer frågan om jämnhet, och valet av mönster bara om beröringskalibreringen inte har gjort det ännu; en behaglighetsnivå som redan är inställd behålls. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
-  recalibrate_restart: 'Starta om beröringskalibreringen nu? Plagget går till noll och det som pågår avbryts. Kalibreringen börjar om från steg 1 som en ny omgång, utan övningen på skattningsskalan. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
+  recalibrate_restart: 'Starta om beröringskalibreringen nu? Plagget går till noll och det som pågår avbryts. Kalibreringen börjar om från steg 1 som en ny omgång, utan övningen på skattningsskalan och utan valet av mönster om beröringskalibreringen redan har gjort det. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
   recalibration_reason: Varför? Registreras tillsammans med valet.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The keys are what the log

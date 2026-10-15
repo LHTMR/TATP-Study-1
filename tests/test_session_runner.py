@@ -85,9 +85,12 @@ def loaded():
 
 
 def make_runner(loaded, tmp_path, resume=None, condition=None, seed=7,
-                fit_preview=False, session_number=1, speed=CLOCK_SPEED) -> SessionRunner:
+                fit_preview=False, session_number=1, speed=CLOCK_SPEED,
+                recalibrations_max=None) -> SessionRunner:
     base = make_config(loaded, tmp_path)
     study1 = {**short_study(loaded), "choice": base.study1["choice"]}
+    study1["touch_calibration"] = {**study1["touch_calibration"],
+                                   "recalibrations_max": recalibrations_max}
     if fit_preview:
         study1["fit_preview"] = {**study1["fit_preview"], "enabled": True}
     config = cfg.Config(**{
@@ -769,11 +772,13 @@ def test_a_crash_after_a_restart_after_a_stop_redoes_the_calibration_and_keeps_t
     driver.before_step = stop_again
     driver.run()
     assert offered == [(False, True, False)], "no limit; no fit yet to rebalance against"
-    assert _details(runner, "recalibration") == ["resume; emergency_stop; step2_estimation; ; "]
+    assert _details(runner, "recalibration") == [
+        "resume; emergency_stop; touch_calibration/step2_estimation; ; "]
     assert runner.session.recalibrations == 1
     assert runner.deliveries is not None
+    assert runner.resume.touchcal_runs == 1
     fits = [(r["run_index"], r["superseded"]) for r in _rows(runner.session, "touchcal_fit")]
-    assert fits == [("1", "false")], "the redone calibration starts its own runs"
+    assert fits == [("2", "false")], "its runs numbered on from the crashed files' (review)"
     runner.cancel()
     runner.session.close()
 
@@ -784,7 +789,7 @@ def test_a_crash_after_a_rebalanced_calibration_reloads_what_it_delivers(app, lo
         crashed, "stage_completed", "touch_calibration"), during=Comparison).run()
     crashed.cancel()
     assert _details(crashed, "recalibration") == [
-        "rebalance; emergency_stop; step4_compare; other; 1"]
+        "rebalance; emergency_stop; touch_calibration/step4_compare; other; 1"]
     runner = _resumed(loaded, tmp_path, crashed)
     assert "touch_calibration" in runner.resume.completed_stages
     assert runner.resume.recalibrations == 1 and runner.resume.calibrations_used == 1
@@ -793,6 +798,166 @@ def test_a_crash_after_a_rebalanced_calibration_reloads_what_it_delivers(app, lo
     assert runner.session.recalibrations == 1
     runner.cancel()
     runner.session.close()
+
+
+def _in_the_calibration(runner, when):
+    """The stage's touch calibration, while `when(calibration, trial)`."""
+    calibration = runner._calibration_running()
+    return calibration is not None and when(calibration)
+
+
+def test_in_touch_calibration_a_plain_resume_is_recorded_as_the_choice(app, loaded, tmp_path):
+    """The runner owns the record (code review of N7.F12a1): every resume from a stop while
+    touch is calibrated is logged as a choice, and is not a re-calibration."""
+    runner = make_runner(loaded, tmp_path)
+    driver = Driver(runner.rig, runner,
+                    stop_when=lambda: _logged(runner, "stage_completed", "touch_calibration"))
+    stopped = []
+
+    def stop_once(trial):
+        if not stopped and isinstance(trial, TouchRating) and _in_the_calibration(
+                runner, lambda c: c.estimates):
+            stopped.append(_offered(runner))
+            press(runner.rig.participant, "period")
+            stopped.append(_offered(runner))
+
+    driver.before_step = stop_once
+    driver.run()
+    assert stopped == [(False, True, False), (False, True, False)], "running, and stopped"
+    (choice,) = [r for r in _events(runner.session) if r["event"] == "recalibration"]
+    assert choice["detail"] == "resume; emergency_stop; touch_calibration/step2_estimation; ; "
+    assert choice["origin"] == "experimenter"
+    assert runner.session.recalibrations == 0
+    assert _offered(runner) == (False, False, False), "withdrawn once the calibration ends"
+    runner.cancel()
+    runner.session.close()
+
+
+def test_a_resume_with_nothing_to_restore_offers_the_choice_again(app, loaded, tmp_path):
+    """Code review of N7.F12a1: a stop while the garment is idle -- an introduction screen --
+    resumes at once, inside the Resume press; the offers are worked out afresh, never
+    withdrawn after it, so they come back."""
+    runner = make_runner(loaded, tmp_path)
+    seen = []
+
+    def at_the_estimation_intro() -> bool:
+        calibration = runner._calibration_running()
+        if (not seen and calibration is not None and calibration.run_index == 1
+                and runner.participant.message.text
+                == runner.participant.text["screens"]["intro_estimation"]):
+            press(runner.rig.participant, "period")
+            runner.experimenter.resume_requested.emit()
+            seen.append((runner.rig.interruptions.active, _offered(runner)))
+        return bool(seen)
+
+    Driver(runner.rig, runner, stop_when=at_the_estimation_intro).run()
+    assert seen == [(None, (False, True, False))]
+    runner.cancel()
+    runner.session.close()
+
+
+@pytest.mark.parametrize("condition", ["ct_targeted", "participant_preferred"])
+def test_after_a_stop_in_the_intervention_the_choice_comes_back_in_every_condition(
+    app, loaded, tmp_path, condition
+):
+    """Code review of N7.F12a1: whatever the resume has to restore, the controls come back
+    the same in every condition (SPEC.md 16)."""
+    runner = make_runner(loaded, tmp_path, condition=condition)
+    rig = runner.rig
+    seen = []
+
+    def stop_with_the_touch_on() -> bool:
+        if seen:
+            if rig.interruptions.active is None and not rig.interruptions.resuming:
+                seen.append(_offered(runner))
+                return True
+            return False
+        if runner.session.phase == "intervention" and runner._touch_on:
+            press(rig.participant, "period")
+            seen.append(_offered(runner))
+        return False
+
+    Driver(rig, runner, stop_when=stop_with_the_touch_on).run()
+    assert seen == [(True, True, False), (True, True, False)], "stopped, and after the resume"
+    resumes = _details(runner, "recalibration")
+    assert len(resumes) == 1 and resumes[0].startswith("resume; emergency_stop; ")
+    runner.cancel()
+    runner.session.close()
+
+
+def test_a_choice_no_longer_offered_is_ignored_and_logged(app, loaded, tmp_path):
+    """Code review of N7.F12a1: the dialog can be accepted after the state has moved on."""
+    runner = make_runner(loaded, tmp_path)
+    Driver(runner.rig, runner, stop_when=lambda: True).run()  # the setup: no touch
+    runner.experimenter.recalibration_requested.emit("restart", "other")
+    (ignored,) = [r for r in _events(runner.session) if r["event"] == "recalibration_ignored"]
+    assert ignored["detail"] == "restart: no longer offered"
+    assert runner.session.recalibrations == 0 and runner.rig.interruptions.active is None
+    runner.cancel()
+    runner.session.close()
+
+
+@pytest.mark.parametrize("limit, offered", [(0, (False, False, False)),
+                                            (1, (False, False, True))])
+def test_the_limit_on_re_calibrations(app, loaded, tmp_path, limit, offered):
+    """With a limit of one, the stop after one offers Resume only, and says why; with none,
+    nothing is offered, and nothing is said to be used up."""
+    runner = make_runner(loaded, tmp_path, recalibrations_max=limit)
+    driver = Driver(runner.rig, runner,
+                    stop_when=lambda: _logged(runner, "stage_completed", "touch_calibration"))
+    seen = []
+
+    def act(trial):
+        calibration = runner._calibration_running()
+        if calibration is None or not isinstance(trial, TouchRating):
+            return
+        if limit and not runner.session.recalibrations:
+            runner.experimenter.recalibration_requested.emit("restart", "other")
+        elif not seen:
+            press(runner.rig.participant, "period")
+            seen.append(_offered(runner))
+
+    driver.before_step = act
+    driver.run()
+    assert seen == [offered]
+    assert runner.session.recalibrations == limit
+    runner.cancel()
+    runner.session.close()
+
+
+class _Result:
+    """What `_recalibrated` reads of a calibration's result."""
+
+    preferred_pattern = "sweep_03cms"
+
+    def __init__(self, deliveries):
+        self.deliveries = deliveries
+
+    def for_condition(self, condition):
+        return self.deliveries[condition]
+
+
+def test_no_touch_is_started_for_a_wait_that_fell_due_to_stop_it(app, loaded, tmp_path):
+    """Code review of N7.F12a1: a re-calibration over the wait for the rekindle or the
+    intervention's end, ending after that is due, does not start the touch only for the step
+    it repeats to stop it."""
+    runner = make_runner(loaded, tmp_path)
+    session = runner.session
+    session.start_sensitisation()
+    delivery = Delivery("sweep_03cms", {c: 0.0 for c in session.garment.channels()})
+    runner.deliveries = {c: delivery for c in loaded.study1["design"]["conditions"]}
+    runner._touch_on = True
+    went_on = []
+    runner._detoured = runner
+    runner._touch_off_due_s = session.clock.t_session_s() - 1.0
+    runner._recalibrated(_Result(runner.deliveries), lambda: went_on.append(True))
+    assert went_on and runner._delivery is None, "straight on, no touch started"
+    runner._detoured = runner
+    runner._touch_off_due_s = None
+    runner._recalibrated(_Result(runner.deliveries), lambda: went_on.append(True))
+    assert len(went_on) == 1 and runner._delivery is not None, "otherwise the touch first"
+    runner._cancel_delivery()
+    session.close()
 
 
 def _recalibrate_in_the_intervention(runner, choice, when, stop=False):
@@ -864,6 +1029,10 @@ def test_a_rebalance_from_the_controls_as_the_touch_restarts_then_the_step_goes_
         int(r["channel"]): float(r[f"{session.condition}_kpa"]) for r in second
     }, "the touch from the new calibration"
     assert session.intervention_recalibrations == 1
+    # Integrator's decision B: step 6 is not asked again; the preference stands.
+    assert len(_rows(session, "touchcal_preference")) == 1 and "preference_kept" in after
+    assert {r["participant_preferred_pattern"] for r in channels} == {
+        channels[0]["participant_preferred_pattern"]}
     assert names.count("stage_started") == len(set(
         r["detail"] for r in events if r["event"] == "stage_started")), "nothing ran twice"
     runner.cancel()
@@ -872,10 +1041,14 @@ def test_a_rebalance_from_the_controls_as_the_touch_restarts_then_the_step_goes_
     assert values["intervention_recalibrations"] == "1"
 
 
-def test_a_restart_after_a_stop_in_a_touch_block_repeats_the_rating_and_defers_the_touch(
-    app, loaded, tmp_path
+@pytest.mark.parametrize("condition", ["ct_targeted", "participant_preferred"])
+def test_a_restart_in_a_touch_block_restarts_the_touch_before_the_rating_repeats(
+    app, loaded, tmp_path, condition
 ):
-    runner = make_runner(loaded, tmp_path)
+    """Integrator's decision A: the block's ratings are of the touch being delivered, so
+    the touch starts again, with its cue, before the abandoned rating is repeated -- not after
+    the block. In the self-start condition, its prompt, as at the intervention's start."""
+    runner = make_runner(loaded, tmp_path, condition=condition)
     session = runner.session
     driver = Driver(runner.rig, runner)
 
@@ -899,8 +1072,21 @@ def test_a_restart_after_a_stop_in_a_touch_block_repeats_the_rating_and_defers_t
     driver.run()
     (choice,) = _details(runner, "recalibration")
     assert choice.startswith("restart; emergency_stop; block.")
-    names = [r["event"] for r in _events(runner.session)]
-    assert "touch_restart_deferred" in names, "inside a block the touch waits for its end"
+    events = _events(runner.session)
+    names = [r["event"] for r in events]
+    assert "touch_restart_deferred" not in names
+    # The re-calibration's, the last: the stage's own came first.
+    done_at = len(names) - 1 - names[::-1].index("touch_calibration_done")
+    after = [(r["event"], r["block_index"]) for r in events[done_at:]]
+    restarted = next(i for i, (event, _) in enumerate(after)
+                     if event == "warning_cue" and events[done_at + i]["detail"]
+                     == "_QuietDeliveryStart")
+    rated = next(i for i, (event, _) in enumerate(after) if event == "rating_cued")
+    assert restarted < rated, "the touch's cue before the repeated rating"
+    if condition != "participant_preferred":
+        assert names.index("garment_activated", done_at) < done_at + rated, (
+            "and the touch on before it"
+        )
     ratings = [r for r in _rows(session, "touch_ratings") if r["block_index"] == str(block[0])]
     plan = TouchBlock(runner.rig, 3, block[0]).plan
     assert len(ratings) == len(plan), "the abandoned rating repeated, none lost or doubled"
@@ -921,17 +1107,30 @@ def test_a_crash_after_an_intervention_recalibration_reloads_the_latest(app, loa
                 and crashed._innermost() is crashed)
 
     act, done = _recalibrate_in_the_intervention(crashed, "rebalance", touch_on)
+    nested = []
 
     def recalibrated() -> bool:
         act()
+        # A restart chosen inside it, in phase touch_calibration, counts for the intervention
+        # too (code review of N7.F12a1).
+        calibration = crashed._calibration_running()
+        if done and not nested and calibration is not None and calibration.step_name == (
+                "step3_match"):
+            nested.append(True)
+            crashed.experimenter.recalibration_requested.emit("restart", "other")
         return bool(done) and _logged(crashed, "garment_activated") and len(
             _details(crashed, "touch_calibration_done")) == 2
 
     Driver(crashed.rig, crashed, stop_when=recalibrated).run()
     crashed.cancel()
+    assert nested and crashed.session.intervention_recalibrations == 2
+    second = _details(crashed, "recalibration")[1]
+    assert second.startswith("restart; controls; ") and second.endswith(
+        "/step3_match; other; 2"), second
     runner = _resumed(loaded, tmp_path, crashed)
     assert runner.resume.calibrations_used == 2
-    assert runner.resume.intervention_recalibrations == 1
+    assert runner.resume.intervention_recalibrations == 2
+    assert runner.resume.touchcal_runs == 2
     assert runner.resume.deliveries == crashed.deliveries, "the latest calibration's"
     Driver(runner.rig, runner, stop_when=lambda: runner._touch_on).run()
     assert _offered(runner) == (False, True, False), "a restart first: no calibration here"

@@ -542,9 +542,9 @@ dialogs:
   fit_rerun_exhausted: The re-run limit for this procedure has been reached. This estimate will be used.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The re-calibrations, the
   # same in every condition and wherever they are offered.
-  recalibrate_rebalance: 'Rebalance the channels now? The garment goes to zero and what is in progress stops. The participant sets each of the other channels against the middle channel again and compares them (steps 3 and 4), then the evenness check and the pattern choice; a pleasantness level already set is kept. The session then goes on from where it was, at the new levels; scheduled steps keep their times. Everything recorded so far is kept.'
+  recalibrate_rebalance: 'Rebalance the channels now? The garment goes to zero and what is in progress stops. The participant sets each of the other channels against the middle channel again and compares them (steps 3 and 4), then the evenness check, and the pattern choice only if the touch calibration has not made it yet; a pleasantness level already set is kept. The session then goes on from where it was, at the new levels; scheduled steps keep their times. Everything recorded so far is kept.'
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
-  recalibrate_restart: 'Restart the touch calibration now? The garment goes to zero and what is in progress stops. The calibration starts again from step 1 as a new run, without the rating-scale training. The session then goes on from where it was, at the new levels; scheduled steps keep their times. Everything recorded so far is kept.'
+  recalibrate_restart: 'Restart the touch calibration now? The garment goes to zero and what is in progress stops. The calibration starts again from step 1 as a new run, without the rating-scale training, and without the pattern choice if the touch calibration has made it. The session then goes on from where it was, at the new levels; scheduled steps keep their times. Everything recorded so far is kept.'
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
   recalibration_reason: Why? Recorded with the choice.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The keys are what the log

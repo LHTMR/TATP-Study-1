@@ -143,6 +143,11 @@ class Interruptions(QObject):
         else:
             self._finish_resume()
 
+    @property
+    def resuming(self) -> bool:
+        """A resume is under way: its cue is up and the restore to come."""
+        return self._pending is not None
+
     def cancel_resume(self) -> None:
         """A resume under way stops before it restores the garment: the session is being
         stopped for an error (`SessionRunner.stop_for_error`)."""
