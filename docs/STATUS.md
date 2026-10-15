@@ -63,8 +63,17 @@ high`, spec-review) with `make check` passing on the merged tree:
    terminal: `python run_session.py --demo --sim-participant watch`. Report anything that
    fails: always-on-top and Spaces, CoreAudio at 48 kHz, the `tatp.devices` child process,
    fonts, key events.
-2. **The whole-demo test stall under load** (always at block.1, the first filament): an
-   investigation was running at the end of 15 Oct; act on its finding.
+2. **The whole-demo test stall under load** (always at block.1, the first filament).
+   Investigated 15 Oct: reproduced with 10 parallel copies (1–2 of 10 fail). The session state
+   is consistent; one Qt timer (a pinprick trial's or the series' advance) is overdue and never
+   delivered to the test's own `processEvents()` + `sleep` pump; a `QTest.qWait` at the stall
+   delivers it and the session carries on. Real sessions run under `app.exec()` and are not
+   known to be affected. Not fully explained. Proposed (test only, not yet applied or proven):
+   replace the 300 s whole-run deadline with a stall detector that resets on log progress, and
+   pump with `QTest.qWait(1)`; re-run the 10-copy check
+   (`make test-one ARGS="tests/test_demo.py::test_a_whole_demonstration_runs_quarantined_and_recorded_as_one -n 10 --dist=each"`).
+   The same pump idiom is in tests/test_protocol_a.py, test_protocol_b.py,
+   test_session_runner.py and tests/virtual_participant.py.
 3. **Re-run the lab session with the new screens**, starting at the hardware page: the sound
    device, a note and its confirmation, walk a session as both people (intros, read-aloud
    lines, the session end), try a re-calibration in calibration and in the intervention; and
