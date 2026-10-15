@@ -263,6 +263,30 @@ def test_one_screen_puts_the_participant_window_above_the_experimenters(app, con
     run_session.shut_down(runner)
 
 
+def test_with_no_dialog_the_shared_window_stays_above_and_shown(app, config):
+    """Showing and activating the maximised experimenter window does not cover it."""
+    runner = run_session.build(config, run_session.parse_args(ARGV), _never)
+    participant, experimenter = runner.rig.participant, runner.rig.experimenter
+    experimenter.activateWindow()
+    experimenter.raise_()
+    assert participant.windowFlags() & Qt.WindowStaysOnTopHint
+    assert participant.isVisible()
+    assert participant.testAttribute(Qt.WA_ShowWithoutActivating)
+    run_session.shut_down(runner)
+
+
+def test_a_command_line_session_runs_as_its_participant_input_says(app, loaded):
+    """Spec review: a hand-edited `participant_input: keyboard` must not record the keyboard
+    while running the remote's keys."""
+    responder = {**loaded.hardware["responder"], "participant_input": "keyboard"}
+    edited = cfg.Config(**{**loaded.__dict__,
+                           "hardware": {**loaded.hardware, "responder": responder}})
+    config = run_session.named_session(edited, run_session.parse_args(ARGV))
+    assert config.hardware["responder"]["keys"] == loaded.hardware["responder"][
+        "alternative_keys"]
+    assert config.hardware["responder"]["key_source"] == "any_keyboard"
+
+
 def test_a_shared_participant_window_never_hides_an_experimenter_dialog(app, config):
     """Code review: kept above the experimenter window, but not above a modal question."""
     runner = run_session.build(config, run_session.parse_args(ARGV), _never)

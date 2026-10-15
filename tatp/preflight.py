@@ -27,11 +27,12 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
+from PySide6.QtGui import QGuiApplication
+
 from tatp import allocation as alloc
 from tatp.audio import DEVICE_ROLES, SOUNDDEVICE
 from tatp.config import REPO_ROOT, Config
 from tatp.devices import (
-    KEY_SOURCE_CHANGE,
     PARTICIPANT_INPUTS,
     REMOTE,
     ProbeError,
@@ -52,6 +53,8 @@ from tatp.session import canonical_initials, earlier_experimenters
 REFUSE = "refuse"
 WARN = "warn"
 LOCK_NAME = "TATP1_instance.lock"
+# The garment no participant data can come from (`tatp.session.DRIVERS`).
+MOCK_DRIVER = "mock"
 PRE_SENSITISATION = "pre_sensitisation"
 # The lock covers one byte of the lock file: all a byte-range lock needs to exclude a second
 # holder. A size, not a study parameter.
@@ -236,13 +239,24 @@ def preflight(
         findings.append(
             Finding(REFUSE, "preflight.alternative_input_study_code", participant_code)
         )
+    # What a study participant's data may not come from (spec review of N7.F12e4-e5). Not on the
+    # mock garment, from which no real data can come, and on which the tests and the validator
+    # run study codes.
+    if study and config.hardware["garment"]["driver"] != MOCK_DRIVER:
+        if participant_input == REMOTE and responder["key_source"] != RAW_INPUT:
+            # Every keyboard then counts as the remote, the experimenter's too, so the
+            # experimenter's full stop is the participant's stop (open item L15), whatever
+            # made it so: hardware.yaml, or a computer without Raw Input.
+            findings.append(Finding(REFUSE, "preflight.every_keyboard_is_the_remote",
+                                    responder["key_source"]))
+        index = config.hardware["screens"]["participant_screen_index"]
+        if index is None or index >= len(QGuiApplication.screens()):
+            # A participant window on the experimenter's display is unseen behind the curtain:
+            # a loose cable must stop the session, not move the participant's screens.
+            findings.append(Finding(REFUSE, "preflight.participant_screen_shared",
+                                    "" if index is None else str(index)))
     # Absent for a session named on the command line, which runs as hardware.yaml says.
     changed = config.hardware.get("changed_at_launch", "")
-    if participant_input == REMOTE and KEY_SOURCE_CHANGE in changed.split(";") and study:
-        # The remote off Windows: every keyboard counts as it, the experimenter's too, so its
-        # full stop is the experimenter's (open item L15). A pilot or a demo may; a study
-        # participant may not (docs/LOG.md N7.F12e4).
-        findings.append(Finding(REFUSE, "preflight.remote_needs_windows", sys.platform))
     if changed:
         names = config.experimenter_text["hardware_check"]["changed"]
         findings.append(Finding(WARN, "preflight.hardware_changed",

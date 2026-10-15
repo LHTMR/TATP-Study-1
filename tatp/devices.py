@@ -279,7 +279,12 @@ def automatic(name: str, hardware: dict, present: Present) -> object:
             return lab
         return lab if on_lab_platform(hardware) else None
     if name == "participant_input":
-        return REMOTE if present.remote else KEYBOARD
+        # In the lab a missing remote is shown missing, to be plugged in: standing the keyboard
+        # in for it would leave the participant holding an R400 whose buttons do nothing
+        # (spec review). Elsewhere it cannot be seen at all, and the keyboard stands in.
+        if present.remote or on_lab_platform(hardware):
+            return REMOTE
+        return KEYBOARD
     return lab
 
 

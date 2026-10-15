@@ -396,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.demo:
         config = demo_session(on_this_computer(loaded), args)
     else:
-        config = with_session_choices(loaded, garment=args.garment)
+        config = named_session(loaded, args)
     for line in warnings_for(config):
         print(f"WARNING: {line}", file=sys.stderr)
     findings = preflight(config, args)
@@ -421,6 +421,15 @@ def main(argv: list[str] | None = None) -> int:
         demo.stop()
     shut_down(runner)
     return 0 if runner.completed else 1
+
+
+def named_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:
+    """A session named on the command line: hardware.yaml's own choices, through the function
+    the hardware page's go through, so the keys and the key source always match
+    `participant_input` and the session file records what ran (spec review)."""
+    return with_session_choices(
+        with_hardware_choices(loaded, configured(loaded.hardware)), garment=args.garment
+    )
 
 
 def on_this_computer(loaded: cfg.Config) -> cfg.Config:

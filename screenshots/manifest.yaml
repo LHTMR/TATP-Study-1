@@ -123,9 +123,9 @@ screens:
     one that is on is filled (LOG N7.F10b; en).'
   experimenter_en_launcher_hardware_check_nothing_found: 'The hardware page (LOG N7.F12e1)
     with nothing of the lab''s connected: one screen, so the participant''s window
-    shares it; no remote, so the keyboard stands in, for pilot codes and demonstrations
-    only; the headphones and the sleeve''s port missing, each in its own colour and
-    saying what to do. Each is found when connected (en).'
+    shares it; the remote, the headphones and the sleeve''s port missing, each in
+    its own colour and saying what to do -- in the lab the keyboard is chosen by hand,
+    never stood in automatically. Each is found when connected (en).'
   experimenter_en_launcher_instruments: 'Instruments and environment (SPEC.md 8.1),
     at the lab laptop''s size: all twenty filaments in view at once, in two halves,
     each with its label, size and nominal force, a field for the weighing in grams
@@ -306,9 +306,9 @@ screens:
     one that is on is filled (LOG N7.F10b; sv).'
   experimenter_sv_launcher_hardware_check_nothing_found: 'The hardware page (LOG N7.F12e1)
     with nothing of the lab''s connected: one screen, so the participant''s window
-    shares it; no remote, so the keyboard stands in, for pilot codes and demonstrations
-    only; the headphones and the sleeve''s port missing, each in its own colour and
-    saying what to do. Each is found when connected (sv).'
+    shares it; the remote, the headphones and the sleeve''s port missing, each in
+    its own colour and saying what to do -- in the lab the keyboard is chosen by hand,
+    never stood in automatically. Each is found when connected (sv).'
   experimenter_sv_launcher_instruments: 'Instruments and environment (SPEC.md 8.1),
     at the lab laptop''s size: all twenty filaments in view at once, in two halves,
     each with its label, size and nominal force, a field for the weighing in grams

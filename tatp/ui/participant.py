@@ -23,6 +23,8 @@ with no protocol in it.
 
 from __future__ import annotations
 
+import time
+
 import shiboken6
 from PySide6.QtCore import QEvent, QObject, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import (
@@ -567,13 +569,25 @@ class _ResponseButton(QPushButton):
             f"border-radius: {BUTTON_RADIUS_PX}px; }}"
         )
 
+        # The press's own stamp and the real time it came, while it is held.
+        self.held: tuple[int, float] | None = None
+
     def mousePressEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         super().mousePressEvent(event)
+        self.held = (event.timestamp(), time.monotonic())
         self._deliver(self.key, False, False, event.timestamp())
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         super().mouseReleaseEvent(event)
+        if self.held is None:
+            return
+        self.held = None
         self._deliver(self.key, True, False, event.timestamp())
+
+    def release_stamp(self) -> int:
+        """The stamp a release would carry now: the press's, plus the real time held since."""
+        press_ms, press_s = self.held
+        return press_ms + round((time.monotonic() - press_s) * MS_PER_S)
 
 
 class ParticipantWindow(QWidget):
@@ -928,6 +942,20 @@ class ParticipantWindow(QWidget):
 
     def _confirm_accepted(self, *_response) -> None:
         self._confirm_accepted_s = self.clock.elapsed_s()
+
+    def hideEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        """An on-screen button held as the window hides -- the shared window's flags changing
+        around a dialog hide it for a moment -- loses its mouse release, and a hold with no end
+        would ramp the pressure on. So its release is delivered now, at the time held so far,
+        as the VAS ends its hold on a hide (spec review of N7.F12e4)."""
+        for made in self.response_buttons.values():
+            if made.held is not None:
+                stamp = made.release_stamp()
+                made.held = None
+                made.setDown(False)
+                QApplication.sendEvent(self.key_target(), remote_key_event(
+                    QEvent.KeyRelease, QT_KEYS[made.key], False, stamp))
+        super().hideEvent(event)
 
     def keyReleaseEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         action = self._action(event)

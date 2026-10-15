@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
+    QLineEdit,
     QListWidget,
     QPushButton,
     QWidget,
@@ -161,3 +162,30 @@ def test_the_stop_is_forwarded_even_from_a_dialog(routed):
     """No dialog uses the full stop, and a stop is never to be lost."""
     _key(routed.accept, "period")
     assert routed.seen == [("stop",)]
+
+
+def test_a_full_stop_typed_into_a_text_field_is_typed_not_a_stop(routed):
+    """Pinned, so a change is deliberate: under any_keyboard a full stop in a note, a distance
+    or the abort dialog's reason is the experimenter typing (open item L15, docs/LOG.md N7.I1).
+    Only raw_input removes it; the on-screen "!" is a button, not a key."""
+    reason = QLineEdit(routed.accept.window())
+    reason.show()
+    QApplication.sendEvent(reason, QKeyEvent(QEvent.KeyPress, QT_KEYS["period"], Qt.NoModifier,
+                                             "."))
+    assert reason.text() == "."
+    assert routed.seen == []
+
+
+def test_a_hold_on_screen_is_released_when_the_window_hides(app, loaded):
+    """Spec review: the shared window's flags changing around a dialog hide it for a moment,
+    and the button's mouse release is then lost; the hold must still end, at the time held."""
+    window = _window(_with_input(loaded, ON_SCREEN))
+    window.show_adjustment(sorted(loaded.participant_text["adjust_targets"])[0])
+    seen = _record(window)
+    button = window.response_buttons[Action.DECREASE]
+    QTest.mousePress(button, Qt.LeftButton)
+    QApplication.sendPostedEvents()
+    window.hide()
+    assert [event[:2] for event in seen] == [("pressed", "decrease"), ("released", "decrease")]
+    assert seen[1][2] >= seen[0][2]
+    assert button.held is None and not button.isDown()

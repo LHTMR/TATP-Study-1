@@ -585,7 +585,11 @@ preflight:
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_missing: Deltagarens fjärrkontroll är inte ansluten (inget tangentbord matchar {value}). Anslut mottagaren och starta igen.
   # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
-  remote_needs_windows: Den här datorn ({value}) kan inte skilja fjärrkontrollen från andra tangentbord, så en studiedeltagares session kan inte köras här. Kör den på labbdatorn. En pilotkod eller en demonstration kan köras här.
+  remote_needs_windows: Den här datorn ({value}) kan inte skilja fjärrkontrollen från andra tangentbord, vilket responder.key_source raw_input kräver. Starta sessionen från programmets första sida (Kontrollera utrustningen), eller kör den på labbdatorn.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  every_keyboard_is_the_remote: 'Alla tangentbord räknas här som deltagarens fjärrkontroll ({value}), även försöksledarens, så en studiedeltagares session kan inte köras: försöksledarens punkt skulle stoppa den. Kör den på labbdatorn med fjärrkontrollen ansluten. En pilotkod, en demonstration eller det simulerade plagget kan köras.'
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  participant_screen_shared: 'Deltagarens skärm {value} är inte ansluten, eller är ett fönster på försöksledarens skärm, så en studiedeltagares session kan inte köras. Anslut deltagarens skärm och välj den under Kontrollera utrustningen. En pilotkod, en demonstration eller det simulerade plagget kan köras.'
   # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
   audio_check_failed: 'Ljudenheterna kunde inte kontrolleras ({value}). Ingenting kan starta förrän de kan det: kontrollera att ljudenheterna fungerar och kontrollera sedan igen.'
   # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced

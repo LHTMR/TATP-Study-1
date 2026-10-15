@@ -580,7 +580,11 @@ preflight:
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_missing: The participant's remote is not plugged in (no keyboard matching {value}). Plug in its receiver, then start again.
   # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
-  remote_needs_windows: This computer ({value}) cannot tell the remote from other keyboards, so a study participant's session cannot run here. Run it on the lab PC. A pilot code or a demonstration can run here.
+  remote_needs_windows: This computer ({value}) cannot tell the remote from other keyboards, as responder.key_source raw_input needs. Start the session from the program's first page (Check the hardware), or run it on the lab PC.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  every_keyboard_is_the_remote: 'Every keyboard counts as the participant''s remote here ({value}), the experimenter''s too, so a study participant''s session cannot run: the experimenter''s full stop would stop it. Run it on the lab PC with the remote plugged in. A pilot code, a demonstration or the mock garment can run.'
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  participant_screen_shared: 'The participant''s screen {value} is not connected, or is a window on the experimenter''s screen, so a study participant''s session cannot run. Connect the participant''s screen and choose it in Check the hardware. A pilot code, a demonstration or the mock garment can run.'
   # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
   audio_check_failed: 'The sound devices could not be checked ({value}). Nothing can start until they can: check that the sound devices are working, then check again.'
   # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced

@@ -1038,9 +1038,10 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     yield Shot(
         f"experimenter_{language}_launcher_hardware_check_nothing_found",
         f"The hardware page (LOG N7.F12e1) with nothing of the lab's connected: one screen, so "
-        f"the participant's window shares it; no remote, so the keyboard stands in, for pilot "
-        f"codes and demonstrations only; the headphones and the sleeve's port missing, each in "
-        f"its own colour and saying what to do. Each is found when connected ({language}).",
+        f"the participant's window shares it; the remote, the headphones and the sleeve's port "
+        f"missing, each in its own colour and saying what to do -- in the lab the keyboard is "
+        f"chosen by hand, never stood in automatically. Each is found when connected "
+        f"({language}).",
         nothing.grab(),
     )
     nothing.release()

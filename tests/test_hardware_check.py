@@ -159,31 +159,36 @@ def test_the_play_buttons_escape_does_not_close_the_page(check):
     assert check.isVisible()
 
 
-def test_without_the_remote_the_keyboard_stands_in_until_it_is_plugged_in(page_for, connected):
-    """S, 15 Oct 2026: with the remote missing, a pilot or a demo can still respond."""
+def test_in_the_lab_a_missing_remote_is_shown_missing_not_replaced(page_for, connected,
+                                                                    hardware):
+    """Spec review: the keyboard standing in on the lab PC would leave the participant holding
+    an R400 whose buttons do nothing. The keyboard is there to choose by hand, for a pilot."""
     connected.remote = False
-    page = page_for()
-    assert page.values[INPUT] == KEYBOARD
-    assert _state(page, INPUT) == STAND_IN
-    assert page.words["remote_missing"] in page.status[INPUT].text()
+    page = page_for(hardware={**hardware, "lab_platform": sys.platform})
+    assert page.values[INPUT] == REMOTE
+    assert _state(page, INPUT) == MISSING
+    assert page.status[INPUT].text() == page.words["remote_missing"]
     connected.remote = True
     page.detect()
-    assert page.values[INPUT] == REMOTE, "found without restarting"
-    assert _state(page, INPUT) == OK
+    assert _state(page, INPUT) == OK, "found without restarting"
+    page.choose(INPUT, page.options[INPUT].index(KEYBOARD))
+    assert page.values[INPUT] == KEYBOARD
 
 
-def test_where_the_remote_cannot_be_told_apart_the_keyboard_is_chosen(page_for, connected):
-    """Off Windows there is no Raw Input, so the remote cannot be seen at all (a MacBook)."""
+def test_where_the_remote_cannot_be_told_apart_the_keyboard_is_chosen(page_for, connected,
+                                                                      hardware):
+    """Off the lab's platform there is no Raw Input, so the remote cannot be seen at all (a
+    MacBook), and the keyboard stands in."""
     connected.remote = None
-    page = page_for()
+    page = page_for(hardware={**hardware, "lab_platform": "elsewhere"})
     assert page.values[INPUT] == KEYBOARD
     page.choose(INPUT, page.options[INPUT].index(REMOTE))
     assert page.status[INPUT].text() == page.words["remote_unknown"]
 
 
-def test_the_keyboard_counts_its_own_keys(page_for, connected):
-    connected.remote = False
+def test_the_keyboard_counts_its_own_keys(page_for):
     page = page_for()
+    page.choose(INPUT, page.options[INPUT].index(KEYBOARD))
     for name in ("left", "right", "return", "period"):
         _press(page.cancel_button, name)
     assert page.presses == {action: 1 for action in Action}
@@ -434,10 +439,10 @@ def test_closing_lets_everything_go(check):
     assert check.presses == before, "the remote is no longer taken once the page is closed"
 
 
-def test_nothing_is_detected_once_closed(page_for, connected):
+def test_nothing_is_detected_once_closed(page_for, connected, hardware):
     """A change of input after closing would take the response keys from the session."""
     connected.remote = False
-    page = page_for()
+    page = page_for(hardware={**hardware, "lab_platform": "elsewhere"})
     page.reject()
     connected.remote = True
     page.detect()

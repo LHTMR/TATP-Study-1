@@ -661,11 +661,18 @@ stop -- never Esc, which dismisses dialogs), or buttons on the participant windo
 trackpad, which press and release the remote's own keys at the mouse's own times, so a hold is a
 hold. Both read every keyboard (`any_keyboard`), are the same in every condition, and are
 recorded (`participant_input`). Under any_keyboard a key is not forwarded to the participant
-from a dialog, a popup, a list or a combo box, which use these keys themselves, except the stop,
-which always is. Preflight refuses either alternative for a study participant's code, and so
-the remote off Windows, where it cannot be told from the experimenter's keyboard: only a pilot
-code (above `design.pilot_code_offset`) or a demonstration may. With the remote the participant
-window is the approved screens, with no buttons.
+from a dialog, a popup, a list or a combo box, which use these keys themselves, except the
+stop. But a full stop typed while the focus is in a text field -- a note, a distance, the abort
+dialog's reason -- is typed, not a stop: that is open item L15's known behaviour under
+any_keyboard, which only `raw_input` removes. The on-screen "!" is a button, not a key, and
+always stops. Preflight refuses either alternative for a study participant's code. With the
+remote, a study participant's session also needs the remote told apart (`key_source:
+raw_input`) and a participant screen of its own, connected: every keyboard counted as the
+remote, or the participant's screens in a window on the experimenter's display, is refused for
+a study code -- except on the mock garment, from which no real data can come and on which the
+tests and the validator run study codes. A pilot code (above `design.pilot_code_offset`) or a
+demonstration may run either way. With the remote the participant window is the approved
+screens, with no buttons.
 
 **What is printed on each button is configuration, not code.** `responder.button_symbols` in
 `hardware.yaml` records the glyph on each button, and a screen that draws a control draws that

@@ -117,6 +117,9 @@ def test_what_was_not_chosen_by_hand_is_worked_out_again_at_each_start(app, load
         list(connected.screens), [], connected.remote))
     automatic = HardwareChoices(None, 0, None, None, None, KEYBOARD,
                                 chosen=frozenset({"experimenter_audio_device"}))
+    # Off the lab's platform, where a remote that is not seen gives way to the keyboard.
+    monkeypatch.setattr(launcher.cfg, "load", lambda *languages: cfg.Config(**{
+        **loaded.__dict__, "hardware": {**loaded.hardware, "lab_platform": "elsewhere"}}))
     window = LauncherWindow(loaded, Fakes().preflight, Fakes().build, choices=automatic)
     dialog = _filled(window, tmp_path)
     hardware = dialog.config(dialog.args()).hardware

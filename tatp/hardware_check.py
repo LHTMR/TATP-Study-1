@@ -656,9 +656,13 @@ class HardwareCheckDialog(QDialog):
 
     def choose(self, name: str, index: int) -> None:
         """A choice made by hand."""
+        before = self.values[INPUT]
         self.values[name] = self.options[name][index]
         self.chosen.add(name)
         self._update()
+        if self.values[INPUT] != before:
+            # `_update` compares with the value it found, which this already changed.
+            self._apply_input()
         if name in AUDIO_CHOICES.values():
             self._start_sound()
             # Checked at once, as a session would open it, rather than at the next listing.

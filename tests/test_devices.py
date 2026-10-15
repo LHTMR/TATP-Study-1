@@ -9,6 +9,7 @@ import pytest
 
 from tatp import config as cfg
 from tatp import devices
+from tatp.demo import DEMO_GARMENT, REAL_TIME_SPEED, demo_config
 from tatp.devices import (
     KEYBOARD,
     ON_SCREEN,
@@ -18,7 +19,7 @@ from tatp.devices import (
     matching_outputs,
 )
 from tatp.remote_keys import ANY_KEYBOARD, RAW_INPUT, with_key_source
-from tatp.session import hardware_with_choices
+from tatp.session import hardware_with_choices, with_hardware_choices
 
 OUTPUTS = [
     "Bose QC Headphones, Windows WASAPI",
@@ -103,15 +104,33 @@ def test_the_keyboards_stop_is_the_remotes_own_and_no_dialog_key(lab):
 def test_what_was_not_chosen_follows_what_is_connected(lab):
     choices = dataclasses.replace(configured(lab), chosen=frozenset({"garment_port"}),
                                   garment_port="COM9")
+    elsewhere = {**lab, "lab_platform": "elsewhere"}
     one_screen = devices.Present([(1470, 956)], [], None)
-    settled = devices.settle(choices, lab, one_screen)
+    settled = devices.settle(choices, elsewhere, one_screen)
     assert settled.participant_screen_index is None
     assert settled.participant_input == KEYBOARD
     assert settled.garment_port == "COM9", "chosen by hand: kept"
     two_screens = devices.Present([(1280, 800), (1280, 800)], [], True)
-    settled = devices.settle(choices, lab, two_screens)
+    settled = devices.settle(choices, elsewhere, two_screens)
     assert settled.participant_screen_index == lab["screens"]["participant_screen_index"]
     assert settled.participant_input == REMOTE
+
+
+def test_in_the_lab_a_missing_remote_stays_the_remote(lab):
+    """Spec review: shown missing, to be plugged in, not replaced by the keyboard."""
+    here = {**lab, "lab_platform": sys.platform}
+    assert devices.automatic("participant_input", here,
+                             devices.Present([(1280, 800)], [], False)) == REMOTE
+
+
+def test_a_demonstration_records_that_every_keyboard_counted(lab):
+    """Spec review: the demonstration's own any_keyboard is in `hardware_changed` too."""
+    loaded = cfg.load("sv", "en")
+    config = with_hardware_choices(
+        cfg.Config(**{**loaded.__dict__, "hardware": lab}), configured(lab))
+    demo = demo_config(config, REAL_TIME_SPEED, DEMO_GARMENT)
+    assert demo.hardware["responder"]["key_source"] == ANY_KEYBOARD
+    assert demo.hardware["changed_at_launch"].split(";").count(devices.KEY_SOURCE_CHANGE) == 1
 
 
 def test_off_the_lab_platform_an_unusable_lab_device_gives_way_to_the_default(lab):
