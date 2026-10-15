@@ -3,9 +3,10 @@
 **Last updated:** 15 October 2026.
 **Milestone:** 6 (pilotable), in progress, in lab piloting. Everything to date is in `main`.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
-back (`CLAUDE.md`, Committing). Open: `pilot/demo-mode`, the demonstration mode (LOG N7.D23):
-launcher *Run a demo* or `run_session.py --demo`, with a simulated or human participant and
-experimenter, Skip the wait and Finish this stage. The remote is now read by Windows Raw Input,
+back (`CLAUDE.md`, Committing). No branch open. A demonstration mode is in `main` (LOG N7.D23,
+15 Oct 2026): launcher *Run a demo* or `run_session.py --demo`, with a simulated or human
+participant and experimenter, Skip the wait and Finish this stage; mock garment only, data in
+`data_demo/`, conditions shuffled per run (open item L16). The remote is now read by Windows Raw Input,
 apart from the experimenter's keyboard (LOG N7.D22, merged 15 Oct 2026), waiting on its lab
 check N2.10. `make check` needs the PC to itself: other sessions' test runs at 99% CPU stall
 the session runner and the validator even on `main`.
@@ -109,10 +110,15 @@ the hardware) and 5 Oct (N7.F5: the repaint stall, Run a session fits the laptop
    `docs/LOG.md`, including Shift held, the laptop's full stop held, another program focused
    and the receiver unplugged). If it fails, `responder.key_source: any_keyboard` restores the
    old routing; if it passes, add `text_field_stop_decided` and L15 closes.
-3. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
-4. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
+3. **Watch a demonstration on a display** (never yet seen run, only tested headless): launcher
+   *Run a demo* with both set to *Simulated, watchable*, or `run_session.py --demo --session 1
+   --experimenter SM --sim-participant watch --sim-experimenter watch`. Judge the pace
+   (`study1.yaml` `demo.*_reaction_s`, `participant_press_interval_s`), try Skip the wait and
+   Finish this stage, and hand the remote between the simulation and a person. Decide L16.
+4. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
+5. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
    Milestone 6 done.
-5. **Left open, not blocking:**
+6. **Left open, not blocking:**
    - the mock's injected faults never lose the link (N7.U8 (2));
    - the emergency stop does not stop the white noise;
    - the hold-acceleration integral is duplicated in `VasState._travel` and
