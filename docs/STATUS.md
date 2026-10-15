@@ -3,11 +3,11 @@
 **Last updated:** 16 October 2026 (on the lab PC).
 **Milestone:** 6 (pilotable), in progress, in lab piloting.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
-back (`CLAUDE.md`, Committing). `pilot/keep-files-open` is merged and deleted locally; its copy
-on `origin` is stale and can be deleted when `main` is pushed. **`pilot/swedish-docs` is parked
+back (`CLAUDE.md`, Committing). `pilot/keep-files-open` is merged and deleted, here and on
+`origin`. **`pilot/swedish-docs` is parked
 on purpose** (S, 16 Oct): Swedish SOP and setup guide, reviewed and pushed, with `main` merged
 in, but both SOPs (`SOP.md` too) predate the 15 Oct screens, so they wait for the next SOP
-update. `main` is ahead of `origin` and not pushed.
+update. `main` is pushed.
 
 ---
 
