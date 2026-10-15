@@ -28,7 +28,7 @@ screens:
   experimenter_en_brush_secondary: 'A brush stroke in the secondary zone: the dashed
     ellipse outlined. (en)'
   experimenter_en_countdown: 'Waiting for the next block: ''Next: block 3 (touch)
-    in 04:05'', grey. (en)'
+    in 04:05'', grey, and nothing to do meanwhile. (en)'
   experimenter_en_demo_banner: The demonstration banner (docs/LOG.md N7.D23), amber
     like the others that say the session runs but what it records is not data. (en)
   experimenter_en_demo_controls: 'The Demo controls window beside a demonstration
@@ -65,6 +65,11 @@ screens:
     either decimal mark. Non-modal: the session runs on behind it. (en)'
   experimenter_en_error_dialog: 'The error dialog: a red title and the message as
     raised. (en)'
+  experimenter_en_first_pain_measures: 'Before the session''s first pain measure:
+    what to tell the participant, set down the type scale to fit its region. (en)'
+  experimenter_en_fit_garment: 'The first step of a session: the garment, the remote''s
+    buttons by their printed symbols, the headphones and the cue, then Next step.
+    (en)'
   experimenter_en_fit_preview_f40: 'The main window while the F40 fit preview (SPEC.md
     11.1) is open, only with fit_preview.enabled: the banner saying what it costs,
     the instruction saying the decision is due, Re-run and Accept offered, and no
@@ -149,9 +154,13 @@ screens:
   experimenter_en_reduced_capability_banner: The reduced-capability banner naming
     the garment in use in words, as the launcher does (SPEC.md 12.4). (en)
   experimenter_en_rekindle_due: 'The rekindle is due: a timed event that is not a
-    block, named by its phase. (en)'
+    block, named by its phase, and the thermode to place. (en)'
   experimenter_en_rerun_dialog: The re-run reason, asked before a fit is discarded
     (SPEC.md 11.1). (en)
+  experimenter_en_status_warning: A warning in the status region, in amber, kept apart
+    from the routine status so the next 'Waiting for...' does not replace it (15 Oct
+    2026 pilot review). It goes under the routine line; this one is too long for both,
+    so it has the region. (en)
   experimenter_en_touchcal_estimation_skip: 'The estimation run with the mock or prototype
     garment: how many ratings are answered, and Skip calibration under the garment,
     shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).
@@ -178,7 +187,7 @@ screens:
   experimenter_sv_brush_secondary: 'A brush stroke in the secondary zone: the dashed
     ellipse outlined. (sv)'
   experimenter_sv_countdown: 'Waiting for the next block: ''Next: block 3 (touch)
-    in 04:05'', grey. (sv)'
+    in 04:05'', grey, and nothing to do meanwhile. (sv)'
   experimenter_sv_demo_banner: The demonstration banner (docs/LOG.md N7.D23), amber
     like the others that say the session runs but what it records is not data. (sv)
   experimenter_sv_demo_controls: 'The Demo controls window beside a demonstration
@@ -215,6 +224,11 @@ screens:
     either decimal mark. Non-modal: the session runs on behind it. (sv)'
   experimenter_sv_error_dialog: 'The error dialog: a red title and the message as
     raised. (sv)'
+  experimenter_sv_first_pain_measures: 'Before the session''s first pain measure:
+    what to tell the participant, set down the type scale to fit its region. (sv)'
+  experimenter_sv_fit_garment: 'The first step of a session: the garment, the remote''s
+    buttons by their printed symbols, the headphones and the cue, then Next step.
+    (sv)'
   experimenter_sv_fit_preview_f40: 'The main window while the F40 fit preview (SPEC.md
     11.1) is open, only with fit_preview.enabled: the banner saying what it costs,
     the instruction saying the decision is due, Re-run and Accept offered, and no
@@ -299,9 +313,13 @@ screens:
   experimenter_sv_reduced_capability_banner: The reduced-capability banner naming
     the garment in use in words, as the launcher does (SPEC.md 12.4). (sv)
   experimenter_sv_rekindle_due: 'The rekindle is due: a timed event that is not a
-    block, named by its phase. (sv)'
+    block, named by its phase, and the thermode to place. (sv)'
   experimenter_sv_rerun_dialog: The re-run reason, asked before a fit is discarded
     (SPEC.md 11.1). (sv)
+  experimenter_sv_status_warning: A warning in the status region, in amber, kept apart
+    from the routine status so the next 'Waiting for...' does not replace it (15 Oct
+    2026 pilot review). It goes under the routine line; this one is too long for both,
+    so it has the region. (sv)
   experimenter_sv_touchcal_estimation_skip: 'The estimation run with the mock or prototype
     garment: how many ratings are answered, and Skip calibration under the garment,
     shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).

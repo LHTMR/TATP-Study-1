@@ -272,6 +272,9 @@ class Config:
     experimenter_text: dict
     participant_language: str
     experimenter_language: str
+    # `say` from the experimenter file in the PARTICIPANT's language: what the experimenter
+    # says aloud to the participant, quoted inside the instructions (`instruction`).
+    say: dict
     open_items: tuple[OpenItem, ...]
     sha256: str
     config_dir: Path
@@ -474,11 +477,11 @@ def load(
             raise ConfigError(f"{name}: training keys {strays} are not scales under `vas`")
         # The experimenter explains proportionality for exactly the scales that are trained.
         explained = TEXT_FILES[("experimenter", lang)]
-        if set(loaded[explained]["vas_training_explain"]) != set(text["training"]):
+        proportionality = loaded[explained]["say"]["proportionality"]
+        if set(proportionality) != set(text["training"]):
             raise ConfigError(
-                f"{explained}: vas_training_explain keys "
-                f"{sorted(loaded[explained]['vas_training_explain'])} are not the trained "
-                f"scales {sorted(text['training'])}"
+                f"{explained}: say.proportionality keys {sorted(proportionality)} are not the "
+                f"trained scales {sorted(text['training'])}"
             )
 
     # A VAS hold is redrawn every tick; at zero the timer would spin the event loop flat out.
@@ -495,6 +498,7 @@ def load(
         experimenter_text=loaded[TEXT_FILES[("experimenter", experimenter_language)]],
         participant_language=participant_language,
         experimenter_language=experimenter_language,
+        say=loaded[TEXT_FILES[("experimenter", participant_language)]]["say"],
         open_items=_load_open_items(loaded, config_dir),
         sha256=hash_files(sorted(p for p in config_dir.rglob("*.yaml"))),
         config_dir=config_dir,
@@ -505,6 +509,33 @@ def load(
     assert config.filaments["filaments"], "no filaments configured"
     assert config.open_items, "open_items.yaml defines no items"
     return config
+
+
+class _Kept(dict):
+    """Format fields: the ones given filled, every other kept as written, to be filled after."""
+
+    def __missing__(self, key: str) -> str:
+        return f"{{{key}}}"
+
+
+def instruction_template(config: Config, key: str) -> str:
+    """`instructions.<key>` with what every instruction can name filled in, and the step's own
+    fields ({n}, {filament}, ...) still to fill.
+
+    {controls[...]} are the buttons' own labels, so an instruction cannot name a button its own
+    way; {say[...]} are the sentences said aloud, in the participant's language (`Config.say`),
+    which may carry fields of their own; the remote's button symbols ({confirm} ...) are
+    hardware.yaml's. The virtual experimenter matches instructions against this template.
+    """
+    text = config.experimenter_text
+    fields = _Kept(controls=text["controls"], say=config.say,
+                   **config.hardware["responder"]["button_symbols"])
+    return text["instructions"][key].format_map(fields)
+
+
+def instruction(config: Config, key: str, **values: object) -> str:
+    """`instructions.<key>`, every field filled. A field left without a value is an error."""
+    return instruction_template(config, key).format(**values)
 
 
 def hash_files(paths: list[Path]) -> str:

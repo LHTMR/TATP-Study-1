@@ -143,6 +143,30 @@ def _collect(procedure):
     return done
 
 
+class Trains(Procedure):
+    """The pain scale's VAS training, then the end."""
+
+    def begin(self) -> None:
+        self.train_then(("pain",), lambda: self.finish(None))
+
+
+def test_the_training_gives_what_to_say_in_the_participants_language(rig, loaded):
+    """The experimenter cannot see the participant's screen, so the instruction gives the
+    labels, left to right, and the proportionality sentence -- both to be said to the
+    participant, so in their language (Swedish here) inside the experimenter's (English)."""
+    procedure = Trains(rig)
+    procedure.start()
+    shown = rig.experimenter.instruction.text()
+    anchors = [a["label"] for a in sorted(loaded.participant_text["vas"]["pain"]["anchors"],
+                                          key=lambda a: a["pct"])]
+    assert " / ".join(anchors) in shown
+    assert loaded.say["proportionality"]["pain"] in shown
+    swedish = cfg.load("sv", "sv").experimenter_text["say"]["proportionality"]["pain"]
+    assert loaded.say["proportionality"]["pain"] == swedish
+    assert shown.startswith(loaded.experimenter_text["instructions"]["vas_training"][:10])
+    procedure.cancel()
+
+
 # -- the sequence -------------------------------------------------------------------------
 
 

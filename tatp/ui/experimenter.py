@@ -39,6 +39,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable, Sequence
+from html import escape
 
 from PySide6.QtCore import QRegularExpression, Qt, QTimer, Signal, SignalInstance
 from PySide6.QtGui import QGuiApplication, QRegularExpressionValidator
@@ -91,6 +92,7 @@ from tatp.units import MS_PER_S, S_PER_MIN
 MARGIN_PX = 20
 IDENTITY_SEPARATOR = "  ·  "
 LINE_SEPARATOR = "\n"
+RICH_LINE_BREAK = "<br>"
 PRESSURE_SEPARATOR = "   "
 # Nothing below the banners may move during a session, because a layout that reflows at the
 # moment something has gone wrong is a layout that gets misread (UI_PRINCIPLES.md 3.3). Every
@@ -107,6 +109,8 @@ INSTRUCTION_SIZES = (SIZE_HEADLINE, SIZE_LARGE, SIZE_BODY, SIZE_SMALL)
 # The status line under it: two lines of body text, or the small size if that is not enough.
 STATUS_LINES = 2
 STATUS_SIZES = (SIZE_BODY, SIZE_SMALL)
+# How many stage starts a warning outlives (`new_stage`).
+WARNING_STAGES = 1
 SIDE_COLUMN_PX = 300
 FAULT_LINES = 4
 # Fixed, so the diagram does not resize when the pressures or faults appear (LOG N7.U10).
@@ -231,6 +235,9 @@ class ExperimenterWindow(QWidget):
         self._mapping_phases: list[str] = []
         self._instruction_text = ""
         self._status_text = ""
+        self._warning_text = ""
+        self._warning_stages = 0
+        self._reminder_text = ""
         self._open_items_text = ""
         # Faults first seen during the intervention or the rekindle: never shown in detail.
         self._withheld_faults: set[str] = set()
@@ -551,6 +558,42 @@ class ExperimenterWindow(QWidget):
         self._status_text = text
         self._fit_text()
 
+    def set_warning(self, text: str) -> None:
+        """A warning, under the status in the same region, in the warning colour.
+
+        Apart from the status, which the routine "Waiting for..." / "Response received"
+        replace every few seconds: a warning set there was gone before it was read (15 Oct
+        2026 pilot review). It stays until `clear_warning`, or until a second stage has begun
+        after it (`new_stage`).
+        """
+        self._warning_text = text
+        self._warning_stages = 0
+        self._fit_text()
+
+    def set_reminder(self, text: str) -> None:
+        """Something to do whenever convenient -- the mapping distances -- under the status,
+        until whatever set it clears it with "". Neither the status nor a stage start takes
+        it down, as they would a line in the status."""
+        self._reminder_text = text
+        self._fit_text()
+
+    def clear_warning(self, text: str | None = None) -> None:
+        """Clear the warning; given `text`, only if that is the one shown, so whatever raised a
+        warning can withdraw it without taking down another's."""
+        if text is not None and text != self._warning_text:
+            return
+        self._warning_text = ""
+        self._fit_text()
+
+    def new_stage(self) -> None:
+        """A stage of the session has begun. A warning survives the first stage start after
+        it, because several are raised as a stage ends, and is cleared at the second."""
+        if not self._warning_text:
+            return
+        self._warning_stages += 1
+        if self._warning_stages > WARNING_STAGES:
+            self.clear_warning()
+
     def set_target(
         self, region: str | None, site: int | None = None, filament: bool = False
     ) -> None:
@@ -819,7 +862,8 @@ class ExperimenterWindow(QWidget):
         wrapped text at up to four sizes every tick is work that changes nothing.
         """
         width = self._left_width()
-        wanted = (self._instruction_text, self._status_text, self._open_items_text, width)
+        wanted = (self._instruction_text, self._status_text, self._reminder_text,
+                  self._warning_text, self._interruption, self._open_items_text, width)
         if wanted == self._fitted:
             return
         self._fitted = wanted
@@ -830,7 +874,26 @@ class ExperimenterWindow(QWidget):
         ))
         _fit_to(self.instruction, self._instruction_text, INSTRUCTION_SIZES, width,
                 self.instruction.height())
-        _fit_to(self.status, self._status_text, STATUS_SIZES, width, self.status.height())
+        # The status, then any reminder, then any warning, each on a line of its own; the
+        # warning in the warning colour, so it is told from the others before it is read
+        # (UI_PRINCIPLES.md 3.2). What does not fit gives way in that order: the routine
+        # status, which the next one replaces anyway, then the reminder, which comes back;
+        # never the warning (UI_PRINCIPLES.md 3.1). While interrupted the whole region is
+        # dimmed with the step it belongs to (`_draw_interruption`), the warning's own colour
+        # included, so the stop line stays the brightest thing in its place.
+        lines = [escape(text, quote=False)
+                 for text in (self._status_text, self._reminder_text) if text]
+        if self._warning_text:
+            colour = WARNING_COLOUR if self._interruption is None else DISABLED
+            lines.append(f'<span style="color: {colour};">'
+                         f'{escape(self._warning_text, quote=False)}</span>')
+        self.status.setTextFormat(Qt.RichText)
+        height = self.status.height()
+        while True:
+            _fit_to(self.status, RICH_LINE_BREAK.join(lines), STATUS_SIZES, width, height)
+            if len(lines) <= 1 or self.status.heightForWidth(width) <= height:
+                break
+            lines.pop(0)
 
     def _draw_countdown(self, event: dict | None) -> None:
         """SPEC.md 7.4: the software counts down, the experimenter launches."""
@@ -840,10 +903,8 @@ class ExperimenterWindow(QWidget):
             return
         is_block = event["kind"] == BLOCK
         if is_block:
-            name = status["block_label"].format(
-                block=event["block_index"],
-                value=self.text["terms"]["block_types"][event["block_type"]],
-            )
+            block_type = self.text["terms"]["block_types"][event["block_type"]]
+            name = status["block_label"].format(block=event["block_index"], value=block_type)
         else:
             name = self.text["phases"][event["label_key"]]
         # Due and overdue look different from a countdown and from each other: the first says
@@ -851,14 +912,14 @@ class ExperimenterWindow(QWidget):
         # (UI_PRINCIPLES.md 3.2).
         if event["overdue"]:
             shown = (
-                status["block_overdue"].format(block=event["block_index"])
+                status["block_overdue"].format(block=event["block_index"], type=block_type)
                 if is_block
                 else status["event_overdue"].format(phase=name)
             )
             style = emphasis_style(DISCONNECTED_COLOUR)
         elif event["due_in_s"] <= 0:
             shown = (
-                status["block_due"].format(block=event["block_index"])
+                status["block_due"].format(block=event["block_index"], type=block_type)
                 if is_block
                 else status["event_due"].format(phase=name)
             )
@@ -885,7 +946,10 @@ class ExperimenterWindow(QWidget):
             self.alert.setText("")
             self.alert.setStyleSheet("")
             return
-        self.alert.setText(self.text["status"][f"interrupted_{interruption}"])
+        # Resume by the label its button carries.
+        self.alert.setText(self.text["status"][f"interrupted_{interruption}"].format(
+            controls=self.text["controls"]
+        ))
         # The stop is the participant's and is red; a pause is the experimenter's own and amber.
         colour = DISCONNECTED_COLOUR if interruption == EMERGENCY_STOP else WARNING_COLOUR
         self.alert.setStyleSheet(emphasis_style(colour))

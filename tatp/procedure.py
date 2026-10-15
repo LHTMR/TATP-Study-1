@@ -50,6 +50,7 @@ from collections.abc import Callable
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication
 
+from tatp.config import instruction
 from tatp.interruption import Interruptions
 from tatp.remote_keys import key_source
 from tatp.session import Session
@@ -62,7 +63,10 @@ from tatp.units import MS_PER_S
 VAS_TRAINING_SHOWN = "vas_training_shown"
 VAS_TRAINING_EXPLAINED = "vas_training_explained"
 VAS_TRAINING_INSTRUCTION = "vas_training"
-VAS_TRAINING_EXPLAIN = "vas_training_explain"
+# The `say` key of the proportionality sentences, one per trained scale.
+PROPORTIONALITY = "proportionality"
+# Between the scale's labels where the experimenter is told to read them out.
+ANCHOR_SEPARATOR = " / "
 
 
 class Rig(QObject):
@@ -246,7 +250,8 @@ class Procedure(QObject):
 
         1. The scale alone, with no button but the stop doing anything, while the experimenter
            explains the anchors and proportionality aloud (Bilaga 1 3.6.1, 3.9), from
-           `vas_training_explain`; their go is logged `vas_training_explained`.
+           `say.proportionality` in the participant's language; their go is logged
+           `vas_training_explained`.
         2. `VasTraining`: a practice rating, never recorded as a rating.
 
         Once confirmed it is not shown again this session (`Session.vas_training_due`).
@@ -260,13 +265,17 @@ class Procedure(QObject):
         def show() -> None:
             self.participant.show_vas_training(scale, accepting=False)
             # The proportionality sentence is the experimenter's to say, not the participant's
-            # to read (S's lab-run list, 5 Oct 2026).
-            text = self.experimenter.text
-            self.experimenter.set_instruction(
-                text["instructions"][VAS_TRAINING_INSTRUCTION].format(
-                    explanation=text[VAS_TRAINING_EXPLAIN][scale]
-                )
-            )
+            # to read (S's lab-run list, 5 Oct 2026). The experimenter cannot see the
+            # participant's screen, so the labels to read out are given too. Both are said to
+            # the participant, so both are in the participant's language.
+            config = self.session.config
+            anchors = sorted(config.participant_text["vas"][scale]["anchors"],
+                             key=lambda anchor: anchor["pct"])
+            self.experimenter.set_instruction(self.instruction_text(
+                VAS_TRAINING_INSTRUCTION,
+                anchors=ANCHOR_SEPARATOR.join(anchor["label"] for anchor in anchors),
+                explanation=config.say[PROPORTIONALITY][scale],
+            ))
             self.experimenter.set_status("")
             self.experimenter.refresh()
             self.session.log(VAS_TRAINING_SHOWN, detail=scale)
@@ -279,6 +288,14 @@ class Procedure(QObject):
             )
 
         self.await_proceed(explained, show)
+
+    def instruct(self, key: str, **values: object) -> None:
+        """What the experimenter should do now (SPEC.md 11), filled by `config.instruction`."""
+        self.experimenter.set_instruction(self.instruction_text(key, **values))
+        self.experimenter.refresh()
+
+    def instruction_text(self, key: str, **values: object) -> str:
+        return instruction(self.session.config, key, **values)
 
     def wait(self, seconds: float, then: Callable[[], None]) -> None:
         """Session-paced time: scaled by the clock, and restarted if interrupted."""

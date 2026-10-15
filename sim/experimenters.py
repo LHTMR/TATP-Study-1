@@ -41,6 +41,7 @@ from collections.abc import Callable
 from PySide6.QtCore import QObject, QTimer
 
 from sim.responders import TICK_S, VirtualParticipant
+from tatp.config import instruction, instruction_template
 from tatp.procedure import Rig
 from tatp.units import MS_PER_S
 
@@ -52,12 +53,17 @@ NORMAL_DISTANCES_MM = (40.0, 35.0, 45.0, 30.0)
 SCENARIO_ENDED = "validator: the scenario's error path is over"
 # Instructions after which the software waits for Next step.
 PROCEED_INSTRUCTIONS = (
-    "fit_garment", "thermode_start", "capsaicin_apply", "capsaicin_remove",
-    "intervention_start", "thermode_rekindle", "ready", "touchcal_uneven", "earplugs",
+    "capsaicin_apply", "capsaicin_remove", "thermode_rekindle", "rekindle_remove",
+    "touchcal_uneven", "earplugs", "ready_long_first",
 )
-# Templated instructions after which the software waits for Next step. The VAS training: the
-# anchors and proportionality explained aloud, then the go (SPEC.md 10.6).
-PROCEED_TEMPLATES = ("touchcal_gain_undefined", "vas_training")
+# Templated instructions after which the software waits for Next step: the ready line of each
+# kind of series and block, and the VAS training -- the anchors and proportionality explained
+# aloud, then the go (SPEC.md 10.6).
+PROCEED_TEMPLATES = (
+    "fit_garment", "thermode_start", "intervention_start", "touchcal_gain_undefined",
+    "vas_training", "ready_long", "ready_short", "ready_brush", "ready_pinprick_block",
+    "ready_touch_block",
+)
 
 
 def template_pattern(template: str) -> re.Pattern:
@@ -85,21 +91,25 @@ class VirtualExperimenter(QObject):
         self.resume_after_s = resume_after_s
         self.abort_when = abort_when
         text = rig.experimenter.text
-        instructions = text["instructions"]
-        self._apply = template_pattern(instructions["apply_filament"])
-        self._brush = template_pattern(instructions["apply_brush"])
-        self._mapping_ready = template_pattern(instructions["mapping_ready"])
-        self._mapping_path = template_pattern(instructions["mapping_path"])
-        self._proceed_templates = [
-            template_pattern(instructions[key]) for key in PROCEED_TEMPLATES
-        ]
-        self._proceed = {instructions[key] for key in PROCEED_INSTRUCTIONS} | {
+        config = rig.session.config
+
+        def template(key: str) -> re.Pattern:
+            # As the screen shows it: the buttons, the sentences said aloud and the remote's
+            # symbols filled in, the step's own values still fields.
+            return template_pattern(instruction_template(config, key))
+
+        self._apply = template("apply_filament")
+        self._brush = template("apply_brush")
+        self._mapping_ready = template("mapping_ready")
+        self._mapping_path = template("mapping_path")
+        self._proceed_templates = [template(key) for key in PROCEED_TEMPLATES]
+        self._proceed = {instruction(config, key) for key in PROCEED_INSTRUCTIONS} | {
             text["dialogs"]["distances_outstanding"]
         }
-        self._accept = {instructions["touchcal_stage1_failed"],
-                        instructions["touchcal_fit_review"],
-                        instructions["touchcal_stage1_exhausted"]}
-        self._rerun = template_pattern(instructions["touchcal_stage1_unusable"])
+        self._accept = {instruction_template(config, key) for key in (
+            "touchcal_stage1_failed", "touchcal_fit_review", "touchcal_stage1_exhausted"
+        )}
+        self._rerun = template("touchcal_stage1_unusable")
         self._accept_patterns = [template_pattern(t) for t in self._accept]
         self._phases = {label: key for key, label in text["phases"].items()}
         self._forces = {

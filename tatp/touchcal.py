@@ -66,6 +66,9 @@ EVENNESS_CHOICE = "evenness"
 SELF_START_SCREEN = "self_start"
 # The one experimenter instruction at the start of every touch delivery, in every condition.
 TOUCH_START_INSTRUCTION = "touch_start"
+MATCH_INSTRUCTION = "touchcal_match"
+READJUST_INSTRUCTION = "touchcal_readjust"
+EQUALISE_INSTRUCTION = "touchcal_equalise"
 # `touchcal_compare.order` and `touchcal_evenness.judgement`.
 TEST_FIRST = "test_first"
 REFERENCE_FIRST = "reference_first"
@@ -1199,6 +1202,7 @@ class TouchCalibration(Procedure):
 
         self.run_index = 0
         self.reruns = 0
+        self._run_warning: str | None = None
         self.rebalances = 0
         self.comparisons = 0
         self.fit: maths.RatingFit | None = None
@@ -1320,6 +1324,10 @@ class TouchCalibration(Procedure):
 
     def _start_run(self) -> None:
         self.run_index += 1
+        # A warning about the run a re-run discards is not about the one now starting.
+        if self._run_warning is not None:
+            self.experimenter.clear_warning(self._run_warning)
+            self._run_warning = None
         self.session.log("touch_calibration_run", detail=f"run {self.run_index}")
         self.anchor_settings: dict[float, list[float]] = {}
         self.fit = None
@@ -1465,11 +1473,10 @@ class TouchCalibration(Procedure):
                 "catch_trials_felt", severity="warning",
                 detail=f"{felt} of {len(catches)} catch trials felt",
             )
-            self.experimenter.set_status(
-                self.experimenter.text["warnings"]["catch_trials_felt"].format(
-                    value=f"{felt}/{len(catches)}"
-                )
+            self._run_warning = self.experimenter.text["warnings"]["catch_trials_felt"].format(
+                value=f"{felt}/{len(catches)}"
             )
+            self.experimenter.set_warning(self._run_warning)
         self._gate(reasons, usable=held is not None)
 
     def _gate(self, reasons: tuple[str, ...], usable: bool) -> None:
@@ -1524,7 +1531,7 @@ class TouchCalibration(Procedure):
                                  detail=f"{self.reruns} of {self.max_reruns} re-runs used")
                 if usable:
                     # "The re-run limit ... has been reached. This estimate will be used."
-                    self.experimenter.set_status(
+                    self.experimenter.set_warning(
                         self.experimenter.text["dialogs"]["fit_rerun_exhausted"]
                     )
                     self.experimenter.hide_fit_preview()
@@ -1662,8 +1669,21 @@ class TouchCalibration(Procedure):
             return
         self._match_channel(channels[0], lambda: self._match_each(channels[1:], then))
 
-    def _match_channel(self, channel: int, then: Callable[[], None], zero_retries: int = 0):
-        """Both start points, then the gain. A 0 kPa setting is matched again, not guessed."""
+    def _channel_instruction(self, key: str, channel: int) -> None:
+        """A step 3 or 4 instruction, with which of the other channels this is."""
+        self.experimenter.set_instruction(
+            self.experimenter.text["instructions"][key].format(
+                channel=channel, index=self.others.index(channel) + 1, count=len(self.others)
+            )
+        )
+
+    def _match_channel(self, channel: int, then: Callable[[], None], zero_retries: int = 0,
+                       readjust: bool = False):
+        """Both start points, then the gain. A 0 kPa setting is matched again, not guessed.
+
+        `readjust` is a match repeated inside step 4, for a channel that still felt different,
+        which the experimenter is told as such rather than as step 3 again.
+        """
         self.match_passes[channel] = self.match_passes.get(channel, 0) + 1
         directions = list(self.touch["start_directions"])
         plans = [
@@ -1684,9 +1704,8 @@ class TouchCalibration(Procedure):
             for index in range(int(self.touch["channel_match_adjustments"]))
         ]
         settings: list[float] = []
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touchcal_match"].format(channel=channel)
-        )
+        self._channel_instruction(READJUST_INSTRUCTION if readjust else MATCH_INSTRUCTION,
+                                  channel)
 
         def next_plan() -> None:
             if len(settings) == len(plans):
@@ -1726,17 +1745,17 @@ class TouchCalibration(Procedure):
                 detail=f"channel {channel}, pass {self.match_passes[channel]}: a 0 kPa setting",
             )
             if zero_retries < int(self.touch["channel_match_zero_retries"]):
-                self._match_channel(channel, then, zero_retries + 1)
+                self._match_channel(channel, then, zero_retries + 1, readjust)
             else:
-                self._ask_about_gain(channel, then)
+                self._ask_about_gain(channel, then, readjust)
 
         next_plan()
 
-    def _ask_about_gain(self, channel: int, then: Callable[[], None]) -> None:
+    def _ask_about_gain(self, channel: int, then: Callable[[], None], readjust: bool) -> None:
         def decided(outcome) -> None:
             name, _ = outcome
             if name == REBALANCE:
-                self._match_channel(channel, then)
+                self._match_channel(channel, then, readjust=readjust)
                 return
             # The experimenter's explicit choice, recorded as a fallback and never as a match.
             self.gains[channel] = 1.0
@@ -1776,9 +1795,7 @@ class TouchCalibration(Procedure):
         pairs_to_flag = int(self.touch["equalisation_pairs_to_flag"])
         max_passes = 1 + int(self.touch["equalisation_readjust_max_passes"])
         judgements: list[str] = []
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touchcal_equalise"].format(channel=channel)
-        )
+        self._channel_instruction(EQUALISE_INSTRUCTION, channel)
 
         def pair(pair_index: int) -> None:
             orders = [TEST_FIRST, REFERENCE_FIRST]
@@ -1830,14 +1847,15 @@ class TouchCalibration(Procedure):
                     "comparison; re-adjusting",
                 )
                 self._match_channel(
-                    channel, lambda: self._check_channel(channel, pass_index + 1, then)
+                    channel, lambda: self._check_channel(channel, pass_index + 1, then),
+                    readjust=True,
                 )
             else:
                 self.session.log(
                     "equalisation_mismatch", severity="warning",
                     detail=f"channel {channel}: still {winner} after re-adjustment; continuing",
                 )
-                self.experimenter.set_status(
+                self.experimenter.set_warning(
                     self.experimenter.text["warnings"]["equalisation_mismatch"].format(
                         channel=channel
                     )
