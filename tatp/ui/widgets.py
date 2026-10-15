@@ -167,6 +167,18 @@ def emphasis_button_style(colour: str) -> str:
     )
 
 
+def primary_button_style() -> str:
+    """The way forward: filled, outlined in the foreground colour, and a size up, so it is the
+    button found first at a glance (UI_PRINCIPLES.md 5.1). Greyed like any other while
+    disabled, with its fill dropped so a disabled one never reads as the way forward."""
+    return (
+        f"QPushButton {{ background-color: {CONTROL_BORDER}; color: {FOREGROUND}; "
+        f"border: 1px solid {FOREGROUND}; font-size: {SIZE_BODY}pt; font-weight: bold; }}"
+        f"QPushButton:disabled {{ background-color: {CONTROL_BACKGROUND}; color: {DISABLED}; "
+        f"border-color: {CONTROL_BACKGROUND}; font-weight: normal; }}"
+    )
+
+
 # -- the zone diagram, SPEC.md 11 ---------------------------------------------------------
 
 

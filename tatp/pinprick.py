@@ -782,9 +782,12 @@ class PinprickTrial(_RatedTrial):
 
     def _connect_extra(self) -> None:
         self.experimenter.substitution_entered.connect(self._on_substitution)
+        # The one owner of the entry's offer: it is shown exactly while it is listened to.
+        self.experimenter.set_actions_enabled(substitution=True)
 
     def _disconnect_extra(self) -> None:
         self.experimenter.substitution_entered.disconnect(self._on_substitution)
+        self.experimenter.set_actions_enabled(substitution=False)
 
     def _on_substitution(self, label_g: str) -> None:
         """The experimenter applied another filament than the one asked for (SPEC.md 8.2).

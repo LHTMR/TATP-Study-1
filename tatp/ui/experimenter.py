@@ -20,12 +20,14 @@ signal below, and every signal has a control that emits it. A protocol never rea
 connects to a signal, so the virtual experimenter of SPEC.md 17.5 drives the same path a real
 one does.
 
-**The layout is read in a fixed order** (UI_PRINCIPLES.md 5.2): the reserved banner region,
-who and where, the phase with the countdown and the clock, any interruption, then what to do
-now -- the largest thing on the screen -- beside where to do it and the garment, and the
-controls along the bottom. Every region above the controls has a fixed height, so nothing moves
-when a warning appears or an instruction is long (UI_PRINCIPLES.md 3.3). A long instruction
-steps down the type scale to fit its region rather than growing it.
+**The layout is read in a fixed order** (UI_PRINCIPLES.md 5.2): the banner region with the
+open items, who and where with the clock, the phase with the countdown, any interruption, then
+what to do now -- the largest thing on the screen -- beside where to do it and the garment, and
+the controls along the bottom: the routine ones, then those a step offers now and then. Every
+region above the controls has a fixed height, and whatever comes and goes keeps its place while
+it is hidden, so nothing moves when a warning appears, a control is offered or an instruction
+is long (UI_PRINCIPLES.md 3.3). A long instruction steps down the type scale to fit its region
+rather than growing it.
 
 **The fit preview is a window of its own** (SPEC.md 11.1): the one named screen where ratings
 reach the experimenter (UI_PRINCIPLES.md 2.5), opened at the end of an estimation run and
@@ -54,7 +56,9 @@ from PySide6.QtWidgets import (
 
 from tatp import touchcal_maths as maths
 from tatp.ui.widgets import (
+    DISABLED,
     DISCONNECTED_COLOUR,
+    FOREGROUND,
     GROUP_GAP_PX,
     ITEM_GAP_PX,
     PLACEHOLDER_COLOUR,
@@ -75,6 +79,7 @@ from tatp.ui.widgets import (
     emphasis_style,
     label,
     line_edit,
+    primary_button_style,
     sample_line,
     sized,
     stylesheet,
@@ -102,7 +107,6 @@ INSTRUCTION_SIZES = (SIZE_HEADLINE, SIZE_LARGE, SIZE_BODY, SIZE_SMALL)
 # The status line under it: two lines of body text, or the small size if that is not enough.
 STATUS_LINES = 2
 STATUS_SIZES = (SIZE_BODY, SIZE_SMALL)
-OPEN_ITEMS_LINES = 2
 SIDE_COLUMN_PX = 300
 FAULT_LINES = 4
 # Fixed, so the diagram does not resize when the pressures or faults appear (LOG N7.U10).
@@ -140,6 +144,30 @@ def _clock_text(seconds: float) -> str:
 
 def _number(value: float | None, spec: str, missing: str) -> str:
     return missing if value is None else format(value, spec)
+
+
+def _banner(colour: str) -> QLabel:
+    """One line, never wrapped and never widening the window: a test holds each headline to
+    the width of the lab laptop in both languages."""
+    made = label(SIZE_BODY)
+    made.setStyleSheet(banner_style(colour))
+    made.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+    return made
+
+
+def _reserve(widget: QWidget) -> None:
+    """Keep `widget`'s space while it is hidden, so its coming and going moves nothing
+    (UI_PRINCIPLES.md 3.3)."""
+    policy = widget.sizePolicy()
+    policy.setRetainSizeWhenHidden(True)
+    widget.setSizePolicy(policy)
+
+
+def _restyle(widget: QWidget, sheet: str) -> None:
+    """Set a style sheet only when it changes: `refresh` runs on a timer, and every
+    `setStyleSheet` re-polishes the widget."""
+    if widget.styleSheet() != sheet:
+        widget.setStyleSheet(sheet)
 
 
 def _fit_to(widget: QLabel, text: str, sizes: Sequence[int], width: int, height: int) -> None:
@@ -197,14 +225,12 @@ class ExperimenterWindow(QWidget):
 
         # What the running procedure is waiting for, beyond what the view says (SPEC.md 11).
         self._awaiting = {"rebalance": False, "fit_decision": False, "discard": False,
-                          "skip_calibration": False}
+                          "skip_calibration": False, "substitution": False}
         self._interruption: str | None = None
         self._connected = False
         self._mapping_phases: list[str] = []
         self._instruction_text = ""
         self._status_text = ""
-        self._open_items_text = ""
-        self._open_items_detail = ""
         # Faults first seen during the intervention or the rekindle: never shown in detail.
         self._withheld_faults: set[str] = set()
         # What `_fit_text` last fitted, so a refresh with nothing new does no layout work.
@@ -226,7 +252,7 @@ class ExperimenterWindow(QWidget):
         # Every gap is one of the shared spacings below, none left to the style's default.
         layout.setSpacing(0)
         layout.addWidget(self.banner_area)
-        layout.addWidget(self.identity)
+        layout.addLayout(self.identity_row)
         layout.addLayout(self.phase_row)
         layout.addWidget(self.alert)
         layout.addSpacing(ITEM_GAP_PX)
@@ -246,21 +272,29 @@ class ExperimenterWindow(QWidget):
     # -- construction --------------------------------------------------------------------
 
     def _build_banners(self) -> None:
-        self.placeholder_banner = label(SIZE_BODY, wrap=True)
-        self.placeholder_banner.setStyleSheet(banner_style(PLACEHOLDER_COLOUR))
-        self.placeholder_banner.setText(self.text["banners"]["placeholder_text"])
-        self.reduced_capability_banner = label(SIZE_BODY, wrap=True)
-        self.reduced_capability_banner.setStyleSheet(banner_style(REDUCED_CAPABILITY_COLOUR))
+        # One line each, the detail in the tooltip: a banner is read once, at the start, and
+        # after that it only has to be recognised, by its colour and its first words
+        # (UI_PRINCIPLES.md 3.2). Four two-line banners out-shouted the instruction.
+        banners_text = self.text["banners"]
+        self.placeholder_banner = _banner(PLACEHOLDER_COLOUR)
+        self.placeholder_banner.setText(banners_text["placeholder_text"])
+        self.placeholder_banner.setToolTip(banners_text["placeholder_text_detail"])
+        self.reduced_capability_banner = _banner(REDUCED_CAPABILITY_COLOUR)
         # SPEC.md 11.1: "in the same register as the reduced-capability banner". Both say the
         # session runs and part of what it records is flagged, which is the same response, so
         # they look the same (UI_PRINCIPLES.md 3.4).
-        self.fit_preview_banner = label(SIZE_BODY, wrap=True)
-        self.fit_preview_banner.setStyleSheet(banner_style(REDUCED_CAPABILITY_COLOUR))
-        self.fit_preview_banner.setText(self.text["banners"]["fit_preview"])
+        self.fit_preview_banner = _banner(REDUCED_CAPABILITY_COLOUR)
+        self.fit_preview_banner.setText(banners_text["fit_preview"])
+        self.fit_preview_banner.setToolTip(banners_text["fit_preview_detail"])
         # A demonstration (tatp/demo.py): the session runs, and nothing it records is data.
-        self.demo_banner = label(SIZE_BODY, wrap=True)
-        self.demo_banner.setStyleSheet(banner_style(REDUCED_CAPABILITY_COLOUR))
-        self.demo_banner.setText(self.text["banners"]["demo"])
+        self.demo_banner = _banner(REDUCED_CAPABILITY_COLOUR)
+        self.demo_banner.setText(banners_text["demo"])
+        # Which open items are not final, by number (SPEC.md 20). Here rather than under the
+        # instruction, because like the banners it is settled before the session and does not
+        # change what to do now. One line, cut rather than wrapped: the summaries are the
+        # tooltip, and are printed at startup and in the log.
+        self.open_items = label(SIZE_SMALL, colour=WARNING_COLOUR)
+        self.open_items.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
 
         self.banner_area = QWidget()
         banners = QVBoxLayout(self.banner_area)
@@ -269,22 +303,30 @@ class ExperimenterWindow(QWidget):
         banners.addWidget(self.placeholder_banner)
         banners.addWidget(self.reduced_capability_banner)
         banners.addWidget(self.fit_preview_banner)
-        # Which banners are up, from the first refresh on (see the note at the top).
+        banners.addWidget(self.open_items)
+        # Which banners are up, and whether the open-items line has its place, from the first
+        # refresh on (see the note at the top).
         self._banners_shown: tuple[bool, ...] | None = None
+        self._open_items_reserved: bool | None = None
 
     def _build_header(self) -> None:
         # Who and where, in the smallest size on the screen: it is looked up once at the start
         # of a session and never needed at a glance again (UI_PRINCIPLES.md 5.2).
         self.identity = label(SIZE_SMALL, colour=SECONDARY)
+        # The session clock is looked up, not watched: what is timed is the countdown beside
+        # the phase. So it sits with who and where, in the same small grey.
+        self.elapsed = label(SIZE_SMALL, colour=SECONDARY)
+        self.identity_row = QHBoxLayout()
+        self.identity_row.addWidget(self.identity)
+        self.identity_row.addStretch(1)
+        self.identity_row.addWidget(self.elapsed)
         self.phase = label(SIZE_LARGE)
         self.countdown = label(SIZE_LARGE, colour=SECONDARY)
-        self.elapsed = label(SIZE_LARGE, colour=SECONDARY)
         self.phase_row = QHBoxLayout()
         self.phase_row.addWidget(self.phase)
         self.phase_row.addSpacing(GROUP_GAP_PX)
         self.phase_row.addWidget(self.countdown)
         self.phase_row.addStretch(1)
-        self.phase_row.addWidget(self.elapsed)
 
         # Reserved whether or not the session is interrupted, so the instruction below it does
         # not move when the stop is pressed (UI_PRINCIPLES.md 3.3).
@@ -302,34 +344,34 @@ class ExperimenterWindow(QWidget):
         self.status = label(SIZE_BODY, wrap=True, colour=SECONDARY)
         self.status.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.status.setFixedHeight(self.status.fontMetrics().lineSpacing() * STATUS_LINES)
-        # A fixed two lines, however many items are open: the summaries are printed at startup
-        # and in the log, and here the line only has to say which are not final (SPEC.md 20).
-        self.open_items = label(SIZE_SMALL, wrap=True, colour=WARNING_COLOUR)
-        self.open_items.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.open_items.setFixedHeight(
-            self.open_items.fontMetrics().lineSpacing() * OPEN_ITEMS_LINES
-        )
         # The monofilament technique, in the smallest size (docs/LOG.md N5.4), and only while a
         # filament is being applied. It is the one thing on the screen allowed to be cut short
         # when space runs out, which is why it is last and why its height is not asked for.
+        # Its space is kept while it is hidden, so the column's spare height stays below the
+        # status: otherwise the instruction was centred in it and its first line jumped about
+        # a hundred pixels between steps (UI_PRINCIPLES.md 5.5).
         self.technique = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
         self.technique.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.technique.setText(self.text["instructions"]["monofilament"])
         self.technique.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Ignored)
+        _reserve(self.technique)
         self.technique.setVisible(False)
         left = QVBoxLayout()
         left.setSpacing(ITEM_GAP_PX)
         left.addWidget(self.instruction)
         left.addWidget(self.status)
-        left.addWidget(self.open_items)
         left.addWidget(self.technique, 1)
 
         # Where the stimulus goes, then the garment: both answer "where", and neither is read
-        # as often as the instruction.
+        # as often as the instruction. The diagram is shown only while there is a target, so
+        # a step with nowhere to go has no picture to look at; which steps have one is a matter
+        # of the procedure, never of the condition (SPEC.md 16).
         self.zone = ZoneDiagram()
         self.zone.setFixedHeight(ZONE_HEIGHT_PX)
+        _reserve(self.zone)
         self.target = label(SIZE_BODY)
         self.target.setAlignment(Qt.AlignHCenter)
+        _reserve(self.target)
         self.hardware_title = label(SIZE_SMALL, colour=SECONDARY)
         self.hardware_title.setText(self.text["hardware"]["title"])
         self.garment = label(SIZE_BODY)
@@ -343,11 +385,13 @@ class ExperimenterWindow(QWidget):
         self.faults.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.faults.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.faults.setMaximumHeight(self.faults.fontMetrics().lineSpacing() * FAULT_LINES)
-        # One disconnect/reconnect button (SPEC.md 11) that says what it will do now.
+        # One disconnect/reconnect button (SPEC.md 11) that says what it will do now. At the
+        # foot of the column, below its stretch, so the pressures and faults appearing never
+        # move it (UI_PRINCIPLES.md 3.3).
         self.garment_button = button("")
         self.garment_button.clicked.connect(self._garment_clicked)
-        # Under the garment it depends on, and last in a column that ends in a stretch, so its
-        # appearing moves nothing (UI_PRINCIPLES.md 3.3). Hidden until offered.
+        # Above the garment button, also below the stretch, so its appearing moves nothing
+        # else. Hidden until offered.
         self.skip_button = button(self.text["controls"]["skip_calibration"])
         self.skip_button.clicked.connect(self.skip_calibration_requested.emit)
         self.skip_button.setVisible(False)
@@ -366,25 +410,38 @@ class ExperimenterWindow(QWidget):
         column.addLayout(state)
         column.addWidget(self.pressures)
         column.addWidget(self.faults)
-        column.addWidget(self.garment_button)
-        column.addWidget(self.skip_button)
         column.addStretch(1)
+        column.addWidget(self.skip_button)
+        column.addWidget(self.garment_button)
 
         self.centre = QHBoxLayout()
         self.centre.addLayout(left, 1)
         self.centre.addSpacing(GROUP_GAP_PX)
         self.centre.addWidget(side)
+        self.set_target(None)
 
     def _build_controls(self) -> None:
         controls = self.text["controls"]
-        self.proceed_button = button(controls["proceed"])
-        self.pause_button = button(controls["pause"])
-        self.resume_button = button(controls["resume"])
+        # Two tiers. The first row is always there, a size up: the way forward, the
+        # interruption, and the end. The second holds what a step offers only now and then,
+        # each in a slot of its own that is kept while it is not offered, so the eye learns
+        # where each one appears and nothing moves when it does (UI_PRINCIPLES.md 3.3, 5.5).
+        # A control that does nothing when pressed is not drawn: ten buttons of equal weight,
+        # six of them dead, were "a lot for the eyes" (S, 15 Oct 2026 pilot).
+        self.proceed_button = button(controls["proceed"], SIZE_BODY)
+        self.pause_button = button(controls["pause"], SIZE_BODY)
+        self.resume_button = button(controls["resume"], SIZE_BODY)
+        self.abort_button = button(controls["abort"], SIZE_BODY)
         self.discard_button = button(controls["discard_repeat"])
         self.rebalance_button = button(controls["rebalance"])
         self.fit_accept_button = button(controls["fit_accept"])
         self.fit_rerun_button = button(controls["fit_rerun"])
-        self.abort_button = button(controls["abort"])
+        # Next step is the way forward in every step, so it always looks like it. Its look
+        # must not follow whether a step is awaited: at a touch start that could differ by
+        # condition (SPEC.md 16). While the session is interrupted Resume is the way forward,
+        # and it is only shown then.
+        self.proceed_button.setStyleSheet(primary_button_style())
+        self.resume_button.setStyleSheet(primary_button_style())
         # The one control that ends the session. Coloured so it is found without reading, and
         # never mistaken for a routine one (UI_PRINCIPLES.md 3.4).
         self.abort_button.setStyleSheet(emphasis_button_style(DISCONNECTED_COLOUR))
@@ -401,21 +458,24 @@ class ExperimenterWindow(QWidget):
         self.controls = QGridLayout()
         self.controls.setHorizontalSpacing(ITEM_GAP_PX)
         self.controls.setVerticalSpacing(ITEM_GAP_PX)
-        ordered = (
-            self.proceed_button,
-            self.pause_button,
-            self.resume_button,
+        # Pause and Resume each keep a slot of their own rather than sharing one, so a press
+        # meant for one can never land on the other as it changes. Abort is last, at the far
+        # right, away from Next step.
+        routine = (self.proceed_button, self.pause_button, self.resume_button,
+                   self.abort_button)
+        # A control a later step offers is added here, and wraps onto a row of its own.
+        situational = (
             self.discard_button,
             self.rebalance_button,
             # Re-run before Accept, as in the fit window and every dialog: the choice that
             # goes on sits on the right (UI_PRINCIPLES.md 5.5, same thing in the same place).
             self.fit_rerun_button,
             self.fit_accept_button,
-            self.abort_button,
         )
-        for index, widget in enumerate(ordered):
+        for index, widget in enumerate(routine + situational):
             row, column = divmod(index, CONTROL_COLUMNS)
             self.controls.addWidget(widget, row, column)
+            _reserve(widget)
 
     def _build_entries(self) -> None:
         controls = self.text["controls"]
@@ -430,11 +490,18 @@ class ExperimenterWindow(QWidget):
         self.substitution.setFixedWidth(SUBSTITUTION_FIELD_PX)
         self.substitution_button = button(controls["record_substitution"])
         self.substitution_button.clicked.connect(self._enter_substitution)
+        # Only during a filament application: it is listened to only then, and a filament typed
+        # at any other time was cleared and lost (S, 15 Oct 2026 pilot review).
+        for widget in (self.substitution, self.substitution_button):
+            _reserve(widget)
+            widget.setVisible(False)
 
         # The distances are typed long after the path, a few times a session, so they live in a
-        # window of their own that never blocks this one (SPEC.md 8.4).
+        # window of their own that never blocks this one (SPEC.md 8.4). Offered from the first
+        # mapping on.
         self.distances_button = button(controls["open_distances"])
         self.distances_button.clicked.connect(self.open_distances)
+        _reserve(self.distances_button)
 
         self.entries = QHBoxLayout()
         self.entries.addWidget(self.note, 1)
@@ -492,6 +559,8 @@ class ExperimenterWindow(QWidget):
         `filament` shows the monofilament technique under the instruction.
         """
         self.zone.set_region(region)
+        self.zone.setVisible(region is not None)
+        self.target.setVisible(region is not None)
         self.technique.setVisible(region is not None and filament)
         if region is None:
             self.target.setText("")
@@ -511,30 +580,29 @@ class ExperimenterWindow(QWidget):
         fit_decision: bool | None = None,
         discard: bool | None = None,
         skip_calibration: bool | None = None,
+        substitution: bool | None = None,
     ) -> None:
         """What the running procedure waits for (SPEC.md 9, 11, 11.1). None leaves it as is.
 
-        `rebalance` enables Rebalance channels; `fit_decision` enables Accept and Re-run;
-        `discard` enables Discard and repeat. All are otherwise disabled, because a control that
-        does nothing when pressed is one the experimenter learns to distrust (UI_PRINCIPLES.md
-        5.1). `skip_calibration` shows Skip calibration, which exists only on a pilot rig, so
-        it is hidden rather than disabled when not offered.
+        `rebalance` offers Rebalance channels; `fit_decision` offers Accept and Re-run;
+        `discard` offers Discard and repeat; `skip_calibration` offers Skip calibration, which
+        exists only on a pilot rig; `substitution` offers the filament-applied-instead entry,
+        while a filament trial listens for it. Each is hidden, in a place kept for it, when not
+        offered, because a control that does nothing when pressed is one the experimenter
+        learns to distrust (UI_PRINCIPLES.md 5.1), and ten of them are a lot to look at.
         """
-        if rebalance is not None:
-            self._awaiting["rebalance"] = bool(rebalance)
-        if fit_decision is not None:
-            self._awaiting["fit_decision"] = bool(fit_decision)
-        if discard is not None:
-            self._awaiting["discard"] = bool(discard)
-        if skip_calibration is not None:
-            self._awaiting["skip_calibration"] = bool(skip_calibration)
+        for key, value in (("rebalance", rebalance), ("fit_decision", fit_decision),
+                           ("discard", discard), ("skip_calibration", skip_calibration),
+                           ("substitution", substitution)):
+            if value is not None:
+                self._awaiting[key] = bool(value)
         self._apply_enabled()
 
     def set_mapping_phases(self, phases: Sequence[str]) -> None:
         """The time points that have a mapping, in session order (SPEC.md 8.4).
 
         Distances are entered for one of these, defaulting to the latest; before the first
-        mapping there is nothing to enter them for, so the entry is disabled.
+        mapping there is nothing to enter them for, so the entry is not offered.
         """
         phases = list(phases)
         if phases == self._mapping_phases:
@@ -654,23 +722,34 @@ class ExperimenterWindow(QWidget):
         # SPEC.md 12.4: persistent and unmissable while they apply, absent when they do not.
         shown = (bool(view["demo"]), bool(view["placeholder_text"]),
                  bool(view["reduced_capability_device"]), bool(view["fit_preview_enabled"]))
+        items = view["unresolved_open_items"]
         if self._banners_shown is None:
             self._banners_shown = shown
+            # The open-items line keeps its place for the session if it starts with one, so
+            # an item settled mid-session moves nothing.
+            self._open_items_reserved = bool(items)
+            if self._open_items_reserved:
+                _reserve(self.open_items)
         # Stage boundary (CLAUDE.md): a banner arriving mid-session would move everything
         # below it, which the banner region no longer reserves room for.
         assert shown == self._banners_shown, (
             f"the banners changed during the session: {self._banners_shown} to {shown}"
         )
+        assert self._open_items_reserved or not items, (
+            "open items appeared during the session, where the banner region has no room"
+        )
+        garment_name = text["terms"]["garments"][view["garment_driver"]]
         self.reduced_capability_banner.setText(
-            text["banners"]["reduced_capability"].format(
-                value=text["terms"]["garments"][view["garment_driver"]]
-            )
+            text["banners"]["reduced_capability"].format(value=garment_name)
+        )
+        self.reduced_capability_banner.setToolTip(
+            text["banners"]["reduced_capability_detail"].format(value=garment_name)
         )
         for banner, visible in zip((self.demo_banner, self.placeholder_banner,
                                     self.reduced_capability_banner, self.fit_preview_banner),
                                    shown, strict=True):
             banner.setVisible(visible)
-        self.banner_area.setVisible(any(shown))
+        self.banner_area.setVisible(any(shown) or self._open_items_reserved)
 
         session_text = text["session"]
         limb = text["terms"]["limbs"][view["limb"]]
@@ -696,15 +775,14 @@ class ExperimenterWindow(QWidget):
 
         # By number, so twenty open items still fit the line; the summaries are the tooltip,
         # and are printed at startup (config.OpenItem.__str__ is "[number] summary").
-        items = view["unresolved_open_items"]
-        shown = []
+        numbers = []
         for item in items:
             number = ITEM_NUMBER.match(item)
-            shown.append(number[1] if number else item)
-        self._open_items_text = (
-            text["warnings"]["open_items"].format(value=", ".join(shown)) if items else ""
+            numbers.append(number[1] if number else item)
+        self.open_items.setText(
+            text["warnings"]["open_items"].format(value=", ".join(numbers)) if items else ""
         )
-        self._open_items_detail = LINE_SEPARATOR.join(items)
+        self.open_items.setToolTip(LINE_SEPARATOR.join(items))
         self.open_items.setVisible(bool(items))
         self._fit_text()
         self._apply_enabled()
@@ -724,16 +802,13 @@ class ExperimenterWindow(QWidget):
         wrapped text at up to four sizes every tick is work that changes nothing.
         """
         width = self._left_width()
-        wanted = (self._instruction_text, self._status_text, self._open_items_text,
-                  self._open_items_detail, width)
+        wanted = (self._instruction_text, self._status_text, width)
         if wanted == self._fitted:
             return
         self._fitted = wanted
         _fit_to(self.instruction, self._instruction_text, INSTRUCTION_SIZES, width,
                 self.instruction.height())
         _fit_to(self.status, self._status_text, STATUS_SIZES, width, self.status.height())
-        self.open_items.setText(self._open_items_text)
-        self.open_items.setToolTip(self._open_items_detail)
 
     def _draw_countdown(self, event: dict | None) -> None:
         """SPEC.md 7.4: the software counts down, the experimenter launches."""
@@ -777,6 +852,13 @@ class ExperimenterWindow(QWidget):
     def _draw_interruption(self, interruption: str | None) -> None:
         assert interruption is None or interruption in INTERRUPTIONS, interruption
         self._interruption = interruption
+        # While interrupted the step on screen is on hold, so it is dimmed and the stop line
+        # is the brightest thing in its place. Colour only: nothing moves (UI_PRINCIPLES.md
+        # 3.3).
+        running = interruption is None
+        _restyle(self.instruction, f"color: {FOREGROUND if running else SECONDARY};")
+        _restyle(self.status, f"color: {SECONDARY if running else DISABLED};")
+        _restyle(self.technique, f"color: {SECONDARY if running else DISABLED};")
         if interruption is None:
             self.alert.setText("")
             self.alert.setStyleSheet("")
@@ -848,28 +930,46 @@ class ExperimenterWindow(QWidget):
         self.faults.setVisible(bool(lines))
 
     def _apply_enabled(self) -> None:
-        """Which controls do something now. Read from the view where it says, else pushed in.
+        """Which controls are offered now. Read from the view where it says, else pushed in.
 
         While the session is interrupted, Resume and Abort are the only ways forward, so they
-        are the only controls enabled besides the notes (SPEC.md 13).
+        are the only controls offered besides the entries (SPEC.md 13). Next step stays in
+        sight, greyed, because it is the way forward again after the resume (LOG N7.U10a).
+        A control not offered is hidden, and disabled too, so no key press reaches it.
         """
         running = self._interruption is None
         self.proceed_button.setEnabled(running)
-        self.pause_button.setEnabled(running)
-        self.resume_button.setEnabled(not running)
-        self.discard_button.setEnabled(running and self._awaiting["discard"])
-        self.rebalance_button.setEnabled(running and self._awaiting["rebalance"])
         deciding = running and self._awaiting["fit_decision"]
-        self.fit_accept_button.setEnabled(deciding)
-        self.fit_rerun_button.setEnabled(deciding)
+        offered = (
+            (self.pause_button, running),
+            (self.resume_button, not running),
+            (self.discard_button, running and self._awaiting["discard"]),
+            (self.rebalance_button, running and self._awaiting["rebalance"]),
+            (self.fit_accept_button, deciding),
+            (self.fit_rerun_button, deciding),
+            (self.skip_button, self._awaiting["skip_calibration"]),
+            (self.substitution, self._awaiting["substitution"]),
+            (self.substitution_button, self._awaiting["substitution"]),
+            (self.distances_button, bool(self._mapping_phases)),
+        )
+        for widget, offer in offered:
+            widget.setVisible(offer)
+            widget.setEnabled(offer)
+        # A filament typed and not recorded belongs to the trial that has ended, never to the
+        # next one.
+        if not self._awaiting["substitution"]:
+            self.substitution.clear()
+        # Skip calibration is shown through an interruption, as it was, but not pressable.
+        self.skip_button.setEnabled(running and self._awaiting["skip_calibration"])
         self.fit_preview.accept_button.setEnabled(deciding)
         self.fit_preview.rerun_button.setEnabled(deciding)
-        self.skip_button.setVisible(self._awaiting["skip_calibration"])
-        self.skip_button.setEnabled(running and self._awaiting["skip_calibration"])
+        # Quiet while connected, the expected state; the way forward when it reads Connect.
         self.garment_button.setText(
             self.text["controls"]["disconnect" if self._connected else "connect"]
         )
-        self.distances_button.setEnabled(bool(self._mapping_phases))
+        _restyle(self.garment_button,
+                 f"QPushButton {{ color: {SECONDARY}; }}" if self._connected
+                 else primary_button_style())
 
 
 class FitPreviewWindow(QDialog):
