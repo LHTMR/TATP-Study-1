@@ -720,11 +720,8 @@ class _SampleDemo(QObject):
         self.experimenter_mode = OFF
         self.finishing = False
 
-    def set_participant(self, mode: str) -> None:
-        self.participant_mode = mode
-
-    def set_experimenter(self, mode: str) -> None:
-        self.experimenter_mode = mode
+    def choose(self, who: str, mode: str) -> None:
+        setattr(self, f"{who}_mode", mode)
 
 
 class _SampleSounddevice:

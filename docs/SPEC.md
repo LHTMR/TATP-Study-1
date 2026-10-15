@@ -203,9 +203,13 @@ without the command line:
 
 1. **Run a session** — the experiment.
 2. **Run a demo** — the software shown without a participant (`tatp/demo.py`, docs/LOG.md
-   N7.D23). The real session, quarantined: its own participant code and allocation, a fresh
-   folder under `data/demo/`, `demo` true in the session file and a DEMONSTRATION banner on the
-   experimenter screen; the participant screen is unchanged (§16). The participant and the
+   N7.D23). The real session, quarantined: its own participant code, a fresh folder under
+   `data_demo/` (beside `data/`, never in it) with its own allocation, the conditions shuffled
+   across the session numbers so none can be chosen to see a condition (open item L16), `demo`
+   true in the session file and a DEMONSTRATION banner on the experimenter screen; the
+   participant screen is unchanged (§16). Always the mock garment, with every keyboard the
+   remote; never beside a running session (it holds the study folder's instance lock). The
+   participant and the
    experimenter are each a person or the validator's simulation (§17.5), paced to be watched or
    as fast as it goes, changeable mid-session from a Demo controls window, which also offers
    *Skip the wait* (session time moved on to just before the next due step) and *Finish this

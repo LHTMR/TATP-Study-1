@@ -17,13 +17,25 @@ from PySide6.QtWidgets import QApplication
 import run_session
 from sim.responders import Action
 from tatp import config as cfg
-from tatp.demo import FAST, OFF, WATCH
+from tatp import preflight as pre
+from tatp.demo import (
+    ALLOCATION_NAME,
+    FAST,
+    OFF,
+    WATCH,
+    demo_config,
+    shuffled_allocation,
+)
 from tatp.launcher import LauncherWindow
+from tatp.remote_keys import ANY_KEYBOARD
+from tatp.session import SessionError
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 # Real seconds a whole demonstration may take with both simulations fast.
-FULL_RUN_TIMEOUT_S = 120.0
-FULL_RUN_SPEED = "1000"
+FULL_RUN_TIMEOUT_S = 300.0
+# Fast enough with Skip the wait, and slow enough that a mapping path or a cue outlasts the
+# simulations' look at the screen under the gate's load, as at 1000x it need not.
+FULL_RUN_SPEED = "100"
 
 
 @pytest.fixture(scope="module")
@@ -36,12 +48,16 @@ def loaded(tmp_path):
     loaded = cfg.load("sv", "en")
     hardware = {
         **loaded.hardware,
+        # The test's own study folder, whose lock a demonstration takes: not the repository's.
+        "data": {**loaded.hardware["data"], "folder": str(tmp_path / "data")},
         "audio": {**loaded.hardware["audio"], "backend": "recording"},
         "screens": {**loaded.hardware["screens"], "participant_screen_index": None,
                     "experimenter_screen_index": None},
     }
-    # Under the test's own folder, not the repository's data/demo.
-    demo = {**loaded.study1["demo"], "data_folder": str(tmp_path / "demo")}
+    # Under the test's own folder, not the repository's data_demo; and fast enough for a whole
+    # session to run inside a test.
+    demo = {**loaded.study1["demo"], "data_folder": str(tmp_path / "demo"),
+            "max_clock_speed": float(FULL_RUN_SPEED)}
     return cfg.Config(**{**loaded.__dict__, "hardware": hardware,
                          "study1": {**loaded.study1, "demo": demo}})
 
@@ -100,6 +116,62 @@ def test_the_simulations_are_for_a_demonstration_only():
                                 "SM", "--patterns", str(EXAMPLES), "--sim-participant", FAST])
 
 
+@pytest.mark.parametrize("extra", [
+    ("--garment", "arduino_mosfet"), ("--clock-speed", "50"), ("--redcap-form-completed",),
+])
+def test_what_a_demonstration_decides_is_refused_not_overridden(extra):
+    with pytest.raises(SystemExit):
+        _args(*extra)
+
+
+def test_a_demonstration_speed_beyond_the_configured_range_is_refused(loaded):
+    too_fast = str(float(loaded.study1["demo"]["max_clock_speed"]) * 2)
+    with pytest.raises(SystemExit):
+        run_session.demo_session(loaded, _args("--demo-speed", too_fast))
+
+
+# -- quarantined -------------------------------------------------------------------------------
+
+
+def test_each_demonstration_shuffles_the_conditions_into_its_own_allocation(loaded, tmp_path):
+    """A session number cannot be chosen to see a condition (open item L16)."""
+    template = cfg.REPO_ROOT / loaded.study1["demo"]["allocation_file"]
+    orders = set()
+    for run in range(20):
+        path = shuffled_allocation(template, tmp_path / str(run))
+        rows = list(csv.DictReader(
+            line for line in path.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("#")
+        ))
+        conditions = [row["condition"] for row in rows]
+        assert sorted(conditions) == sorted(loaded.study1["design"]["conditions"])
+        orders.add(tuple(conditions))
+    assert len(orders) > 1, "shuffled, not fixed"
+
+
+def test_a_demonstration_runs_on_the_mock_garment_with_any_keyboard(loaded):
+    config = demo_config(loaded, 1.0)
+    assert config.hardware["garment"]["driver"] == "mock"
+    assert config.hardware["responder"]["key_source"] == ANY_KEYBOARD
+
+
+def test_a_demonstration_is_refused_while_a_session_holds_the_study_folder(app, loaded,
+                                                                          tmp_path):
+    study = tmp_path / "study"
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"], "folder": str(study)}}
+    loaded = cfg.Config(**{**loaded.__dict__, "hardware": hardware})
+    held = pre.InstanceLock(study)
+    assert held.acquire()
+    args = _args()
+    config = run_session.demo_session(loaded, args)
+    keys = [key for severity, key, _ in run_session.preflight(config, args)
+            if severity == pre.REFUSE]
+    assert keys == ["preflight.another_instance"]
+    with pytest.raises(SessionError, match="another session"):
+        run_session.build(config, args)
+    held.release()
+
+
 def test_run_a_demo_in_the_launcher_asks_for_a_demonstration(app, loaded):
     seen = []
     launcher = LauncherWindow(loaded, preflight=lambda config, args: [],
@@ -115,9 +187,10 @@ def test_run_a_demo_in_the_launcher_asks_for_a_demonstration(app, loaded):
     assert (args.demo, args.participant, args.sim_participant, args.sim_experimenter) == (
         True, loaded.study1["demo"]["participant_code"], WATCH, OFF
     )
-    assert args.garment == "mock" and not args.redcap_form_completed
+    assert args.garment == "mock" and not dialog.garment.isEnabled()
+    assert not args.redcap_form_completed
     design = dialog.config(args).study1["design"]
-    assert design["allocation_file"] == loaded.study1["demo"]["allocation_file"]
+    assert Path(design["allocation_file"]).name == ALLOCATION_NAME
 
 
 def test_run_a_session_in_the_launcher_is_never_a_demonstration(app, loaded):
@@ -140,13 +213,23 @@ def test_a_whole_demonstration_runs_quarantined_and_recorded_as_one(app, loaded,
     session = runner.session
     runner.start()
     deadline = time.monotonic() + FULL_RUN_TIMEOUT_S
-    while not session.closed:
-        assert time.monotonic() < deadline, f"the demonstration stalled at {runner.stage_index}"
-        QApplication.processEvents()
-        time.sleep(0.0005)
-    _finish(runner, demo)
+    skips = 0
+    try:
+        while not session.closed:
+            assert time.monotonic() < deadline, (
+                f"the demonstration stalled at {runner.stages[runner.stage_index].id}: "
+                f"{runner.rig.experimenter.instruction.text()!r}"
+            )
+            QApplication.processEvents()
+            # As someone showing the software would: every long wait skipped.
+            skips += demo.skip_wait() is not None
+            time.sleep(0.0005)
+    finally:
+        # Stopped either way: a session left running keeps the test from ever ending.
+        _finish(runner, demo)
 
     assert runner.completed
+    assert skips > 0, "a whole session has waits to skip"
     values = _session_values(session)
     assert values["demo"].lower() == "true"
     assert values["participant_code"] == loaded.study1["demo"]["participant_code"]
@@ -191,6 +274,25 @@ def test_skip_the_wait_ends_a_timed_wait_lead_s_before_it_is_due(app, loaded):
     _finish(runner, demo)
 
 
+def test_a_skip_carries_a_playing_pattern_on_rather_than_replaying_it(app, loaded):
+    """Every cycle the skip passed, delivered in one tick, would flood the garment."""
+    runner, demo = _demo(app, loaded)
+    session = runner.session
+    session.clock.start_session()
+    garment = session.garment
+    garment.play_pattern(next(iter(session.patterns.values())))
+    per_cycle = len(garment._pattern_events)
+    delivered = []
+    deliver = garment._deliver
+    garment._deliver = lambda event: (delivered.append(event), deliver(event))
+    runner._wait_until(3600.0, lambda: None, lambda: None)
+    demo.skip_wait()
+    garment.advance()
+    # At most a cycle's worth either side of the skip, where replay would be ~an hour's.
+    assert len(delivered) <= 2 * per_cycle
+    _finish(runner, demo)
+
+
 def test_there_is_nothing_to_skip_while_no_timed_wait_runs(app, loaded):
     runner, demo = _demo(app, loaded)
     assert demo.skip_wait() is None
@@ -229,7 +331,18 @@ def test_every_change_of_who_presses_is_logged(app, loaded):
     demo.set_experimenter(FAST)
     demo.set_participant(OFF)
     modes = [e["detail"] for e in _events(runner.session) if e["event"] == "demo_simulation"]
-    assert modes == [f"participant: {WATCH}", f"experimenter: {FAST}", f"participant: {OFF}"]
+    assert modes == [f"participant: {OFF}", f"experimenter: {OFF}", f"participant: {WATCH}",
+                     f"experimenter: {FAST}", f"participant: {OFF}"]
+    _finish(runner, demo)
+
+
+def test_a_mode_chosen_while_finishing_is_kept(app, loaded):
+    """The person who takes the remote mid-finish keeps it at the next stage."""
+    runner, demo = _demo(app, loaded, "--sim-participant", WATCH)
+    demo.finish_stage()
+    demo.choose("participant", OFF)
+    runner.stage_started.emit("the next stage")
+    assert demo.participant_mode == OFF
     _finish(runner, demo)
 
 

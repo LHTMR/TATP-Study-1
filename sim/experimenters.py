@@ -119,6 +119,8 @@ class VirtualExperimenter(QObject):
         # As fast as it can (the validator) until `set_pace` slows it or stops it acting.
         self.acts = True
         self.reaction_s = 0.0
+        # The reason recorded when it re-runs an estimate that cannot be used.
+        self.rerun_reason = SCENARIO_ENDED
         self._instruction = ""
         self._instruction_at_s = 0.0
 
@@ -150,6 +152,8 @@ class VirtualExperimenter(QObject):
         participant beside a person at the experimenter screen knows what was applied."""
         self.acts = acts
         self.reaction_s = reaction_s
+        # Whatever is up now is read afresh, so its reading time is not already spent.
+        self._instruction = ""
         if not acts:
             self._resume_timer.stop()
 
@@ -214,7 +218,11 @@ class VirtualExperimenter(QObject):
         elif any(p.fullmatch(instruction) for p in self._accept_patterns):
             window.fit_accepted.emit()
         elif self._rerun.fullmatch(instruction):
-            window.fit_rerun_requested.emit(SCENARIO_ENDED)
+            window.fit_rerun_requested.emit(self.rerun_reason)
+        else:
+            return
+        # Pressed: the same instruction up again is a new step, read again before the next.
+        self._instruction_at_s = time.monotonic()
 
     def _track_mapping(self, instruction: str, phase: str | None) -> None:
         """Enter the distances when a time point's last path has ended."""

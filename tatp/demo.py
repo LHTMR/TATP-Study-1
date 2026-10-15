@@ -2,39 +2,50 @@
 docs/LOG.md N7.D23.
 
 A demonstration is a real session through the real code -- the same stages, screens, garment
-commands and data files -- with four things changed, and none of them able to reach study data:
+commands and data files -- with these things changed, and none of them able to reach study data:
 
 - **Quarantined.** Its own participant code and allocation (`study1.yaml` `demo`), a fresh
-  folder under `demo.data_folder` for each run, so a demonstration can be run again and again,
-  `demo` true in the session file, and a DEMONSTRATION banner on the experimenter screen. The
-  participant screen is unchanged: a demonstration shows what a participant sees (SPEC.md 16).
+  folder under `demo.data_folder` -- beside the study's `data/`, not in it -- for each run, so a
+  demonstration can be run again and again, `demo` true in the session file, and a
+  DEMONSTRATION banner on the experimenter screen. The participant screen is unchanged: a
+  demonstration shows what a participant sees (SPEC.md 16). Each run writes its own copy of the
+  allocation with the conditions shuffled across the session numbers, so a session number cannot
+  be chosen to see a condition (open item L16).
+- **Nothing worn, and any keyboard.** Always the mock garment: a demonstration's speed and its
+  simulated experimenter, who resumes after an emergency stop on its own, belong nowhere near a
+  real garment (SPEC.md 13, 10.9). And every keyboard is the remote (`any_keyboard`), so it runs
+  on any computer, with or without the remote, and a simulated participant's presses arrive.
 - **Who presses.** The participant and the experimenter are each, independently, a person, a
   simulation paced to be watched, or a simulation as fast as it can go (`OFF`, `WATCH`, `FAST`;
   `sim/responders.py`, `sim/experimenters.py`, the validator's own). Either can be changed at
   any time from the Demo controls window, so the remote can be handed between a person and the
-  simulation mid-session. Every change is logged (`demo_simulation`).
+  simulation mid-session. Logged at the start and at every change (`demo_simulation`).
 - **Skip the wait.** The long timed waits -- to the next block, the rekindle, the end of the
   intervention -- end at once, `demo.skip_lead_s` before what they wait for, by moving session
   time on (`Clock.skip`). The participant's hand is not affected. Logged (`demo_wait_skipped`).
-- **Finish this stage.** Both simulations run the stage now under way as fast as they can, then
-  go back to what they were. A stage is finished, never skipped: what later stages need from it
-  -- the touch calibration, the F40s -- comes from the real procedure, not from invented values.
+- **Finish this stage.** Both simulations run the stage now under way as fast as they can, and
+  a timed wait is skipped, then they go back to what they were. A stage is finished, never
+  skipped: what later stages need from it -- the touch calibration, the F40s -- comes from the
+  real procedure, not from invented values.
 
 `demo.clock_speed` (or `--demo-speed`) can also run every session-paced interval faster, as the
 validator does; at 1 a person meets every interval as a participant would.
+
+The simulations are imported when a demonstration starts, so a real session never loads them.
 """
 
 from __future__ import annotations
 
+import csv
+import random
 from pathlib import Path
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Qt
 from PySide6.QtWidgets import QComboBox, QGridLayout, QVBoxLayout, QWidget
 
-from sim.experimenters import VirtualExperimenter
-from sim.responders import VirtualParticipant
 from tatp.clock import Clock
 from tatp.config import REPO_ROOT, Config
+from tatp.remote_keys import ANY_KEYBOARD, with_key_source
 from tatp.session import with_session_choices
 from tatp.session_runner import SessionRunner
 from tatp.ui.widgets import (
@@ -53,8 +64,13 @@ OFF = "off"
 WATCH = "watch"
 FAST = "fast"
 MODES = (OFF, WATCH, FAST)
-# The garment a demonstration uses unless another is chosen: nothing is worn.
+# The only garment a demonstration drives: nothing is worn.
 DEMO_GARMENT = "mock"
+# The slowest a demonstration runs: real time, as a participant meets every interval.
+REAL_TIME_SPEED = 1.0
+ALLOCATION_NAME = "demo_allocation.csv"
+# What a simulated experimenter records when it re-runs an estimate that cannot be used.
+RERUN_REASON = "demonstration: the simulated experimenter re-ran an unusable estimate"
 
 
 def real_time_settings(study1: dict, speed: float, scale_timeout: bool = True) -> dict:
@@ -77,14 +93,66 @@ def resolved(path: str) -> Path:
     return Path(path) if Path(path).is_absolute() else REPO_ROOT / path
 
 
-def demo_config(loaded: Config, speed: float, garment: str | None) -> Config:
-    """The configuration a demonstration runs with: its own allocation, a fresh folder."""
+def run_folder(demo: dict) -> Path:
+    """A folder of this run's own, under `demo.data_folder`: never one a run used before."""
+    root = resolved(demo["data_folder"])
+    stamp = Clock().filename_stamp()
+    folder, n = root / stamp, 1
+    while folder.exists():
+        n += 1
+        folder = root / f"{stamp}_{n}"
+    return folder
+
+
+def shuffled_allocation(template: Path, folder: Path) -> Path:
+    """This run's allocation: `template` with its conditions shuffled across the sessions of
+    each code, written into `folder`. Drawn from the system's entropy, and recorded only in
+    the run's own files (open item L16)."""
+    lines = template.read_text(encoding="utf-8").splitlines()
+    comments = [line for line in lines if line.startswith("#")]
+    rows = list(csv.DictReader(line for line in lines if not line.startswith("#")))
+    shuffler = random.SystemRandom()
+    for code in {row["participant_code"] for row in rows}:
+        own = [row for row in rows if row["participant_code"] == code]
+        conditions = [row["condition"] for row in own]
+        shuffler.shuffle(conditions)
+        for row, condition in zip(own, conditions, strict=True):
+            row["condition"] = condition
+    folder.mkdir(parents=True)
+    path = folder / ALLOCATION_NAME
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        handle.write("\n".join(comments) + "\n")
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
+
+
+def demo_config(loaded: Config, speed: float) -> Config:
+    """The configuration a demonstration runs with: a fresh folder with its own shuffled
+    allocation, the mock garment, every keyboard the remote, real-time settings kept."""
     demo = loaded.study1["demo"]
-    folder = resolved(demo["data_folder"]) / Clock().filename_stamp()
-    config = with_session_choices(loaded, folder, garment or DEMO_GARMENT)
-    design = {**config.study1["design"], "allocation_file": demo["allocation_file"]}
+    assert REAL_TIME_SPEED <= speed <= float(demo["max_clock_speed"]), (
+        f"a demonstration runs at 1 to demo.max_clock_speed, not {speed}"
+    )
+    folder = run_folder(demo)
+    allocation = shuffled_allocation(resolved(demo["allocation_file"]), folder)
+    config = with_session_choices(loaded, folder, DEMO_GARMENT)
+    hardware = with_key_source(config.hardware, ANY_KEYBOARD)
+    # The study's own folder, whose instance lock a demonstration holds (`lock_folder`), so
+    # one never runs beside a session, or beside another demonstration.
+    study_folder = str(resolved(loaded.hardware["data"]["folder"]))
+    hardware = {**hardware, "data": {**hardware["data"], "study_folder": study_folder}}
+    design = {**config.study1["design"], "allocation_file": str(allocation)}
     study1 = {**real_time_settings(config.study1, speed), "design": design}
-    return Config(**{**config.__dict__, "study1": study1})
+    return Config(**{**config.__dict__, "hardware": hardware, "study1": study1})
+
+
+def lock_folder(config: Config, data_folder: Path) -> Path:
+    """The folder whose instance lock a session holds: its own, or for a demonstration the
+    study's, so the two never run at once (`demo_config`)."""
+    study_folder = config.hardware["data"].get("study_folder")
+    return data_folder if study_folder is None else Path(study_folder)
 
 
 class Demo(QObject):
@@ -93,6 +161,9 @@ class Demo(QObject):
     def __init__(self, runner: SessionRunner, participant_mode: str, experimenter_mode: str,
                  seed: int):
         super().__init__(runner)
+        from sim.experimenters import VirtualExperimenter
+        from sim.responders import VirtualParticipant
+
         self.runner = runner
         rig = runner.rig
         self.session = rig.session
@@ -103,9 +174,11 @@ class Demo(QObject):
         # Always running: when it does not act, it still reads what each cue applied, so a
         # simulated participant beside a person at the experimenter screen can feel it.
         self.experimenter = VirtualExperimenter(rig, self.participant, parent=self)
+        self.experimenter.rerun_reason = RERUN_REASON
         self.experimenter.start()
-        self.participant_mode = OFF
-        self.experimenter_mode = OFF
+        # None until set, so the starting modes are logged too, a person's included.
+        self.participant_mode: str | None = None
+        self.experimenter_mode: str | None = None
         self._before_finish: tuple[str, str] | None = None
         # Its window, kept here so it lives as long as the demonstration (run_session.py).
         self.controls: DemoControls | None = None
@@ -125,7 +198,7 @@ class Demo(QObject):
                 )
             else:
                 self.participant.set_pace(0.0, 0.0)
-            if self.participant_mode == OFF:
+            if self.participant_mode in (None, OFF):
                 self.participant.start()
         self._log_mode("participant", self.participant_mode, mode)
         self.participant_mode = mode
@@ -137,7 +210,12 @@ class Demo(QObject):
         self._log_mode("experimenter", self.experimenter_mode, mode)
         self.experimenter_mode = mode
 
-    def _log_mode(self, who: str, before: str, after: str) -> None:
+    def choose(self, who: str, mode: str) -> None:
+        """A mode chosen in the Demo controls: kept, even past Finish this stage."""
+        self._before_finish = None
+        (self.set_participant if who == "participant" else self.set_experimenter)(mode)
+
+    def _log_mode(self, who: str, before: str | None, after: str) -> None:
         if before != after:
             self.session.log("demo_simulation", detail=f"{who}: {after}")
 
@@ -149,11 +227,18 @@ class Demo(QObject):
         return skipped_s
 
     def finish_stage(self) -> None:
-        """Both simulations, fast, until the next stage starts; then as they were."""
+        """Both simulations, fast, until the next stage starts; then as they were. A timed
+        wait the stage is in is skipped too, since being fast does not shorten it."""
         if self._before_finish is None:
             self._before_finish = (self.participant_mode, self.experimenter_mode)
         self.set_participant(FAST)
         self.set_experimenter(FAST)
+        self.skip_wait()
+
+    @property
+    def finishing(self) -> bool:
+        """Whether Finish this stage is running the stage now under way."""
+        return self._before_finish is not None
 
     def _stage_started(self, _stage_id: str) -> None:
         if self._before_finish is not None:
@@ -162,29 +247,28 @@ class Demo(QObject):
             self.set_participant(participant_mode)
             self.set_experimenter(experimenter_mode)
 
-    @property
-    def finishing(self) -> bool:
-        """Whether Finish this stage is running the stage now under way."""
-        return self._before_finish is not None
-
     def stop(self) -> None:
         self.participant.stop()
         self.experimenter.stop()
 
 
 class DemoControls(QWidget):
-    """The Demo controls window, beside the experimenter screen. Experimenter text only."""
+    """The Demo controls window, beside the experimenter screen. Experimenter text only.
 
-    def __init__(self, demo: Demo, text: dict):
-        super().__init__()
+    A tool window of the experimenter's: it closes with it, and never keeps the program
+    running once the session's own windows are gone.
+    """
+
+    def __init__(self, demo: Demo, text: dict, parent: QWidget | None = None):
+        super().__init__(parent, Qt.Tool)
         self.demo = demo
         words = text["demo"]
         self.words = words
         self.setWindowTitle(words["title"])
         self.setStyleSheet(stylesheet())
 
-        self.participant_mode = self._modes(demo.participant_mode, demo.set_participant)
-        self.experimenter_mode = self._modes(demo.experimenter_mode, demo.set_experimenter)
+        self.participant_mode = self._modes("participant", demo.participant_mode)
+        self.experimenter_mode = self._modes("experimenter", demo.experimenter_mode)
         self.skip_button = button(words["skip_wait"])
         self.skip_button.clicked.connect(self.skip_wait)
         self.finish_button = button(words["finish_stage"])
@@ -207,12 +291,12 @@ class DemoControls(QWidget):
         layout.addWidget(self.finish_button)
         layout.addWidget(self.status)
 
-    def _modes(self, current: str, choose) -> QComboBox:
+    def _modes(self, who: str, current: str) -> QComboBox:
         modes = sized(QComboBox(), SIZE_BODY)
         for mode in MODES:
             modes.addItem(self.words["modes"][mode], mode)
         modes.setCurrentIndex(MODES.index(current))
-        modes.currentIndexChanged.connect(lambda index: choose(MODES[index]))
+        modes.currentIndexChanged.connect(lambda index: self.demo.choose(who, MODES[index]))
         return modes
 
     def skip_wait(self) -> None:

@@ -394,10 +394,11 @@ class SessionRunner(Procedure):
     def _run_stage(self, index: int) -> None:
         self.stage_index = index
         stage = self.stages[index]
-        self.stage_started.emit(stage.id)
         if self.session.phase != stage.phase:
             self.session.set_phase(stage.phase)
         self.session.log("stage_started", detail=stage.id)
+        # After the row, so what a listener logs falls inside the stage it belongs to.
+        self.stage_started.emit(stage.id)
         # Each stage draws from a stream of its own, derived from the seed and the stage id
         # (docs/LOG.md N7.D13). A string seed is hashed the same in every process, unlike
         # `hash()`, so a session is reproducible from its seed alone, and a resume draws for
@@ -963,6 +964,7 @@ class SessionRunner(Procedure):
         if skipped_s <= 0:
             return None
         self.session.clock.skip(skipped_s)
+        self.session.garment.skip(skipped_s)
         # The wait's own check and the alerts were timed for the old clock: run them now.
         self._timer.stop()
         self._fire()

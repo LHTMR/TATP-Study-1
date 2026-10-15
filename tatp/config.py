@@ -51,7 +51,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "demo.allocation_file", str, None, None),
     ("study1.yaml", "demo.data_folder", str, None, None),
     ("study1.yaml", "demo.pattern_folder", str, None, None),
-    ("study1.yaml", "demo.clock_speed", NUMBER, 0, None),
+    ("study1.yaml", "demo.clock_speed", NUMBER, 1, None),
     ("study1.yaml", "demo.max_clock_speed", NUMBER, 1, None),
     ("study1.yaml", "demo.skip_lead_s", NUMBER, 0, None),
     ("study1.yaml", "demo.participant_reaction_s", NUMBER, 0, None),

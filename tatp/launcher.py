@@ -64,7 +64,7 @@ from PySide6.QtWidgets import (
 
 from tatp import config as cfg
 from tatp import schedule as sched
-from tatp.demo import DEMO_GARMENT, MODES, OFF, demo_config, resolved
+from tatp.demo import DEMO_GARMENT, MODES, OFF, REAL_TIME_SPEED, demo_config, resolved
 from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
 from tatp.session import DRIVERS, canonical_initials, with_session_choices
@@ -107,9 +107,6 @@ RESUME_ANSWERS = {QDialog.DialogCode.Accepted.value: True, NEW_SESSION: False}
 
 # Where every pattern folder is kept, and where Browse opens for an empty pattern folder field.
 PATTERNS_DIR = cfg.CONFIG_DIR / "patterns"
-
-# The slowest a demonstration runs: real time, as a participant meets every interval.
-REAL_TIME_SPEED = 1.0
 
 LAUNCHER_WIDTH_PX = 720
 PREVIEW_WIDTH_PX = 900
@@ -214,6 +211,7 @@ class SessionDialog(QDialog):
         # A demonstration's settings (study1.yaml demo) when this is Run a demo, else None.
         self.demo = demo
         self.findings: list[Finding] = []
+        self.checked_config: cfg.Config | None = None
         words = text["launcher"]
         self.title_text = words["demo_title" if demo is not None else "session_title"]
         self.setWindowTitle(self.title_text)
@@ -341,8 +339,9 @@ class SessionDialog(QDialog):
         self.pattern_folder.setText(str(resolved(demo["pattern_folder"])))
         self.form.setRowVisible(self.data_folder.parentWidget(), False)
         self.form.setRowVisible(self.redcap_form, False)
-        # Nothing is worn at a demonstration unless chosen otherwise.
+        # Nothing is worn at a demonstration (tatp/demo.py): shown, not chosen.
         self.garment.setCurrentIndex(self.garment.findData(DEMO_GARMENT))
+        self.garment.setEnabled(False)
         self.demo_speed = sized(QDoubleSpinBox(), SIZE_BODY)
         self.demo_speed.setRange(REAL_TIME_SPEED, float(demo["max_clock_speed"]))
         self.demo_speed.setValue(float(demo["clock_speed"]))
@@ -463,7 +462,7 @@ class SessionDialog(QDialog):
         demonstration's own (tatp/demo.py), with a fresh folder each time."""
         loaded = self._load(args.participant_language, args.experimenter_language)
         if args.demo:
-            return demo_config(loaded, args.clock_speed, args.garment)
+            return demo_config(loaded, args.clock_speed)
         return with_session_choices(loaded, args.data_folder, args.garment)
 
     # -- check, then start ------------------------------------------------------------
@@ -477,7 +476,10 @@ class SessionDialog(QDialog):
             self.start_button.setEnabled(False)
             return False
         args = self.args()
-        self.findings = list(self._preflight(self.config(args), args))
+        # Kept for Start, so the session is the one checked: a demonstration's configuration
+        # is a fresh folder each time it is built.
+        self.checked_config = self.config(args)
+        self.findings = list(self._preflight(self.checked_config, args))
         refusals, warnings = [], []
         for severity, key, value in self.findings:
             if key == RESUME_KEY:
@@ -542,7 +544,7 @@ class SessionDialog(QDialog):
             args.resume = self.ask_resume(offer[0])
             if args.resume is None:
                 return
-        self._start(self.config(args), args)
+        self._start(self.checked_config, args)
         self.accept()
 
     def ask_resume(self, value: dict) -> bool | None:

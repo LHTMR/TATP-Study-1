@@ -30,7 +30,18 @@ from tatp import preflight as pre
 from tatp import resume as resumption
 from tatp import schedule
 from tatp.clock import ISO_FORMAT, Clock
-from tatp.demo import FAST, MODES, OFF, WATCH, Demo, DemoControls, demo_config, resolved
+from tatp.demo import (
+    FAST,
+    MODES,
+    OFF,
+    REAL_TIME_SPEED,
+    WATCH,
+    Demo,
+    DemoControls,
+    demo_config,
+    lock_folder,
+    resolved,
+)
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import (
@@ -133,8 +144,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         )
     args = parser.parse_args(argv)
     if args.demo:
+        # What a demonstration decides itself, refused rather than quietly overridden.
         if args.participant is not None:
             parser.error("a demonstration has its own participant code; omit --participant")
+        if args.garment is not None:
+            parser.error("a demonstration always runs on the mock garment; omit --garment")
+        if args.clock_speed != REAL_TIME_SPEED:
+            parser.error("a demonstration's speed is --demo-speed, not --clock-speed")
+        if args.redcap_form_completed:
+            parser.error("a demonstration has no REDCap form; omit --redcap-form-completed")
     else:
         if args.participant is None or args.patterns is None:
             parser.error("--participant and --patterns are required, except for a "
@@ -158,6 +176,14 @@ def preflight(config: cfg.Config, args: argparse.Namespace) -> list[pre.Finding]
     findings = pre.preflight(
         config, args.participant, args.session, args.experimenter, data_folder
     )
+    locked = lock_folder(config, data_folder)
+    if locked != data_folder:
+        # A demonstration: refused here, as build would, while a session runs.
+        probe = pre.InstanceLock(locked)
+        if probe.acquire():
+            probe.release()
+        else:
+            findings.append(pre.Finding(pre.REFUSE, "preflight.another_instance", str(locked)))
     open_session = resumption.find_open_session(data_folder, args.participant, args.session)
     if open_session is not None:
         summary = resume_summary(config, open_session)
@@ -205,7 +231,7 @@ def build(
     they are.
     """
     data_folder = pre.data_folder_for(config)
-    lock = pre.InstanceLock(data_folder)
+    lock = pre.InstanceLock(lock_folder(config, data_folder))
     if not lock.acquire():
         raise SessionError(f"another session is running from {data_folder} ({lock.path})")
     handed_over = False
@@ -344,16 +370,22 @@ def demo_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:
     args.clock_speed = (
         float(settings["clock_speed"]) if args.demo_speed is None else args.demo_speed
     )
+    highest = float(settings["max_clock_speed"])
+    if not REAL_TIME_SPEED <= args.clock_speed <= highest:
+        raise SystemExit(f"--demo-speed must be {REAL_TIME_SPEED:g} to {highest:g} "
+                         f"(study1.yaml demo.max_clock_speed), not {args.clock_speed:g}")
     args.participant = settings["participant_code"]
     if args.patterns is None:
         args.patterns = resolved(settings["pattern_folder"])
-    return demo_config(loaded, args.clock_speed, args.garment)
+    return demo_config(loaded, args.clock_speed)
 
 
 def attach_demo(runner: SessionRunner, args: argparse.Namespace) -> Demo:
     """The simulations and the Demo controls, beside a built demonstration session."""
     demo = Demo(runner, args.sim_participant, args.sim_experimenter, runner.session.rng_seed)
-    demo.controls = DemoControls(demo, runner.session.config.experimenter_text)
+    demo.controls = DemoControls(
+        demo, runner.session.config.experimenter_text, parent=runner.rig.experimenter
+    )
     demo.controls.show()
     return demo
 

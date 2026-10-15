@@ -278,6 +278,13 @@ class GarmentController(ABC):
             # (`patterns.loop_events`).
             self._pattern_events = self._later_cycle_events
 
+    def skip(self, seconds: float) -> None:
+        """Session time moved on at once, by a demonstration's Skip the wait (tatp/demo.py).
+        A playing pattern carries on from where it was, rather than delivering every cycle the
+        skip passed over in one tick -- thousands of commands, and a flooded serial link."""
+        if self._pattern_start_s is not None:
+            self._pattern_start_s += seconds
+
     def stop_pattern(self) -> None:
         """Stop the pattern and return every channel it left on to off."""
         if self._pattern is None:

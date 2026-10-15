@@ -622,7 +622,7 @@ class VirtualParticipant(QObject):
         # session would wait for a second press that a person gives and this never would.
         if action is Action.CONFIRM and self.window.confirm_would_carry_over():
             wait_ms = self.window.clock.scaled_ms(self.window.confirm_lockout_remaining_s())
-            QTimer.singleShot(wait_ms + LOCKOUT_MARGIN_MS, self, lambda: self.tap(action))
+            QTimer.singleShot(wait_ms + LOCKOUT_MARGIN_MS, self, self._deferred_confirm)
             return
         # One stamp for both edges: a tap is instant, and stamping the release when it is sent
         # would put however long the press handler took into the thumb's hold -- the very
@@ -630,6 +630,12 @@ class VirtualParticipant(QObject):
         stamp_ms = self._now_ms()
         self._send(action, QEvent.KeyPress, stamp_ms)
         self._send(action, QEvent.KeyRelease, stamp_ms)
+
+    def _deferred_confirm(self) -> None:
+        # Not if this participant has stopped meanwhile: a demonstration may have handed the
+        # remote to a person, whose screen this press is not.
+        if self._timer.isActive():
+            self.tap(Action.CONFIRM)
 
     def hold(self, action: Action) -> None:
         self._send(action, QEvent.KeyPress, self._now_ms())
