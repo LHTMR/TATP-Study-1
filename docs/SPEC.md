@@ -691,8 +691,9 @@ language.
   position (S, 15 Oct 2026, replacing a filled circle that signalled the same start but needed
   explaining). The touch calibration's zero-pressure catch trials are cued exactly as real
   trials are (§9), so what matters is that the cueing is identical, not what the cue says. It
-  is identical in every condition (§16). The audible cue is sounded from the same signal, so the two cannot
-  come apart.
+  is identical in every condition (§16). The audible cue is sounded from the same signal, so the
+  two cannot come apart, except before the noise starts and while it is stopped, when the cue
+  is visual only (§10.9, `Audio.participant_cue`).
 - **Continuous white noise** to the participant's headphones at a configured level, with an
   **alert tone mixed over it** as the cue.
 - Separate lab-side alerts for the experimenter — block due, rekindle approaching — which must
