@@ -4,7 +4,7 @@
 **Milestone:** 6 (pilotable), in progress, in lab piloting. Everything to date is in `main`.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
 back (`CLAUDE.md`, Committing). `accel/integration` is finished and no longer used. Open:
-`pilot/falls-unlimited`, the rate limit on rises only (LOG N7.D21), not yet reviewed or merged.
+`pilot/remote-raw-input`, the remote told from the experimenter's keyboard (LOG N7.D22).
 
 ---
 
@@ -72,7 +72,7 @@ fix (adjustment presses timed from their key events) and the RNG question, decid
   - low-confidence decisions N7.C2, N7.B2 and N7.D8.
 - **Open items still S's:** L11, the rehearsal pressure; L13, the noise ceiling and the cue; L3,
   alert metering; L14, a lost sleeve link; **L15, the participant's stop typed into a focused
-  experimenter text field (a safety gap, decide before piloting).**
+  experimenter text field: fixed by N7.D22, closes when the lab check N2.10 passes.**
 
 ---
 
@@ -121,7 +121,9 @@ fix (adjustment presses timed from their key events) and the RNG question, decid
        counts as ▶;
      - whether the alerts are audible over the noise;
      - taps on the adjustment are never lost or misread (N2.9).
-3. **Review and merge `pilot/falls-unlimited` into `main`.**
+3. **Review and merge `pilot/remote-raw-input`, then run the lab check N2.10** with the R400
+   and the laptop keyboard. If it fails, `responder.key_source: any_keyboard` restores the old
+   routing.
 4. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
 5. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
    Milestone 6 done.

@@ -288,13 +288,89 @@ def test_a_forwarded_key_keeps_its_timestamp(rig):
 
 
 def test_typing_in_an_experimenter_field_is_not_taken_for_the_remote(rig):
-    """The stop key is a full stop, which the experimenter types in notes and distances."""
+    """Under any_keyboard: the stop key is a full stop, which the experimenter types in notes
+    and distances, and nothing tells the two apart (docs/LOG.md N7.I1)."""
     rig.participant.show()
     field = QLineEdit()
     field.show()
     rig.participant.show_message("welcome")
     _key(field, QT_KEYS["period"], QEvent.KeyPress)
     assert rig.interruptions.active is None
+
+
+class _Keyboards:
+    """A key source that knows the device, as Raw Input does: `remote` says which it was."""
+
+    distinguishes = True
+
+    def __init__(self):
+        self.remote = True
+
+    def from_remote(self, event) -> bool:
+        return self.remote
+
+
+def test_the_remotes_stop_works_while_the_experimenter_is_typing(rig):
+    """Under raw_input the participant's stop is never typed into a field (open item L15)."""
+    keyboards = _Keyboards()
+    rig._remote_keys.source = keyboards
+    rig.participant.show()
+    field = QLineEdit()
+    field.show()
+    rig.participant.show_message("welcome")
+    _key(field, QT_KEYS["period"], QEvent.KeyPress)
+    assert rig.interruptions.active == "emergency_stop"
+    assert field.text() == ""
+
+
+def test_the_experimenters_full_stop_is_typed_not_a_stop(rig):
+    keyboards = _Keyboards()
+    keyboards.remote = False
+    rig._remote_keys.source = keyboards
+    rig.participant.show()
+    field = QLineEdit()
+    field.show()
+    rig.participant.show_message("welcome")
+    QApplication.sendEvent(
+        field, QKeyEvent(QEvent.KeyPress, QT_KEYS["period"], Qt.NoModifier, ".")
+    )
+    assert rig.interruptions.active is None
+    assert field.text() == ".", "typed into the field, not swallowed"
+
+
+def test_a_forwarded_key_is_not_asked_about_again(rig):
+    """The router's own copy is not a keystroke, so it must not spend the next one's verdict."""
+    asked = []
+
+    class Counting(_Keyboards):
+        def from_remote(self, event):
+            asked.append(event.key())
+            return True
+
+    rig._remote_keys.source = Counting()
+    rig.participant.show()
+    elsewhere = QPushButton()
+    elsewhere.show()
+    rig.participant.show_message("welcome")
+    _key(elsewhere, QT_KEYS["f5"], QEvent.KeyPress)
+    assert asked == [QT_KEYS["f5"]]
+
+
+def test_the_experimenters_keyboard_never_answers_for_the_participant(rig):
+    """Esc or F5 on the experimenter's keyboard is not ▶, even aimed at the participant."""
+    keyboards = _Keyboards()
+    keyboards.remote = False
+    rig._remote_keys.source = keyboards
+    rig.participant.show()
+    confirmed = []
+    rig.participant.message_confirmed.connect(lambda: confirmed.append(1))
+    rig.participant.show_message("welcome")
+    _key(rig.participant, QT_KEYS["f5"])
+    _key(QPushButton(), QT_KEYS["escape"])
+    assert confirmed == []
+    keyboards.remote = True
+    _key(rig.participant, QT_KEYS["f5"])
+    assert confirmed == [1]
 
 
 def test_a_deleted_participant_window_takes_its_key_router_with_it(app, loaded, tmp_path):

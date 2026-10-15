@@ -94,6 +94,7 @@ from tatp.config import CONFIG_DIR, REPO_ROOT, hash_files  # noqa: E402
 from tatp.datafiles import parse_schema  # noqa: E402
 from tatp.pinprick import PAIN_SCALE, prior_for  # noqa: E402
 from tatp.procedure import VAS_TRAINING_EXPLAINED  # noqa: E402
+from tatp.remote_keys import ANY_KEYBOARD, with_key_source  # noqa: E402
 from tatp.resume import VAS_TRAINING_CONFIRMED  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
 from tatp.units import MS_PER_S, S_PER_MIN  # noqa: E402
@@ -297,12 +298,14 @@ def run_config(loaded: cfg.Config, folder: Path, scenario: Scenario) -> cfg.Conf
     """The configuration a validator run uses: the loaded one, with the harness's changes.
 
     The data folder is the run's own, the audio is the recording double (there is no sound
-    device headless), the windows go on the one offscreen screen rather than the lab's two, and
+    device headless), every keyboard is the remote (headless has no native windows for Raw
+    Input, tatp/remote_keys.py), the windows go on the one offscreen screen rather than the
+    lab's two, and
     the three real-time settings the module docstring names are scaled back to real time at
     `CLOCK_SPEED`.
     """
     hardware = {
-        **loaded.hardware,
+        **with_key_source(loaded.hardware, ANY_KEYBOARD),
         "data": {**loaded.hardware["data"], "folder": str(folder)},
         "audio": {**loaded.hardware["audio"], "backend": "recording"},
         "screens": {**loaded.hardware["screens"], **HEADLESS_SCREENS},

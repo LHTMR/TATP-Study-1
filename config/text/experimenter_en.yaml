@@ -303,6 +303,10 @@ preflight:
     Session {value} for this participant was started before and aborted. A new session will be
     recorded alongside it.
   another_instance: Another session is already running from this data folder ({value}). Close it first.
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_missing: The participant's remote is not plugged in (no keyboard matching {value}). Plug in its receiver, then start again.
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_needs_windows: This computer ({value}) cannot tell the remote from other keyboards. Set responder.key_source to any_keyboard in hardware.yaml, or run the session on the lab PC.
 
 zones:
   # Beside the zone diagram (SPEC.md 11): where the current stimulus goes.
@@ -590,8 +594,13 @@ hardware_check:
   title: Check the hardware
   remote: Remote
   remote_hint: Press each button; its own count should go up. ▶ sends two keys in turn, and both count.
-  remote_none: No press yet.
   remote_last: 'Last press: {symbol} ({value})'
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_found: Remote found; only it counts.
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_missing: 'Remote not found: plug it in.'
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_any_keyboard: Any keyboard counts here.
   screens: Screens
   role_participant: Participant screen
   role_experimenter: Experimenter screen

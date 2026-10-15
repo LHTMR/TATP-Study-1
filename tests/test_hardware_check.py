@@ -63,6 +63,29 @@ def test_a_held_button_counts_once(check):
     assert check.presses[Action.INCREASE] == 1
 
 
+class _OtherKeyboard:
+    """A key source that knows the device, as Raw Input does, and says: not the remote."""
+
+    distinguishes = True
+
+    def from_remote(self, event) -> bool:
+        return False
+
+
+def test_only_the_remotes_presses_count(check):
+    """Under raw_input the check shows the split working: the same keys on the experimenter's
+    keyboard count for nothing (docs/LOG.md N7.D22)."""
+    check.remote_keys.source = _OtherKeyboard()
+    for name in ("pageup", "pagedown", "f5", "period"):
+        _press(check.close_button, name)
+    assert set(check.presses.values()) == {0}
+
+
+def test_the_check_says_every_keyboard_counts_when_it_cannot_tell(check, loaded):
+    words = loaded.experimenter_text["hardware_check"]
+    assert check.last_key.text() == words["remote_any_keyboard"]
+
+
 def test_the_play_buttons_escape_does_not_close_the_check(check):
     """Every other ▶ is escape; it is a press to count, not Qt's 'close this dialog'."""
     _press(check, "escape")

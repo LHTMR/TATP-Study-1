@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import pytest
+import yaml
 
 from tatp import config as cfg
 from tatp import preflight as pre
 from tatp.clock import Clock
+from tatp.remote_keys import RAW_INPUT, with_key_source
 from tatp.session import Session
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
@@ -117,12 +119,46 @@ def test_a_second_instance_is_refused_and_the_lock_frees_on_release(config):
     assert pre.preflight(config, "01", 1, "SM", folder) == []
 
 
+def _raw_input(config):
+    hardware = with_key_source(config.hardware, RAW_INPUT)
+    return cfg.Config(**{**config.__dict__, "hardware": hardware})
+
+
+def test_a_session_that_needs_the_remote_is_refused_without_it(config, monkeypatch):
+    """Under raw_input no other keyboard is the participant's, so without the remote nobody
+    could stop the garment from the participant's side (docs/LOG.md N7.D22)."""
+    monkeypatch.setattr(pre, "raw_input_available", lambda: True)
+    monkeypatch.setattr(pre, "remote_present", lambda responder: False)
+    config = _raw_input(config)
+    findings = pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config))
+    assert findings == [pre.Finding(pre.REFUSE, "preflight.remote_missing",
+                                    config.hardware["responder"]["device_match"])]
+    monkeypatch.setattr(pre, "remote_present", lambda responder: True)
+    assert pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config)) == []
+
+
+def test_raw_input_off_windows_is_refused_before_anything_is_written(config, monkeypatch):
+    monkeypatch.setattr(pre, "raw_input_available", lambda: False)
+    config = _raw_input(config)
+    findings = pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config))
+    assert findings == [
+        pre.Finding(pre.REFUSE, "preflight.remote_needs_windows", pre.sys.platform)
+    ]
+
+
+def test_the_lab_tells_the_remote_from_other_keyboards():
+    """The tests run with any_keyboard (conftest.py); the lab's own setting is raw_input."""
+    lab = yaml.safe_load((cfg.CONFIG_DIR / "hardware.yaml").read_text(encoding="utf-8"))
+    assert lab["responder"]["key_source"] == RAW_INPUT
+
+
 def test_every_finding_has_its_text_in_both_languages(loaded):
     english = cfg.load("sv", "en").experimenter_text
     swedish = cfg.load("sv", "sv").experimenter_text
     for key in ("preflight.code_not_allocated", "preflight.session_completed",
                 "preflight.session_aborted_before", "preflight.previous_session_missing",
-                "preflight.another_instance", "warnings.experimenter_changed"):
+                "preflight.another_instance", "preflight.remote_missing",
+                "preflight.remote_needs_windows", "warnings.experimenter_changed"):
         for text in (english, swedish):
             node = text
             for part in key.split("."):

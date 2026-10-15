@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
 from tatp.audio import Audio, AudioError
 from tatp.clock import Clock
 from tatp.garment.base import GarmentController, GarmentError, Limits
+from tatp.remote_keys import RAW_INPUT, key_source, remote_present
 from tatp.responder import Action, Responder
 from tatp.session import DRIVERS
 from tatp.ui.vas import QT_KEYS
@@ -114,18 +115,25 @@ def device_lines(audio_config: dict, words: dict, sd) -> tuple[list[str], str]:
 class RemoteKeys(QObject):
     """Takes the remote's keys from every window while the check is open, and counts them."""
 
-    def __init__(self, responder: Responder, on_press: Callable[[str, Action], None],
+    def __init__(self, responder: Responder, source, on_press: Callable[[str, Action], None],
                  parent: QObject | None = None):
         super().__init__(parent)
         self.responder = responder
+        self.source = source
         self.on_press = on_press
         self._names = {QT_KEYS[name]: name for name in responder.keys}
 
     def eventFilter(self, watched, event) -> bool:  # noqa: N802 -- Qt's name
         if event.type() not in (QEvent.KeyPress, QEvent.KeyRelease):
             return False
+        # Asked of every key, so each keystroke's verdict is used up in turn (as the router).
+        from_remote = self.source.from_remote(event)
         name = self._names.get(Qt.Key(event.key()))
         if name is None:
+            return False
+        # Another keyboard's key is not the remote's, so it does not count, and passes through:
+        # the same split the session makes, put where the experimenter can see it work.
+        if self.source.distinguishes and not from_remote:
             return False
         # A held button repeats; the count is of presses, as the session's own handling is.
         if event.type() == QEvent.KeyPress and not event.isAutoRepeat():
@@ -149,7 +157,6 @@ class HardwareCheckDialog(QDialog):
 
         self.responder = Responder(hardware)
         self.presses: dict[Action, int] = {action: 0 for action in Action}
-        self.remote_keys = RemoteKeys(self.responder, self.pressed, self)
 
         audio_config = hardware["audio"]
         self.audio = Audio(audio_config, self.clock, lambda *_, **__: None)
@@ -187,6 +194,9 @@ class HardwareCheckDialog(QDialog):
         fit_to_screen(self, HARDWARE_CHECK_WIDTH_PX, HARDWARE_CHECK_HEIGHT_PX)
         # Last, once nothing above can raise: a filter installed by a dialog that failed to
         # build would never be removed, and would swallow every remote press in a later session.
+        # Nothing to log in the check: an unmatched key shows as a laptop key that counts.
+        self.key_source = key_source(hardware["responder"], self, lambda: None)
+        self.remote_keys = RemoteKeys(self.responder, self.key_source, self.pressed, self)
         QApplication.instance().installEventFilter(self.remote_keys)
 
     # -- sections ------------------------------------------------------------------------
@@ -216,11 +226,20 @@ class HardwareCheckDialog(QDialog):
         self.press_labels: dict[Action, QLabel] = {}
         for action in Action:
             self.press_labels[action] = label(SIZE_LARGE)
+        # Until the first press, whether the remote is told from other keyboards. The column
+        # has no height for another line, and with the remote missing nothing counts, so the
+        # warning stays up.
         self.last_key = label(SIZE_SMALL, colour=SECONDARY)
-        self.last_key.setText(self.words["remote_none"])
+        self.last_key.setText(self._remote_source_line())
         section.addLayout(self._row(*self.press_labels.values(), self.last_key))
         self._show_presses()
         return section
+
+    def _remote_source_line(self) -> str:
+        responder = self.hardware["responder"]
+        if responder["key_source"] != RAW_INPUT:
+            return self.words["remote_any_keyboard"]
+        return self.words["remote_found" if remote_present(responder) else "remote_missing"]
 
     def _screens(self) -> QVBoxLayout:
         section = self._heading("screens")
@@ -480,6 +499,7 @@ class HardwareCheckDialog(QDialog):
     def release(self, *_result) -> None:
         """Everything let go, by Close, Esc from the keyboard or the window's own X."""
         QApplication.instance().removeEventFilter(self.remote_keys)
+        self.key_source.close()
         self._hide_label()
         if self.audio.noise_running:
             self.audio.stop_noise("hardware check closed")

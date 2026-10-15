@@ -3,7 +3,8 @@
 `preflight` answers the adversarial experimenters of SPEC.md 17.5 before anything is written:
 
 - **Refused:** a session that has already been completed; a participant code the allocation
-  file does not have; a second instance while one is running from the same data folder.
+  file does not have; a second instance while one is running from the same data folder; the
+  remote not plugged in, when the session tells it from other keyboards (`raw_input`).
 - **Warned, and allowed:** session N when session N-1 has no data; initials that differ from
   the participant's earlier sessions (SPEC.md 11); a session that was started and aborted
   before. A warning is the experimenter's to read, and the deviation lands in the data.
@@ -25,6 +26,7 @@ from typing import NamedTuple
 
 from tatp import allocation as alloc
 from tatp.config import REPO_ROOT, Config
+from tatp.remote_keys import KEY_SOURCES, RAW_INPUT, raw_input_available, remote_present
 from tatp.resume import previous_session_f40, read_session_values, session_files
 from tatp.session import earlier_experimenters
 
@@ -151,6 +153,22 @@ def preflight(
         probe.release()
     else:
         findings.append(Finding(REFUSE, "preflight.another_instance", str(probe.path)))
+
+    # Without the remote, `raw_input` would take no key as the participant's, emergency stop
+    # included, so a session must not start (docs/LOG.md N7.D22).
+    # Checked here rather than when the session's rig is built, which is after its files are
+    # written: a refusal leaves nothing behind.
+    responder = config.hardware["responder"]
+    assert responder["key_source"] in KEY_SOURCES, (
+        f"responder.key_source is {responder['key_source']!r}; one of {KEY_SOURCES}"
+    )
+    if responder["key_source"] == RAW_INPUT:
+        if not raw_input_available():
+            findings.append(Finding(REFUSE, "preflight.remote_needs_windows", sys.platform))
+        elif not remote_present(responder):
+            findings.append(
+                Finding(REFUSE, "preflight.remote_missing", responder["device_match"])
+            )
     return findings
 
 

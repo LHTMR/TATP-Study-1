@@ -51,6 +51,7 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication
 
 from tatp.interruption import Interruptions
+from tatp.remote_keys import key_source
 from tatp.session import Session
 from tatp.trials import VasTraining
 from tatp.ui.experimenter import ExperimenterWindow
@@ -61,6 +62,7 @@ from tatp.units import MS_PER_S
 VAS_TRAINING_SHOWN = "vas_training_shown"
 VAS_TRAINING_EXPLAINED = "vas_training_explained"
 VAS_TRAINING_INSTRUCTION = "vas_training"
+REMOTE_KEY_UNMATCHED = "remote_key_unmatched"
 
 
 class Rig(QObject):
@@ -85,7 +87,11 @@ class Rig(QObject):
         # outlive the window it points at -- the rig sits in reference cycles, so its end is
         # the garbage collector's timing -- and a key event anywhere then reached a filter
         # whose window was gone (docs/LOG.md N7.I3).
-        self._remote_keys = RemoteKeyRouter(participant, participant)
+        source = key_source(
+            session.config.hardware["responder"], participant,
+            lambda: session.log(REMOTE_KEY_UNMATCHED, severity="warning"),
+        )
+        self._remote_keys = RemoteKeyRouter(participant, source, participant)
         QApplication.instance().installEventFilter(self._remote_keys)
         # SPEC.md 10.5: the audible cue sounds with the visual one, from one signal, so no
         # protocol can show the one and forget the other.
