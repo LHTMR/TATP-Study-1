@@ -11,10 +11,22 @@ string comes from `config/text/participant_{sv,en}.yaml` (SPEC.md 10.4).
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from PySide6.QtCore import QPointF, QRect, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QPolygonF
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetrics,
+    QFontMetricsF,
+    QPainter,
+    QPen,
+    QPolygonF,
+    QTextCharFormat,
+    QTextLayout,
+    QTextOption,
+)
 from PySide6.QtWidgets import QWidget
 
 from tatp.clock import Clock
@@ -26,6 +38,12 @@ from tatp.units import MS_PER_S
 # screenshots are what pins them (SPEC.md 17.4).
 BACKGROUND = QColor(20, 20, 20)
 FOREGROUND = QColor(235, 235, 235)
+# How every block of participant text is laid out: `draw_prose` draws it, and `boundingRect`
+# measures it, with these.
+PROSE_FLAGS = Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap
+# What `drawText` turns a newline into before laying text out.
+LINE_SEPARATOR = "\N{LINE SEPARATOR}"
+UTF16_UNIT_BYTES = 2
 LINE_WIDTH_PX = 3
 MARKER_HALF_WIDTH_PX = 14
 MARKER_HEIGHT_PX = 22
@@ -59,6 +77,60 @@ ANCHOR_POINT_SIZE = 18
 ANCHOR_GAP_PX = 18
 ANCHOR_LABEL_GAP_PX = 16  # clear space required between two anchor labels sharing a row
 TICK_LABEL_GAP_PX = 6
+
+
+def draw_prose(painter: QPainter, box: QRect, text: str, responder: Responder) -> None:
+    """Participant text, centred and wrapped as `drawText` lays it out, with every play-button
+    symbol in that button's colour (`responder.button_symbol_colours.confirm`; S, lab run
+    5 Oct 2026).
+
+    The one place participant text is coloured, so the approved wording stays plain text and
+    `ParticipantWindow` still finds the symbol in it. `drawText` takes one pen for the whole
+    string, so the text is laid out line by line as Qt's own `drawText` (`qt_format_text`)
+    does it -- the same breaks, each line on the whole pixel at or below the last one's end,
+    clipped to the box and laid out no further than it -- so `boundingRect` with PROSE_FLAGS
+    still measures it, pixel for pixel.
+    """
+    play_symbol = responder.symbol_for(Action.CONFIRM)
+    layout = QTextLayout(text.replace("\n", LINE_SEPARATOR), painter.font(), painter.device())
+    option = QTextOption(Qt.AlignmentFlag(PROSE_FLAGS & Qt.AlignHorizontal_Mask))
+    assert PROSE_FLAGS & Qt.TextWordWrap, "draw_prose lays out wrapped text only"
+    option.setWrapMode(QTextOption.WordWrap)
+    layout.setTextOption(option)
+    coloured = QTextCharFormat()
+    coloured.setForeground(QColor(responder.confirm_colour))
+    ranges = []
+    start = text.find(play_symbol)
+    while start >= 0:
+        span = QTextLayout.FormatRange()
+        # Qt counts UTF-16 code units, Python code points.
+        span.start = _utf16_length(text[:start])
+        span.length = _utf16_length(play_symbol)
+        span.format = coloured
+        ranges.append(span)
+        start = text.find(play_symbol, start + len(play_symbol))
+    layout.setFormats(ranges)
+    leading = QFontMetricsF(painter.font(), painter.device()).leading()
+    height = -leading
+    layout.beginLayout()
+    while (line := layout.createLine()).isValid():
+        line.setLineWidth(max(0, box.width()))
+        height = math.ceil(height + leading)
+        line.setPosition(QPointF(0.0, height))
+        # The line's own extent, not `line.height()`, which is already rounded up: rounding
+        # once per line, where `drawText` does, keeps a fractional leading from accumulating.
+        height += line.ascent() + line.descent()
+        if height >= box.height():
+            break
+    layout.endLayout()
+    painter.save()
+    painter.setClipRect(box, Qt.IntersectClip)
+    layout.draw(painter, QPointF(box.topLeft()))
+    painter.restore()
+
+
+def _utf16_length(text: str) -> int:
+    return len(text.encode("utf-16-le")) // UTF16_UNIT_BYTES
 
 
 # The anchor tick (UI_PRINCIPLES.md 1.4). It straddles the line rather than hanging below it --
@@ -597,7 +669,6 @@ class VasWidget(QWidget):
         """
         top = float(self.height() * QUESTION_Y_FRACTION)
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
-        flags = Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap
         width = self.width() - 2 * margin
 
         y = top
@@ -605,10 +676,10 @@ class VasWidget(QWidget):
             font = QFont(self.font())
             font.setPointSize(point_size)
             box = QRect(margin, int(y), width, int(line_y - y))
-            drawn = QFontMetrics(font).boundingRect(box, flags, text)
+            drawn = QFontMetrics(font).boundingRect(box, PROSE_FLAGS, text)
             if painter is not None:
                 painter.setFont(font)
-                painter.drawText(box, flags, text)
+                draw_prose(painter, box, text, self.responder)
             y = drawn.bottom() + (STATEMENT_GAP_PX if index == 0 else 0)
         return y
 
@@ -651,14 +722,13 @@ class VasWidget(QWidget):
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
         top = int(self.height() * TRAINING_Y_FRACTION)
         box = QRect(margin, top, self.width() - 2 * margin, self.height() - top)
-        flags = Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap
         font = QFont(self.font())
         font.setPointSize(QUESTION_POINT_SIZE)
         if painter is not None:
             painter.setFont(font)
             painter.setPen(FOREGROUND)
-            painter.drawText(box, flags, self.training)
-        return QFontMetrics(font).boundingRect(box, flags, self.training)
+            draw_prose(painter, box, self.training, self.responder)
+        return QFontMetrics(font).boundingRect(box, PROSE_FLAGS, self.training)
 
     def training_clearance(self) -> tuple[float, float]:
         """Pixels from the lowest anchor label to the training text, and from its end to the

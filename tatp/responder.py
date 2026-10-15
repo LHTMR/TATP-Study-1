@@ -34,6 +34,8 @@ class Responder:
         # that is physically under the participant's thumb (UI_PRINCIPLES.md 5.9), so it is read
         # from the device's own configuration rather than written into the screen that draws it.
         self._symbols = dict(block["button_symbols"])
+        # The colour the confirm symbol is drawn in wherever participant text names it.
+        self.confirm_colour = block["button_symbol_colours"][Action.CONFIRM.value]
 
         self._by_key: dict[str, Action] = {}
         for action in Action:

@@ -11,6 +11,7 @@ experimenter may see is decided, and a test asserts the condition is not in it.
 
 from __future__ import annotations
 
+import argparse
 import dataclasses
 import random
 import time
@@ -94,10 +95,23 @@ class SessionError(Exception):
     """The session cannot start or continue as asked. Fatal."""
 
 
+def canonical_initials(initials: str) -> str:
+    """One spelling per experimenter: "sm" and "SM" are the same person (S, lab run 5 Oct).
+
+    Applied wherever initials are compared or stored, and to what earlier files recorded, so
+    a session typed in lower case still matches, and resumes beside, one typed in upper case.
+    Also `run_session.py`'s `--experimenter` type, so blank initials are refused there.
+    """
+    canonical = initials.strip().upper()
+    if not canonical:
+        raise argparse.ArgumentTypeError("experimenter initials are empty")
+    return canonical
+
+
 def earlier_experimenters(
     data_folder: Path, participant_code: str, exclude: Path | None = None
 ) -> set[str]:
-    """Initials recorded in this participant's session files (SPEC.md 11, 14.2).
+    """Initials recorded in this participant's session files (SPEC.md 11, 14.2), canonical.
 
     Shared by the session's own `experimenter_changed` key and the launcher's preflight
     warning (`tatp/preflight.py`), so the two cannot disagree about what "differ" means.
@@ -110,7 +124,7 @@ def earlier_experimenters(
         for line in path.read_text(encoding="utf-8").splitlines():
             key, _, value = line.partition(",")
             if key == "experimenter_initials" and value:
-                found.add(value)
+                found.add(canonical_initials(value))
     return found
 
 
@@ -132,7 +146,8 @@ class Session:
         self.clock = clock or Clock()
         self.participant_code = participant_code
         self.session_number = session_number
-        self.experimenter_initials = experimenter_initials
+        self.experimenter_initials = canonical_initials(experimenter_initials)
+        assert self.experimenter_initials, "experimenter initials are empty"
         self.resumed_from = resumed_from
         self.session_start_iso = self.clock.wall_iso()
 

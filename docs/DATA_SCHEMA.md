@@ -57,8 +57,8 @@ written, with an empty value — an absent row and an empty value must not be co
 | `session_number` | - | 1, 2 or 3 |
 | `condition` | - | `participant_preferred`, `ct_targeted` or `sham`. Recorded, never displayed (§16) |
 | `limb` | - | `left` or `right`, from the allocation file |
-| `experimenter_initials` | - | §11 |
-| `experimenter_changed` | - | `true` if these differ from an earlier session for this participant |
+| `experimenter_initials` | - | §11. Upper case whatever was typed, so `sm` and `SM` are one experimenter. Files written before initials were made canonical (October 2026) may hold mixed case: upper-case the value when reading |
+| `experimenter_changed` | - | `true` if these differ from an earlier session for this participant, ignoring case |
 | `participant_language` | - | `sv` or `en` |
 | `experimenter_language` | - | `sv` or `en` |
 | `rng_seed` | - | Integer seed; each stage draws from `random.Random(f"{rng_seed}:{stage_id}")` (LOG N7.D13) |

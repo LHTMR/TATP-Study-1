@@ -56,6 +56,7 @@ from tatp.ui.vas import (
     QUESTION_Y_FRACTION,
     SIDE_MARGIN_FRACTION,
     VasWidget,
+    draw_prose,
 )
 from tatp.units import MS_PER_S
 
@@ -112,8 +113,9 @@ class _MessageScreen(QWidget):
     is a search on every one of them.
     """
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, responder: Responder, parent: QWidget | None = None):
         super().__init__(parent)
+        self.responder = responder
         self.text = ""
         # Weight rather than wording is what marks the stop screen out from a rest screen
         # (UI_PRINCIPLES.md 5.6). Not colour: an alarming screen is the wrong thing to show
@@ -137,7 +139,7 @@ class _MessageScreen(QWidget):
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
         top = int(self.height() * QUESTION_Y_FRACTION)
         box = self.rect().adjusted(margin, top, -margin, 0)
-        painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.text)
+        draw_prose(painter, box, self.text, self.responder)
         if self.stop_symbol is not None:
             painter.setRenderHint(QPainter.Antialiasing)
             _draw_symbol_button(
@@ -352,7 +354,7 @@ class _ControlScreen(QWidget):
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
         top = int(self.height() * ADJUST_CONFIRM_Y_FRACTION)
         box = self.rect().adjusted(margin, top, -margin, 0)
-        painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.confirm)
+        draw_prose(painter, box, self.confirm, self.responder)
         painter.end()
 
 
@@ -365,7 +367,7 @@ def _draw_top_text(painter: QPainter, widget: QWidget, text: str) -> None:
     margin = int(widget.width() * SIDE_MARGIN_FRACTION)
     top = int(widget.height() * QUESTION_Y_FRACTION)
     box = widget.rect().adjusted(margin, top, -margin, 0)
-    painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, text)
+    draw_prose(painter, box, text, widget.responder)
 
 
 def _button_rect(widget: QWidget, side: str) -> QRect:
@@ -463,7 +465,7 @@ def _draw_button(
         label_width,
         widget.height() - rect.bottom() - BUTTON_LABEL_GAP_PX,
     )
-    painter.drawText(label_box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, label)
+    draw_prose(painter, label_box, label, responder)
 
 
 class ParticipantWindow(QWidget):
@@ -518,7 +520,7 @@ class ParticipantWindow(QWidget):
         self._confirm_lockout_s = float(responder_config["repeat_confirm_lockout_s"])
         self._confirm_accepted_s: float | None = None
 
-        self.message = _MessageScreen()
+        self.message = _MessageScreen(responder)
         self.message.stop_colour = QColor(
             responder_config["button_symbol_colours"]["emergency_stop"]
         )

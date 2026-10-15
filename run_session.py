@@ -32,7 +32,13 @@ from tatp import schedule
 from tatp.clock import ISO_FORMAT, Clock
 from tatp.procedure import Rig
 from tatp.responder import Responder
-from tatp.session import DRIVERS, Session, SessionError, with_session_choices
+from tatp.session import (
+    DRIVERS,
+    Session,
+    SessionError,
+    canonical_initials,
+    with_session_choices,
+)
 from tatp.session_runner import SessionRunner, stage_layout, summary_phase
 from tatp.ui.application import application, scale_screens
 from tatp.ui.experimenter import ExperimenterWindow
@@ -61,7 +67,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a TATP Study 1 session.")
     parser.add_argument("--participant", required=True, help="participant code, e.g. 01")
     parser.add_argument("--session", type=int, required=True, help="session number")
-    parser.add_argument("--experimenter", required=True, help="experimenter initials")
+    parser.add_argument(
+        "--experimenter", required=True, type=canonical_initials,
+        help="experimenter initials, case-insensitive (recorded in upper case)",
+    )
     parser.add_argument(
         "--patterns",
         type=Path,
