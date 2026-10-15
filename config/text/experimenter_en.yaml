@@ -111,13 +111,13 @@ instructions:
   # Read aloud before the first path: `say.mapping`.
   mapping_script: 'Say aloud: "{say[mapping]}"'
   mapping_distances: Measure each border from the centre of the primary zone, and enter the four distances in mm whenever convenient. This never blocks the session.
-  # DRAFT (LOG N7.F11b1): written by the build, not ethics-sourced. The cue is named by its
-  # shape only.
+  # DRAFT (LOG N7.F12g2): written by the build, not ethics-sourced. Nothing about the warning
+  # cue: it is now words ("Get ready"), which explain themselves the first time they appear, so
+  # the sentence the circle needed (N7.F11b1) is gone.
   fit_garment: >-
     Fit the garment and check that all five channels are seated. Give the participant the
     remote and show the buttons: {decrease} {increase} move, {confirm} confirms,
-    {emergency_stop} stops. Put the headphones on. Tell them: "{say[circle]}" Then press
-    {controls[proceed]}.
+    {emergency_stop} stops. Put the headphones on. Then press {controls[proceed]}.
   # DRAFT (LOG N7.F11b2): written by the build, not ethics-sourced
   welcome: >-
     The participant reads the welcome and presses {confirm}. The stop rehearsal follows at
@@ -320,10 +320,6 @@ say:
     I will touch you with this filament, moving a small step at a time towards the marked
     area. Tell me as soon as the feeling clearly changes — burning, tenderness, or a sharper
     pricking.
-  # DRAFT (LOG N7.F11b1): written by the build, not ethics-sourced. The participant welcome's
-  # own words (stream C): it marks a step, and promises no touch -- the estimation run cues its
-  # zero-pressure catch trials too.
-  circle: A white circle on the screen marks the start of each step.
   # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. {minutes} is filled after.
   heat: You will now feel heat on your hand for {minutes} minutes.
   # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced
@@ -334,12 +330,13 @@ say:
   training_scale: There is no touch now. This is the scale you will use.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   rerun: We will do the settings and ratings once more.
-  # DRAFT (LOG N7.F11b14): written by the build, not ethics-sourced. The brush is rated on the
-  # pain scale too (study1.yaml brush.rating_scale).
+  # DRAFT (LOG N7.F12g3): written by the build, not ethics-sourced. The brush is rated on the
+  # pain scale too (study1.yaml brush.rating_scale). The cue is now the text "Get ready"
+  # (N7.F12g1), not a circle; every skin test is a real stimulus, so saying one follows is true.
   first_pain: >-
-    Next I will test the skin with thin plastic filaments and a soft brush. Each time, a circle
-    appears first, then you feel it, then the line appears and you rate how painful it was.
-    This first line is practice.
+    Next I will test the skin with thin plastic filaments and a soft brush. Each time, the
+    screen first tells you to get ready, then you feel it, then the line appears and you rate
+    how painful it was. This first line is practice.
   # DRAFT (LOG N7.F11b13): written by the build, not ethics-sourced. {hours} is filled after.
   intervention: >-
     The next part takes about {hours} hours. You will feel touch from the garment, and in

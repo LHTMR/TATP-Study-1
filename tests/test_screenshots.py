@@ -51,7 +51,7 @@ def test_the_tolerance_is_tight_enough_to_catch_a_word(image):
 def test_the_manifest_round_trips(tmp_path, monkeypatch):
     monkeypatch.setattr(screenshots, "SCREENSHOT_DIR", tmp_path)
     monkeypatch.setattr(screenshots, "MANIFEST_PATH", tmp_path / "manifest.yaml")
-    catalogue = {"participant_sv_cue": "One filled disc, centred."}
+    catalogue = {"participant_sv_cue": "The cue text, centred."}
     screenshots.write_manifest(catalogue)
     assert screenshots.read_manifest() == catalogue
 
