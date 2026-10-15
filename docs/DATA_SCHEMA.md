@@ -148,10 +148,10 @@ screen before it accepts one; and `confirm_carried_over`, a play-button press wi
 `responder.repeat_confirm_lockout_s` of the last one the software accepted, which is ignored
 as a double tap or a bounce rather than taken as the new screen's (docs/LOG.md N7.U15).
 
-`remote_key_unmatched` (severity `warning`) is written once, the first time a key event cannot
-be told to come from the remote or another keyboard (`responder.key_source: raw_input`,
-docs/LOG.md N7.D22). That key, and any later one like it, is taken as the remote's; a session
-with this row may have had the experimenter's keyboard acting for the participant.
+`remote_disconnected` (severity `error`) is written when the participant's remote is unplugged
+or its receiver drops out during a session, and `remote_reconnected` (`warning`) when it comes
+back (`responder.key_source: raw_input`, docs/LOG.md N7.D22). Between the two, nothing the
+participant pressed reached the software, the emergency stop included.
 
 The garment's own events are logged too, because no command wrote them (§14.2): every
 `garment` table `fault` row is also a `garment_fault` row here (severity `error`, the fault in

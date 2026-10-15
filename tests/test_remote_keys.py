@@ -1,101 +1,87 @@
-"""Pairing each key event with the raw report that says which keyboard sent it. LOG N7.D22.
+"""The remote's buttons read from its raw reports, and its key messages paired to be dropped.
+LOG N7.D22.
 
 `RawInputKeyboards` itself needs Windows and a native window, so it is checked in the lab
-(docs/LOG.md N2.10). What can be checked headless is the pairing it relies on: a raw report,
-then the key message it becomes, then the Qt key event made from that message.
+(docs/LOG.md N2.10). What can be checked headless is the two parts it is built from.
 """
 
 from __future__ import annotations
 
-from tatp.remote_keys import Pairing
+import pytest
+
+from tatp.remote_keys import VIRTUAL_KEYS, Pairing, RemoteButtons
 
 PERIOD_SCAN = 0x34
-PERIOD_VK = 0xBE
 NUMPAD_DECIMAL_SCAN = 0x53
-VK_DECIMAL = 0x6E
 F5_SCAN = 0x3F
-F5_VK = 0x74
+REMOTE_KEYS = ["pageup", "pagedown", "f5", "escape", "period"]
 
 
-def _keystroke(pairing, time_ms, remote, scan=PERIOD_SCAN, vk=PERIOD_VK, released=False):
-    pairing.report(scan, False, released, remote)
-    pairing.message(time_ms, vk, scan, False, released)
+# -- the remote's buttons, from its own reports ------------------------------------------------
 
 
-def test_a_key_event_takes_its_own_keystrokes_verdict():
+def test_a_press_and_its_release_are_the_remotes_own():
+    buttons = RemoteButtons(REMOTE_KEYS)
+    assert buttons.report(VIRTUAL_KEYS["period"], False) == ("period", False, False)
+    assert buttons.report(VIRTUAL_KEYS["period"], True) == ("period", True, False)
+
+
+def test_a_held_button_repeats_by_the_remotes_own_state():
+    """Another keyboard holding the same key cannot make the remote's press a repeat: only
+    the remote's own reports are counted here."""
+    buttons = RemoteButtons(REMOTE_KEYS)
+    assert buttons.report(VIRTUAL_KEYS["period"], False)[2] is False
+    assert buttons.report(VIRTUAL_KEYS["period"], False)[2] is True
+    buttons.report(VIRTUAL_KEYS["period"], True)
+    assert buttons.report(VIRTUAL_KEYS["period"], False)[2] is False
+
+
+def test_a_key_the_remote_does_not_have_is_nothing():
+    assert RemoteButtons(REMOTE_KEYS).report(0x41, False) is None  # A
+
+
+def test_every_configured_key_has_a_virtual_key():
+    """A responder key Windows cannot be told to look for would never arrive (fail fast)."""
+    with pytest.raises(AssertionError, match="no Windows virtual key"):
+        RemoteButtons(["period", "space"])
+
+
+# -- pairing each key message with its report, to drop the remote's ---------------------------
+
+
+def test_the_remotes_key_message_is_dropped_and_another_keyboards_kept():
     pairing = Pairing()
-    _keystroke(pairing, 100, remote=True)
-    assert pairing.verdict(1, 100, PERIOD_VK, False) is True
+    pairing.report(PERIOD_SCAN, False, False, remote=True)
+    pairing.report(PERIOD_SCAN, False, False, remote=False)
+    assert pairing.message(PERIOD_SCAN, False, False) is True
+    assert pairing.message(PERIOD_SCAN, False, False) is False
 
 
-def test_the_experimenters_full_stop_is_not_the_remotes():
+def test_the_numpad_decimal_is_paired_by_scan_code():
+    """Its virtual key differs between the report and the message; its scan code does not."""
     pairing = Pairing()
-    _keystroke(pairing, 100, remote=False)
-    assert pairing.verdict(1, 100, PERIOD_VK, False) is False
+    pairing.report(NUMPAD_DECIMAL_SCAN, False, False, remote=False)
+    assert pairing.message(NUMPAD_DECIMAL_SCAN, False, False) is False
 
 
-def test_the_numpad_decimal_is_paired_by_scan_code_not_virtual_key():
-    """The raw report can name VK_DELETE where the key message names VK_DECIMAL."""
+def test_a_press_and_its_release_are_paired_separately():
     pairing = Pairing()
-    pairing.report(NUMPAD_DECIMAL_SCAN, False, False, False)
-    pairing.message(100, VK_DECIMAL, NUMPAD_DECIMAL_SCAN, False, False)
-    assert pairing.verdict(1, 100, VK_DECIMAL, False) is False
-    assert pairing.misses == 0
+    pairing.report(PERIOD_SCAN, False, False, remote=True)
+    pairing.report(PERIOD_SCAN, False, True, remote=True)
+    assert pairing.message(PERIOD_SCAN, False, False) is True
+    assert pairing.message(PERIOD_SCAN, False, True) is True
 
 
-def test_a_colon_typed_before_the_stop_does_not_take_the_stops_verdict():
-    """A colon is Shift and the full-stop key. Its event is asked about too, in turn."""
+def test_a_message_with_no_report_is_kept_and_leaves_the_others_theirs():
     pairing = Pairing()
-    _keystroke(pairing, 100, remote=False)  # the experimenter's colon
-    _keystroke(pairing, 100, remote=True)  # the participant's stop, in the same clock tick
-    assert pairing.verdict(1, 100, PERIOD_VK, False) is False
-    assert pairing.verdict(2, 100, PERIOD_VK, False) is True
+    pairing.report(PERIOD_SCAN, False, False, remote=True)
+    assert pairing.message(F5_SCAN, False, False) is False
+    assert pairing.message(PERIOD_SCAN, False, False) is True
 
 
-def test_keystrokes_at_different_times_are_kept_apart():
+def test_reports_whose_message_never_came_are_dropped():
     pairing = Pairing()
-    _keystroke(pairing, 100, remote=False)
-    _keystroke(pairing, 140, remote=True)
-    assert pairing.verdict(2, 140, PERIOD_VK, False) is True
-    assert pairing.verdict(1, 100, PERIOD_VK, False) is False
-
-
-def test_a_press_and_its_release_each_have_their_own_verdict():
-    pairing = Pairing()
-    _keystroke(pairing, 100, remote=True)
-    _keystroke(pairing, 180, remote=True, released=True)
-    assert pairing.verdict(1, 100, PERIOD_VK, False) is True
-    assert pairing.verdict(2, 180, PERIOD_VK, True) is True
-
-
-def test_a_message_with_no_report_leaves_the_others_their_reports():
-    pairing = Pairing()
-    pairing.report(PERIOD_SCAN, False, False, True)
-    pairing.message(90, F5_VK, F5_SCAN, False, False)  # no report of its own
-    pairing.message(100, PERIOD_VK, PERIOD_SCAN, False, False)
-    assert pairing.verdict(1, 100, PERIOD_VK, False) is True
-    assert pairing.misses == 0
-
-
-def test_reports_whose_key_message_never_came_are_dropped():
-    pairing = Pairing()
-    pairing.report(F5_SCAN, False, False, False)  # some other window swallowed it
-    _keystroke(pairing, 100, remote=True)
-    assert pairing.verdict(1, 100, PERIOD_VK, False) is True
-
-
-def test_the_same_event_asked_twice_takes_one_verdict():
-    """A key event propagates to each parent, and the router is asked at every step."""
-    pairing = Pairing()
-    _keystroke(pairing, 100, remote=False)
-    _keystroke(pairing, 100, remote=True)
-    assert pairing.verdict(7, 100, PERIOD_VK, False) is False
-    assert pairing.verdict(7, 100, PERIOD_VK, False) is False
-    assert pairing.verdict(8, 100, PERIOD_VK, False) is True
-
-
-def test_a_key_event_with_no_verdict_is_the_remotes_and_is_counted():
-    """A spurious stop is recoverable; a lost one is not. The miss is logged (N7.D22)."""
-    pairing = Pairing()
-    assert pairing.verdict(1, 100, PERIOD_VK, False) is True
-    assert pairing.misses == 1
+    pairing.report(F5_SCAN, False, False, remote=True)  # some other window took it
+    pairing.report(PERIOD_SCAN, False, False, remote=False)
+    assert pairing.message(PERIOD_SCAN, False, False) is False
+    assert pairing.message(F5_SCAN, False, False) is False, "dropped with the one before"

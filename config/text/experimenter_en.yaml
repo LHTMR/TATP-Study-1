@@ -640,6 +640,8 @@ hardware_check:
   remote_missing: 'Remote not found: plug it in.'
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_any_keyboard: Any keyboard counts here.
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_needs_windows: 'Needs Windows: any keyboard counts.'
   screens: Screens
   role_participant: Participant screen
   role_experimenter: Experimenter screen

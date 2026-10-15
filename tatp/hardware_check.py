@@ -44,7 +44,13 @@ from PySide6.QtWidgets import (
 from tatp.audio import Audio, AudioError
 from tatp.clock import Clock
 from tatp.garment.base import GarmentController, GarmentError, Limits
-from tatp.remote_keys import RAW_INPUT, key_source, remote_present
+from tatp.remote_keys import (
+    RAW_INPUT,
+    AnyKeyboard,
+    key_source,
+    raw_input_available,
+    remote_present,
+)
 from tatp.responder import Action, Responder
 from tatp.session import DRIVERS
 from tatp.ui.vas import QT_KEYS
@@ -113,27 +119,25 @@ def device_lines(audio_config: dict, words: dict, sd) -> tuple[list[str], str]:
 
 
 class RemoteKeys(QObject):
-    """Takes the remote's keys from every window while the check is open, and counts them."""
+    """Takes the remote's keys from every window while the check is open, and counts them.
 
-    def __init__(self, responder: Responder, source, on_press: Callable[[str, Action], None],
+    Under any_keyboard only. Under raw_input the remote's presses come from its raw reports
+    (`HardwareCheckDialog.remote_key`), and every key event is another keyboard's, which does
+    not count and passes through: the session's own split, where the experimenter can see it.
+    """
+
+    def __init__(self, responder: Responder, on_press: Callable[[str, Action], None],
                  parent: QObject | None = None):
         super().__init__(parent)
         self.responder = responder
-        self.source = source
         self.on_press = on_press
         self._names = {QT_KEYS[name]: name for name in responder.keys}
 
     def eventFilter(self, watched, event) -> bool:  # noqa: N802 -- Qt's name
         if event.type() not in (QEvent.KeyPress, QEvent.KeyRelease):
             return False
-        # Asked of every key, so each keystroke's verdict is used up in turn (as the router).
-        from_remote = self.source.from_remote(event)
         name = self._names.get(Qt.Key(event.key()))
         if name is None:
-            return False
-        # Another keyboard's key is not the remote's, so it does not count, and passes through:
-        # the same split the session makes, put where the experimenter can see it work.
-        if self.source.distinguishes and not from_remote:
             return False
         # A held button repeats; the count is of presses, as the session's own handling is.
         if event.type() == QEvent.KeyPress and not event.isAutoRepeat():
@@ -194,10 +198,17 @@ class HardwareCheckDialog(QDialog):
         fit_to_screen(self, HARDWARE_CHECK_WIDTH_PX, HARDWARE_CHECK_HEIGHT_PX)
         # Last, once nothing above can raise: a filter installed by a dialog that failed to
         # build would never be removed, and would swallow every remote press in a later session.
-        # Nothing to log in the check: an unmatched key shows as a laptop key that counts.
-        self.key_source = key_source(hardware["responder"], self, lambda: None)
-        self.remote_keys = RemoteKeys(self.responder, self.key_source, self.pressed, self)
-        QApplication.instance().installEventFilter(self.remote_keys)
+        # Off Windows, raw_input cannot work, and the line above says so: every keyboard counts.
+        responder = hardware["responder"]
+        if responder["key_source"] == RAW_INPUT and not raw_input_available():
+            self.key_source = AnyKeyboard()
+        else:
+            self.key_source = key_source(
+                responder, self, self.remote_key, self._remote_changed
+            )
+        self.remote_keys = RemoteKeys(self.responder, self.pressed, self)
+        if not self.key_source.distinguishes:
+            QApplication.instance().installEventFilter(self.remote_keys)
 
     # -- sections ------------------------------------------------------------------------
 
@@ -239,7 +250,17 @@ class HardwareCheckDialog(QDialog):
         responder = self.hardware["responder"]
         if responder["key_source"] != RAW_INPUT:
             return self.words["remote_any_keyboard"]
+        if not raw_input_available():
+            return self.words["remote_needs_windows"]
         return self.words["remote_found" if remote_present(responder) else "remote_missing"]
+
+    def _remote_changed(self, present: bool) -> None:
+        self.last_key.setText(self.words["remote_found" if present else "remote_missing"])
+
+    def remote_key(self, name: str, released: bool, repeat: bool, _time_ms: int) -> None:
+        """One of the remote's raw key reports (raw_input). Counted as the filter counts."""
+        if not released and not repeat:
+            self.pressed(name, self.responder.action_for(name))
 
     def _screens(self) -> QVBoxLayout:
         section = self._heading("screens")

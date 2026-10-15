@@ -5,24 +5,27 @@ never the device that sent it. So the remote's emergency stop -- a full stop -- 
 as the experimenter typing a decimal point, and the session had to guess from which window had
 focus (open item L15). Windows itself knows the device: its **Raw Input** API reports every
 keystroke from every keyboard to a window registered for it, with the handle of the device that
-sent it, even when another window has focus. The handle's device path carries the USB vendor and
-product IDs, which `responder.device_match` in `hardware.yaml` names.
+sent it, even when another window or another application has focus. The handle's device path
+carries the USB vendor and product IDs, which `responder.device_match` in `hardware.yaml` names.
 
 `responder.key_source` chooses, explicitly, as `audio.backend` does:
 
-- `raw_input` -- the lab. A key counts as the remote's only if Raw Input says it came from the
-  device `device_match` names. Windows only.
+- `raw_input` -- the lab. Windows only. Described below.
 - `any_keyboard` -- every keyboard is the remote, as before this module: development machines,
   the headless tests and the validator, none of which has the remote or a native window.
 
-**Matching a Qt key event to its raw report** is done where Windows still has both, in the
-native message stream. Each keystroke reaches this application twice: first as a raw report
-(`WM_INPUT`), then as the ordinary key message (`WM_KEYDOWN`, `WM_KEYUP`) that Qt turns into a
-key event. The two are paired by scan code and direction -- not by virtual key, which differs
-between them for numpad keys -- and the verdict is filed under what Qt copies into the event:
-the message's time, its virtual key and its direction. A Qt key event then takes its verdict
-from there. A key event with no verdict -- which should not happen -- is taken as the remote's:
-a spurious stop is recoverable, and a lost one is not.
+**Under `raw_input` the remote's buttons are read from its raw reports alone** (`on_key`), and
+never from Qt's key events. Windows keeps one keyboard state for every keyboard, so a Qt key
+event for the remote's key is shaped by the other keyboards: with Shift held on the laptop the
+remote's full stop arrives as a colon, and with the laptop's full stop held down it arrives as
+an auto-repeat. A raw report carries the remote's own key, and whether the press is a repeat is
+decided from the remote's own reports. The safety path -- the emergency stop -- depends on
+nothing else, whichever window or application has focus.
+
+**The remote's ordinary key messages are dropped**, so its keys are never typed into whatever
+has focus as well: each key message is paired with the raw report it came from (by scan code
+and direction) and consumed when that report was the remote's. A message that cannot be paired
+is let through as typing. Either way the stop has already been delivered from the raw report.
 """
 
 from __future__ import annotations
@@ -30,45 +33,60 @@ from __future__ import annotations
 import ctypes
 import functools
 import sys
-from collections import OrderedDict, deque
+from collections import deque
 from collections.abc import Callable
 from types import SimpleNamespace
 
-import shiboken6
-from PySide6.QtCore import QAbstractNativeEventFilter, QEvent
+from PySide6.QtCore import QAbstractNativeEventFilter
 from PySide6.QtWidgets import QApplication, QWidget
 
 RAW_INPUT = "raw_input"
 ANY_KEYBOARD = "any_keyboard"
 KEY_SOURCES = (RAW_INPUT, ANY_KEYBOARD)
 
-# Windows constants (WinUser.h), not study parameters.
+# The Windows virtual key of each key name the responder's keys use (WinUser.h). The raw report
+# names the key the remote sent by these, independent of Shift or any other keyboard's state.
+VIRTUAL_KEYS = {
+    "pageup": 0x21, "pagedown": 0x22, "f5": 0x74, "escape": 0x1B, "period": 0xBE,
+}
+
+# Windows constants (WinUser.h, winerror.h), not study parameters.
+WM_INPUT_DEVICE_CHANGE = 0x00FE
 WM_INPUT = 0x00FF
 WM_KEYDOWN = 0x0100
 WM_KEYUP = 0x0101
 WM_SYSKEYDOWN = 0x0104
 WM_SYSKEYUP = 0x0105
 KEY_MESSAGES = {WM_KEYDOWN: False, WM_SYSKEYDOWN: False, WM_KEYUP: True, WM_SYSKEYUP: True}
+WANTED_MESSAGES = frozenset({WM_INPUT_DEVICE_CHANGE, WM_INPUT, *KEY_MESSAGES})
+GIDC_ARRIVAL = 1
+GIDC_REMOVAL = 2
 RID_INPUT = 0x10000003
 RIM_TYPEKEYBOARD = 1
 RIDI_DEVICENAME = 0x20000007
 RIDEV_INPUTSINK = 0x00000100
+RIDEV_DEVNOTIFY = 0x00002000
 RIDEV_REMOVE = 0x00000001
 RI_KEY_BREAK = 0x0001
 RI_KEY_E0 = 0x0002
 RIM_INPUT = 0  # GET_RAWINPUT_CODE_WPARAM: the report came while this application had focus
 RIM_CODE_MASK = 0xFF
-RAW_INPUT_ERROR = 0xFFFFFFFF  # GetRawInputData's (UINT)-1
+RAW_INPUT_ERROR = 0xFFFFFFFF  # the (UINT)-1 the Raw Input calls return on failure
+ERROR_INSUFFICIENT_BUFFER = 122
 HID_USAGE_PAGE_GENERIC = 0x01
 HID_USAGE_GENERIC_KEYBOARD = 0x06
 # A key message's lParam: bits 16-23 the scan code, bit 24 the extended-key flag.
 LPARAM_SCAN_SHIFT = 16
 SCAN_CODE_MASK = 0xFF
 LPARAM_EXTENDED_BIT = 24
-# How many raw reports may wait for their key message, and verdicts for their Qt event. Each is
-# taken within a turn or two of the event loop; the bounds only stop strays piling up.
+# The native message's id sits after its window handle (the MSG structure).
+MSG_ID_OFFSET = ctypes.sizeof(ctypes.c_void_p)
+# How many raw reports may wait for their key message. Each is taken within a turn of the event
+# loop; the bound only stops strays piling up.
 PENDING_REPORTS = 64
-FILED_VERDICTS = 256
+# The keyboard list can change between asking its length and reading it; Windows then asks for
+# the call to be repeated.
+DEVICE_LIST_ATTEMPTS = 5
 
 
 class RemoteKeyError(RuntimeError):
@@ -131,142 +149,152 @@ def _win() -> SimpleNamespace:
 
 
 def _device_path(handle) -> str:
+    """The device path, or "" for a handle Windows no longer knows."""
     win = _win()
     length = win.wintypes.UINT(0)
     win.user32.GetRawInputDeviceInfoW(handle, RIDI_DEVICENAME, None, ctypes.byref(length))
     name = ctypes.create_unicode_buffer(length.value)
-    win.user32.GetRawInputDeviceInfoW(handle, RIDI_DEVICENAME, name, ctypes.byref(length))
+    if win.user32.GetRawInputDeviceInfoW(
+        handle, RIDI_DEVICENAME, name, ctypes.byref(length)
+    ) == RAW_INPUT_ERROR:
+        return ""
     return name.value
 
 
-def device_paths() -> list[str]:
-    """Every keyboard Raw Input reports, by device path. Windows only."""
+def _keyboards() -> list[tuple[int, str]]:
+    """Every keyboard Raw Input reports, as (handle, device path). Windows only."""
     win = _win()
     size = ctypes.sizeof(win.RawInputDeviceList)
-    count = win.wintypes.UINT(0)
-    if win.user32.GetRawInputDeviceList(None, ctypes.byref(count), size) == RAW_INPUT_ERROR:
-        raise RemoteKeyError(f"GetRawInputDeviceList failed, error {ctypes.get_last_error()}")
-    devices = (win.RawInputDeviceList * count.value)()
-    listed = win.user32.GetRawInputDeviceList(devices, ctypes.byref(count), size)
-    if listed == RAW_INPUT_ERROR:
-        raise RemoteKeyError(f"GetRawInputDeviceList failed, error {ctypes.get_last_error()}")
-    return [_device_path(device.hDevice) for device in devices[:listed]
-            if device.dwType == RIM_TYPEKEYBOARD]
+    for _ in range(DEVICE_LIST_ATTEMPTS):
+        count = win.wintypes.UINT(0)
+        if win.user32.GetRawInputDeviceList(None, ctypes.byref(count), size) == RAW_INPUT_ERROR:
+            raise RemoteKeyError(
+                f"GetRawInputDeviceList failed, error {ctypes.get_last_error()}"
+            )
+        devices = (win.RawInputDeviceList * count.value)()
+        listed = win.user32.GetRawInputDeviceList(devices, ctypes.byref(count), size)
+        if listed != RAW_INPUT_ERROR:
+            return [(device.hDevice or 0, _device_path(device.hDevice))
+                    for device in devices[:listed] if device.dwType == RIM_TYPEKEYBOARD]
+        if ctypes.get_last_error() != ERROR_INSUFFICIENT_BUFFER:
+            break
+    raise RemoteKeyError(f"GetRawInputDeviceList failed, error {ctypes.get_last_error()}")
 
 
 def remote_present(responder: dict) -> bool:
     """Whether the remote `device_match` names is plugged in. Only asked for `raw_input`."""
     match = responder["device_match"].upper()
-    return any(match in path.upper() for path in device_paths())
+    return any(match in path.upper() for _, path in _keyboards())
+
+
+class RemoteButtons:
+    """The remote's raw key reports as button presses: which key, and whether a repeat.
+
+    A repeat is a press of a key the remote already holds down -- its own state, so another
+    keyboard's held key cannot make the remote's press look like one. No Windows calls.
+    """
+
+    def __init__(self, key_names: list[str]):
+        unknown = sorted(set(key_names) - set(VIRTUAL_KEYS))
+        assert not unknown, f"responder keys with no Windows virtual key: {unknown}"
+        self._names = {VIRTUAL_KEYS[name]: name for name in key_names}
+        self._down: set[int] = set()
+
+    def report(self, vkey: int, released: bool) -> tuple[str, bool, bool] | None:
+        """(key name, released, repeat) for a key the remote has, else None."""
+        name = self._names.get(vkey)
+        if name is None:
+            return None
+        if released:
+            self._down.discard(vkey)
+            return name, True, False
+        repeat = vkey in self._down
+        self._down.add(vkey)
+        return name, False, repeat
 
 
 class Pairing:
-    """Raw reports paired with the key messages Qt turns into key events. No Windows calls.
+    """Each key message paired with the raw report it came from. No Windows calls.
 
-    `report` takes a raw report as it arrives; `message` pairs the key message that follows it
-    and files the verdict under what Qt copies into the event; `verdict` hands it to the event.
+    Windows sends a keystroke's raw report before its key message. `report` queues the report
+    with whether it was the remote's; `message` finds the key message's own report, by scan code
+    and direction (not by virtual key, which differs between the two for numpad keys), and says
+    whether to drop the message. Reports ahead of the match belong to keystrokes whose message
+    never came (a key some other window took), and are dropped too. A message with no report
+    of its own leaves the queue alone and is let through.
     """
 
     def __init__(self):
         self._reports: deque[tuple[int, bool, bool, bool]] = deque(maxlen=PENDING_REPORTS)
-        self._filed: OrderedDict[tuple, deque[bool]] = OrderedDict()
-        self._answered: tuple[int, tuple, bool] | None = None
-        self.misses = 0  # key events that found no verdict
 
     def report(self, scan_code: int, extended: bool, released: bool, remote: bool) -> None:
         self._reports.append((scan_code, extended, released, remote))
 
-    def message(self, time_ms: int, vkey: int, scan_code: int, extended: bool,
-                released: bool) -> None:
-        """A key message arrived: pair it with its report and file the verdict.
-
-        Reports ahead of the match belong to keystrokes whose key message never came (a key
-        some other window swallowed), and are dropped. With no match the queue is left alone,
-        so a stray message cannot cost the keystrokes still on their way their own reports.
-        """
-        remote = None
-        for index, (code, ext, up, verdict) in enumerate(self._reports):
+    def message(self, scan_code: int, extended: bool, released: bool) -> bool:
+        """Whether this key message is the remote's, and so to be dropped."""
+        for index, (code, ext, up, remote) in enumerate(self._reports):
             if (code, ext, up) == (scan_code, extended, released):
-                remote = verdict
                 for _ in range(index + 1):
                     self._reports.popleft()
-                break
-        if remote is None:
-            return
-        key = (time_ms, vkey, released)
-        self._filed.setdefault(key, deque()).append(remote)
-        self._filed.move_to_end(key)
-        while len(self._filed) > FILED_VERDICTS:
-            self._filed.popitem(last=False)
-
-    def verdict(self, event_id: int, time_ms: int, vkey: int, released: bool) -> bool:
-        """Whether the Qt key event these describe came from the remote.
-
-        Asked again for the same event as it propagates to each parent, so the last answer is
-        kept for that event (`event_id`, its C++ address) rather than taking a second verdict.
-        """
-        key = (time_ms, vkey, released)
-        if self._answered is not None and self._answered[:2] == (event_id, key):
-            return self._answered[2]
-        filed = self._filed.get(key)
-        if filed:
-            answer = filed.popleft()
-            if not filed:
-                del self._filed[key]
-        else:
-            answer = True  # no verdict: the remote's, as the module says
-            self.misses += 1
-        self._answered = (event_id, key, answer)
-        return answer
+                return remote
+        return False
 
 
 class AnyKeyboard:
-    """Every keyboard is the remote. `distinguishes` is False, so the router keeps its rule
-    that a key typed into an experimenter text field is the experimenter's (LOG N7.I1)."""
+    """Every keyboard is the remote, through Qt's key events (`distinguishes` False): the router
+    forwards them, except a key typed into an experimenter text field (LOG N7.I1)."""
 
     distinguishes = False
-
-    def from_remote(self, event) -> bool:
-        return True
 
     def close(self) -> None:
         pass
 
 
-# The source Windows is currently sending raw reports for. Windows keeps one keyboard
-# registration per process, so a source closing must not remove a newer one's.
-_registered: RawInputKeyboards | None = None
+# The sources open now, newest last. Windows keeps one keyboard registration per process, so
+# the newest has it, and closing it hands it back to the one before.
+_open: list[RawInputKeyboards] = []
 
 
 class RawInputKeyboards(QAbstractNativeEventFilter):
-    """Tells the remote's keys from every other keyboard's, by Raw Input. Windows only.
+    """Reads the remote's buttons from Raw Input and keeps its keys out of Qt. Windows only.
 
     Registered to `window`, whose native window receives every keystroke's raw report whichever
-    window has focus (`RIDEV_INPUTSINK`). Unregistered by `close()`, or when that window is
-    destroyed. A newer source replaces this one's registration, and closing this one then
-    leaves the newer one alone.
+    window or application has focus (`RIDEV_INPUTSINK`), and every keyboard's arrival and
+    removal (`RIDEV_DEVNOTIFY`). Unregistered by `close()`, or when that window is destroyed.
+
+    `on_key(name, released, repeat, time_ms)` is called for each of the remote's key reports;
+    `on_change(present)` whenever the remote is plugged in or unplugged.
     """
 
     distinguishes = True
 
-    def __init__(self, device_match: str, window: QWidget, on_unmatched: Callable[[], None]):
+    def __init__(self, responder: dict, window: QWidget,
+                 on_key: Callable[[str, bool, bool, int], None],
+                 on_change: Callable[[bool], None]):
         super().__init__()
-        global _registered
         self._win = _win()
-        self._on_unmatched = on_unmatched
         if QApplication.platformName() != "windows":
             raise RemoteKeyError(
                 f"responder.key_source raw_input needs a real display, not the "
                 f"{QApplication.platformName()!r} platform"
             )
-        self._match = device_match.upper()
-        self._paths: dict[int, bool] = {}
+        self._match = responder["device_match"].upper()
+        self._buttons = RemoteButtons(
+            [name for names in responder["keys"].values() for name in names]
+        )
+        self._on_key = on_key
+        self._on_change = on_change
+        self._remotes = {handle for handle, path in _keyboards() if self._match in path.upper()}
         self._pairing = Pairing()
-        self._register(int(window.winId()), RIDEV_INPUTSINK)
-        _registered = self
-        self._open = True
+        self._hwnd = int(window.winId())
+        self._register(self._hwnd, RIDEV_INPUTSINK | RIDEV_DEVNOTIFY)
+        _open.append(self)
         QApplication.instance().installNativeEventFilter(self)
         window.destroyed.connect(self.close)
+
+    @property
+    def remote_present(self) -> bool:
+        return bool(self._remotes)
 
     def _register(self, hwnd: int, flags: int) -> None:
         device = self._win.RawInputDevice(
@@ -280,38 +308,57 @@ class RawInputKeyboards(QAbstractNativeEventFilter):
             )
 
     def close(self, *_args) -> None:
-        global _registered
-        if not self._open:
+        if self not in _open:
             return
-        self._open = False
+        newest = _open[-1] is self
+        _open.remove(self)
         app = QApplication.instance()
         if app is not None:
             app.removeNativeEventFilter(self)
-        if _registered is self:
-            _registered = None
+        if not newest:
+            return
+        if _open:
+            _open[-1]._register(_open[-1]._hwnd, RIDEV_INPUTSINK | RIDEV_DEVNOTIFY)
+        else:
             self._register(0, RIDEV_REMOVE)
 
     # -- the native message stream -------------------------------------------------------
 
     def nativeEventFilter(self, event_type, message):  # noqa: N802 -- Qt's name
+        # Called for every native message, so the cheap test first: the message's id.
+        message_id = ctypes.c_uint.from_address(int(message) + MSG_ID_OFFSET).value
+        if message_id not in WANTED_MESSAGES:
+            return False, 0
+        # The window procedure's copy only: the dispatcher sees the same message too.
         if bytes(event_type) != b"windows_generic_MSG":
             return False, 0
         msg = self._win.wintypes.MSG.from_address(int(message))
-        # A report made while another application has focus becomes no key event here.
-        if msg.message == WM_INPUT and (msg.wParam & RIM_CODE_MASK) == RIM_INPUT:
-            self._read(msg.lParam)
-        elif msg.message in KEY_MESSAGES:
-            self._pairing.message(
-                msg.time, msg.wParam,
-                (msg.lParam >> LPARAM_SCAN_SHIFT) & SCAN_CODE_MASK,
-                bool((msg.lParam >> LPARAM_EXTENDED_BIT) & 1),
-                KEY_MESSAGES[msg.message],
-            )
-        # Never consumed: Windows still turns the report into the key message, and Qt that
-        # into the key event.
-        return False, 0
+        if msg.message == WM_INPUT:
+            self._read(msg.lParam, msg.time, (msg.wParam & RIM_CODE_MASK) == RIM_INPUT)
+            return False, 0
+        if msg.message == WM_INPUT_DEVICE_CHANGE:
+            self._device_changed(msg.wParam, msg.lParam or 0)
+            return False, 0
+        remote = self._pairing.message(
+            (msg.lParam >> LPARAM_SCAN_SHIFT) & SCAN_CODE_MASK,
+            bool((msg.lParam >> LPARAM_EXTENDED_BIT) & 1),
+            KEY_MESSAGES[msg.message],
+        )
+        # The remote's key message is consumed: its press has been delivered from the report.
+        return remote, 0
 
-    def _read(self, handle) -> None:
+    def _device_changed(self, change: int, handle: int) -> None:
+        # A removed device's path cannot be asked for any more, so the remote's handles are
+        # remembered from when they arrived.
+        was_present = self.remote_present
+        if change == GIDC_ARRIVAL and self._match in _device_path(handle).upper():
+            self._remotes.add(handle)
+        elif change == GIDC_REMOVAL:
+            self._remotes.discard(handle)
+        if self.remote_present != was_present:
+            self._on_change(self.remote_present)
+
+    def _read(self, handle, time_ms: int, foreground: bool) -> None:
         win = self._win
         report = win.Report()
         size = win.wintypes.UINT(ctypes.sizeof(report))
@@ -321,38 +368,26 @@ class RawInputKeyboards(QAbstractNativeEventFilter):
         )
         if read in (0, RAW_INPUT_ERROR) or report.header.dwType != RIM_TYPEKEYBOARD:
             return
-        device = report.header.hDevice or 0
-        if device not in self._paths:
-            self._paths[device] = self._match in _device_path(report.header.hDevice).upper()
         flags = report.keyboard.Flags
-        self._pairing.report(
-            report.keyboard.MakeCode, bool(flags & RI_KEY_E0), bool(flags & RI_KEY_BREAK),
-            self._paths[device],
-        )
-
-    # -- asked by the router -------------------------------------------------------------
-
-    def from_remote(self, event) -> bool:
-        """Whether this Qt key event came from the remote.
-
-        The first event with no verdict is reported, once: if Raw Input stopped working, every
-        keyboard would quietly be the remote, and that must show in the session's log.
-        """
-        missed = self._pairing.misses
-        answer = self._pairing.verdict(
-            shiboken6.getCppPointer(event)[0], event.timestamp(), event.nativeVirtualKey(),
-            event.type() == QEvent.KeyRelease,
-        )
-        if missed == 0 and self._pairing.misses == 1:
-            self._on_unmatched()
-        return answer
+        released = bool(flags & RI_KEY_BREAK)
+        remote = (report.header.hDevice or 0) in self._remotes
+        # Only a report made while this application has focus becomes a key message here.
+        if foreground:
+            self._pairing.report(
+                report.keyboard.MakeCode, bool(flags & RI_KEY_E0), released, remote
+            )
+        if remote:
+            button = self._buttons.report(report.keyboard.VKey, released)
+            if button is not None:
+                self._on_key(*button, time_ms)
 
 
-def key_source(responder: dict, window: QWidget, on_unmatched: Callable[[], None]):
-    """The configured key source, registered to `window`. `on_unmatched` is called the first
-    time a key event cannot be told apart (raw_input only)."""
+def key_source(responder: dict, window: QWidget,
+               on_key: Callable[[str, bool, bool, int], None],
+               on_change: Callable[[bool], None]):
+    """The configured key source, registered to `window` (callbacks: `RawInputKeyboards`)."""
     source = responder["key_source"]
     assert source in KEY_SOURCES, f"responder.key_source is {source!r}; one of {KEY_SOURCES}"
     if source == ANY_KEYBOARD:
         return AnyKeyboard()
-    return RawInputKeyboards(responder["device_match"], window, on_unmatched)
+    return RawInputKeyboards(responder, window, on_key, on_change)

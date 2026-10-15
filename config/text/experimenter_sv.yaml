@@ -643,6 +643,8 @@ hardware_check:
   remote_missing: 'Fjärrkontrollen saknas: anslut den.'
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_any_keyboard: Alla tangentbord räknas här.
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_needs_windows: 'Kräver Windows: alla tangentbord räknas.'
   screens: Skärmar
   role_participant: Deltagarens skärm
   role_experimenter: Försöksledarens skärm

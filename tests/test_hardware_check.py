@@ -63,22 +63,13 @@ def test_a_held_button_counts_once(check):
     assert check.presses[Action.INCREASE] == 1
 
 
-class _OtherKeyboard:
-    """A key source that knows the device, as Raw Input does, and says: not the remote."""
-
-    distinguishes = True
-
-    def from_remote(self, event) -> bool:
-        return False
-
-
-def test_only_the_remotes_presses_count(check):
-    """Under raw_input the check shows the split working: the same keys on the experimenter's
-    keyboard count for nothing (docs/LOG.md N7.D22)."""
-    check.remote_keys.source = _OtherKeyboard()
-    for name in ("pageup", "pagedown", "f5", "period"):
-        _press(check.close_button, name)
-    assert set(check.presses.values()) == {0}
+def test_the_remotes_raw_reports_count_as_presses_once_each(check):
+    """Under raw_input the remote's presses arrive from its raw reports (docs/LOG.md N7.D22):
+    a press counts, its repeats and its release do not."""
+    check.remote_key("period", False, False, 100)
+    check.remote_key("period", False, True, 150)
+    check.remote_key("period", True, False, 200)
+    assert check.presses[Action.EMERGENCY_STOP] == 1
 
 
 def test_the_check_says_every_keyboard_counts_when_it_cannot_tell(check, loaded):

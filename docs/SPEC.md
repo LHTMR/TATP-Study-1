@@ -610,12 +610,15 @@ the window.
 
 **The remote is told apart from every other keyboard by its device** (`responder.key_source:
 raw_input`, `docs/LOG.md` N7.D22). The remote is a keyboard to the operating system, and Qt
-reports keys, not devices, so Windows' Raw Input is asked which device sent each key, matched by
-`responder.device_match`. The remote's keys reach the participant whichever window has focus,
-an experimenter text field included, so its emergency stop always stops. The same keys typed on
-the experimenter's keyboard never reach the participant: a full stop is typed, and Esc or F5 is
-not a ▶. A session does not start with the remote missing. `any_keyboard`, for development and the
-headless tests, takes every keyboard as the remote except inside a text field (N7.I1).
+reports keys, not devices, so the remote's buttons are read from Windows' Raw Input, which reports
+each keystroke with the device that sent it (matched by `responder.device_match`). Its presses
+reach the participant whichever window or application has focus, and whatever the experimenter's
+keyboard is doing (Shift held, a key down), so its emergency stop always stops; its own key
+messages are dropped, so it never types. Nothing typed on the experimenter's keyboard reaches the
+participant: a full stop is typed, and Esc or F5 is not a ▶. A session does not start with the
+remote missing, and the remote unplugged mid-session is logged as an error. `any_keyboard`, for
+development and the headless tests, takes every keyboard as the remote except inside a text
+field (N7.I1).
 
 **What is printed on each button is configuration, not code.** `responder.button_symbols` in
 `hardware.yaml` records the glyph on each button, and a screen that draws a control draws that

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-import yaml
 
 from tatp import config as cfg
 from tatp import preflight as pre
@@ -160,12 +159,6 @@ def test_raw_input_off_windows_is_refused_before_anything_is_written(config, mon
     assert findings == [
         pre.Finding(pre.REFUSE, "preflight.remote_needs_windows", pre.sys.platform)
     ]
-
-
-def test_the_lab_tells_the_remote_from_other_keyboards():
-    """The tests run with any_keyboard (conftest.py); the lab's own setting is raw_input."""
-    lab = yaml.safe_load((cfg.CONFIG_DIR / "hardware.yaml").read_text(encoding="utf-8"))
-    assert lab["responder"]["key_source"] == RAW_INPUT
 
 
 def test_every_finding_has_its_text_in_both_languages(loaded):
