@@ -134,7 +134,8 @@ instructions:
     press Resume. Press Next step only if they cannot press it.
   stop_rehearsal_resume: The stop was detected. Press Resume to carry on in front of the participant.
   touchcal_bracket: 'Touch calibration, step 1: the participant sets the touch on the middle channel.'
-  touchcal_estimation: 'Touch calibration, step 2: the participant rates a series of touches.'
+  # DRAFT (LOG N7.F8c): the progress, "x/N answered" (S, 5 Oct 2026).
+  touchcal_estimation: 'Touch calibration, step 2: the participant rates a series of touches. {answered}/{total} answered.'
   touchcal_match: 'Touch calibration, step 3: the participant matches channel {channel} to the middle channel.'
   touchcal_equalise: 'Touch calibration, step 4: the participant compares channel {channel} with the middle channel.'
   touchcal_pleasantness: 'Touch calibration, step 5: the participant sets the most pleasant level.'
@@ -203,6 +204,9 @@ controls:
   # SPEC.md 11.1, shown only when fit_preview.enabled.
   fit_accept: Accept this estimate
   fit_rerun: Re-run the procedure
+  # DRAFT (LOG N7.F8b): written by the build. Shown only with the mock or prototype garment,
+  # after a few touch-calibration ratings; ends the calibration, recorded as skipped.
+  skip_calibration: Skip calibration
   # The free-text entries (SPEC.md 8.2, 8.4, 11). None of them ever blocks the session.
   add_note: Add note
   substitution: Filament applied instead (g)

@@ -106,6 +106,17 @@ def test_a_null_required_value_names_the_file_and_the_key(tmp_path):
         cfg.load("sv", "en", config_dir=config_dir)
 
 
+def test_a_pilot_skip_before_any_rating_is_refused_at_load(tmp_path):
+    config_dir = _config_copy(tmp_path)
+    path = config_dir / "study1.yaml"
+    text = path.read_text(encoding="utf-8")
+    assert "pilot_skip_min_ratings: 3" in text
+    path.write_text(text.replace("pilot_skip_min_ratings: 3", "pilot_skip_min_ratings: 0"),
+                    encoding="utf-8")
+    with pytest.raises(cfg.ConfigError, match=r"pilot_skip_min_ratings.*below the minimum"):
+        cfg.load("sv", "en", config_dir=config_dir)
+
+
 def test_a_missing_font_file_is_fatal_at_load(tmp_path):
     config_dir = _config_copy(tmp_path)
     path = config_dir / "hardware.yaml"

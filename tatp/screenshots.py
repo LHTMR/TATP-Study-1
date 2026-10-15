@@ -95,6 +95,9 @@ DIALOG_WIDTH_PX = 720
 SAMPLE_ELAPSED_S = 3725.0
 SAMPLE_SITE = 3
 SAMPLE_CHANNEL = 2
+# Part-way through the estimation run: ten amplitudes and two catch trials (R32).
+SAMPLE_ANSWERED = 3
+SAMPLE_PRESENTATIONS = 12
 SAMPLE_PATH = "lateral"
 SAMPLE_DISTANCES = ("42", "37,5")
 SAMPLE_BLOCK = {"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch"}
@@ -573,6 +576,20 @@ def _experimenter_states(text: dict) -> dict:
                 instructions["touchcal_stage1_exhausted"].format(
                     value=text["terms"]["stage1"]["flat"]
                 )
+            ),
+        ),
+        "touchcal_estimation_skip": (
+            "The estimation run with the mock or prototype garment: how many ratings are "
+            "answered, and Skip calibration under the garment, shown only on a pilot rig once "
+            "a few ratings are in (docs/LOG.md N7.F8b, N7.F8c). Nothing else has moved.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: (
+                window.set_instruction(
+                    instructions["touchcal_estimation"].format(
+                        answered=SAMPLE_ANSWERED, total=SAMPLE_PRESENTATIONS
+                    )
+                ),
+                window.set_actions_enabled(skip_calibration=True),
             ),
         ),
         "awaiting_rebalance": (

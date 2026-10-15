@@ -1097,6 +1097,13 @@ Because per-channel pressure is unavailable, Protocol B's anchor-and-match proce
 This is a warning, not a refusal — piloting is exactly what it is for. But a session run this
 way must be impossible to mistake for a real one afterwards.
 
+**Skip calibration, on a pilot rig only** (S, 5 Oct 2026; `docs/LOG.md` N7.F8b). With the mock
+or the prototype — a driver declaring `pilot_rig` — the experimenter can end touch calibration
+after `touch_calibration.pilot_skip_min_ratings` estimation ratings and move to the next event.
+It is not the skip-trial control §11 rules out: nothing planned is dropped silently, every
+`touchcal_channels` row says `skipped` and is not valid for analysis, and with the study garment
+the control is never shown and the skip is asserted impossible.
+
 ---
 
 ## 13. Safety

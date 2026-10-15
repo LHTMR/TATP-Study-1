@@ -203,6 +203,10 @@ touch_calibration:
                                      # this many times, then continue with a logged warning
   evenness_max_rebalances: 1         # how often "uneven" offers the experimenter a rebalance
                                      # (steps 3 and 4 again) before the answer is just recorded
+  pilot_skip_min_ratings: 3          # with the mock or prototype garment ONLY, Skip calibration
+                                     # is offered after this many estimation ratings ("a few",
+                                     # S, 5 Oct 2026; docs/LOG.md N7.F8b). Never offered, and
+                                     # asserted impossible, on the study garment.
 
 patterns:
   # Which pattern each condition uses, by pattern name within the selected pattern folder.

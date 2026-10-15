@@ -433,7 +433,7 @@ One row per estimation run — the fitted rating function and the targets read o
 | t_session_s | float | s | no | Seconds from session t=0 |
 | channel | int | - | yes | Reference channel |
 | run_index | int | - | yes | 1 for the first run; incremented for each re-run (§11.1) |
-| superseded | bool | - | yes | `true` if the experimenter re-ran after seeing this fit. The row is retained regardless — a procedure repeatable until it looks right is a forking path unless every attempt is kept |
+| superseded | bool | - | yes | `true` if the experimenter re-ran after seeing this fit, or skipped the calibration while it awaited their decision (`touchcal_channels.skipped`), so it was never accepted. The row is retained regardless — a procedure repeatable until it looks right is a forking path unless every attempt is kept |
 | rerun_reason | str | - | no | Free text the experimenter gave when re-running |
 | fit_form | str | - | yes | `log_pressure` or `linear_pressure` (§9 step 2) |
 | intercept | float | - | no | `a` in `rating ~ a + b·log(pressure)`. This and the six columns after it are empty when the run had no fit, because the step 1 bracket left nothing to sample (`stage1_failures` says `bracket_unusable`) |
@@ -511,20 +511,21 @@ Every value is on this channel, through its gain, and held inside [0, ceiling].
 | channel | int | - | yes | Channel |
 | reference_channel | int | - | yes | The reference, channel 3 (§9) |
 | gain | float | - | yes | Pressure this channel needs to feel like the reference, as a ratio (§9 step 3) |
-| gain_source | str | - | yes | `reference` (the reference itself, 1), `matched` (geometric mean of the settings over `match_level_kpa`), or `fallback_unit_gain` — the experimenter's recorded choice after a match that gave 0 kPa, delivered at the reference's pressure and not valid for analysis |
+| gain_source | str | - | yes | `reference` (the reference itself, 1), `matched` (geometric mean of the settings over `match_level_kpa`), `fallback_unit_gain` — the experimenter's recorded choice after a match that gave 0 kPa, delivered at the reference's pressure and not valid for analysis — or `skipped_unit_gain`, a channel not yet matched when the calibration was skipped, likewise at the reference's pressure |
 | match_settings_kpa | str | kPa | no | This channel's last step 3 settings, semicolon-separated. Empty for the reference |
 | match_level_kpa | float | kPa | yes | Reference pressure the channels were matched at, P50 (`docs/research/R31`) |
 | targets_source | str | - | yes | Where P20/P30/P80 came from: `fit`; `bracket_line`, the line through the step 1 settings; or `device_range`, the line from the smallest step to the ceiling. The last two are fallbacks and make the row not valid for analysis |
 | p20_kpa | float | kPa | yes | Reference-scale P20 as delivered |
 | p30_kpa | float | kPa | yes | Reference-scale lower bound of the pleasantness window |
 | p80_kpa | float | kPa | yes | Reference-scale upper bound |
-| pleasant_kpa | float | kPa | yes | Reference-scale pleasantness level, geometric mean of the two step 5 settings |
+| pleasant_kpa | float | kPa | yes | Reference-scale pleasantness level, geometric mean of the two step 5 settings; of P30 and P80 when the calibration was skipped before step 5 |
 | sham_kpa | float | kPa | yes | What the sham condition delivers on this channel |
 | ct_targeted_kpa | float | kPa | yes | What the CT-targeted condition delivers on this channel |
 | participant_preferred_kpa | float | kPa | yes | What the participant-preferred condition delivers on this channel; equal to `ct_targeted_kpa` by design (R31) |
-| participant_preferred_pattern | str | - | yes | The pattern chosen in the preference selection |
+| participant_preferred_pattern | str | - | yes | The pattern chosen in the preference selection; the fixed CT-targeted pattern (`patterns.fixed_ct_pattern`) when the calibration was skipped before it |
 | clamped | str | - | no | Semicolon-separated conditions whose level on this channel was held inside [0, ceiling] |
-| valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4), or when any fallback stood in for a measured value |
+| skipped | bool | - | yes | `true` when the experimenter ended the calibration early with Skip calibration, possible only on a pilot rig — the mock or the prototype, never the study garment (`docs/LOG.md` N7.F8b). Whatever was not yet measured is filled as the other columns say. A run skipped while its fit awaited the experimenter's decision has that fit's `touchcal_fit` row, `superseded`; one skipped during its estimation run has none. The skip is offered only once the current run has its own ratings, so a skipped calibration's fallback is always on that run's step 1 settings. The `log` has `touchcal_skipped` with the number of ratings given. Files written before 14 Oct 2026 lack the column; read its absence as `false` |
+| valid_for_analysis | bool | - | yes | `false` on a reduced-capability device (§12.4), when any fallback stood in for a measured value, or when the calibration was `skipped` |
 
 ---
 

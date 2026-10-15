@@ -175,6 +175,9 @@ class ExperimenterWindow(QWidget):
     fit_accepted = Signal()
     fit_rerun_requested = Signal(str)
     rebalance_requested = Signal()
+    # End touch calibration early, on a pilot rig only (docs/LOG.md N7.F8b). Not a skip-trial
+    # control: shown only while the procedure offers it, and recorded as a skipped calibration.
+    skip_calibration_requested = Signal()
     garment_connect_requested = Signal()
     garment_disconnect_requested = Signal()
 
@@ -193,7 +196,8 @@ class ExperimenterWindow(QWidget):
         self.setStyleSheet(stylesheet())
 
         # What the running procedure is waiting for, beyond what the view says (SPEC.md 11).
-        self._awaiting = {"rebalance": False, "fit_decision": False, "discard": False}
+        self._awaiting = {"rebalance": False, "fit_decision": False, "discard": False,
+                          "skip_calibration": False}
         self._interruption: str | None = None
         self._connected = False
         self._mapping_phases: list[str] = []
@@ -337,6 +341,11 @@ class ExperimenterWindow(QWidget):
         # One disconnect/reconnect button (SPEC.md 11) that says what it will do now.
         self.garment_button = button("")
         self.garment_button.clicked.connect(self._garment_clicked)
+        # Under the garment it depends on, and last in a column that ends in a stretch, so its
+        # appearing moves nothing (UI_PRINCIPLES.md 3.3). Hidden until offered.
+        self.skip_button = button(self.text["controls"]["skip_calibration"])
+        self.skip_button.clicked.connect(self.skip_calibration_requested.emit)
+        self.skip_button.setVisible(False)
         state = QHBoxLayout()
         state.addWidget(self.hardware_title)
         state.addWidget(self.garment)
@@ -353,6 +362,7 @@ class ExperimenterWindow(QWidget):
         column.addWidget(self.pressures)
         column.addWidget(self.faults)
         column.addWidget(self.garment_button)
+        column.addWidget(self.skip_button)
         column.addStretch(1)
 
         self.centre = QHBoxLayout()
@@ -495,13 +505,15 @@ class ExperimenterWindow(QWidget):
         rebalance: bool | None = None,
         fit_decision: bool | None = None,
         discard: bool | None = None,
+        skip_calibration: bool | None = None,
     ) -> None:
         """What the running procedure waits for (SPEC.md 9, 11, 11.1). None leaves it as is.
 
         `rebalance` enables Rebalance channels; `fit_decision` enables Accept and Re-run;
         `discard` enables Discard and repeat. All are otherwise disabled, because a control that
         does nothing when pressed is one the experimenter learns to distrust (UI_PRINCIPLES.md
-        5.1).
+        5.1). `skip_calibration` shows Skip calibration, which exists only on a pilot rig, so
+        it is hidden rather than disabled when not offered.
         """
         if rebalance is not None:
             self._awaiting["rebalance"] = bool(rebalance)
@@ -509,6 +521,8 @@ class ExperimenterWindow(QWidget):
             self._awaiting["fit_decision"] = bool(fit_decision)
         if discard is not None:
             self._awaiting["discard"] = bool(discard)
+        if skip_calibration is not None:
+            self._awaiting["skip_calibration"] = bool(skip_calibration)
         self._apply_enabled()
 
     def set_mapping_phases(self, phases: Sequence[str]) -> None:
@@ -839,6 +853,8 @@ class ExperimenterWindow(QWidget):
         self.fit_rerun_button.setEnabled(deciding)
         self.fit_preview.accept_button.setEnabled(deciding)
         self.fit_preview.rerun_button.setEnabled(deciding)
+        self.skip_button.setVisible(self._awaiting["skip_calibration"])
+        self.skip_button.setEnabled(running and self._awaiting["skip_calibration"])
         self.garment_button.setText(
             self.text["controls"]["disconnect" if self._connected else "connect"]
         )
