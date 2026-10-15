@@ -31,6 +31,7 @@ from tatp import resume as resumption
 from tatp import schedule
 from tatp.clock import ISO_FORMAT, Clock
 from tatp.demo import (
+    DEMO_GARMENT,
     FAST,
     MODES,
     OFF,
@@ -40,6 +41,7 @@ from tatp.demo import (
     DemoControls,
     DemoError,
     begin_run,
+    check_person,
     check_speed,
     demo_config,
     resolved,
@@ -107,7 +109,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=sorted(DRIVERS),
         default=None,
         help="the garment driver for this session, e.g. arduino_mosfet for the prototype "
-        "sleeve; hardware.yaml's garment.driver when not given",
+        "sleeve; hardware.yaml's garment.driver when not given, and the mock for a "
+        "demonstration, which on any other garment runs at real time only, with people as "
+        "the participant and the experimenter",
     )
     parser.add_argument(
         "--clock-speed",
@@ -149,8 +153,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         # What a demonstration decides itself, refused rather than quietly overridden.
         if args.participant is not None:
             parser.error("a demonstration has its own participant code; omit --participant")
-        if args.garment is not None:
-            parser.error("a demonstration always runs on the mock garment; omit --garment")
         if args.clock_speed != REAL_TIME_SPEED:
             parser.error("a demonstration's speed is --demo-speed, not --clock-speed")
         if args.redcap_form_completed:
@@ -365,19 +367,25 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def demo_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:
-    """A demonstration's configuration, and its code and speed set in `args`."""
+    """A demonstration's configuration, and its code, speed and garment set in `args`: the
+    mock unless `--garment` names another, which, being worn, is refused above real time or
+    with either simulation (tatp/demo.py)."""
     settings = loaded.study1["demo"]
+    if args.garment is None:
+        args.garment = DEMO_GARMENT
     args.clock_speed = (
         float(settings["clock_speed"]) if args.demo_speed is None else args.demo_speed
     )
     try:
-        check_speed(settings, args.clock_speed)
+        check_speed(settings, args.clock_speed, args.garment)
+        check_person(args.garment, "participant", args.sim_participant)
+        check_person(args.garment, "experimenter", args.sim_experimenter)
     except DemoError as error:
         raise SystemExit(str(error)) from error
     args.participant = settings["participant_code"]
     if args.patterns is None:
         args.patterns = resolved(settings["pattern_folder"])
-    return demo_config(loaded, args.clock_speed)
+    return demo_config(loaded, args.clock_speed, args.garment)
 
 
 def attach_demo(runner: SessionRunner, args: argparse.Namespace) -> Demo:
