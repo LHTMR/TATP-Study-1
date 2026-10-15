@@ -25,12 +25,17 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication, QDialog
+
 from tatp import config as cfg
 from tatp import preflight as pre
 from tatp import resume as resumption
 from tatp import schedule
 from tatp.clock import ISO_FORMAT, Clock
 from tatp.demo import (
+    DEMO_GARMENT,
     FAST,
     MODES,
     OFF,
@@ -40,10 +45,12 @@ from tatp.demo import (
     DemoControls,
     DemoError,
     begin_run,
+    check_person,
     check_speed,
     demo_config,
     resolved,
 )
+from tatp.devices import configured, settle
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import (
@@ -51,9 +58,10 @@ from tatp.session import (
     Session,
     SessionError,
     canonical_initials,
+    with_hardware_choices,
     with_session_choices,
 )
-from tatp.session_runner import SessionRunner, stage_layout, summary_phase
+from tatp.session_runner import SessionRunner, stage_layout, stop_on_error, summary_phase
 from tatp.ui.application import application, scale_screens
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -107,7 +115,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=sorted(DRIVERS),
         default=None,
         help="the garment driver for this session, e.g. arduino_mosfet for the prototype "
-        "sleeve; hardware.yaml's garment.driver when not given",
+        "sleeve; hardware.yaml's garment.driver when not given, and the mock for a "
+        "demonstration, which on any other garment runs at real time only, with people as "
+        "the participant and the experimenter",
     )
     parser.add_argument(
         "--clock-speed",
@@ -149,8 +159,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         # What a demonstration decides itself, refused rather than quietly overridden.
         if args.participant is not None:
             parser.error("a demonstration has its own participant code; omit --participant")
-        if args.garment is not None:
-            parser.error("a demonstration always runs on the mock garment; omit --garment")
         if args.clock_speed != REAL_TIME_SPEED:
             parser.error("a demonstration's speed is --demo-speed, not --clock-speed")
         if args.redcap_form_completed:
@@ -294,11 +302,61 @@ def _build_holding(config, args, resume_decision, data_folder) -> SessionRunner:
         session.experimenter_view,
         refresh_interval_s=config.hardware["screens"]["experimenter_refresh_interval_s"],
     )
-    participant.place(config.hardware["screens"])
+    screens = config.hardware["screens"]
+    participant.place(screens)
+    if screens["participant_screen_index"] is None:
+        share_screen(participant, screens)
     participant.show()
-    experimenter.place(config.hardware["screens"])
+    experimenter.place(screens)
     experimenter.show()
     return SessionRunner(Rig(session, participant, experimenter), resume=state)
+
+
+def share_screen(participant: ParticipantWindow, screens: dict) -> None:
+    """The participant window on the experimenter's screen: one display, a MacBook or a
+    development machine (docs/LOG.md N7.F12e5). A window of its own size in that screen's
+    lower right, kept above the experimenter window, which is maximised and would otherwise
+    hide it at every click of Next step. It can be moved and resized. While an experimenter
+    dialog is open it is not kept above, so it never hides one (`DialogsAbove`)."""
+    width, height = screens["shared_participant_window_px"]
+    index = screens["experimenter_screen_index"]
+    available_screens = QGuiApplication.screens()
+    screen = (available_screens[index] if index is not None and index < len(available_screens)
+              else QGuiApplication.primaryScreen())
+    participant.setWindowFlag(Qt.WindowStaysOnTopHint)
+    # Shown again whenever its flags change; it must not take the keys from the experimenter.
+    participant.setAttribute(Qt.WA_ShowWithoutActivating)
+    participant.resize(width, height)
+    available = screen.availableGeometry()
+    participant.move(available.right() - width, available.bottom() - height)
+    QApplication.instance().installEventFilter(DialogsAbove(participant))
+
+
+class DialogsAbove(QObject):
+    """Drops the shared participant window's always-on-top while any dialog is shown, and
+    raises the dialog, so a modal question is never hidden behind it; restores it after."""
+
+    def __init__(self, participant: ParticipantWindow):
+        super().__init__(participant)
+        self.participant = participant
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802 -- Qt's name
+        if event.type() not in (QEvent.Show, QEvent.Hide) or not isinstance(watched, QDialog):
+            return False
+        if not watched.isWindow():
+            return False
+        participant = self.participant
+        dialog_open = any(isinstance(widget, QDialog) and widget.isVisible()
+                          for widget in QApplication.topLevelWidgets())
+        on_top = bool(participant.windowFlags() & Qt.WindowStaysOnTopHint)
+        if dialog_open == on_top:
+            participant.setWindowFlag(Qt.WindowStaysOnTopHint, not dialog_open)
+            if participant.isHidden():
+                participant.show()
+        if event.type() == QEvent.Show:
+            watched.raise_()
+            watched.activateWindow()
+        return False
 
 
 def shut_down(runner: SessionRunner) -> None:
@@ -307,7 +365,8 @@ def shut_down(runner: SessionRunner) -> None:
     That is recorded as an abort, with the block it happened in marked aborted and any mapping
     distance still missing flagged -- every row already written stays as it is (SPEC.md 17.5).
     """
-    if not runner.session.closed:
+    # An error left the session open on purpose, to be resumed (`SessionRunner.stop_for_error`).
+    if not runner.session.closed and not runner.left_open:
         runner.abort(WINDOW_CLOSED)
     if runner.lock is not None:
         runner.lock.release()
@@ -331,10 +390,13 @@ def main(argv: list[str] | None = None) -> int:
         return run_launcher(argv)
     args = parse_args(argv)
     loaded = cfg.load(args.participant_language, args.experimenter_language)
+    # Qt first: what is connected is asked of it.
+    scale_screens(loaded.hardware)
+    app = application(loaded.hardware)
     if args.demo:
-        config = demo_session(loaded, args)
+        config = demo_session(on_this_computer(loaded), args)
     else:
-        config = with_session_choices(loaded, garment=args.garment)
+        config = named_session(loaded, args)
     for line in warnings_for(config):
         print(f"WARNING: {line}", file=sys.stderr)
     findings = preflight(config, args)
@@ -348,10 +410,10 @@ def main(argv: list[str] | None = None) -> int:
     if any(key == RESUME_OFFER for _, key, _ in findings) and args.resume is None:
         return EXIT_OPEN_SESSION  # the terminal's answer is --resume or --new
 
-    scale_screens(config.hardware)
-    app = application(config.hardware)
     runner = build(config, args)
     demo = attach_demo(runner, args) if args.demo else None
+    # With no session open the error is on the console already, and there is nowhere else.
+    stop_on_error(lambda: runner, lambda _summary: None)
     runner.start()
     app.exec()
     # Nothing above catches an exception, so reaching here means the loop ended.
@@ -361,20 +423,48 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if runner.completed else 1
 
 
+def named_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:
+    """A session named on the command line: hardware.yaml's own choices, through the function
+    the hardware page's go through, so the keys and the key source always match
+    `participant_input` and the session file records what ran (spec review)."""
+    return with_session_choices(
+        with_hardware_choices(loaded, configured(loaded.hardware)), garment=args.garment
+    )
+
+
+def on_this_computer(loaded: cfg.Config) -> cfg.Config:
+    """hardware.yaml settled against what is connected, as the hardware page settles it with
+    nothing chosen by hand (`tatp.devices.settle`, docs/LOG.md N7.F12e5): a configured screen
+    that is not there becomes a window, a lab sound device off the lab's platform the default
+    output, and a remote that cannot be seen the keyboard. For a demonstration named on the
+    command line, so it runs from a MacBook's terminal too."""
+    from tatp.hardware_check import present_now  # Qt widgets, needed only here
+
+    lab = configured(loaded.hardware)
+    present = present_now(loaded.hardware, lab)
+    return with_hardware_choices(loaded, settle(lab, loaded.hardware, present))
+
+
 def demo_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:
-    """A demonstration's configuration, and its code and speed set in `args`."""
+    """A demonstration's configuration, and its code, speed and garment set in `args`: the
+    mock unless `--garment` names another, which, being worn, is refused above real time or
+    with either simulation (tatp/demo.py)."""
     settings = loaded.study1["demo"]
+    if args.garment is None:
+        args.garment = DEMO_GARMENT
     args.clock_speed = (
         float(settings["clock_speed"]) if args.demo_speed is None else args.demo_speed
     )
     try:
-        check_speed(settings, args.clock_speed)
+        check_speed(settings, args.clock_speed, args.garment)
+        check_person(args.garment, "participant", args.sim_participant)
+        check_person(args.garment, "experimenter", args.sim_experimenter)
     except DemoError as error:
         raise SystemExit(str(error)) from error
     args.participant = settings["participant_code"]
     if args.patterns is None:
         args.patterns = resolved(settings["pattern_folder"])
-    return demo_config(loaded, args.clock_speed)
+    return demo_config(loaded, args.clock_speed, args.garment)
 
 
 def attach_demo(runner: SessionRunner, args: argparse.Namespace) -> Demo:

@@ -241,12 +241,22 @@ def test_a_confirm_at_the_ceiling_is_flagged_in_the_data_and_to_the_experimenter
     flagged = _events(session, "masking_at_ceiling")
     assert len(flagged) == 1 and flagged[0]["severity"] == "warning"
     warning = rig.experimenter.text["warnings"]["masking_at_ceiling"]
-    assert rig.experimenter._status_text == warning
+    # A warning, apart from the routine status, so the next one does not replace it.
+    assert rig.experimenter._warning_text == warning
 
 
 def test_a_confirm_below_the_ceiling_is_not_flagged(rig):
     Virtual(rig, MaskingCheck(rig)).run()
     assert not _events(rig.session, "masking_at_ceiling")
+
+
+def test_the_settled_screen_does_not_offer_next_step(rig):
+    """15 Oct 2026 pilot review: the masking step's "press Next step if they can still hear"
+    stayed up on the closing screen, where Next step does nothing (LOG N7.F11b4)."""
+    Virtual(rig, MaskingCheck(rig)).run()
+    assert rig.experimenter.instruction.text() == cfg.instruction(
+        rig.session.config, "masking_done"
+    )
 
 
 def test_the_earplug_warning_is_cleared_when_the_check_restarts(rig):
@@ -255,17 +265,16 @@ def test_the_earplug_warning_is_cleared_when_the_check_restarts(rig):
 
     def watch(trial):
         if isinstance(trial, NoiseAdjustment):
-            statuses.append(rig.experimenter._status_text)
+            statuses.append(rig.experimenter._warning_text)
 
     virtual = Virtual(rig, MaskingCheck(rig))
     virtual.before_step = _reports_audible(rig, 1, also=watch)
     virtual.run()
     assert warning not in statuses[1:], "gone once the earplugs are in"
-    assert rig.experimenter._status_text != warning
+    assert rig.experimenter._warning_text != warning
 
 
 def test_the_experimenter_is_told_what_next_step_does_in_the_masking_step(rig):
-    instructions = rig.experimenter.text["instructions"]
     shown = []
 
     def watch(trial):
@@ -275,8 +284,8 @@ def test_the_experimenter_is_told_what_next_step_does_in_the_masking_step(rig):
     virtual = Virtual(rig, MaskingCheck(rig))
     virtual.before_step = _reports_audible(rig, 1, also=watch)
     virtual.run()
-    assert shown[0] == instructions["masking_check_mask"]
-    assert shown[-1] == instructions["masking_check_mask_earplugs"]
+    assert shown[0] == cfg.instruction(rig.session.config, "masking_check_mask")
+    assert shown[-1] == cfg.instruction(rig.session.config, "masking_check_mask_earplugs")
 
 
 def test_unmaskable_even_with_earplugs_is_recorded_not_refused(rig):
@@ -381,6 +390,9 @@ def test_the_rehearsal_fires_the_real_stop_and_shows_the_resume(rig, loaded, tmp
     session = rig.session
     screens = session.config.participant_text["screens"]
     seen = []
+    instructions = []
+    real = rig.experimenter.set_instruction
+    rig.experimenter.set_instruction = lambda text: (instructions.append(text), real(text))
     virtual = Virtual(rig, StopRehearsal(rig))
 
     def watch(trial):
@@ -390,6 +402,11 @@ def test_the_rehearsal_fires_the_real_stop_and_shows_the_resume(rig, loaded, tmp
     result = virtual.run()
 
     assert result == StopRehearsalResult(press_detected=True)
+    # After the press, what to say and then Resume; after the Resume, not Resume again
+    # (LOG N7.F11b3).
+    done = cfg.instruction(session.config, "stop_rehearsal_done")
+    resume = cfg.instruction(session.config, "stop_rehearsal_resume")
+    assert instructions.index(resume) < instructions.index(done)
     stops = _events(session, "emergency_stop")
     assert len(stops) == 1 and stops[0]["origin"] == "participant", "the real path's own event"
     assert _events(session, "stop_rehearsal_press_detected")

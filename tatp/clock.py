@@ -20,6 +20,12 @@ from tatp.units import MS_PER_S
 
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%f"
 FILENAME_FORMAT = "%Y-%m-%d_%H-%M-%S"
+TIME_FORMAT = "%H:%M:%S"
+
+
+def time_of(wall_iso: str) -> str:
+    """A `wall_iso` stamp's time to the second, as the experimenter reads it off the log."""
+    return datetime.fromisoformat(wall_iso).strftime(TIME_FORMAT)
 
 
 class Clock:

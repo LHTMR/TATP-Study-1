@@ -36,9 +36,9 @@ from tatp.procedure import Procedure, Rig
 from tatp.session import Session, SessionError
 from tatp.ui.experimenter import ExperimenterWindow
 
-# A key in config/text/participant_*.yaml, not wording. There is no participant mapping
-# screen; the participant is instructed and answers verbally (SPEC.md 8.4).
-STANDBY_SCREEN = "standby"
+# There is no participant mapping screen, only standby: the participant is instructed and
+# answers verbally (SPEC.md 8.4).
+from tatp.ui.participant import STANDBY_SCREEN
 
 # The formula takes opposite pairs, so it is defined for exactly four paths round the zone.
 N_PATHS_FOR_AREA = 4
@@ -100,6 +100,11 @@ class MappingLedger(QObject):
         )
         self.time_points: dict[str, _TimePoint] = {}
         self.prompted = False
+        # Time points whose paths have all been walked: their distances are what the reminder
+        # asks for (`_remind`).
+        self.walked: set[str] = set()
+        # The implausible-distance query on the warning line, withdrawn once answered.
+        self._query_warning: str | None = None
         experimenter.distances_entered.connect(self.enter)
 
     # -- written by the mapping procedure ------------------------------------------------
@@ -130,6 +135,23 @@ class MappingLedger(QObject):
         self.session.log(
             "mapping_restored", severity="warning",
             detail=f"{phase}: {len(distances)} of {self.n_paths} distances already recorded",
+        )
+        self.walked.add(phase)
+        self._remind()
+
+    def paths_walked(self, phase: str) -> None:
+        """Every path of a time point has been walked: its distances can be measured now."""
+        self.walked.add(phase)
+        self._remind()
+
+    def _remind(self) -> None:
+        """The reminder to measure and enter the distances, for as long as a walked time
+        point's are not all in. A reminder line of its own, not the status, which the next
+        trial replaces, and not the warning line, which a warning takes over and a stage
+        start clears (15 Oct 2026 pilot review)."""
+        waiting = [phase for phase in self.walked if not self.time_points[phase].area_written]
+        self.experimenter.set_reminder(
+            self.experimenter.text["instructions"]["mapping_distances"] if waiting else ""
         )
 
     # -- the experimenter's entries ----------------------------------------------------
@@ -185,10 +207,18 @@ class MappingLedger(QObject):
             if path in point.starts:
                 self._write_path(phase, point, path)
         if warnings:
-            self.experimenter.set_status(" ".join(warnings))
-            self.experimenter.refresh()
+            self._query_warning = " ".join(warnings)
+            self.experimenter.set_warning(self._query_warning)
+        elif self._query_warning is not None and not any(
+            p.queried for p in self.time_points.values()
+        ):
+            # Every query answered: confirmed, or replaced by a plausible value.
+            self.experimenter.clear_warning(self._query_warning)
+            self._query_warning = None
         if point.complete and (not point.area_written or corrected):
             self._write_area(phase, point)
+        self._remind()
+        self.experimenter.refresh()
 
     # -- session end (SPEC.md 8.4) ------------------------------------------------------
 
@@ -225,6 +255,7 @@ class MappingLedger(QObject):
                 elif path not in point.rows:
                     self._write_path(phase, point, path)
             self._write_area(phase, point)
+        self._remind()
         return True
 
     # -- plumbing ----------------------------------------------------------------------
@@ -316,14 +347,20 @@ class AreaMapping(Procedure):
     def _await_path(self) -> None:
         self.path += 1
         if self.path > self.n_paths:
+            # The borders are on the skin; what is left is measuring them, whenever convenient.
+            self.ledger.paths_walked(self.session.phase)
+            self.experimenter.refresh()
             self.finish(MappingResult(self.session.phase, self.n_paths))
             return
-        text = self.experimenter.text["instructions"]
-        ready = text["mapping_ready"].format(
-            path=self.ledger.path_name(self.path), value=self.n_paths
+        ready = self.instruction_text(
+            "mapping_ready", index=self.path, count=self.n_paths,
+            path=self.ledger.path_name(self.path),
         )
         # Read aloud before the first path; there is no participant mapping screen.
-        instruction = f"{text['mapping_script']}\n\n{ready}" if self.path == 1 else ready
+        if self.path == 1:
+            instruction = f"{self.instruction_text('mapping_script')}\n\n{ready}"
+        else:
+            instruction = ready
 
         def prepare() -> None:
             self._standby()
@@ -338,11 +375,10 @@ class AreaMapping(Procedure):
         self._standby()
         self.ledger.path_started(self.session.phase, self.path)
         self.session.log("mapping_path_started", origin="experimenter", detail=self._detail())
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["mapping_path"].format(
-                path=self.ledger.path_name(self.path)
-            )
-        )
+        self.experimenter.set_instruction(self.instruction_text(
+            "mapping_path", path=self.ledger.path_name(self.path),
+            step=f"{float(self.mapping['step_size_mm']):g}",
+        ))
         self.experimenter.refresh()
         self.cue = 0
         self.on_proceed(self._stop_path)

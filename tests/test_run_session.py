@@ -11,11 +11,14 @@ import csv
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication, QDialog
 
 import run_session
 from tatp import config as cfg
 from tatp import preflight as pre
+from tatp.devices import Present, candidates, check_key
 from tatp.session import SessionError
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
@@ -245,6 +248,77 @@ def test_unresolved_open_items_are_printed_before_the_windows_open(loaded):
 
 
 # -- build and shut_down ------------------------------------------------------------------
+
+
+def test_one_screen_puts_the_participant_window_above_the_experimenters(app, config):
+    """A MacBook (docs/LOG.md N7.F12e5): the experimenter window is maximised, so a
+    participant window on the same screen is kept above it, at its own size, to be usable."""
+    runner = run_session.build(config, run_session.parse_args(ARGV), _never)
+    participant = runner.rig.participant
+    width, height = config.hardware["screens"]["shared_participant_window_px"]
+    assert participant.windowFlags() & Qt.WindowStaysOnTopHint
+    assert (participant.width(), participant.height()) == (width, height)
+    available = QGuiApplication.primaryScreen().availableGeometry()
+    assert participant.geometry().bottomRight().x() <= available.right() + 1
+    run_session.shut_down(runner)
+
+
+def test_with_no_dialog_the_shared_window_stays_above_and_shown(app, config):
+    """Showing and activating the maximised experimenter window does not cover it."""
+    runner = run_session.build(config, run_session.parse_args(ARGV), _never)
+    participant, experimenter = runner.rig.participant, runner.rig.experimenter
+    experimenter.activateWindow()
+    experimenter.raise_()
+    assert participant.windowFlags() & Qt.WindowStaysOnTopHint
+    assert participant.isVisible()
+    assert participant.testAttribute(Qt.WA_ShowWithoutActivating)
+    run_session.shut_down(runner)
+
+
+def test_a_command_line_session_runs_as_its_participant_input_says(app, loaded):
+    """Spec review: a hand-edited `participant_input: keyboard` must not record the keyboard
+    while running the remote's keys."""
+    responder = {**loaded.hardware["responder"], "participant_input": "keyboard"}
+    edited = cfg.Config(**{**loaded.__dict__,
+                           "hardware": {**loaded.hardware, "responder": responder}})
+    config = run_session.named_session(edited, run_session.parse_args(ARGV))
+    assert config.hardware["responder"]["keys"] == loaded.hardware["responder"][
+        "alternative_keys"]
+    assert config.hardware["responder"]["key_source"] == "any_keyboard"
+
+
+def test_a_shared_participant_window_never_hides_an_experimenter_dialog(app, config):
+    """Code review: kept above the experimenter window, but not above a modal question."""
+    runner = run_session.build(config, run_session.parse_args(ARGV), _never)
+    participant = runner.rig.participant
+    dialog = QDialog(runner.rig.experimenter)
+    dialog.show()
+    assert not participant.windowFlags() & Qt.WindowStaysOnTopHint
+    assert participant.isVisible()
+    dialog.hide()
+    assert participant.windowFlags() & Qt.WindowStaysOnTopHint
+    assert participant.isVisible()
+    run_session.shut_down(runner)
+
+
+def test_a_demonstration_from_the_command_line_runs_on_whatever_is_connected(app, loaded,
+                                                                             monkeypatch):
+    """S's MacBook from a terminal: one screen, its own speakers, no remote (code review)."""
+    import tatp.hardware_check
+
+    monkeypatch.setattr(tatp.hardware_check, "present_now", lambda hardware, choices: Present(
+        [(1470, 956)], [], None, outputs=["Speakers, Core Audio"], default_output="Speakers",
+        checks={role: {check_key(spec): ("" if spec is None else "No output device")
+                       for spec in specs}
+                for role, specs in candidates(hardware, choices).items()},
+    ))
+    elsewhere = cfg.Config(**{**loaded.__dict__,
+                              "hardware": {**loaded.hardware, "lab_platform": "elsewhere"}})
+    config = run_session.on_this_computer(elsewhere)
+    assert config.hardware["screens"]["participant_screen_index"] is None
+    assert config.hardware["audio"]["participant_device"] is None
+    assert config.hardware["audio"]["experimenter_device"] is None
+    assert config.hardware["responder"]["key_source"] == "any_keyboard"
 
 
 def test_build_returns_an_unstarted_runner_holding_the_lock(app, config):

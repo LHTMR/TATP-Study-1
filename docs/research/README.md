@@ -15,6 +15,7 @@ Numbers are never reused.
 | [R33](R33-touchcal-equalisation-mismatch.md) | What counts as a mismatch in the Protocol B equalisation check, and how re-adjustment loops (SPEC §9) | medium | A pair is both orders; a second pair only if the first favoured one channel both times; a channel winning all four is re-adjusted from both start points and re-checked once (LOG N7.C5) |
 | [R34](R34-vas-proportionality-training-frequency.md) | Is the VAS proportionality instruction (SPEC §10.6) given at first use of each scale in every session, or only in session 1? | medium | Every session, at the first use of each scale in that session (LOG N7.T1) |
 | [R35](R35-vas-practice-rating.md) | Should the VAS training's practice rating be free placement or aimed at a target, and should it be recorded, and where? (SPEC §10.6) | medium | Free placement, no target, no feedback; logged only (`vas_practice_rating`), never in a ratings table |
+| [R36](R36-recalibration-after-emergency-stop.md) | What re-calibration to offer when resuming from an emergency stop, by phase (S's pilot, 15 Oct 2026) | medium | In touch calibration only: Resume, Rebalance channels or Restart calibration, once per session; elsewhere Resume as now; lowering a channel or stopping the touch mid-intervention is S's |
 
 ## To fetch
 
@@ -38,3 +39,6 @@ papers are copyrighted), a later session re-reads it and updates the report that
 | 10.1017/S0140525X00040061 | Poulton 1995, Bias by stimuli presented before the start of an investigation (abstract only; which biases, and how large) | R35 |
 | 10.1037/0033-2909.86.4.777 | Poulton 1979, Models for biases in judging sensory magnitude (known only from citations; transfer and centring bias) | R35 |
 | 10.1016/j.pain.2013.01.016 | Watkinson et al. 2013, Pain ratings reflect cognitive context: a range frequency model of pain perception (abstract only; effect sizes) | R35 |
+| (look up by title) | Liljencrantz et al. 2013, Altered C-tactile processing in human dynamic tactile allodynia, *Pain* 154:227–234 (read only through the 2014 open review) | R36 |
+| 10.1097/00001756-199905140-00022 | Petersen & Rowbotham 1999, heat/capsaicin rekindling model, *Neuroreport* 10:1511–1516 (abstract only) | R36 |
+| 10.1152/jn.1991.66.1.190 | LaMotte et al. 1991, neurogenic hyperalgesia areas and time course, *J Neurophysiol* 66:190–211 (abstract only) | R36 |

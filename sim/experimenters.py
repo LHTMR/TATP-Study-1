@@ -12,12 +12,15 @@ The normal experimenter runs a whole session from the experimenter screen, and o
   screen for well under a millisecond.
 - **It presses Next step whenever the screen says the software is waiting for it** -- the
   garment fitted, the thermode started, the capsaicin, the next block, the next mapping path,
-  the rekindle -- and presses it again to stop each mapping path. The software decides when a
+  the rekindle, the intervention's end, and at last the session complete, which closes the
+  program -- and presses it again to stop each mapping path. The software decides when a
   press counts (SPEC.md 7.4); a press it is not waiting for is ignored, as the lab's would be.
 - **It enters the four mapping distances** once a time point's four paths have run.
 - **It resumes after an interruption**, through `resume_requested`, after `resume_after_s` of
   session time. The resume is the experimenter's and never a timer's (SPEC.md 10.9); this is
-  the experimenter.
+  the experimenter. Not with `resumes_by_itself` false, as a demonstration on a real garment
+  sets it: a person resumes then. It never re-calibrates (docs/LOG.md N7.F12a1), from the
+  controls or in place of Resume, so the validator's runs keep their shape.
 - It accepts a touch-calibration estimate that is put to it, re-runs one that cannot be used,
   and proceeds past an uneven or zero-gain question, so a session never waits on it.
 
@@ -41,6 +44,8 @@ from collections.abc import Callable
 from PySide6.QtCore import QObject, QTimer
 
 from sim.responders import TICK_S, VirtualParticipant
+from tatp.config import instruction, instruction_template
+from tatp.interruption import RECALIBRATION
 from tatp.procedure import Rig
 from tatp.units import MS_PER_S
 
@@ -52,12 +57,20 @@ NORMAL_DISTANCES_MM = (40.0, 35.0, 45.0, 30.0)
 SCENARIO_ENDED = "validator: the scenario's error path is over"
 # Instructions after which the software waits for Next step.
 PROCEED_INSTRUCTIONS = (
-    "fit_garment", "thermode_start", "capsaicin_apply", "capsaicin_remove",
-    "intervention_start", "thermode_rekindle", "ready", "touchcal_uneven", "earplugs",
+    "capsaicin_apply", "capsaicin_remove", "thermode_rekindle", "rekindle_remove",
+    "touchcal_uneven", "earplugs", "ready_long_first",
+    # The intervention's end, told to the participant, and the session complete, whose Next
+    # step closes the program (docs/LOG.md N7.F11c9, N7.F11c10).
+    "intervention_end", "session_complete",
 )
-# Templated instructions after which the software waits for Next step. The VAS training: the
-# anchors and proportionality explained aloud, then the go (SPEC.md 10.6).
-PROCEED_TEMPLATES = ("touchcal_gain_undefined", "vas_training")
+# Templated instructions after which the software waits for Next step: the ready line of each
+# kind of series and block, and the VAS training -- the anchors and proportionality explained
+# aloud, then the go (SPEC.md 10.6).
+PROCEED_TEMPLATES = (
+    "fit_garment", "thermode_start", "intervention_start", "touchcal_gain_undefined",
+    "vas_training", "ready_long", "ready_short", "ready_brush", "ready_pinprick_block",
+    "ready_touch_block",
+)
 
 
 def template_pattern(template: str) -> re.Pattern:
@@ -85,21 +98,25 @@ class VirtualExperimenter(QObject):
         self.resume_after_s = resume_after_s
         self.abort_when = abort_when
         text = rig.experimenter.text
-        instructions = text["instructions"]
-        self._apply = template_pattern(instructions["apply_filament"])
-        self._brush = template_pattern(instructions["apply_brush"])
-        self._mapping_ready = template_pattern(instructions["mapping_ready"])
-        self._mapping_path = template_pattern(instructions["mapping_path"])
-        self._proceed_templates = [
-            template_pattern(instructions[key]) for key in PROCEED_TEMPLATES
-        ]
-        self._proceed = {instructions[key] for key in PROCEED_INSTRUCTIONS} | {
+        config = rig.session.config
+
+        def template(key: str) -> re.Pattern:
+            # As the screen shows it: the buttons, the sentences said aloud and the remote's
+            # symbols filled in, the step's own values still fields.
+            return template_pattern(instruction_template(config, key))
+
+        self._apply = template("apply_filament")
+        self._brush = template("apply_brush")
+        self._mapping_ready = template("mapping_ready")
+        self._mapping_path = template("mapping_path")
+        self._proceed_templates = [template(key) for key in PROCEED_TEMPLATES]
+        self._proceed = {instruction(config, key) for key in PROCEED_INSTRUCTIONS} | {
             text["dialogs"]["distances_outstanding"]
         }
-        self._accept = {instructions["touchcal_stage1_failed"],
-                        instructions["touchcal_fit_review"],
-                        instructions["touchcal_stage1_exhausted"]}
-        self._rerun = template_pattern(instructions["touchcal_stage1_unusable"])
+        self._accept = {instruction_template(config, key) for key in (
+            "touchcal_stage1_failed", "touchcal_fit_review", "touchcal_stage1_exhausted"
+        )}
+        self._rerun = template("touchcal_stage1_unusable")
         self._accept_patterns = [template_pattern(t) for t in self._accept]
         self._phases = {label: key for key, label in text["phases"].items()}
         self._forces = {
@@ -121,6 +138,9 @@ class VirtualExperimenter(QObject):
         self.reaction_s = 0.0
         # The reason recorded when it re-runs an estimate that cannot be used.
         self.rerun_reason = SCENARIO_ENDED
+        # False for a demonstration on a real garment (tatp/demo.py): it then leaves every
+        # interruption, an emergency stop above all, for a person to resume (SPEC.md 10.9).
+        self.resumes_by_itself = True
         self._instruction = ""
         self._instruction_at_s = 0.0
 
@@ -248,13 +268,17 @@ class VirtualExperimenter(QObject):
     # -- interruptions --------------------------------------------------------------------
 
     def _on_interrupted(self, kind: str) -> None:
-        if not self.acts:
-            return  # a person at the experimenter screen resumes
+        # A person at the experimenter screen resumes; a re-calibration is never resumed.
+        if not self.acts or not self.resumes_by_itself or kind == RECALIBRATION:
+            return
         # A child timer rather than `QTimer.singleShot`, so it dies with this object and a
         # resume can never reach a later run.
         self._resume_timer.start(self.rig.session.clock.scaled_ms(self.resume_after_s))
 
     def _resume(self) -> None:
+        # A person beside it may have ended the stop with a re-calibration meanwhile.
+        if self.rig.interruptions.active is None:
+            return
         self.resumes += 1
         self.rig.experimenter.resume_requested.emit()
 

@@ -33,9 +33,11 @@ terms:
     distal: distal
     medial: medial
   # Filled into warnings.out_of_range (SPEC.md 8.2).
+  # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced. Shortened so the warning
+  # fits the status region.
   out_of_range:
-    below: the lightest filament was already rated at or above the target
-    above: the heaviest filament was still rated below the target
+    below: even the lightest reached the target
+    above: even the heaviest stayed below the target
   # The two kinds of intervention block, filled into status.block_label. Identical in every
   # condition, so naming them reveals nothing (SPEC.md 16).
   block_types:
@@ -71,125 +73,288 @@ phases:
   rekindle: Rekindle
   post_intervention: Post-intervention
   session_end: Session end
+  # Not phases of the session: what the countdown names while the capsaicin is on, and while
+  # the rekindle heat is on. `capsaicin_removal` is also the scheduled step's name in the log.
+  # DRAFT (LOG N7.F11b17): written by the build, not ethics-sourced
+  capsaicin_removal: Capsaicin removal
+  # DRAFT (LOG N7.F11b10): written by the build, not ethics-sourced
+  rekindle_end: End of the rekindle heat
 
 instructions:
   # SPEC.md 11: what to do now, alongside the zone diagram.
+  #
+  # Filled by `tatp.config.instruction`: {controls[...]} with the button labels below, so an
+  # instruction never names a button its own way (LOG N7.F11b18); {say[...]} with a sentence
+  # from `say:` in the PARTICIPANT's language, since it is said to them (LOG N7.F11b19); the
+  # remote's button symbols ({confirm} ...) from hardware.yaml; and the step's own values.
   monofilament: >-
     Approach perpendicular from about 3 cm. Bend the filament to about three-quarters of its
     extended length, hold for about 1 s, no lateral movement, then remove slowly. Keep the
     site out of the participant's view.
   # Filaments are named by the gram label printed on them (SPEC.md 8.1), with the force after.
-  apply_filament: Apply the {filament} g filament ({force_mn} mN) at site {site}, {region} zone.
+  # "Now:" so the application in progress never reads like the one before (LOG N7.F11b8).
+  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced
+  apply_filament: 'Now: apply the {filament} g filament ({force_mn} mN) at site {site}, {region} zone.'
   # One stroke of about 2 cm, never repeated: repetition raises pain (docs/research/RB2).
-  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
-  apply_brush: 'Brush the {region} zone at site {site}: one single stroke of about 2 cm.'
-  mapping_path: Map path {path}. Step inward 5 mm on each cue and stop when the participant signals.
-  # Read aloud before the first path. The mapping is instructed verbally and the participant
-  # answers verbally, so this is the only place the wording exists -- there is no participant
-  # mapping screen. Examples of the change are Bilaga 1's own ("burning", "tenderness", "more
-  # intense pricking"); keep them, they are what the plan says participants are told.
-  mapping_script: >-
-    Say aloud: "I will touch you with this filament, moving a small step at a time towards the
-    marked area. Tell me as soon as the feeling clearly changes — burning, tenderness, or a
-    sharper pricking."
+  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced
+  apply_brush: 'Now: brush the {region} zone at site {site}, one single stroke of about 2 cm.'
+  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced. The jittered gap after a
+  # rating, so the last application's prompt is not left up as if still to do. Never names
+  # the next filament.
+  between_applications: 'Response received. Wait: the next application will appear here.'
+  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced. The same gap after a
+  # discard, which the status reports, whether a repeat follows or not.
+  between_applications_discarded: 'Discarded. Wait: the next step will appear here.'
+  # DRAFT (LOG N7.F11b11): written by the build, not ethics-sourced. {step} is
+  # mapping.step_size_mm.
+  mapping_path: 'Path {path}: move the filament {step} mm inward on each tick. When the participant reports a change, press {controls[proceed]} and mark the border on the skin.'
+  # Read aloud before the first path: `say.mapping`.
+  mapping_script: 'Say aloud: "{say[mapping]}"'
   mapping_distances: Measure each border from the centre of the primary zone, and enter the four distances in mm whenever convenient. This never blocks the session.
-  fit_garment: Fit the garment and confirm all five channels are seated.
-  thermode_start: Start the thermode at 50 °C. The software times the phase and does not command the device.
-  thermode_rekindle: Rekindle now. The garment has been deactivated and will be reactivated afterwards.
-  capsaicin_apply: Apply 0.075 % capsaicin.
-  # SPEC.md 7.4, 8.3: the software times, the experimenter launches.
-  ready: Ready. Press Next step when the participant is ready.
-  mapping_ready: Path {path} of {value}. Press Next step to start the pacing cue, and again to stop it at the border.
+  # DRAFT (LOG N7.F12g2): written by the build, not ethics-sourced. Nothing about the warning
+  # cue: it is now words ("Get ready"), which explain themselves the first time they appear, so
+  # the sentence the circle needed (N7.F11b1) is gone.
+  fit_garment: >-
+    Fit the garment and check that all five channels are seated. Give the participant the
+    remote and show the buttons: {decrease} {increase} move, {confirm} confirms,
+    {emergency_stop} stops. Put the headphones on. Then press {controls[proceed]}.
+  # DRAFT (LOG N7.F11b2): written by the build, not ethics-sourced
+  welcome: >-
+    The participant reads the welcome and presses {confirm}. The stop rehearsal follows at
+    once: the touch starts and they are asked to press the stop button.
+  # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. {minutes} is the
+  # sensitisation window's length (schedule.yaml), inside `say.heat`.
+  thermode_start: >-
+    Heat: tell the participant "{say[heat]}" Place the thermode (50 °C) on the primary zone
+    and press {controls[proceed]} the moment it starts heating: this is time zero.
+  # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. While the heat is on.
+  heat_on: Heat on. Remove the thermode when the capsaicin is due.
+  # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced
+  capsaicin_apply: Remove the thermode. Apply 0.075 % capsaicin to the primary zone, then press {controls[proceed]}.
+  # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. While the capsaicin is on.
+  capsaicin_on: Capsaicin on. Remove it when the countdown ends.
+  # DRAFT (LOG N7.F11b10): written by the build, not ethics-sourced
+  thermode_rekindle: >-
+    Rekindle: the garment's touch is off. Place the thermode on the primary zone and press
+    {controls[proceed]} as it starts heating.
+  # DRAFT (LOG N7.F11b10): written by the build, not ethics-sourced. While the rekindle heat is
+  # on; the countdown above counts to its end.
+  rekindle_heating: Rekindle heat on. Remove the thermode when the countdown ends.
+  # DRAFT (LOG N7.F11b10): written by the build, not ethics-sourced
+  rekindle_remove: Remove the thermode, then press {controls[proceed]}. The garment's touch starts again.
+  # SPEC.md 7.4, 8.3: the software times, the experimenter launches. One per kind of series,
+  # saying what is about to be applied (LOG N7.F11b7). {n} is the configured count.
+  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
+  ready_long: >-
+    Filament series, {region} zone, starting with the {filament} g filament. Have the
+    filaments to hand, then press {controls[proceed]}.
+  # DRAFT (LOG N7.F11b14): written by the build, not ethics-sourced. Before the session's
+  # first pain measure, which is followed by the pain scale's training.
+  ready_long_first: 'First pain measures. Tell the participant: "{say[first_pain]}" Then press {controls[proceed]}.'
+  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
+  ready_short: '{n} applications of the {filament} g filament, {region} zone. Have it to hand, then press {controls[proceed]}.'
+  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
+  ready_brush: '{n} brush strokes, {region} zone. Have the brush to hand, then press {controls[proceed]}.'
+  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced. An intervention pinprick
+  # block: {ready} is `ready_short`.
+  ready_pinprick_block: 'Pinprick block {block}: {ready}'
+  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
+  ready_touch_block: 'Touch-rating block {block}: nothing to apply. Press {controls[proceed]} and the participant rates the touch.'
+  # DRAFT (LOG N7.F11b11): written by the build, not ethics-sourced
+  mapping_ready: 'Path {index} of {count} ({path}). Start outside the area. Press {controls[proceed]} to start the tick.'
   await_participant: Waiting for the participant's response.
   response_received: Response received.
-  # DRAFT (LOG N7.T2): written by the build, not ethics-sourced. The VAS proportionality
-  # training (SPEC.md 10.6), before a scale's first rating; the same in every condition.
-  # Reworded (LOG N7.F7a): the proportionality sentence is said aloud here, not shown to the
-  # participant.
+  # DRAFT (LOG N7.F11b5): written by the build, not ethics-sourced. The VAS proportionality
+  # training (SPEC.md 10.6), before a scale's first rating; the same in every condition. The
+  # experimenter cannot see the participant's screen, so the labels are given here:
+  # {anchors} are the participant text's anchors for the scale, left to right, and
+  # {explanation} is `say.proportionality`, both in the PARTICIPANT's language.
   vas_training: >-
-    Rating scale training: explain the labels along the line aloud, and explain that
-    "{explanation}" Then press Next step.
+    Rating-scale training. Tell the participant: "{say[training_scale]}" Read the labels from
+    left to right: {anchors}. Then say: "{explanation}" Then press {controls[proceed]}.
   # DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. After that Next step, while
   # the participant makes the practice rating. Never shows where they put the marker.
   vas_training_wait: >-
-    Rating scale training: the participant is making a practice rating and confirms it with ▶.
-    It is not recorded as a rating.
+    Rating scale training: the participant is making a practice rating and confirms it with
+    {confirm}. It is not recorded as a rating.
   # Setup and touch calibration (SPEC.md 9, 10.7, 10.9). None names a pattern or a condition.
-  masking_check: 'Audio setup: the participant is setting the noise level against the garment.'
-  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. The masking step (SPEC.md
+  # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced. Step 1 of the masking
+  # check, with the garment still off.
+  masking_check: 'Audio setup, part 1: the participant turns the noise up until they can hear it easily. The garment starts next.'
+  # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced. The masking step (SPEC.md
   # 10.7): the participant is told to say so if they can still hear the garment, and the
   # experimenter's Next step is what records it.
   masking_check_mask: >-
-    Audio setup: the garment is running and the participant is raising the noise to cover it.
-    If they say they can still hear the garment, press Next step. The noise stops so you can
-    offer earplugs.
-  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. The same step with earplugs in.
+    Audio setup, part 2: the garment is running and the participant raises the noise to cover
+    it. Press {controls[proceed]} only if they say they can still hear the garment: that
+    records it and stops the noise so you can offer earplugs.
+  # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced. The same step with earplugs in.
   masking_check_mask_earplugs: >-
-    Audio setup, with earplugs: the participant is raising the noise to cover the garment. If
-    they say they can still hear it, press Next step. The session continues, recorded as not
-    fully masked.
-  earplugs: Fit the earplugs under the headphones, then press Next step.
+    Audio setup, with earplugs: the participant raises the noise to cover the garment. Press
+    {controls[proceed]} only if they say they can still hear it: that records it, and the
+    session continues recorded as not fully masked.
+  # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced. The `settled` screen, where
+  # Next step does nothing.
+  masking_done: 'Audio setup done. The participant reads the screen and presses {confirm}; touch calibration follows.'
+  # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced
+  earplugs: >-
+    Fit the earplugs under the headphones. Tell the participant: "{say[earplugs]}" Then press
+    {controls[proceed]}.
+  # DRAFT (LOG N7.F11b3): written by the build, not ethics-sourced
   stop_rehearsal: >-
-    Stop rehearsal: the participant will now press the stop button. When the stop screen shows,
-    press Resume. Press Next step only if they cannot press it.
-  stop_rehearsal_resume: The stop was detected. Press Resume to carry on in front of the participant.
-  touchcal_bracket: 'Touch calibration, step 1: the participant sets the touch on the middle channel.'
+    Stop rehearsal: the touch is running and the participant is asked to press the stop
+    button. Wait for the press. {controls[proceed]} is only for a participant who cannot press,
+    and it records no press.
+  # DRAFT (LOG N7.F11b3): written by the build, not ethics-sourced
+  stop_rehearsal_resume: 'The stop worked. Tell the participant: "{say[stop_works]}" Then press {controls[resume]}.'
+  # DRAFT (LOG N7.F11b3): written by the build, not ethics-sourced. After the resume, while
+  # `stop_rehearsal_done` is up.
+  stop_rehearsal_done: The participant reads that the stop button works at any time and presses {confirm}. The audio setup follows.
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced. "Each starts from no touch"
+  # holds while touch_calibration.adjustments_per_anchor is 1 (tests/test_touchcal.py).
+  touchcal_bracket: >-
+    Touch calibration, step 1 of 6: the participant sets the touch on the middle channel,
+    first to just noticeable, then to just uncomfortable. Each starts from no touch.
   # DRAFT (LOG N7.F8c): the progress, "x/N answered" (S, 5 Oct 2026).
-  touchcal_estimation: 'Touch calibration, step 2: the participant rates a series of touches. {answered}/{total} answered.'
-  touchcal_match: 'Touch calibration, step 3: the participant matches channel {channel} to the middle channel.'
-  touchcal_equalise: 'Touch calibration, step 4: the participant compares channel {channel} with the middle channel.'
-  touchcal_pleasantness: 'Touch calibration, step 5: the participant sets the most pleasant level.'
-  touchcal_evenness: 'Touch calibration: the participant is asked whether the movement feels even.'
-  touchcal_preference: 'Touch calibration, step 6: the participant chooses a kind of touch.'
-  touchcal_fit_review: The touch-calibration estimate is ready. Accept it, or re-run the procedure.
-  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
-  f40_fit_review: The F40 estimate is ready. Accept it, or re-run the procedure.
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
+  touchcal_estimation: 'Touch calibration, step 2 of 6: the participant rates a series of touches. {answered}/{total} answered.'
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced. {index} of {count} counts
+  # the channels matched to the middle one.
+  touchcal_match: 'Touch calibration, step 3 of 6: the participant matches channel {channel} ({index} of {count}) to the middle channel.'
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced. Step 3's matching, repeated
+  # inside step 4 for a channel that still felt different.
+  touchcal_readjust: 'Touch calibration, step 4 of 6: channel {channel} did not match the middle channel, so the participant sets it again.'
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
+  touchcal_equalise: 'Touch calibration, step 4 of 6: the participant compares channel {channel} ({index} of {count}) with the middle channel.'
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
+  touchcal_pleasantness: 'Touch calibration, step 5 of 6: the participant sets the most pleasant level.'
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
+  touchcal_evenness: 'Touch calibration, after step 5: the participant is asked whether the movement feels even.'
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
+  touchcal_preference: 'Touch calibration, step 6 of 6: the participant chooses a kind of touch.'
+  # DRAFT (LOG N7.F11b18): written by the build, not ethics-sourced
+  touchcal_fit_review: 'The touch-calibration estimate is ready. Press {controls[fit_accept]}, or {controls[fit_rerun]}.'
+  # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced
+  f40_fit_review: 'The pinprick-force estimate (F40) is ready. Press {controls[fit_accept]}, or {controls[fit_rerun]}.'
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_failed: >-
-    The touch-calibration estimate failed its quality check ({value}). Re-run the procedure, or
-    accept it to continue with the estimate flagged.
+    The touch-calibration estimate failed its quality check ({value}). Press
+    {controls[fit_rerun]} to repeat steps 1 and 2, and tell the participant: "{say[rerun]}" Or
+    press {controls[fit_accept]} to go on with it flagged.
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_unusable: >-
-    The touch-calibration estimate cannot be used ({value}). Re-run the procedure, or abort the
-    session.
+    The touch-calibration estimate cannot be used ({value}). Press {controls[fit_rerun]} to
+    repeat steps 1 and 2, and tell the participant: "{say[rerun]}" Or press {controls[abort]}.
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced. No re-run is offered: the
+  # limit is reached, and a re-run is refused.
   touchcal_stage1_exhausted: >-
     The touch-calibration estimate cannot be used ({value}) and the re-run limit is reached.
-    Accept to continue on a fallback that is recorded as not valid for analysis, or abort the
-    session.
+    Press {controls[fit_accept]} to go on with a fallback that is recorded as not valid for
+    analysis, or press {controls[abort]}.
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_gain_undefined: >-
-    Channel {channel} was matched at 0 kPa again. Rebalance to repeat the match, or proceed
-    with this channel at the middle channel's pressure, which is recorded as not valid for
-    analysis.
+    Channel {channel} was matched at 0 kPa again. Press {controls[rebalance]} to repeat the
+    match, or {controls[proceed]} to continue with this channel at the middle channel's
+    pressure, which is recorded as not valid for analysis.
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_uneven: >-
-    The participant reports the movement as uneven along the arm. Rebalance the channels, or
-    proceed.
+    The participant reports the movement as uneven along the arm. Press {controls[rebalance]}
+    to repeat steps 3 and 4, or {controls[proceed]} to go on.
   # Shown at the start of every touch delivery in EVERY condition, and nothing else is: only
   # one condition is self-started, so any line about starting it would name that condition
   # (SPEC.md 16). A test holds the experimenter screen identical across the three.
-  touch_start: 'Touch: the garment is being started.'
+  # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced
+  touch_start: The garment's touch is starting.
   # The session sequencer (SPEC.md 2, 7.4). The software times and the experimenter launches;
   # none of these names a condition, a pattern or anything about the touch that differs.
-  waiting: Waiting for the next scheduled step. The countdown shows when it is due.
-  capsaicin_remove: Remove the capsaicin, then press Next step to begin the post-sensitisation measures.
-  intervention_start: The intervention starts now. Press Next step to start the touch.
-  touch_block: 'Touch-rating block: the participant rates the touch.'
+  # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced
+  waiting: Nothing to do until the next step. The countdown above shows when it is due.
+  # DRAFT (LOG N7.F11b18): written by the build, not ethics-sourced
+  capsaicin_remove: Remove the capsaicin, then press {controls[proceed]} to begin the post-sensitisation measures.
+  # DRAFT (LOG N7.F11b13): written by the build, not ethics-sourced. Identical in every
+  # condition: in every condition the garment touches (SPEC.md 12). {hours} is the
+  # intervention window's length (schedule.yaml), inside `say.intervention`.
+  intervention_start: 'Intervention. Tell the participant: "{say[intervention]}" Then press {controls[proceed]}.'
+  # DRAFT (LOG N7.F11c7): written by the build, not ethics-sourced. The count as in
+  # `touchcal_estimation`: the same in every condition, never what was answered.
+  touch_block: 'Touch-rating block: the participant rates the touch. {answered}/{total} answered.'
   baseline_ratings: 'Baseline: the participant rates how they feel right now.'
-  intervention_end: The intervention has ended and the garment has been switched off.
+  # DRAFT (LOG N7.F11c10): written by the build, not ethics-sourced. A wait for Next step, so
+  # the participant is told before the measures begin again; the same in every condition.
+  intervention_end: >-
+    The intervention has ended; the garment is off. Tell the participant: "{say[intervention_end]}"
+    Then press {controls[proceed]}.
+  # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced. The last instruction, once
+  # the session is closed and every file written; Next step closes the program.
+  session_complete: >-
+    Session complete. All data is saved. Remove the garment and tell the participant the visit
+    is over. Press {controls[proceed]} to close the program.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced. While the participant reads
+  # the introduction to the next kind of task in touch calibration (participant
+  # `screens.intro_*`), one whole line each, numbered as the step instructions are.
+  touchcal_intro_bracket: 'Touch calibration, step 1 of 6: the participant is reading what comes next.'
+  touchcal_intro_estimation: 'Touch calibration, step 2 of 6: the participant is reading what comes next.'
+  touchcal_intro_match: 'Touch calibration, step 3 of 6: the participant is reading what comes next.'
+  # A channel set again after it did not match (`touchcal_readjust`) is part of step 4.
+  touchcal_intro_readjust: 'Touch calibration, step 4 of 6: the participant is reading what comes next.'
+  touchcal_intro_compare: 'Touch calibration, step 4 of 6: the participant is reading what comes next.'
+  touchcal_intro_pleasant: 'Touch calibration, step 5 of 6: the participant is reading what comes next.'
   # SPEC.md 15: a session resumed during the rekindle never prompts the heat a second time.
+  # DRAFT (LOG N7.F11b18): written by the build, not ethics-sourced
   rekindle_resumed: >-
     The session resumed during the rekindle. The heat was started before the interruption and
-    is not prompted again; the rekindle is timed from then. Press Next step to confirm. If the
-    heat was not in fact applied, apply it now and enter a note. The garment stays off until the
-    rekindle is over.
+    is not prompted again; the rekindle is timed from then. Press {controls[proceed]} to
+    confirm. If the heat was not in fact applied, apply it now and enter a note. The garment
+    stays off until the rekindle is over.
 
-# DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. What the experimenter says
-# about proportionality in the VAS training (SPEC.md 10.6), shown inside `instructions.
-# vas_training` as {explanation}. It was on the participant's screen until S's lab-run list
-# (5 Oct 2026); it is the participant text's old sentence, and Bilaga 1's "a mark twice as far
-# along the line indicates it is twice as painful" / "twice as pleasant/intense". One key per
-# trained scale, the same scales as the participant text's `training`.
-vas_training_explain:
-  pain: A mark twice as far along the line means it was twice as painful.
-  intensity: A mark twice as far along the line means the touch felt twice as intense.
-  pleasantness: A mark twice as far along the line means the touch felt twice as pleasant.
+# What the experimenter says aloud to the participant, quoted inside `instructions` as
+# {say[...]}. Loaded in the PARTICIPANT's language (`Config.say`), whatever the experimenter's
+# (LOG N7.F11b19). None may differ by condition (SPEC.md 16).
+say:
+  # Read aloud before the first mapping path. The mapping is instructed verbally and the
+  # participant answers verbally, so this is the only place the wording exists -- there is no
+  # participant mapping screen. Examples of the change are Bilaga 1's own ("burning",
+  # "tenderness", "more intense pricking"); keep them, they are what the plan says
+  # participants are told.
+  mapping: >-
+    I will touch you with this filament, moving a small step at a time towards the marked
+    area. Tell me as soon as the feeling clearly changes — burning, tenderness, or a sharper
+    pricking.
+  # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. {minutes} is filled after.
+  heat: You will now feel heat on your hand for {minutes} minutes.
+  # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced
+  earplugs: You will set the noise again from the start, the same way.
+  # DRAFT (LOG N7.F11b3): written by the build, not ethics-sourced
+  stop_works: That is how the stop button works. I will start the touch again now.
+  # DRAFT (LOG N7.F11b5): written by the build, not ethics-sourced
+  training_scale: There is no touch now. This is the scale you will use.
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
+  rerun: We will do the settings and ratings once more.
+  # DRAFT (LOG N7.F12g3): written by the build, not ethics-sourced. The brush is rated on the
+  # pain scale too (study1.yaml brush.rating_scale). The cue is now the text "Get ready"
+  # (N7.F12g1), not a circle; every skin test is a real stimulus, so saying one follows is true.
+  first_pain: >-
+    Next I will test the skin with thin plastic filaments and a soft brush. Each time, the
+    screen first tells you to get ready, then you feel it, then the line appears and you rate
+    how painful it was. This first line is practice.
+  # DRAFT (LOG N7.F11b13): written by the build, not ethics-sourced. {hours} is filled after.
+  intervention: >-
+    The next part takes about {hours} hours. You will feel touch from the garment, and in
+    between I will repeat the skin tests and you will rate the touch. Just follow the screen.
+  # DRAFT (LOG N7.F11c10): written by the build, not ethics-sourced. At the intervention's end,
+  # the same in every condition.
+  intervention_end: The touch has finished. We will now repeat the skin tests from the start of the visit.
+  # DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. What the experimenter says
+  # about proportionality in the VAS training (SPEC.md 10.6), shown inside
+  # `instructions.vas_training` as {explanation}. It was on the participant's screen until S's
+  # lab-run list (5 Oct 2026); it is the participant text's old sentence, and Bilaga 1's "a
+  # mark twice as far along the line indicates it is twice as painful" / "twice as
+  # pleasant/intense". One key per trained scale, the same scales as the participant text's
+  # `training`.
+  proportionality:
+    pain: A mark twice as far along the line means it was twice as painful.
+    intensity: A mark twice as far along the line means the touch felt twice as intense.
+    pleasantness: A mark twice as far along the line means the touch felt twice as pleasant.
 
 controls:
   proceed: Next step
@@ -207,8 +372,19 @@ controls:
   # DRAFT (LOG N7.F8b): written by the build. Shown only with the mock or prototype garment,
   # after a few touch-calibration ratings; ends the calibration, recorded as skipped.
   skip_calibration: Skip calibration
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Re-calibration, while
+  # touch is calibrated or delivered and beside Resume after a stop; each opens a dialog
+  # asking why.
+  recalibrate_rebalance: Rebalance channels…
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
+  recalibrate_restart: Restart calibration…
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Confirms the restart's dialog.
+  restart_calibration: Restart calibration
   # The free-text entries (SPEC.md 8.2, 8.4, 11). None of them ever blocks the session.
   add_note: Add note
+  # DRAFT (LOG N7.F10a): written by the build, not ethics-sourced. Shown in the emptied note
+  # field once the note is written to the log.
+  note_saved: 'Note saved at {time}. Type another here.'
   substitution: Filament applied instead (g)
   record_substitution: Record filament
   distances: 'Mapping distances (mm), measured from the centre of the primary zone:'
@@ -225,16 +401,26 @@ status:
   channel_pressure_short: '{channel}: {value}'
   elapsed: Session elapsed {time}
   next_event: 'Next: {phase} in {time}'
-  block_due: Block {block} is due.
-  block_overdue: Block {block} is OVERDUE.
+  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced. {type} is from
+  # terms.block_types, the same in every condition.
+  block_due: Block {block} ({type}) is due.
+  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
+  block_overdue: Block {block} ({type}) is OVERDUE.
   # A scheduled phase change or the rekindle, due and overdue, as for a block.
   event_due: '{phase} is due.'
   event_overdue: '{phase} is OVERDUE.'
   # Filled into next_event's {phase} when the next event is a block.
   block_label: block {block} ({value})
-  # Shown for as long as the session is interrupted (SPEC.md 13).
-  interrupted_emergency_stop: EMERGENCY STOP. The garment is at zero. Press Resume when the participant is ready.
-  interrupted_pause: Paused. The garment is at zero. Press Resume to continue.
+  # Shown for as long as the session is interrupted (SPEC.md 13). One line at body size: a test
+  # holds both languages to it.
+  # DRAFT (LOG N7.F11b12): written by the build, not ethics-sourced
+  interrupted_emergency_stop: Stopped by the participant; garment at zero. Remove any stimulus, ask what they need, then press {controls[resume]}.
+  # DRAFT (LOG N7.F11b12): written by the build, not ethics-sourced
+  interrupted_pause: Paused; garment at zero. The step in progress will be repeated. Press {controls[resume]} to continue.
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Under Resume after a stop,
+  # in place of the re-calibrations once the limit set for a session is reached. One line at
+  # small size: a test holds both languages to it.
+  recalibration_used: The re-calibrations allowed in a session are used up, so only {controls[resume]} is offered.
   discarded: Last trial discarded. It will be repeated.
   discarded_not_repeated: >-
     Last trial discarded. The application limit has been reached, so it will not be repeated.
@@ -251,15 +437,20 @@ warnings:
     No measured filament forces. Nominal forces deviate from measured by up to about 20 %
     (Berquin et al. 2010). Weigh the set in Instruments and environment before collecting data.
   open_items: 'Unresolved configuration placeholders: {value}'
+  # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced. Short enough to share the
+  # status region with `application_cap` (tests/test_ui.py).
   out_of_range: >-
-    The calibration ran out of ladder ({value}). The boundary filament will be used and the
-    trial is flagged. Expect this in a meaningful fraction of sessions.
-  application_cap: >-
-    The limit of {value} applications was reached. The best available estimate is used and
-    flagged.
+    The filament set ran out ({value}), as it often does: the end filament is used, flagged.
+  # DRAFT (LOG N7.F11b16): written by the build, not ethics-sourced
+  application_cap: The {value}-application limit was reached; the best estimate is used and flagged.
   substitution_unknown: No filament labelled {filament} g is held. The substitution was not recorded.
   substitution_not_lower: >-
     The {filament} g filament is not lighter than the one asked for. It is recorded as applied.
+  # DRAFT (LOG N7.F11b20): written by the build, not ethics-sourced. A filament typed in the
+  # substitution entry and never recorded when its trial ended; {controls[...]} is a button.
+  substitution_not_recorded: >-
+    "{value}" was typed as the filament applied but not recorded, so the trial keeps the one
+    asked for. If it was applied, add a note or press {controls[discard_repeat]}.
   distance_implausible: >-
     Path {path}: {value} mm is outside the plausible range. Enter the same value again to
     confirm it, or enter the corrected value.
@@ -288,16 +479,25 @@ warnings:
 banners:
   # SPEC.md 12.4: persistent and unmissable. A session run this way must be impossible to
   # mistake for a real one afterwards.
-  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. {value} is the garment's
+  # Each banner is one line on the screen; its _detail is the tooltip (LOG N7.F11a4).
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced. {value} is the garment's
   # name from terms.garments, which carries brackets of its own.
-  reduced_capability: >-
-    THIS SESSION IS NOT COLLECTING VALID TOUCH-CALIBRATION DATA. The connected device cannot
+  reduced_capability: 'NOT COLLECTING VALID TOUCH-CALIBRATION DATA: {value}'
+  # DRAFT (LOG N7.U4, N7.F11a4): written by the build, not ethics-sourced
+  reduced_capability_detail: >-
+    This session is not collecting valid touch-calibration data. The connected device cannot
     set pressure per channel: {value}. Timings are real; pressures are not.
-  placeholder_text: >-
-    PARTICIPANT SCREENS STILL CONTAIN PLACEHOLDER TEXT. Do not run a real participant.
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced
+  placeholder_text: 'DO NOT RUN A REAL PARTICIPANT: participant screens contain placeholder text.'
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced
+  placeholder_text_detail: >-
+    Some participant-screen wording is still a placeholder and has not been approved. Run
+    tests and pilots only until it is replaced.
   # SPEC.md 11.1. Unmissable, because the experimenter must not switch this on without seeing
   # what it costs.
-  fit_preview: >-
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced
+  fit_preview: 'FIT PREVIEW IS ON: you will see the participant''s ratings.'
+  fit_preview_detail: >-
     FIT PREVIEW IS ON. You will see the participant's ratings, which Bilaga 1 3.3 and the
     information sheet say you do not. The session is recorded as unblinded in that respect.
   # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
@@ -319,6 +519,24 @@ demo:
   skipped: 'Skipped {value} min of waiting.'
   nothing_to_skip: Nothing to skip now.
   finishing: Finishing this stage…
+  # What the garment is commanded to do, channel by channel (tatp/ui/garment_display.py,
+  # LOG N7.F12f).
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_title: The garment, as commanded
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_channel: Channel {channel}
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_on: "on"
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_off: "off"
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_pressure: '{state}, {value} kPa'
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_not_connected: 'Not connected: nothing is commanded.'
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_link_lost: 'Link lost: the outputs may still hold their last state.'
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  worn_note: 'Someone may be wearing this garment: the participant and the experimenter are people, not simulations, and Finish this stage is off.'
 
 dialogs:
   abort_confirm: Abort this session? All data collected so far is kept.
@@ -335,11 +553,34 @@ dialogs:
   resume_since_sensitisation: 'Sensitisation began {hours} h {minutes} min ago.'
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   resume_not_sensitised: Sensitisation had not begun.
-  distances_outstanding: Mapping distances are still outstanding. Enter them now, or close the session with them flagged missing.
+  # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced. Names the button that
+  # enters them and the one that finishes without them.
+  distances_outstanding: Mapping distances are still missing. Enter them with Mapping distances…, or press Next step to finish with them recorded as missing.
   fit_rerun_reason: Why are you re-running? Recorded with the discarded estimate, which is kept.
   fit_rerun_exhausted: The re-run limit for this procedure has been reached. This estimate will be used.
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The re-calibrations, the
+  # same in every condition and wherever they are offered.
+  recalibrate_rebalance: 'Rebalance the channels now? The garment goes to zero and what is in progress stops. The participant sets each of the other channels against the middle channel again and compares them (steps 3 and 4), then the evenness check, and the pattern choice only if the touch calibration has not made it yet; a pleasantness level already set is kept. The session then goes on from where it was, at the new levels; scheduled steps keep their times. Everything recorded so far is kept.'
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
+  recalibrate_restart: 'Restart the touch calibration now? The garment goes to zero and what is in progress stops. The calibration starts again from step 1 as a new run, without the rating-scale training, and without the pattern choice if the touch calibration has made it. The session then goes on from where it was, at the new levels; scheduled steps keep their times. Everything recorded so far is kept.'
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
+  recalibration_reason: Why? Recorded with the choice.
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The keys are what the log
+  # records (docs/DATA_SCHEMA.md, recalibration_after_stop).
+  recalibration_reasons:
+    channel_uneven: A channel felt wrong or uneven
+    too_strong: The touch was too strong overall
+    other: Other
   error: Error
   close: Close
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. An error nothing caught,
+  # during setup; on Close the program ends with the session open to a resume.
+  software_error: 'The software hit an error, so the session has been stopped and the garment turned off. Everything recorded so far is saved. The program closes now; start it again and choose Resume the session to carry on. The error: {value}'
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. The same from touch
+  # calibration on, where the error's own text could name a pattern (SPEC.md 16); the log has it.
+  software_error_withheld: 'The software hit an error, so the session has been stopped and the garment turned off. Everything recorded so far is saved. The program closes now; start it again and choose Resume the session to carry on. What the error was is in the session''s log.'
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. The same, with no session open.
+  launcher_error: 'The software hit an error: {value}. If you were starting a session, check the details and start it again.'
   # Buttons of the resume question.
   resume_yes: Resume the session
   resume_no: Start a new session
@@ -363,8 +604,22 @@ preflight:
   another_instance: Another session is already running from this data folder ({value}). Close it first.
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_missing: The participant's remote is not plugged in (no keyboard matching {value}). Plug in its receiver, then start again.
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_needs_windows: This computer ({value}) cannot tell the remote from other keyboards. Set responder.key_source to any_keyboard in hardware.yaml, or run the session on the lab PC.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  remote_needs_windows: This computer ({value}) cannot tell the remote from other keyboards, as responder.key_source raw_input needs. Start the session from the program's first page (Check the hardware), or run it on the lab PC.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  every_keyboard_is_the_remote: 'Every keyboard counts as the participant''s remote here ({value}), the experimenter''s too, so a study participant''s session cannot run: the experimenter''s full stop would stop it. Run it on the lab PC with the remote plugged in. A pilot code, a demonstration or the mock garment can run.'
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  participant_screen_shared: 'The participant''s screen {value} is not connected, or is a window on the experimenter''s screen, so a study participant''s session cannot run. Connect the participant''s screen and choose it in Check the hardware. A pilot code, a demonstration or the mock garment can run.'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_check_failed: 'The sound devices could not be checked ({value}). Nothing can start until they can: check that the sound devices are working, then check again.'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  participant_audio_missing: 'The participant''s headphones cannot be used ({value}). Connect or switch them on, or choose another output in Check the hardware, then check again. There is no need to restart.'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  experimenter_audio_missing: 'The experimenter''s speakers cannot be used ({value}). Connect them, or choose another output in Check the hardware, then check again. There is no need to restart.'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  alternative_input_study_code: 'Participant code {value} is a study participant''s, who responds with the remote. The keyboard and the on-screen buttons are for pilot codes and demonstrations. Plug in the remote and choose it in Check the hardware.'
+  # DRAFT (LOG N7.F12e3): written by the build, not ethics-sourced
+  hardware_changed: 'This session runs on hardware other than the lab setup ({value}). The session file records it.'
 
 zones:
   # Beside the zone diagram (SPEC.md 11): where the current stimulus goes.
@@ -426,8 +681,8 @@ launcher:
   preview_schedule_detail: The session timeline and its warnings. Nothing is started.
   # DRAFT (LOG N7.F4): written by the build, not ethics-sourced
   hardware_check: Check the hardware
-  # DRAFT (LOG N7.F4): written by the build, not ethics-sourced
-  hardware_check_detail: Before the participant arrives. The remote, the screens, the sound and the garment, one by one. Nothing is recorded.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  hardware_check_detail: The page shown at startup. Choose and test the remote, the screens, the sound and the garment, before the participant arrives. Nothing is recorded.
   environment_entered: 'Room {temperature} °C, {humidity} % RH, handed to the next session.'
   # The session dialog. It collects only what SPEC.md 6 lists; everything else is config.
   session_title: Run a session
@@ -662,34 +917,83 @@ schedule_warnings:
 # DRAFT (LOG N7.F4): every key in this block is written by the build, not ethics-sourced.
 hardware_check:
   title: Check the hardware
-  remote: Remote
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  page_hint: Each choice starts on the lab's own setup. Connect anything missing; it is found here without restarting.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  continue: Continue
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input: Participant's responses
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input_choice: Respond with
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  inputs:
+    remote: The remote
+    keyboard: 'Keyboard: ← → Return, . (full stop) stops'
+    on_screen: 'Mouse or trackpad: buttons on the participant''s window'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
   remote_hint: Press each button; its own count should go up. ▶ sends two keys in turn, and both count.
   remote_last: 'Last press: {symbol} ({value})'
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_found: Remote found; only it counts.
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_missing: 'Remote not found: plug it in.'
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_any_keyboard: Any keyboard counts here.
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_needs_windows: 'Needs Windows: any keyboard counts.'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  remote_missing: 'Remote not found: plug in its receiver.'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  remote_unknown: This computer cannot tell the remote from a keyboard, so every keyboard counts as the remote.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input_keyboard: Pilot codes and demonstrations only; or a simulated participant in Run a demo.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input_on_screen: Pilot codes and demonstrations only. Click and hold as on the remote.
+  # DRAFT (LOG N7.F12e3): written by the build, not ethics-sourced. Each choice, as the
+  # preflight's warning names it when it is not the lab's.
+  changed:
+    participant_screen_index: the participant screen
+    experimenter_screen_index: the experimenter screen
+    participant_audio_device: the participant's headphones
+    experimenter_audio_device: the experimenter's speakers
+    garment_port: the sleeve's port
+    participant_input: the participant's responses
+    key_source: which keyboard counts as the remote
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_unusable: 'Cannot be used: {value}'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  found: Found.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  not_connected: '{value} (not connected)'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  none: none
   screens: Screens
   role_participant: Participant screen
   role_experimenter: Experimenter screen
-  screen_found: '{role}: screen {index}, {width} × {height}'
-  screen_missing: '{role}: screen {index} is not connected ({count} found). Check the cable, then hardware.yaml.'
-  screen_unset: '{role}: not set, so the primary screen is used.'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  screen_choice: 'Screen {index}: {width} × {height}'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  screen_numbered: Screen {index}
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  screen_window: A window on this screen
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  screen_missing: 'Not connected: check the cable.'
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  screen_unplaced_participant: 'A window over the experimenter''s: for testing only.'
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  screen_unplaced_experimenter: A window where the computer puts it.
   show_label: Show a label on the participant screen
   hide_label: Take the label down
   label_text: Participant screen
   sound: Sound
-  sound_hint: Start the noise and raise it until you hear it in the participant's headphones, then play the cue over it. Play the alert and check it comes from the lab-side speakers only.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  sound_hint: Raise the noise until it is heard in the headphones, then play the cue over it. The alert must sound lab-side only.
   role_participant_audio: Participant headphones
   role_experimenter_audio: Experimenter speakers
-  device_found: '{role}: {value}'
-  device_missing: '{role}: not found. {value}'
-  devices_available: 'Output devices on this computer:{value}'
-  backend_recording: The audio backend is the test double, which plays nothing.
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_default: 'System default ({value})'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_default_line: The computer's default output, which follows its own sound setting.
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_missing: 'Not connected: connect it or switch it on.'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_listing: Looking for sound devices…
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_list_failed: 'The sound devices could not be listed: {value}'
   start_noise: Start the noise
   stop_noise: Stop the noise
   noise_level: '{value} dBFS'
@@ -698,10 +1002,21 @@ hardware_check:
   audio_failed: 'Sound failed: {value}'
   garment: Garment
   garment_hint: Connect, then turn each channel on and off and watch the sleeve.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  port: Prototype sleeve's port
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  port_missing: 'Not connected: plug in the sleeve''s USB cable.'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  ports_none: No serial port found.
   connect: Connect
   disconnect: Disconnect
   connecting: 'Connecting to the {garment}…'
-  channel: 'Channel {value}'
+  # DRAFT (LOG N7.F10b): written by the build, not ethics-sourced
+  channels: 'Channels:'
+  # DRAFT (LOG N7.F10b): written by the build, not ethics-sourced
+  channel_on: '{value}: on'
+  # DRAFT (LOG N7.F10b): written by the build, not ethics-sourced
+  channel_off: '{value}: off'
   garment_connected: '{garment}: connected.'
   garment_disconnected: '{garment}: not connected.'
   garment_failed: 'Garment failed: {value}'

@@ -57,6 +57,8 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "demo.participant_reaction_s", NUMBER, 0, None),
     ("study1.yaml", "demo.participant_press_interval_s", NUMBER, 0, None),
     ("study1.yaml", "demo.experimenter_reaction_s", NUMBER, 0, None),
+    ("study1.yaml", "demo.garment_display_refresh_s", NUMBER, 0.01, 1),
+    ("study1.yaml", "demo.garment_highlight_s", NUMBER, 0.1, None),
     ("study1.yaml", "vas.start_pct_after_left_press", NUMBER, 0, 100),
     ("study1.yaml", "vas.start_pct_after_right_press", NUMBER, 0, 100),
     ("study1.yaml", "vas.move_step_pct", NUMBER, 0, 100),
@@ -90,6 +92,8 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "touch_block.repeated_scales[*]", str, None, None),
     ("study1.yaml", "touch_block.once_scales[*]", str, None, None),
     ("study1.yaml", "touch_block.baseline_scales[*]", str, None, None),
+    ("study1.yaml", "touch_block.gap_s", NUMBER, 0, None),
+    ("study1.yaml", "session_end.quit_lockout_s", NUMBER, 0, None),
     # Its entries are checked by `Session`: `[*]` here would refuse the empty list, which is a
     # valid value meaning no training.
     ("study1.yaml", "training.vas_proportionality_sessions", list, None, None),
@@ -206,6 +210,17 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "audio.experimenter_alert_level_dbfs", NUMBER, None, 0),
     ("hardware.yaml", "audio.pacing_tick_hz", NUMBER, 0, None),
     ("hardware.yaml", "audio.pacing_tick_duration_s", NUMBER, 0, None),
+    ("hardware.yaml", "lab_platform", str, None, None),
+    ("hardware.yaml", "devices.poll_interval_s", NUMBER, 0, None),
+    ("hardware.yaml", "devices.audio_poll_interval_s", NUMBER, 0, None),
+    ("hardware.yaml", "devices.probe_timeout_s", NUMBER, 0, None),
+    ("hardware.yaml", "devices.child_stop_timeout_s", NUMBER, 0, None),
+    ("hardware.yaml", "responder.participant_input", str, None, None),
+    ("hardware.yaml", "responder.alternative_keys.decrease", list, None, None),
+    ("hardware.yaml", "responder.alternative_keys.increase", list, None, None),
+    ("hardware.yaml", "responder.alternative_keys.confirm", list, None, None),
+    ("hardware.yaml", "responder.alternative_keys.emergency_stop", list, None, None),
+    ("hardware.yaml", "screens.shared_participant_window_px[*]", int, 1, None),
     ("hardware.yaml", "data.folder", str, None, None),
     ("hardware.yaml", "data.upload_folder", str, None, None),
     ("hardware.yaml", "data.cloud_sync_markers", list, None, None),
@@ -272,6 +287,9 @@ class Config:
     experimenter_text: dict
     participant_language: str
     experimenter_language: str
+    # `say` from the experimenter file in the PARTICIPANT's language: what the experimenter
+    # says aloud to the participant, quoted inside the instructions (`instruction`).
+    say: dict
     open_items: tuple[OpenItem, ...]
     sha256: str
     config_dir: Path
@@ -474,17 +492,32 @@ def load(
             raise ConfigError(f"{name}: training keys {strays} are not scales under `vas`")
         # The experimenter explains proportionality for exactly the scales that are trained.
         explained = TEXT_FILES[("experimenter", lang)]
-        if set(loaded[explained]["vas_training_explain"]) != set(text["training"]):
+        proportionality = loaded[explained]["say"]["proportionality"]
+        if set(proportionality) != set(text["training"]):
             raise ConfigError(
-                f"{explained}: vas_training_explain keys "
-                f"{sorted(loaded[explained]['vas_training_explain'])} are not the trained "
-                f"scales {sorted(text['training'])}"
+                f"{explained}: say.proportionality keys {sorted(proportionality)} are not the "
+                f"trained scales {sorted(text['training'])}"
             )
 
     # A VAS hold is redrawn every tick; at zero the timer would spin the event loop flat out.
     # The schema's minimums are inclusive, so this one is checked here.
     if loaded["study1.yaml"]["vas"]["hold_tick_interval_s"] <= 0:
         raise ConfigError("study1.yaml: 'vas.hold_tick_interval_s' must be above 0")
+
+    # Null is a value here, no limit (docs/LOG.md N7.F12a1), which the schema refuses as a
+    # placeholder, so it is checked here.
+    touch = loaded["study1.yaml"]["touch_calibration"]
+    if "recalibrations_max" not in touch:
+        raise ConfigError(
+            "study1.yaml: required key 'touch_calibration.recalibrations_max' is missing"
+        )
+    limit = touch["recalibrations_max"]
+    if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int)
+                              or limit < 0):
+        raise ConfigError(
+            f"study1.yaml: 'touch_calibration.recalibrations_max' is {limit!r}; it must be "
+            "null, for no limit, or a whole number from 0"
+        )
 
     config = Config(
         study1=loaded["study1.yaml"],
@@ -495,6 +528,7 @@ def load(
         experimenter_text=loaded[TEXT_FILES[("experimenter", experimenter_language)]],
         participant_language=participant_language,
         experimenter_language=experimenter_language,
+        say=loaded[TEXT_FILES[("experimenter", participant_language)]]["say"],
         open_items=_load_open_items(loaded, config_dir),
         sha256=hash_files(sorted(p for p in config_dir.rglob("*.yaml"))),
         config_dir=config_dir,
@@ -505,6 +539,33 @@ def load(
     assert config.filaments["filaments"], "no filaments configured"
     assert config.open_items, "open_items.yaml defines no items"
     return config
+
+
+class _Kept(dict):
+    """Format fields: the ones given filled, every other kept as written, to be filled after."""
+
+    def __missing__(self, key: str) -> str:
+        return f"{{{key}}}"
+
+
+def instruction_template(config: Config, key: str) -> str:
+    """`instructions.<key>` with what every instruction can name filled in, and the step's own
+    fields ({n}, {filament}, ...) still to fill.
+
+    {controls[...]} are the buttons' own labels, so an instruction cannot name a button its own
+    way; {say[...]} are the sentences said aloud, in the participant's language (`Config.say`),
+    which may carry fields of their own; the remote's button symbols ({confirm} ...) are
+    hardware.yaml's. The virtual experimenter matches instructions against this template.
+    """
+    text = config.experimenter_text
+    fields = _Kept(controls=text["controls"], say=config.say,
+                   **config.hardware["responder"]["button_symbols"])
+    return text["instructions"][key].format_map(fields)
+
+
+def instruction(config: Config, key: str, **values: object) -> str:
+    """`instructions.<key>`, every field filled. A field left without a value is an error."""
+    return instruction_template(config, key).format(**values)
 
 
 def hash_files(paths: list[Path]) -> str:

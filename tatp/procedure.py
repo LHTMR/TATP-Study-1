@@ -24,6 +24,10 @@ that must be identical everywhere -- what an interruption does to a sequence:
   `proceed_requested`, the one way every procedure is launched (SPEC.md 7.4).
 - `train_then(scales, then)` gives the VAS proportionality training still due for those scales
   (SPEC.md 10.6), one step per screen, then runs `then`.
+- `blank_for(seconds, then)` is a `wait` on a blank screen; `introduce(screen, instruction,
+  then)` puts up a screen the participant confirms before a new kind of task.
+- `detour(make_child, then)` runs a nested procedure in place of a step an interruption has
+  abandoned, then repeats that step: a re-calibration in the middle of the intervention.
 - `finish(result)` ends the procedure and emits `finished(result)`.
 
 On `Interruptions.interrupted` the innermost procedure cancels its trial and its timer. On
@@ -50,19 +54,23 @@ from collections.abc import Callable
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication
 
+from tatp.config import instruction
 from tatp.interruption import Interruptions
 from tatp.remote_keys import key_source
 from tatp.session import Session
-from tatp.trials import VasTraining
+from tatp.trials import MessageConfirm, VasTraining
 from tatp.ui.experimenter import ExperimenterWindow
-from tatp.ui.participant import ParticipantWindow, RemoteKeyRouter
+from tatp.ui.participant import STANDBY_SCREEN, ParticipantWindow, RemoteKeyRouter
 from tatp.units import MS_PER_S
 
 # `log` event names (docs/DATA_SCHEMA.md) and an experimenter text key, not wording.
 VAS_TRAINING_SHOWN = "vas_training_shown"
 VAS_TRAINING_EXPLAINED = "vas_training_explained"
 VAS_TRAINING_INSTRUCTION = "vas_training"
-VAS_TRAINING_EXPLAIN = "vas_training_explain"
+# The `say` key of the proportionality sentences, one per trained scale.
+PROPORTIONALITY = "proportionality"
+# Between the scale's labels where the experimenter is told to read them out.
+ANCHOR_SEPARATOR = " / "
 
 
 class Rig(QObject):
@@ -79,6 +87,11 @@ class Rig(QObject):
         self.session = session
         self.participant = participant
         self.experimenter = experimenter
+        # What the participant sees while a protocol waits for the experimenter's go before it
+        # starts: the rest screen, not a blank identical to the one under a stimulus (15 Oct
+        # 2026 pilot review, docs/LOG.md N7.F11c8). The session runner replaces it with its
+        # own, which leaves a self-start prompt still waiting for its press in place (N7.D17).
+        self.show_between: Callable[[], None] = lambda: participant.show_message(STANDBY_SCREEN)
         self.interruptions = Interruptions(session, participant, experimenter, self)
         session.attach_interruptions(lambda: self.interruptions.active)
         # The remote's presses reach the participant window whichever window is active. The
@@ -234,8 +247,47 @@ class Procedure(QObject):
         self._step = None
         child = make_child()
         self._child = child
-        child.finished.connect(lambda result: self._child_done(child, result, on_done))
+
+        # Once only: a procedure can be run again -- touch calibration is, to re-calibrate
+        # (`detour`) -- and its finishing then is not this run's.
+        def done(result: object) -> None:
+            child.finished.disconnect(done)
+            self._child_done(child, result, on_done)
+
+        child.finished.connect(done)
         child.start()
+
+    def detour(
+        self,
+        make_child: Callable[[], Procedure],
+        then: Callable[[object, Callable[[], None]], None],
+    ) -> None:
+        """Run a procedure in place of the step an interruption has just abandoned: the
+        re-calibration during the intervention (docs/LOG.md N7.F12a1), in whichever procedure
+        is innermost. What this one offers the experimenter is withdrawn meanwhile
+        (`suspend_offers`). Then `then(result, go_on)`, where `go_on()` gives the offers back
+        and runs the abandoned step again, as a resume would have, now or after a step of
+        its own."""
+        step = self._step
+        self.suspend_offers()
+        # A go the abandoned step waited for is its own again only when it repeats: a press
+        # before then -- during the detour, or a step `then` runs first -- starts nothing.
+        self.on_proceed(None)
+
+        def go_on() -> None:
+            self.restore_offers()
+            self._step = step
+            if step is not None:
+                step()
+
+        self.run_child(make_child, lambda result: then(result, go_on))
+
+    def suspend_offers(self) -> None:
+        """Withdraw what this procedure offers the experimenter while another runs in its
+        place (`detour`). Nothing, unless a procedure offers something of its own."""
+
+    def restore_offers(self) -> None:
+        """Undo `suspend_offers`, as the abandoned step comes back."""
 
     def train_then(self, scales, then: Callable[[], None]) -> None:
         """The proportionality training for each of `scales` still due, then `then` (10.6).
@@ -246,7 +298,8 @@ class Procedure(QObject):
 
         1. The scale alone, with no button but the stop doing anything, while the experimenter
            explains the anchors and proportionality aloud (Bilaga 1 3.6.1, 3.9), from
-           `vas_training_explain`; their go is logged `vas_training_explained`.
+           `say.proportionality` in the participant's language; their go is logged
+           `vas_training_explained`.
         2. `VasTraining`: a practice rating, never recorded as a rating.
 
         Once confirmed it is not shown again this session (`Session.vas_training_due`).
@@ -260,13 +313,17 @@ class Procedure(QObject):
         def show() -> None:
             self.participant.show_vas_training(scale, accepting=False)
             # The proportionality sentence is the experimenter's to say, not the participant's
-            # to read (S's lab-run list, 5 Oct 2026).
-            text = self.experimenter.text
-            self.experimenter.set_instruction(
-                text["instructions"][VAS_TRAINING_INSTRUCTION].format(
-                    explanation=text[VAS_TRAINING_EXPLAIN][scale]
-                )
-            )
+            # to read (S's lab-run list, 5 Oct 2026). The experimenter cannot see the
+            # participant's screen, so the labels to read out are given too. Both are said to
+            # the participant, so both are in the participant's language.
+            config = self.session.config
+            anchors = sorted(config.participant_text["vas"][scale]["anchors"],
+                             key=lambda anchor: anchor["pct"])
+            self.experimenter.set_instruction(self.instruction_text(
+                VAS_TRAINING_INSTRUCTION,
+                anchors=ANCHOR_SEPARATOR.join(anchor["label"] for anchor in anchors),
+                explanation=config.say[PROPORTIONALITY][scale],
+            ))
             self.experimenter.set_status("")
             self.experimenter.refresh()
             self.session.log(VAS_TRAINING_SHOWN, detail=scale)
@@ -280,9 +337,49 @@ class Procedure(QObject):
 
         self.await_proceed(explained, show)
 
+    def instruct(self, key: str, **values: object) -> None:
+        """What the experimenter should do now (SPEC.md 11), filled by `config.instruction`."""
+        self.experimenter.set_instruction(self.instruction_text(key, **values))
+        self.experimenter.refresh()
+
+    def instruction_text(self, key: str, **values: object) -> str:
+        return instruction(self.session.config, key, **values)
+
     def wait(self, seconds: float, then: Callable[[], None]) -> None:
         """Session-paced time: scaled by the clock, and restarted if interrupted."""
         self.step(lambda: self._after(seconds, then))
+
+    def blank_for(self, seconds: float, then: Callable[[], None]) -> None:
+        """A `wait` on a blank screen, the break between two ratings (UI_PRINCIPLES.md 1.10).
+        The blank is part of the step, so a repeat after a resume takes the stop screen down."""
+
+        def begin() -> None:
+            self.participant.show_blank()
+            self._after(seconds, then)
+
+        self.step(begin)
+
+    def introduce(self, screen: str, instruction: str, then: Callable[[], None]) -> None:
+        """`screens.<screen>`, confirmed with ▶, before a new kind of task (docs/LOG.md
+        N7.F11c1), with `instruction` on the experimenter screen meanwhile. A step of its own,
+        so an interruption repeats it; called only between tasks, never between a stimulus and
+        its rating."""
+
+        def show() -> None:
+            self.participant.show_message(screen)
+            self.experimenter.set_instruction(instruction)
+            self.experimenter.refresh()
+
+        self.run_trial(
+            lambda: MessageConfirm(self.session, self.participant, self.experimenter, show,
+                                   screen),
+            lambda _: then(),
+        )
+
+    @property
+    def awaiting_go(self) -> bool:
+        """Whether this procedure is waiting for the experimenter's go (`await_proceed`)."""
+        return self._on_go is not None
 
     def await_proceed(
         self, then: Callable[[], None], prepare: Callable[[], None] | None = None

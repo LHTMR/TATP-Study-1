@@ -119,6 +119,10 @@ Other environment facts:
 
 - **One Windows lab PC, two displays.** Participant window fullscreen on the display behind
   the curtain; experimenter window on the lab display. One process, one clock.
+- **Also a MacBook, for piloting and demonstration** (docs/LOG.md N7.F12e5): one screen, no
+  remote, no lab sound devices. The hardware page then puts the participant window in a window
+  kept above the experimenter's, uses the default output, and reads the remote (or the keyboard
+  standing in for it) from every keyboard; `screens.scale_factors` applies on Windows only.
 - **Conda environment `tatp-study-1`, declared in `environment.yml`.** Add dependencies by
   editing that file and running `conda env update -f environment.yml --prune`, never with an
   ad-hoc `conda install` or `pip install` — an ad-hoc install is invisible in the diff and will
@@ -222,6 +226,19 @@ without the command line:
 6. **Check the hardware** — before the participant arrives: each remote button, where each
    screen lands, the sound devices, and each garment channel, through the session's own code.
    Nothing is recorded, and it adds no sound level or pressure (docs/LOG.md N7.F4).
+
+**The hardware page opens first** (docs/LOG.md N7.F12e1), before the launcher, as a
+videoconferencing program shows its devices before a call; entry 6 reopens it. It is the
+hardware check with a choice for each device: the participant's input, the participant and
+experimenter screens (each connected display, or a window on the experimenter's screen), the
+participant's and the experimenter's sound devices (each output present, or the system default)
+and the prototype sleeve's serial port. Each starts on `hardware.yaml`'s lab setup, says whether
+it is found or missing and what to do, and follows what is connected until changed by hand: a
+device connected later is found without a restart (sound devices are listed by a child process,
+so the launcher process does not load PortAudio before a session plays). Continue opens the
+launcher, and every session and demonstration started from it runs with these choices
+(`tatp.session.with_hardware_choices`); the session file records them, and preflight warns when
+any differs from the lab setup.
 
 ### 4.2 The rule about literals
 
@@ -601,6 +618,30 @@ inflation rates differ between channels, and nothing later corrects relative imb
 Whether it matters is for piloting; the software must support the check so it can be answered
 without a code change.
 
+**Re-calibration — at any time while touch is calibrated or delivered** (S, 15 Oct 2026;
+`docs/LOG.md` N7.F12a1, which supersedes R36's narrower recommendation, N7.F10d). The touch is
+not supposed to be uncomfortable, so if it becomes so it is adjusted to salvage the rest of the
+session. During touch calibration and during the intervention while the condition's touch is
+on (touch blocks and pinprick blocks included), the experimenter can **rebalance the channels**
+(steps 3–4 and the evenness check again; only once a fit exists) or **restart the
+calibration** (a new run from step 1, without the VAS training), from the controls or in place
+of Resume after an emergency stop, with a reason from a fixed list. During the intervention
+step 6 is not asked again: the touch calibration's preference stands, so the
+participant-preferred condition's pattern cannot change mid-intervention. The garment goes to
+zero and the step in progress is abandoned as a stop abandons it; the re-calibration runs;
+every condition's delivery is recomputed from it identically; the touch starts again with its
+cue, as at any touch start, before the abandoned step is repeated -- inside a block too, since
+the block's ratings and measures are made under the touch (in the participant-preferred
+condition the session does not wait for the self-start press, as at any touch start, and a
+block that goes on first is flagged). The
+session clock is not paused: alerts sound, and a block that falls due waits, armed, for the
+re-calibration to end. A restart during the intervention includes the "just uncomfortable"
+bracket, on sensitised skin. `touch_calibration.recalibrations_max` limits them per session
+(null, the default, is no limit). Each is logged, each calibration that governed the touch is
+its own `touchcal_channels` set (`calibration_index`), earlier attempts are kept, and the
+session file counts re-calibrations and stops during the intervention as intercurrent events.
+Identical in every condition (§16).
+
 ---
 
 ## 10. Participant interface
@@ -636,6 +677,26 @@ as an error, and if Raw Input stops reporting, that is logged and every keyboard
 remote, as under `any_keyboard`. `any_keyboard`, for
 development and the headless tests, takes every keyboard as the remote except inside a text
 field (N7.I1).
+
+**Without the remote, a pilot or a demonstration may respond otherwise** (docs/LOG.md
+N7.F12e4), chosen on the hardware page: the keyboard (`responder.alternative_keys`: ← and → for
+the large buttons, Return for ▶, and the full stop, the remote's own stop key, for the emergency
+stop -- never Esc, which dismisses dialogs), or buttons on the participant window for a mouse or
+trackpad, which press and release the remote's own keys at the mouse's own times, so a hold is a
+hold. Both read every keyboard (`any_keyboard`), are the same in every condition, and are
+recorded (`participant_input`). Under any_keyboard a key is not forwarded to the participant
+from a dialog, a popup, a list or a combo box, which use these keys themselves, except the
+stop. But a full stop typed while the focus is in a text field -- a note, a distance, the abort
+dialog's reason -- is typed, not a stop: that is open item L15's known behaviour under
+any_keyboard, which only `raw_input` removes. The on-screen "!" is a button, not a key, and
+always stops. Preflight refuses either alternative for a study participant's code. With the
+remote, a study participant's session also needs the remote told apart (`key_source:
+raw_input`) and a participant screen of its own, connected: every keyboard counted as the
+remote, or the participant's screens in a window on the experimenter's display, is refused for
+a study code -- except on the mock garment, from which no real data can come and on which the
+tests and the validator run study codes. A pilot code (above `design.pilot_code_offset`) or a
+demonstration may run either way. With the remote the participant window is the approved
+screens, with no buttons.
 
 **What is printed on each button is configuration, not code.** `responder.button_symbols` in
 `hardware.yaml` records the glyph on each button, and a screen that draws a control draws that
@@ -686,7 +747,14 @@ language.
 
 ### 10.5 Cues and audio
 
-- **A visual warning cue precedes every stimulus.**
+- **A visual warning cue precedes every stimulus.** It is a short neutral text, the participant
+  text key `warning_cue` ("Get ready" / "Gör dig redo"), alone on the screen at the message
+  position (S, 15 Oct 2026, replacing a filled circle that signalled the same start but needed
+  explaining). The touch calibration's zero-pressure catch trials are cued exactly as real
+  trials are (§9), so what matters is that the cueing is identical, not what the cue says. It
+  is identical in every condition (§16). The audible cue is sounded from the same signal, so the
+  two cannot come apart, except before the noise starts and while it is stopped, when the cue
+  is visual only (§10.9, `Audio.participant_cue`).
 - **Continuous white noise** to the participant's headphones at a configured level, with an
   **alert tone mixed over it** as the cue.
 - Separate lab-side alerts for the experimenter — block due, rekindle approaching — which must
@@ -750,8 +818,8 @@ pairing of an invigoration word with a wakefulness word and is the natural Swedi
 
 **VAS training — proportionality** (Price et al. 1983), given once per scale at first use.
 Since S's lab-run list (5 Oct 2026) **the sentence is the experimenter's to say aloud**, shown on
-the experimenter screen (`vas_training_explain` in the experimenter text, both languages), not
-on the participant's. The participant then makes a **practice rating** — free placement, moved
+the experimenter screen (`say.proportionality` in the experimenter text, both languages, shown
+in the participant's language because it is said to them), not on the participant's. The participant then makes a **practice rating** — free placement, moved
 and confirmed as a real rating — which is logged as `vas_practice_rating` and never written to
 a ratings table (docs/research/R35, DATA_SCHEMA.md `log`).
 
@@ -985,7 +1053,8 @@ unaffected — both estimation runs are identical across conditions.
 - Whether it stays on for real data collection is S's call (`docs/LOG.md` N2.4).
 
 Controls: start block, pause, **discard and repeat the last trial**, abort session, timestamped
-free-text note. All logged.
+free-text note, and, while touch is calibrated or delivered, **rebalance channels / restart
+calibration** (§9, re-calibration). All logged.
 
 Discard-and-repeat exists for the case where the filament was delivered badly but the
 participant still responded: the trial is marked discarded, retained in the data with its flag,
@@ -1141,7 +1210,9 @@ the control is never shown and the skip is asserted impossible.
   path that makes them work.
 - **Software emergency stop** on `period` (the blank-screen button): immediately commands all channels to zero, logs the
   press, pauses, and offers resume. Bilaga 1 §3.10 says participants are told pressing it will
-  not disturb the experiment, so resumption must be genuinely clean.
+  not disturb the experiment, so resumption must be genuinely clean. While touch is calibrated
+  or delivered, a re-calibration is offered beside Resume (§9); it ends the stop with the
+  garment left at zero until the re-calibration's own cue.
 - **The participant rehearses that stop once per session, with the garment running** (§10.9).
   The promise in Bilaga 1 §3.10 is only credible to someone who has seen it kept, and the moment
   a participant needs the button is the moment they are least willing to find out what it does.

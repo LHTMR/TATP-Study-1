@@ -23,6 +23,8 @@ with no protocol in it.
 
 from __future__ import annotations
 
+import time
+
 import shiboken6
 from PySide6.QtCore import QEvent, QObject, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import (
@@ -35,10 +37,17 @@ from PySide6.QtGui import (
     QPen,
 )
 from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QAbstractSlider,
     QAbstractSpinBox,
     QApplication,
+    QComboBox,
+    QDialog,
+    QHBoxLayout,
     QLineEdit,
+    QMenu,
     QPlainTextEdit,
+    QPushButton,
     QStackedWidget,
     QTextEdit,
     QVBoxLayout,
@@ -47,6 +56,7 @@ from PySide6.QtWidgets import (
 
 from tatp.clock import Clock
 from tatp.config import Config
+from tatp.devices import ON_SCREEN
 from tatp.responder import Action, Responder
 from tatp.ui.vas import (
     BACKGROUND,
@@ -69,9 +79,13 @@ EMERGENCY_STOP_SCREEN = "emergency_stop"
 # The one screen that draws the stop button, because pointing at it is its purpose (SPEC.md
 # 10.9). A key in the participant text file, not wording.
 STOP_REHEARSAL_SCREEN = "stop_rehearsal"
+# The rest screen between parts (SPEC.md 10.5). A key in the participant text file.
+STANDBY_SCREEN = "standby"
+# The participant text key whose two option labels name the two touches of a pair: the
+# comparison's "The first" / "The second", reused on the channel match (docs/LOG.md N7.F11c5).
+PAIR_LABELS = "comparison"
 
 MESSAGE_POINT_SIZE = 26
-CUE_RADIUS_FRACTION = 0.09
 
 # The drawn response buttons (UI_PRINCIPLES.md 5.8-5.11). Sized and placed to match the remote
 # in the participant's hand: two buttons side by side, the left one on the left.
@@ -101,6 +115,18 @@ ADJUST_CONFIRM_Y_FRACTION = 0.76
 # large buttons go, which that text would overlap.
 STOP_BUTTON_Y_FRACTION = 0.62
 STOP_BUTTON_CENTRE_FRACTION = 0.5
+# The channel match's pair labels sit in the gap between the two drawn buttons, one above the
+# other, at these fractions of the buttons' height: clear of both, so neither reads as a
+# button's own label.
+PAIR_ROW_FRACTIONS = (0.3, 0.7)
+PAIR_UNDERLINE_GAP_PX = 6
+# The on-screen buttons that stand in for the remote (docs/LOG.md N7.F12e4), in a row below the
+# screens. Large enough to hit without looking twice.
+RESPONSE_BUTTON_POINT_SIZE = 28
+RESPONSE_BUTTON_WIDTH_PX = 110
+RESPONSE_BUTTON_HEIGHT_PX = 64
+RESPONSE_BAR_MARGIN_PX = 12
+RESPONSE_BAR_GROUP_GAP_PX = 48
 
 
 class _MessageScreen(QWidget):
@@ -154,20 +180,31 @@ class _MessageScreen(QWidget):
 
 
 class _CueScreen(QWidget):
-    """The visual warning cue: a filled disc, centred, on an otherwise empty screen.
+    """The visual warning cue: the short `warning_cue` text, alone on the screen.
 
-    Deliberately wordless. A cue that has to be read is not a cue, and any wording here would be
-    participant-facing text outside `config/text/` (SPEC.md 10.4).
+    Words rather than the filled disc it replaces (S, 15 Oct 2026 pilot): a disc needed the
+    welcome screen to explain it, and words explain themselves. Laid out exactly as a message
+    -- same margins, wrapping and top position (UI_PRINCIPLES.md 5.5) -- but at the drawn
+    button symbols' size, the largest in the participant set (4.3), because it is a signal to
+    take in at a glance rather than a sentence to read.
     """
+
+    def __init__(self, text: str, responder: Responder, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.text = text
+        self.responder = responder
 
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
         painter.fillRect(self.rect(), BACKGROUND)
-        painter.setBrush(FOREGROUND)
-        painter.setPen(Qt.NoPen)
-        radius = min(self.width(), self.height()) * CUE_RADIUS_FRACTION
-        painter.drawEllipse(self.rect().center(), int(radius), int(radius))
+        painter.setPen(FOREGROUND)
+        font = QFont(self.font())
+        font.setPointSize(BUTTON_SYMBOL_POINT_SIZE)
+        painter.setFont(font)
+        margin = int(self.width() * SIDE_MARGIN_FRACTION)
+        top = int(self.height() * QUESTION_Y_FRACTION)
+        box = self.rect().adjusted(margin, top, -margin, 0)
+        draw_prose(painter, box, self.text, self.responder)
         painter.end()
 
 
@@ -306,6 +343,12 @@ class _ControlScreen(QWidget):
     A held button is drawn pressed for exactly as long as it is held (UI_PRINCIPLES.md 5.10).
     On the adjustment that also shows the participant that a hold is registering while the
     pressure ramps, which a sentence cannot.
+
+    **The channel match names its two touches** (`pair`). Its reference and the touch being set
+    take turns, and the participant could not tell which one they were feeling. So "The first"
+    and "The second" stand between the buttons, and the one playing is set in bold and
+    underlined while it plays (`playing`), as the comparison emphasises its button
+    (UI_PRINCIPLES.md 5.11): weight, never brightness or colour.
     """
 
     def __init__(self, responder: Responder, parent: QWidget | None = None):
@@ -315,13 +358,24 @@ class _ControlScreen(QWidget):
         self.labels: dict[str, str] = {}
         self.confirm = ""
         self.held: set[str] = set()
+        self.pair: tuple[str, str] | None = None
+        self.playing: int | None = None
 
-    def present(self, opening: str, controls: dict) -> None:
-        """`opening` goes above the buttons; `controls` is one `participant_controls` entry."""
+    def present(self, opening: str, controls: dict,
+                pair: tuple[str, str] | None = None) -> None:
+        """`opening` goes above the buttons; `controls` is one `participant_controls` entry;
+        `pair` names the two alternating touches, on the channel match only."""
         self.target = opening
         self.labels = {side: controls[side] for side in SIDES}
         self.confirm = controls["confirm"]
         self.held.clear()
+        self.pair = pair
+        self.playing = None
+        self.update()
+
+    def emphasise(self, index: int | None) -> None:
+        """Mark which of `pair` is playing now; None while neither is."""
+        self.playing = index
         self.update()
 
     def hold(self, side: str) -> None:
@@ -355,7 +409,29 @@ class _ControlScreen(QWidget):
         top = int(self.height() * ADJUST_CONFIRM_Y_FRACTION)
         box = self.rect().adjusted(margin, top, -margin, 0)
         draw_prose(painter, box, self.confirm, self.responder)
+        if self.pair is not None:
+            self._draw_pair(painter)
         painter.end()
+
+    def _draw_pair(self, painter: QPainter) -> None:
+        left, right = _button_rect(self, SIDES[0]), _button_rect(self, SIDES[1])
+        for index, (label, row) in enumerate(zip(self.pair, PAIR_ROW_FRACTIONS, strict=True)):
+            font = QFont(self.font())
+            font.setPointSize(BUTTON_LABEL_POINT_SIZE)
+            font.setBold(index == self.playing)
+            painter.setFont(font)
+            painter.setPen(FOREGROUND)
+            metrics = QFontMetrics(font)
+            centre_y = int(left.top() + left.height() * row)
+            box = QRect(left.right(), centre_y - metrics.height() // 2,
+                        right.left() - left.right(), metrics.height())
+            painter.drawText(box, Qt.AlignCenter, label)
+            if index == self.playing:
+                width = metrics.horizontalAdvance(label)
+                y = box.bottom() + PAIR_UNDERLINE_GAP_PX
+                painter.setPen(QPen(FOREGROUND, BUTTON_LINE_WIDTH_PX))
+                painter.drawLine(box.center().x() - width // 2, y,
+                                 box.center().x() + width // 2, y)
 
 
 def _draw_top_text(painter: QPainter, widget: QWidget, text: str) -> None:
@@ -468,6 +544,52 @@ def _draw_button(
     draw_prose(painter, label_box, label, responder)
 
 
+class _ResponseButton(QPushButton):
+    """One of the remote's buttons on screen, for a mouse or trackpad (docs/LOG.md N7.F12e4).
+
+    Its press and its release are delivered as the remote's key going down and up, stamped
+    with the mouse event's own time, exactly as a raw report from the remote is
+    (`ParticipantWindow.deliver_remote_key`): the adjustment and the VAS time a hold from those
+    stamps. It never takes the focus, which the window or the VAS keeps for the keys.
+    """
+
+    def __init__(self, symbol: str, key: str, deliver, parent: QWidget):
+        super().__init__(symbol, parent)
+        self.key = key
+        self._deliver = deliver
+        self.setFocusPolicy(Qt.NoFocus)
+        font = self.font()
+        font.setPointSize(RESPONSE_BUTTON_POINT_SIZE)
+        self.setFont(font)
+        self.setMinimumSize(RESPONSE_BUTTON_WIDTH_PX, RESPONSE_BUTTON_HEIGHT_PX)
+        self.setStyleSheet(
+            f"QPushButton {{ color: {FOREGROUND.name()}; "
+            f"background-color: {BACKGROUND.name()}; "
+            f"border: {BUTTON_LINE_WIDTH_PX}px solid {FOREGROUND.name()}; "
+            f"border-radius: {BUTTON_RADIUS_PX}px; }}"
+        )
+
+        # The press's own stamp and the real time it came, while it is held.
+        self.held: tuple[int, float] | None = None
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        super().mousePressEvent(event)
+        self.held = (event.timestamp(), time.monotonic())
+        self._deliver(self.key, False, False, event.timestamp())
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        super().mouseReleaseEvent(event)
+        if self.held is None:
+            return
+        self.held = None
+        self._deliver(self.key, True, False, event.timestamp())
+
+    def release_stamp(self) -> int:
+        """The stamp a release would carry now: the press's, plus the real time held since."""
+        press_ms, press_s = self.held
+        return press_ms + round((time.monotonic() - press_s) * MS_PER_S)
+
+
 class ParticipantWindow(QWidget):
     """The participant's screen. Everything shown to a participant goes through here."""
 
@@ -527,7 +649,7 @@ class ParticipantWindow(QWidget):
         self.message.stop_disc = QColor(
             responder_config["button_symbol_discs"]["emergency_stop"]
         )
-        self.cue = _CueScreen()
+        self.cue = _CueScreen(self.text["warning_cue"], responder)
         self.vas = VasWidget(config.study1["vas"], responder, clock)
         self.vas.confirmed.connect(self.confirmed)
         self.vas.emergency_stop.connect(self.emergency_stop)
@@ -547,12 +669,48 @@ class ParticipantWindow(QWidget):
             self.stack.addWidget(screen)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.addWidget(self.stack)
+        # Only when the hardware page chose them, so with the remote the window is the
+        # approved screens and nothing else (docs/LOG.md N7.F12e4).
+        self.response_buttons: dict[Action, _ResponseButton] = {}
+        if responder_config["participant_input"] == ON_SCREEN:
+            layout.addWidget(self._response_bar(responder_config))
 
         self._adjusting = False
         self._choosing = False
         self.setFocusPolicy(Qt.StrongFocus)
         self.show_blank()
+
+    def _response_bar(self, responder_config: dict) -> QWidget:
+        """The remote's four buttons, on screen for a mouse or trackpad (docs/LOG.md
+        N7.F12e4): the two large ones at the left, where the hand would hold them, ▶ apart, and
+        the stop alone at the far right, on its sticker's disc. Each presses and releases the
+        key the remote's button sends, at the moment the mouse does, so a hold is a hold."""
+        bar = QWidget(self)
+        bar.setAttribute(Qt.WA_StyledBackground, True)
+        bar.setStyleSheet(f"background-color: {BACKGROUND.name()};")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(RESPONSE_BAR_MARGIN_PX, RESPONSE_BAR_MARGIN_PX,
+                               RESPONSE_BAR_MARGIN_PX, RESPONSE_BAR_MARGIN_PX)
+        row.setSpacing(RESPONSE_BAR_MARGIN_PX)
+        for action in Action:
+            made = _ResponseButton(
+                self.responder.symbol_for(action, pointing_at_stop=True),
+                self.responder.key_for(action), self.deliver_remote_key, bar,
+            )
+            if action is Action.EMERGENCY_STOP:
+                row.addStretch(1)
+                colour = responder_config["button_symbol_colours"][action]
+                disc = responder_config["button_symbol_discs"][action]
+                made.setStyleSheet(made.styleSheet() + (
+                    f"QPushButton {{ color: {colour}; background-color: {disc}; }}"
+                ))
+            elif action is Action.CONFIRM:
+                row.addSpacing(RESPONSE_BAR_GROUP_GAP_PX)
+            self.response_buttons[action] = made
+            row.addWidget(made)
+        return bar
 
     # -- placement ---------------------------------------------------------------------
 
@@ -620,16 +778,24 @@ class ParticipantWindow(QWidget):
         """What the participant is left looking at after a stop (SPEC.md 13)."""
         self.show_message(EMERGENCY_STOP_SCREEN)
 
-    def show_adjustment(self, target_key: str) -> None:
+    def show_adjustment(self, target_key: str, paired: bool = False) -> None:
         """The adjustment screen: what to set, above how the buttons work (SPEC.md 9, 10.3).
 
         `target_key` names an entry in `adjust_targets`, which is always one of the anchors the
         scale labels -- a participant is asked for a sensation the scale names, never for a
-        position on a line.
+        position on a line. `paired` is the channel match, whose two alternating touches are
+        named on screen; `emphasise_adjustment` marks the one playing.
         """
         target = self.text["adjust_targets"][target_key]
-        self.control.present(target, self.text["participant_controls"]["adjust"])
+        labels = self.text["choices"][PAIR_LABELS]
+        pair = (labels[SIDES[0]], labels[SIDES[1]]) if paired else None
+        self.control.present(target, self.text["participant_controls"]["adjust"], pair)
         self._show(self.control, adjusting=True)
+
+    def emphasise_adjustment(self, index: int | None) -> None:
+        """On a paired adjustment, which touch is playing: 0 the first, 1 the second, None
+        neither."""
+        self.control.emphasise(index)
 
     def show_preference(self) -> None:
         """The preference selection (SPEC.md 9 step 6): move between patterns, then choose.
@@ -674,15 +840,18 @@ class ParticipantWindow(QWidget):
     def show_vas_training(self, scale: str, accepting: bool) -> None:
         """The VAS training for `scale` (SPEC.md 10.6): the scale as it is rated.
 
-        While the experimenter explains the anchors and proportionality aloud, that is all, and
-        no button but the emergency stop does anything. Once they have (`accepting`), it is a
-        practice rating with `training.<scale>` below it, and ▶ with the marker shown emits
-        `vas_training_confirmed` with the practice response -- never `confirmed`.
+        While the experimenter explains the anchors and proportionality aloud, it is the scale
+        with `training_listen` below it, and no button but the emergency stop does anything.
+        Once they have (`accepting`), it is a practice rating with `training.<scale>` in the
+        same place, and ▶ with the marker shown emits `vas_training_confirmed` with the
+        practice response -- never `confirmed`.
         """
         if accepting:
             self.vas.show_practice(scale, self.text["vas"][scale], self.text["training"][scale])
         else:
-            self.vas.show_explanation(scale, self.text["vas"][scale])
+            self.vas.show_explanation(
+                scale, self.text["vas"][scale], self.text["training_listen"]
+            )
         self._show(self.vas)
 
     def _show(self, screen: QWidget, adjusting: bool = False, choosing: bool = False) -> None:
@@ -774,6 +943,20 @@ class ParticipantWindow(QWidget):
     def _confirm_accepted(self, *_response) -> None:
         self._confirm_accepted_s = self.clock.elapsed_s()
 
+    def hideEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        """An on-screen button held as the window hides -- the shared window's flags changing
+        around a dialog hide it for a moment -- loses its mouse release, and a hold with no end
+        would ramp the pressure on. So its release is delivered now, at the time held so far,
+        as the VAS ends its hold on a hide (spec review of N7.F12e4)."""
+        for made in self.response_buttons.values():
+            if made.held is not None:
+                stamp = made.release_stamp()
+                made.held = None
+                made.setDown(False)
+                QApplication.sendEvent(self.key_target(), remote_key_event(
+                    QEvent.KeyRelease, QT_KEYS[made.key], False, stamp))
+        super().hideEvent(event)
+
     def keyReleaseEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         action = self._action(event)
         if (
@@ -820,6 +1003,21 @@ class ParticipantWindow(QWidget):
 # experimenter typing, not the participant pressing -- the remote's emergency stop is the full
 # stop, which is also typed.
 TEXT_ENTRY_WIDGETS = (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
+# Widgets that act on the arrows, Return and Esc themselves (code review of N7.F12e4). Under
+# any_keyboard a key reaching one of these, or any widget in a dialog or a popup, is the
+# experimenter's: Return accepting a dialog is not ▶, and an arrow in a list does not move the
+# participant's marker. The stop is still forwarded from them: no dialog uses the full stop, and
+# a stop is never to be lost.
+KEY_USING_WIDGETS = (QComboBox, QAbstractItemView, QAbstractSlider, QMenu)
+
+
+def uses_keys(widget: QWidget) -> bool:
+    window = widget.window()
+    return (
+        isinstance(widget, KEY_USING_WIDGETS)
+        or isinstance(window, QDialog)
+        or window.windowType() == Qt.Popup
+    )
 
 # Set in a key event's native modifiers to mark it as the remote's own, delivered to the
 # participant: from its raw report, or forwarded by the router. Bit 31, which Windows' native
@@ -855,7 +1053,11 @@ class RemoteKeyRouter(QObject):
     - **It cannot** (`any_keyboard`): every keyboard is the remote, and its keys are forwarded
       to the participant, except a key typed into an experimenter text field, which is taken as
       the experimenter writing a note or a distance (docs/LOG.md N7.I1). A participant's stop
-      pressed while the experimenter is typing then reaches the field.
+      pressed while the experimenter is typing then reaches the field. Nor are the other
+      buttons' keys forwarded from a dialog, a popup, a list or a combo box, which use them
+      (`uses_keys`); the stop still is. So on one screen, with one person playing both parts
+      (a MacBook, N7.F12e4), keys pressed over the experimenter window's own surface -- after
+      clicking Next step, say -- still reach the participant.
     """
 
     def __init__(self, participant: ParticipantWindow, source, parent: QObject | None = None):
@@ -885,6 +1087,8 @@ class RemoteKeyRouter(QObject):
         if at_participant or not participant.isVisible():
             return False
         if isinstance(watched, TEXT_ENTRY_WIDGETS):
+            return False
+        if participant._action(event) is not Action.EMERGENCY_STOP and uses_keys(watched):
             return False
         # The native codes go with it, as the remote's own event would carry them.
         forwarded = QKeyEvent(

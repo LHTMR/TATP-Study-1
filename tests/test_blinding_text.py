@@ -37,6 +37,24 @@ def test_no_screen_text_names_a_condition(path):
     assert not hits, "SPEC.md 16:\n" + "\n".join(hits)
 
 
+@pytest.mark.parametrize("path", EXPERIMENTER_FILES, ids=lambda p: p.name)
+def test_nothing_said_aloud_to_the_participant_contains_a_forbidden_term(path):
+    """The experimenter's `say` section is spoken to the participant (LOG N7.F11b19), so it is
+    held to the participant's list, not only to the condition labels."""
+    hits = blinding.hits(path, FORBIDDEN_TERMS, blinding.SAY_SECTION)
+    assert not hits, "SPEC.md 16:\n" + "\n".join(hits)
+
+
+def test_a_forbidden_term_in_what_is_said_aloud_is_found(tmp_path):
+    folder = _plant(
+        tmp_path, "screens:\n  welcome: 'Hello'\n",
+        "title: 'TATP Study 1'\nsay:\n  heat: 'This is for pain relief.'\n",
+    )
+    found = blinding.violations(folder)
+    assert found == [hit for hit in found if "experimenter_xx.yaml:say.heat" in hit]
+    assert len(found) == 1, "the study name outside `say` is still the experimenter's to use"
+
+
 def _plant(folder, participant: str, experimenter: str):
     (folder / "participant_xx.yaml").write_text(participant, encoding="utf-8")
     (folder / "experimenter_xx.yaml").write_text(experimenter, encoding="utf-8")

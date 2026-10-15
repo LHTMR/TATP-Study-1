@@ -1159,6 +1159,11 @@ MAY_BE_EMPTY: dict[str, tuple[str, Callable[[Run], bool]]] = {
                               lambda run: not run.config.unresolved),
     "resumed_from_session_file": ("the run did not resume",
                                   lambda run: run.scenario.resumes is None),
+    # docs/LOG.md N7.F12e3: empty when the run is on hardware.yaml's own setup.
+    "hardware_changed": ("the run is on hardware.yaml's own setup",
+                         lambda run: not run.config.hardware.get("changed_at_launch")),
+    "garment_port": ("no sleeve port is configured",
+                     lambda run: run.config.hardware["garment"]["prototype"]["port"] is None),
     "sensitisation_start_iso": ("the run ended before session t=0",
                                 lambda run: not _logged(run, "sensitisation_started")
                                 and not _logged(run, "sensitisation_resumed")),
@@ -1243,6 +1248,12 @@ def check_emergency_stop_mid_block_resumes(runs):
     if len(stops) != 1:
         return [*failures, f"{len(stops)} emergency_stop events logged in the intervention"]
     stop = events[stops[0]]
+    # Intercurrent events, counted in the session file (docs/LOG.md N7.F12a1): the stop, and
+    # no re-calibration, since the simulated experimenter resumes.
+    if run.session.get("intervention_emergency_stops") != "1":
+        failures.append("the session file does not count the one stop in the intervention")
+    if run.session.get("intervention_recalibrations") != "0":
+        failures.append("the session file counts a re-calibration nobody chose")
     if not stop["block_index"]:
         failures.append("the stop was not logged inside an intervention block")
     if stop["origin"] != "participant":

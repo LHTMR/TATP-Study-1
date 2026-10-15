@@ -43,6 +43,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from tatp import touchcal_maths as maths
 from tatp.procedure import Procedure
 from tatp.responder import Action
+from tatp.resume import RECALIBRATION_EVENT, RESUME_CHOICE, ResumeState
 from tatp.session import Session
 from tatp.touchcal_maths import REFERENCE_STRONGER, TEST_STRONGER, Delivery
 from tatp.trials import Choice, Cue, ExperimenterChoice, Ramp, Trial
@@ -64,8 +65,21 @@ PLEASANTNESS_TARGET = "most_pleasant"
 COMPARISON_CHOICE = "comparison"
 EVENNESS_CHOICE = "evenness"
 SELF_START_SCREEN = "self_start"
+# The introduction before each new kind of task (docs/LOG.md N7.F11c1): participant screen
+# keys; the experimenter's line meanwhile is the instruction `touchcal_<key>`, or for a
+# channel set again inside step 4, `touchcal_intro_readjust`.
+INTRO_BRACKET = "intro_bracket"
+INTRO_ESTIMATION = "intro_estimation"
+INTRO_MATCH = "intro_match"
+INTRO_COMPARE = "intro_compare"
+INTRO_PLEASANT = "intro_pleasant"
+INTRO_INSTRUCTION = "touchcal_"
+INTRO_READJUST_INSTRUCTION = "touchcal_intro_readjust"
 # The one experimenter instruction at the start of every touch delivery, in every condition.
 TOUCH_START_INSTRUCTION = "touch_start"
+MATCH_INSTRUCTION = "touchcal_match"
+READJUST_INSTRUCTION = "touchcal_readjust"
+EQUALISE_INSTRUCTION = "touchcal_equalise"
 # `touchcal_compare.order` and `touchcal_evenness.judgement`.
 TEST_FIRST = "test_first"
 REFERENCE_FIRST = "reference_first"
@@ -78,6 +92,51 @@ ACCEPT = "accept"
 RERUN = "rerun"
 REBALANCE = "rebalance"
 PROCEED = "proceed"
+# A re-calibration (docs/LOG.md N7.F12a1): the other path beside `REBALANCE`, the trigger
+# beside `interruption.EMERGENCY_STOP`, what a restarted run's `touchcal_fit.rerun_reason`
+# starts with, and the calibration's steps as the `recalibration` event names the one it
+# abandoned (docs/DATA_SCHEMA.md).
+RESTART = "restart"
+FROM_CONTROLS = "controls"
+RERUN_RECALIBRATION = "recalibration"
+STEP_TRAINING = "training"
+STEP_BRACKET = "step1_bracket"
+STEP_ESTIMATION = "step2_estimation"
+STEP_FIT_DECISION = "fit_decision"
+STEP_MATCH = "step3_match"
+STEP_COMPARE = "step4_compare"
+STEP_PLEASANTNESS = "step5_pleasantness"
+STEP_EVENNESS = "evenness"
+STEP_PREFERENCE = "step6_preference"
+
+
+def recalibration_allowed(session: Session) -> bool:
+    """Whether `touch_calibration.recalibrations_max` leaves another; null is no limit."""
+    limit = session.config.study1["touch_calibration"]["recalibrations_max"]
+    return limit is None or session.recalibrations < limit
+
+
+def recalibrations_used_up(session: Session) -> bool:
+    """Whether a limit there was has been reached -- not a limit of none at all."""
+    limit = session.config.study1["touch_calibration"]["recalibrations_max"]
+    return bool(limit) and not recalibration_allowed(session)
+
+
+def log_recalibration(session: Session, choice: str, trigger: str, where: str,
+                      reason: str, in_intervention: bool) -> None:
+    """The `recalibration` row: how the experimenter went on from a stop where touch was
+    being calibrated or delivered, or what they chose from the controls (docs/LOG.md
+    N7.F12a1). `<choice>; <trigger>; <where>; <reason>; <count>`. A rebalance or a restart is
+    counted, for the limit and, during the intervention, as an intercurrent event -- one
+    chosen inside a re-calibration there included."""
+    count = ""
+    if choice != RESUME_CHOICE:
+        session.recalibrations += 1
+        count = str(session.recalibrations)
+        if in_intervention:
+            session.intervention_recalibrations += 1
+    session.log(RECALIBRATION_EVENT, origin="experimenter",
+                detail=f"{choice}; {trigger}; {where}; {reason}; {count}")
 
 
 @dataclass(frozen=True)
@@ -336,6 +395,8 @@ class Adjustment(QObject):
     """
 
     finished = Signal(object)
+    # Whether the screen names two alternating touches (`MatchAdjustment`).
+    paired = False
 
     def __init__(
         self,
@@ -393,7 +454,7 @@ class Adjustment(QObject):
         self.participant.adjust_released.connect(self._on_released)
         self.participant.adjust_confirmed.connect(self._on_confirmed)
 
-        self.participant.show_adjustment(self.plan.target_key)
+        self.participant.show_adjustment(self.plan.target_key, self.paired)
         self.experimenter.set_status(
             self.experimenter.text["instructions"]["await_participant"]
         )
@@ -635,7 +696,12 @@ class MatchAdjustment(Adjustment):
     which clears the inflation transient (comparison doc 7.4). The reference's pressure is
     already set by the caller; this trial switches channels and commands only the one being
     adjusted.
+
+    The screen names the two "The first" and "The second", and marks the one on as it plays
+    (docs/LOG.md N7.F11c5), so the participant knows which they are feeling.
     """
+
+    paired = True
 
     def __init__(self, session, participant, experimenter, plan: AdjustmentPlan):
         super().__init__(session, participant, experimenter, plan)
@@ -672,6 +738,8 @@ class MatchAdjustment(Adjustment):
             wanted = channel == on
             if (channel in garment.status()["channels_on"]) != wanted:
                 garment.set_channel(channel, wanted)
+        playing = {self.plan.reference_channel: 0, self.plan.channel: 1}
+        self.participant.emphasise_adjustment(playing.get(on))
         self._cycle.start(self.session.clock.scaled_ms(seconds))
 
     def _end(self) -> None:
@@ -1160,12 +1228,23 @@ class TouchCalibration(Procedure):
     prototype). After `pilot_skip_min_ratings` estimation ratings the experimenter can end the
     calibration and move on to the next event; see `_skip`. Never on the study garment.
 
+    **Re-calibration** (S, 15 Oct 2026, docs/LOG.md N7.F12a1). At any point the experimenter
+    may rebalance the channels (steps 3 and 4 and the evenness check again, then on; once a
+    fit is accepted) or restart the calibration (a new run from step 1). The session runner
+    owns the choice and its record; this takes the path (`recalibrate`). During the
+    intervention the runner runs this same procedure again, from the path chosen
+    (`recalibrate_on_start`), so its runs, passes and counts go on from where the calibration
+    in use left them, and step 6 is not asked again; each finish writes a new set of
+    `touchcal_channels`.
+
     `fit_ready` carries the estimate to the fit preview, when the preview is on.
     """
 
     fit_ready = Signal(object)
+    # What it can offer for a re-calibration has changed (`recalibration_offers`).
+    recalibration_changed = Signal()
 
-    def __init__(self, rig):
+    def __init__(self, rig, resumed: ResumeState | None = None) -> None:
         super().__init__(rig)
         config = self.session.config
         self.touch = config.study1["touch_calibration"]
@@ -1197,10 +1276,27 @@ class TouchCalibration(Procedure):
         )
         self.low_pct, self.high_pct, self.sham_pct = low_pct, high_pct, sham_pct
 
-        self.run_index = 0
+        # The session's numbering, which a resumed session continues from the files it
+        # resumes (`resumed`, SPEC.md 15), so the chain never has two runs, evenness questions
+        # or comparisons of one number (docs/LOG.md N7.F12a1).
+        self.run_index = 0 if resumed is None else resumed.touchcal_runs
         self.reruns = 0
+        self._run_warning: str | None = None
         self.rebalances = 0
-        self.comparisons = 0
+        # Numbers `touchcal_evenness.check_index`: a rebalance or a re-calibration asks again.
+        self.evenness_checks = 0 if resumed is None else resumed.evenness_checks
+        self.comparisons = 0 if resumed is None else resumed.comparisons
+        # Re-calibration (docs/LOG.md N7.F12a1). `step_name` is where the calibration is, as
+        # the runner logs it; `_entry`, the path and reason a re-calibration during the
+        # intervention starts with, and `_kept_preference` the step 6 choice it keeps;
+        # `_used_run_index`, the run whose result governed the touch, never superseded since
+        # it was used.
+        self.step_name = STEP_TRAINING
+        self._entry: tuple[str, str] | None = None
+        self._kept_preference: str | None = None
+        self._used_run_index: int | None = None
+        # The stage-1 reasons of the fit accepted, for its row again if a restart supersedes it.
+        self._accepted_reasons: tuple[str, ...] = ()
         self.fit: maths.RatingFit | None = None
         self.raw_targets: dict[float, float | None] = {}
         self.targets: dict[float, float] = {}
@@ -1225,14 +1321,95 @@ class TouchCalibration(Procedure):
         # This run's (plan, rating) pairs; reset by `_start_run`.
         self.estimates: list[tuple[maths.EstimationPlan, float]] = []
 
-    # -- the experimenter's skip, on a pilot rig only ----------------------------------
-
     def connect_actions(self) -> None:
         self.experimenter.skip_calibration_requested.connect(self._skip)
 
     def disconnect_actions(self) -> None:
         self.experimenter.skip_calibration_requested.disconnect(self._skip)
         self.experimenter.set_actions_enabled(skip_calibration=False)
+
+    # -- re-calibration, docs/LOG.md N7.F12a1 ---------------------------------------------
+    # The session runner owns it: what is offered, the choice, its record, and the
+    # interruption it ends or makes. This procedure says what it can offer and takes the path.
+
+    def recalibration_offers(self) -> tuple[bool, bool]:
+        """(rebalance, restart) as the calibration stands: Rebalance channels once a fit is
+        accepted, since steps 3 and 4 are built on its targets; Restart calibration once a run
+        has begun. `recalibration_changed` says when this changes."""
+        return bool(self.targets), self.run_index > 0
+
+    def recalibrate_on_start(self, choice: str, reason: str, preference: str) -> None:
+        """Run again, from `choice`, when next started: a re-calibration during the
+        intervention, which keeps the touch calibration's `preference` (S, via the integrator,
+        15 Oct 2026): step 6 is not asked again, so the participant-preferred condition's
+        pattern cannot change mid-intervention."""
+        assert not self.running, "a re-calibration set up on a calibration still running"
+        assert choice != REBALANCE or self.targets, "a rebalance with no targets"
+        self._entry = (choice, reason)
+        self._kept_preference = preference
+
+    def recalibrate(self, choice: str, reason: str) -> None:
+        """Take `choice` now, once the runner has zeroed the garment and abandoned the step in
+        progress (`Interruptions.take_over`) or ended the stop unrestored
+        (`end_without_restore`). Nothing of the abandoned step goes on: its trial and timer
+        went with it, its repeat is never run, and a go it waited for is withdrawn. The path
+        starts as any run of it does, introduced to the participant (docs/LOG.md N7.F11c1) and
+        with its own cue before the garment starts. Identical in every condition: nothing
+        here reads it (SPEC.md 16)."""
+        # Stage boundary (CLAUDE.md): the runner offers only what this said it could take.
+        assert self.running and self.rig.interruptions.active is None, (
+            f"a {choice} while {self.rig.interruptions.active} is in force"
+        )
+        rebalance, restart = self.recalibration_offers()
+        assert rebalance if choice == REBALANCE else restart, f"{choice} was not offered"
+        self.on_proceed(None)
+        self.experimenter.set_status("")
+        self._take(choice, reason)
+
+    def _take(self, choice: str, reason: str) -> None:
+        """The path chosen. A rebalance is the N7.C8 path: steps 3 and 4 for every test
+        channel, then the evenness check, then on; a pleasantness level already set stands
+        (`_after_equalisation`)."""
+        assert choice in (REBALANCE, RESTART), choice
+        if choice == REBALANCE:
+            self._match_all(self._equalise_all)
+        else:
+            self._restart(reason)
+
+    def _restart(self, reason: str) -> None:
+        """A new run from step 1; the scale training is not given again (`begin`).
+
+        A run never used is kept, as a re-run keeps it (SPEC.md 11.1): a fit awaiting the
+        experimenter's decision gets its row, `superseded`; an accepted one gets a second row,
+        the same but `superseded`, since its first cannot be rewritten; a run stopped before
+        its fit has no fit row, and its per-step rows show how far it got. The run whose
+        calibration governed the touch is not superseded: `touchcal_channels` says when it did.
+        Everything built on the run is discarded: targets, gains and any pleasantness level.
+        """
+        rerun_reason = f"{RERUN_RECALIBRATION}: {reason}"
+        self.experimenter.hide_fit_preview()
+        if self.pending_reasons is not None:
+            self._write_fit(superseded=True, reasons=self.pending_reasons,
+                            rerun_reason=rerun_reason)
+        elif self.inverse is not None and self.run_index != self._used_run_index:
+            self._write_fit(superseded=True, reasons=self._accepted_reasons,
+                            rerun_reason=rerun_reason)
+        self.pending_reasons = None
+        self.inverse = None
+        self.targets = {}
+        self.targets_source = FROM_FIT
+        self.match_level_kpa = 0.0
+        self.gains = {self.reference: 1.0}
+        self.gain_sources = {self.reference: GAIN_REFERENCE}
+        self.match_settings = {}
+        self.match_passes = {}
+        self.pleasant_kpa = None
+        self.stage1_pass = False
+        self.valid = self.real
+        self.skipped = False
+        self._start_run()
+
+    # -- the experimenter's skip, on a pilot rig only ----------------------------------
 
     def _offer_skip(self) -> None:
         """Offer the skip once `pilot_skip_min_ratings` ratings are in, on a pilot rig only.
@@ -1299,12 +1476,20 @@ class TouchCalibration(Procedure):
             self.pleasant_kpa = maths.geometric_mean(
                 [self.targets[self.low_pct], self.targets[self.high_pct]]
             )
-        self._finish_calibration(self.pattern_config["fixed_ct_pattern"])
+        # A re-calibration during the intervention keeps the preference it had.
+        self._finish_calibration(self._kept_preference
+                                 or self.pattern_config["fixed_ct_pattern"])
 
     # -- steps 1 and 2 -----------------------------------------------------------------
 
     def begin(self) -> None:
         self.session.set_phase(TOUCH_CALIBRATION)
+        if self._entry is not None:
+            # A re-calibration during the intervention: straight to the path chosen, the
+            # garment already at zero (`recalibrate_on_start`).
+            (choice, reason), self._entry = self._entry, None
+            self._take(choice, reason)
+            return
         # SPEC.md 10.6, Bilaga 1 3.9: the training for the touch scales, during touch
         # calibration, before step 1 -- whose adjustments already ask for the intensity scale's
         # anchors, so that is the scale's first use. The touch scales are the touch block's
@@ -1320,6 +1505,12 @@ class TouchCalibration(Procedure):
 
     def _start_run(self) -> None:
         self.run_index += 1
+        self.step_name = STEP_BRACKET
+        self.recalibration_changed.emit()
+        # A warning about the run a re-run discards is not about the one now starting.
+        if self._run_warning is not None:
+            self.experimenter.clear_warning(self._run_warning)
+            self._run_warning = None
         self.session.log("touch_calibration_run", detail=f"run {self.run_index}")
         self.anchor_settings: dict[float, list[float]] = {}
         self.fit = None
@@ -1330,7 +1521,14 @@ class TouchCalibration(Procedure):
         self.catch_flag = False
         # A new run has no ratings of its own yet, so nothing to skip on.
         self.experimenter.set_actions_enabled(skip_calibration=False)
-        self._anchor(list(anchor_plans(self.session.config, self.run_index)))
+        plans = list(anchor_plans(self.session.config, self.run_index))
+        self._introduce(INTRO_BRACKET, lambda: self._anchor(plans))
+
+    def _introduce(self, key: str, then: Callable[[], None], readjust: bool = False) -> None:
+        """`Procedure.introduce`, with the experimenter told which step comes: `touchcal_<key>`,
+        or for a channel set again inside step 4 (`readjust`), step 4's own line."""
+        instruction = INTRO_READJUST_INSTRUCTION if readjust else f"{INTRO_INSTRUCTION}{key}"
+        self.introduce(key, self.instruction_text(instruction), then)
 
     def _anchor(self, plans: list[AdjustmentPlan]) -> None:
         if not plans:
@@ -1353,6 +1551,7 @@ class TouchCalibration(Procedure):
         self.run_trial(lambda: Cue(*self._windows()), on)
 
     def _estimate(self) -> None:
+        self.step_name = STEP_ESTIMATION
         percents = sorted(self.anchor_settings)
         # The bracket only sets where the run samples, and a setting can be zero, so the
         # settings at one anchor are averaged arithmetically here.
@@ -1378,7 +1577,10 @@ class TouchCalibration(Procedure):
             len(amplitudes), float(self.touch["catch_trial_fraction"])
         )
         plans = list(maths.estimation_plans(amplitudes, n_catch, self.session.rng))
-        self._present(plans, off_s=0.0, stopped_s=None)
+        self._introduce(
+            INTRO_ESTIMATION,
+            lambda: self._present(plans, off_s=0.0, stopped_s=None),
+        )
 
     def _device_range(self) -> tuple[float, float]:
         return (float(self.session.config.hardware["adjustment"]["tap_step_kpa"]),
@@ -1465,11 +1667,10 @@ class TouchCalibration(Procedure):
                 "catch_trials_felt", severity="warning",
                 detail=f"{felt} of {len(catches)} catch trials felt",
             )
-            self.experimenter.set_status(
-                self.experimenter.text["warnings"]["catch_trials_felt"].format(
-                    value=f"{felt}/{len(catches)}"
-                )
+            self._run_warning = self.experimenter.text["warnings"]["catch_trials_felt"].format(
+                value=f"{felt}/{len(catches)}"
             )
+            self.experimenter.set_warning(self._run_warning)
         self._gate(reasons, usable=held is not None)
 
     def _gate(self, reasons: tuple[str, ...], usable: bool) -> None:
@@ -1503,6 +1704,7 @@ class TouchCalibration(Procedure):
 
         Every instruction says truthfully what each choice will do from here.
         """
+        self.step_name = STEP_FIT_DECISION
         terms = self.experimenter.text["terms"]["stage1"]
         value = ", ".join(terms[r] for r in reasons)
         exhausted = self.reruns >= self.max_reruns
@@ -1524,7 +1726,7 @@ class TouchCalibration(Procedure):
                                  detail=f"{self.reruns} of {self.max_reruns} re-runs used")
                 if usable:
                     # "The re-run limit ... has been reached. This estimate will be used."
-                    self.experimenter.set_status(
+                    self.experimenter.set_warning(
                         self.experimenter.text["dialogs"]["fit_rerun_exhausted"]
                     )
                     self.experimenter.hide_fit_preview()
@@ -1550,6 +1752,7 @@ class TouchCalibration(Procedure):
                     RERUN: self.experimenter.fit_rerun_requested,
                 },
                 instruction,
+                show=self.rig.show_between,
                 value=value,
             ),
             decided,
@@ -1611,6 +1814,7 @@ class TouchCalibration(Procedure):
 
     def _accept(self, reasons: tuple[str, ...], usable: bool) -> None:
         self.pending_reasons = None
+        self._accepted_reasons = reasons
         self._write_fit(superseded=False, reasons=reasons)
         if usable:
             self.inverse = self.fit
@@ -1618,6 +1822,7 @@ class TouchCalibration(Procedure):
         else:
             self._fallback(reasons)
         self._set_targets()
+        self.recalibration_changed.emit()
         self._match_all(self._equalise_all)
 
     def _set_targets(self) -> None:
@@ -1654,7 +1859,10 @@ class TouchCalibration(Procedure):
     # -- step 3 ------------------------------------------------------------------------
 
     def _match_all(self, then: Callable[[], None]) -> None:
-        self._match_each(list(self.others), then)
+        self.step_name = STEP_MATCH
+        self._introduce(
+            INTRO_MATCH, lambda: self._match_each(list(self.others), then)
+        )
 
     def _match_each(self, channels: list[int], then: Callable[[], None]) -> None:
         if not channels:
@@ -1662,8 +1870,22 @@ class TouchCalibration(Procedure):
             return
         self._match_channel(channels[0], lambda: self._match_each(channels[1:], then))
 
-    def _match_channel(self, channel: int, then: Callable[[], None], zero_retries: int = 0):
-        """Both start points, then the gain. A 0 kPa setting is matched again, not guessed."""
+    def _channel_instruction(self, key: str, channel: int) -> None:
+        """A step 3 or 4 instruction, with which of the other channels this is."""
+        self.experimenter.set_instruction(
+            self.experimenter.text["instructions"][key].format(
+                channel=channel, index=self.others.index(channel) + 1, count=len(self.others)
+            )
+        )
+
+    def _match_channel(self, channel: int, then: Callable[[], None], zero_retries: int = 0,
+                       readjust: bool = False):
+        """Both start points, then the gain. A 0 kPa setting is matched again, not guessed.
+
+        `readjust` is a match repeated inside step 4, for a channel that still felt different,
+        which the experimenter is told as such rather than as step 3 again.
+        """
+        self.step_name = STEP_COMPARE if readjust else STEP_MATCH
         self.match_passes[channel] = self.match_passes.get(channel, 0) + 1
         directions = list(self.touch["start_directions"])
         plans = [
@@ -1684,9 +1906,8 @@ class TouchCalibration(Procedure):
             for index in range(int(self.touch["channel_match_adjustments"]))
         ]
         settings: list[float] = []
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touchcal_match"].format(channel=channel)
-        )
+        self._channel_instruction(READJUST_INSTRUCTION if readjust else MATCH_INSTRUCTION,
+                                  channel)
 
         def next_plan() -> None:
             if len(settings) == len(plans):
@@ -1726,17 +1947,22 @@ class TouchCalibration(Procedure):
                 detail=f"channel {channel}, pass {self.match_passes[channel]}: a 0 kPa setting",
             )
             if zero_retries < int(self.touch["channel_match_zero_retries"]):
-                self._match_channel(channel, then, zero_retries + 1)
+                self._match_channel(channel, then, zero_retries + 1, readjust)
             else:
-                self._ask_about_gain(channel, then)
+                self._ask_about_gain(channel, then, readjust)
 
         next_plan()
 
-    def _ask_about_gain(self, channel: int, then: Callable[[], None]) -> None:
+    def _ask_about_gain(self, channel: int, then: Callable[[], None], readjust: bool) -> None:
         def decided(outcome) -> None:
             name, _ = outcome
             if name == REBALANCE:
-                self._match_channel(channel, then)
+                # Back to matching after a wait on the experimenter: introduced again.
+                self._introduce(
+                    INTRO_MATCH,
+                    lambda: self._match_channel(channel, then, readjust=readjust),
+                    readjust=readjust,
+                )
                 return
             # The experimenter's explicit choice, recorded as a fallback and never as a match.
             self.gains[channel] = 1.0
@@ -1755,6 +1981,7 @@ class TouchCalibration(Procedure):
                 {REBALANCE: self.experimenter.rebalance_requested,
                  PROCEED: self.experimenter.proceed_requested},
                 "touchcal_gain_undefined",
+                show=self.rig.show_between,
                 channel=channel,
             ),
             decided,
@@ -1763,7 +1990,11 @@ class TouchCalibration(Procedure):
     # -- step 4 ------------------------------------------------------------------------
 
     def _equalise_all(self) -> None:
-        self._equalise(list(self.others), self._after_equalisation)
+        self.step_name = STEP_COMPARE
+        self._introduce(
+            INTRO_COMPARE,
+            lambda: self._equalise(list(self.others), self._after_equalisation),
+        )
 
     def _equalise(self, channels: list[int], then: Callable[[], None]) -> None:
         if not channels:
@@ -1776,9 +2007,7 @@ class TouchCalibration(Procedure):
         pairs_to_flag = int(self.touch["equalisation_pairs_to_flag"])
         max_passes = 1 + int(self.touch["equalisation_readjust_max_passes"])
         judgements: list[str] = []
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touchcal_equalise"].format(channel=channel)
-        )
+        self._channel_instruction(EQUALISE_INSTRUCTION, channel)
 
         def pair(pair_index: int) -> None:
             orders = [TEST_FIRST, REFERENCE_FIRST]
@@ -1829,15 +2058,24 @@ class TouchCalibration(Procedure):
                     detail=f"channel {channel}, pass {pass_index}: {winner} in every "
                     "comparison; re-adjusting",
                 )
-                self._match_channel(
-                    channel, lambda: self._check_channel(channel, pass_index + 1, then)
+                # Back to matching, then to comparing: each introduced again (N7.F11c1).
+                def compare_again() -> None:
+                    self._introduce(
+                        INTRO_COMPARE,
+                        lambda: self._check_channel(channel, pass_index + 1, then),
+                    )
+
+                self._introduce(
+                    INTRO_MATCH,
+                    lambda: self._match_channel(channel, compare_again, readjust=True),
+                    readjust=True,
                 )
             else:
                 self.session.log(
                     "equalisation_mismatch", severity="warning",
                     detail=f"channel {channel}: still {winner} after re-adjustment; continuing",
                 )
-                self.experimenter.set_status(
+                self.experimenter.set_warning(
                     self.experimenter.text["warnings"]["equalisation_mismatch"].format(
                         channel=channel
                     )
@@ -1852,7 +2090,8 @@ class TouchCalibration(Procedure):
             # gains do not touch, so it stands (docs/LOG.md N7.C8).
             self._evenness()
         else:
-            self._pleasantness()
+            self.step_name = STEP_PLEASANTNESS
+            self._introduce(INTRO_PLEASANT, self._pleasantness)
 
     # -- step 5 ------------------------------------------------------------------------
 
@@ -1916,8 +2155,9 @@ class TouchCalibration(Procedure):
         return levels
 
     def _evenness(self) -> None:
+        self.step_name = STEP_EVENNESS
         if not self.touch["evenness_check"]:
-            self._preference()
+            self._after_evenness()
             return
         levels = self._levels(self.pleasant_kpa, "evenness check")
         self.experimenter.set_instruction(
@@ -1929,18 +2169,19 @@ class TouchCalibration(Procedure):
             even = side == SIDES[0]  # the affirmative is on the left (SPEC.md 10.7)
             allowed = int(self.touch["evenness_max_rebalances"])
             rebalance = not even and self.rebalances < allowed
+            self.evenness_checks += 1
             self.session.files.write(
                 "touchcal_evenness",
                 timestamp_iso=self.session.clock.wall_iso(),
                 t_session_s=self.session.clock.t_session_s(),
-                check_index=self.rebalances + 1,
+                check_index=self.evenness_checks,
                 level_kpa=self.pleasant_kpa,
                 judgement=EVEN if even else UNEVEN,
                 rebalance_offered=rebalance,
                 valid_for_analysis=self.real,
             )
             if not rebalance:
-                self._preference()
+                self._after_evenness()
                 return
             self.run_trial(
                 lambda: ExperimenterChoice(
@@ -1948,6 +2189,7 @@ class TouchCalibration(Procedure):
                     {REBALANCE: self.experimenter.rebalance_requested,
                      PROCEED: self.experimenter.proceed_requested},
                     "touchcal_uneven",
+                    show=self.rig.show_between,
                 ),
                 decided,
             )
@@ -1960,7 +2202,7 @@ class TouchCalibration(Procedure):
                                  detail=f"rebalance {self.rebalances}")
                 self._match_all(self._equalise_all)
             else:
-                self._preference()
+                self._after_evenness()
 
         def ask(_) -> None:
             self.run_trial(lambda: Choice(*self._windows(), EVENNESS_CHOICE), answered)
@@ -1975,7 +2217,20 @@ class TouchCalibration(Procedure):
 
     # -- step 6 ------------------------------------------------------------------------
 
+    def _after_evenness(self) -> None:
+        """Step 6, except in a re-calibration during the intervention, which keeps the
+        touch calibration's choice: asked again, it could change the participant-preferred
+        condition's pattern mid-intervention (docs/LOG.md N7.F12a1). Logged, without the
+        pattern, which is recorded in `touchcal_channels` and never displayed."""
+        if self._kept_preference is None:
+            self._preference()
+            return
+        self.session.log("preference_kept",
+                         detail="re-calibration during the intervention: step 6 not asked")
+        self._finish_calibration(self._kept_preference)
+
     def _preference(self) -> None:
+        self.step_name = STEP_PREFERENCE
         order = list(self.pattern_config["preference_candidates"])
         self.session.rng.shuffle(order)
         levels = self._levels(self.pleasant_kpa, "preference selection")
@@ -2021,6 +2276,8 @@ class TouchCalibration(Procedure):
                     detail=f"a delivery: channels {', '.join(map(str, clamped[condition]))} "
                     "held inside [0, ceiling]",
                 )
+        self._used_run_index = self.run_index
+        self._kept_preference = None
         self._write_channels(preferred, levels, clamped)
         deliveries = {
             condition: Delivery(pattern, levels[condition] if self.real else None)
@@ -2057,14 +2314,18 @@ class TouchCalibration(Procedure):
         """One row per channel: what a resumed session needs to deliver (SPEC.md 15).
 
         Recorded, never displayed: the per-condition pressures and the preferred pattern are
-        data, and a screen that showed them would name the condition (SPEC.md 16).
+        data, and a screen that showed them would name the condition (SPEC.md 16). Each set is
+        numbered, so a re-calibration during the intervention adds one, governing the touch
+        from its time on (docs/LOG.md N7.F12a1).
         """
         stamp, t_session_s = self.session.clock.wall_iso(), self.session.clock.t_session_s()
+        self.session.calibrations_used += 1
         for channel in sorted(self.gains):
             self.session.files.write(
                 "touchcal_channels",
                 timestamp_iso=stamp,
                 t_session_s=t_session_s,
+                calibration_index=self.session.calibrations_used,
                 run_index=self.run_index,
                 channel=channel,
                 reference_channel=self.reference,

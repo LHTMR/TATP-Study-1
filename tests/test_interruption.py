@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
 from tatp.clock import Clock
-from tatp.interruption import EMERGENCY_STOP, PAUSE, Interruptions
+from tatp.interruption import EMERGENCY_STOP, PAUSE, RECALIBRATION, Interruptions
 from tatp.responder import Responder
 from tatp.session import Session, SessionError
 from tatp.ui.experimenter import ExperimenterWindow
@@ -227,3 +227,87 @@ def test_a_resume_with_nothing_interrupted_is_a_defect(rigged):
     _, _, _, interruptions, _ = rigged
     with pytest.raises(SessionError, match="nothing is interrupted"):
         interruptions.resume()
+
+
+# -- ending a stop without a restore, docs/research/R36 ----------------------------------------
+
+
+def test_a_stop_can_end_with_the_garment_left_at_zero_and_nothing_repeated(rigged):
+    """Touch calibration's re-calibration in place of Resume: the interruption ends, nothing
+    is restored, and no procedure is told to repeat its step."""
+    session, participant, _, interruptions, seen = rigged
+    _deliver(session)
+    _press(participant, "period")
+    interruptions.end_without_restore("restart")
+    deadline = time.monotonic() + (interruptions.warning_lead_s * 2) / CLOCK_SPEED + 0.2
+    while time.monotonic() < deadline:
+        QApplication.processEvents()
+    assert interruptions.active is None
+    assert seen == [EMERGENCY_STOP], "resumed is not emitted"
+    assert session.garment.pressure_kpa[CHANNEL] == 0.0
+    assert session.garment.status()["channels_on"] == []
+    (resumed,) = _events(session, "resumed")
+    assert resumed["origin"] == "experimenter"
+    assert resumed["detail"] == "emergency_stop; garment not restored: restart"
+    assert not _events(session, "garment_restored") and not _events(session, "warning_cue")
+
+
+def test_a_recalibration_from_the_controls_abandons_the_step_and_leaves_nothing_in_force(
+    rigged
+):
+    session, participant, _, interruptions, seen = rigged
+    _deliver(session)
+    interruptions.take_over("rebalance")
+    assert seen == [RECALIBRATION], "the step in progress is abandoned, as for a stop"
+    assert interruptions.active is None, "nothing to resume"
+    assert session.garment.pressure_kpa[CHANNEL] == 0.0
+    (row,) = _events(session, "interrupted_for_recalibration")
+    assert row["origin"] == "experimenter" and row["detail"] == "rebalance"
+    assert not _events(session, "emergency_stop") and not _events(session, "paused")
+    experimenter = rigged[2]
+    experimenter.pause_requested.emit()
+    with pytest.raises(SessionError, match="while pause is in force"):
+        interruptions.take_over("restart")
+
+
+def test_only_a_stop_ends_without_a_restore_and_never_under_a_resume(rigged):
+    session, participant, experimenter, interruptions, _ = rigged
+    experimenter.pause_requested.emit()
+    with pytest.raises(SessionError, match="only an emergency stop"):
+        interruptions.end_without_restore("rebalance")
+    interruptions.resume()
+    _spin(lambda: interruptions.active is None)
+    _deliver(session)
+    _press(participant, "period")
+    interruptions.resume()
+    with pytest.raises(AssertionError, match="already restoring"):
+        interruptions.end_without_restore("rebalance")
+    _spin(lambda: interruptions.active is None)
+
+
+# -- the intervention's stops, an intercurrent event (docs/research/R36) -----------------------
+
+
+@pytest.mark.parametrize("phase", ["intervention", "rekindle"])
+def test_a_stop_during_the_intervention_is_counted_once_and_written_at_close(rigged, phase):
+    session, participant, _, interruptions, _ = rigged
+    session.set_phase(phase)
+    _press(participant, "period")
+    _press(participant, "period")  # pressed again while stopped: the same stop
+    interruptions.resume()
+    _spin(lambda: interruptions.active is None)
+    session.set_phase("post_intervention")
+    _press(participant, "period")
+    assert session.intervention_emergency_stops == 1
+    session.close()
+    with session.files.path("session").open(encoding="utf-8", newline="") as handle:
+        values = {row["key"]: row["value"] for row in csv.DictReader(handle)}
+    assert values["intervention_emergency_stops"] == "1"
+
+
+def test_no_stop_during_the_intervention_is_written_as_zero(rigged):
+    session = rigged[0]
+    session.close()
+    with session.files.path("session").open(encoding="utf-8", newline="") as handle:
+        values = {row["key"]: row["value"] for row in csv.DictReader(handle)}
+    assert values["intervention_emergency_stops"] == "0"

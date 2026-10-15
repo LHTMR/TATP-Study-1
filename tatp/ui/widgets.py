@@ -17,6 +17,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -94,6 +95,8 @@ def stylesheet() -> str:
         f"QPushButton {{ background-color: {CONTROL_BACKGROUND}; color: {FOREGROUND}; "
         f"border: 1px solid {CONTROL_BORDER}; padding: {CONTROL_PADDING_PX}px; }}"
         f"QPushButton:disabled {{ color: {DISABLED}; border-color: {CONTROL_BACKGROUND}; }}"
+        # A button that stays down says so: otherwise on and off look the same (N7.F10b).
+        f"QPushButton:checked {{ background-color: {TARGET_COLOUR}; color: {BACKGROUND}; }}"
         f"QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {{ "
         f"background-color: {CONTROL_BACKGROUND}; color: {FOREGROUND}; "
         f"border: 1px solid {CONTROL_BORDER}; padding: {CONTROL_PADDING_PX // 2}px; }}"
@@ -162,6 +165,19 @@ def emphasis_button_style(colour: str) -> str:
     return (
         f"QPushButton {{ color: {colour}; font-weight: bold; }}"
         f"QPushButton:disabled {{ color: {DISABLED}; font-weight: normal; }}"
+    )
+
+
+def primary_button_style(point_size: int = SIZE_BODY) -> str:
+    """The way forward: filled, outlined in the foreground colour, and bold, so it is the
+    button found first at a glance (UI_PRINCIPLES.md 5.1). Greyed like any other while
+    disabled, with its fill dropped so a disabled one never reads as the way forward.
+    `point_size` is the button's own size, so taking on the emphasis never resizes it."""
+    return (
+        f"QPushButton {{ background-color: {CONTROL_BORDER}; color: {FOREGROUND}; "
+        f"border: 1px solid {FOREGROUND}; font-size: {point_size}pt; font-weight: bold; }}"
+        f"QPushButton:disabled {{ background-color: {CONTROL_BACKGROUND}; color: {DISABLED}; "
+        f"border-color: {CONTROL_BACKGROUND}; font-weight: normal; }}"
     )
 
 
@@ -402,6 +418,68 @@ class ReasonDialog(QDialog):
 
     def reason_text(self) -> str:
         return self.reason.text().strip()
+
+
+class ChoiceDialog(QDialog):
+    """A question that needs a reason from a fixed list before it can be confirmed: the
+    re-calibration after an emergency stop (docs/research/R36). As `ReasonDialog`, but the
+    reason is one of `options` ({key: wording}), so it costs one press and can be analysed.
+    Each option is a button that stays down when chosen, one at a time."""
+
+    def __init__(
+        self,
+        title: str,
+        message: str,
+        reason_label: str,
+        options: dict[str, str],
+        confirm: str,
+        cancel: str,
+        parent: QWidget | None = None,
+    ):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setStyleSheet(stylesheet())
+        self.message = label(SIZE_BODY, wrap=True)
+        self.message.setText(message)
+        self.reason_label = label(SIZE_SMALL, colour=SECONDARY)
+        self.reason_label.setText(reason_label)
+        self.confirm = button(confirm, SIZE_BODY)
+        self.confirm.setStyleSheet(emphasis_button_style(WARNING_COLOUR))
+        self.cancel = button(cancel, SIZE_BODY)
+        self.confirm.setEnabled(False)
+        self.confirm.clicked.connect(self.accept)
+        self.cancel.clicked.connect(self.reject)
+
+        self.group = QButtonGroup(self)
+        self.group.setExclusive(True)
+        self.options: dict[str, QPushButton] = {}
+        reasons = QVBoxLayout()
+        for key, wording in options.items():
+            option = button(wording, SIZE_BODY)
+            option.setCheckable(True)
+            self.group.addButton(option)
+            self.options[key] = option
+            reasons.addWidget(option)
+        self.group.buttonToggled.connect(
+            lambda *_: self.confirm.setEnabled(bool(self.choice()))
+        )
+
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(self.cancel)
+        buttons.addWidget(self.confirm)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(MARGIN_PX, MARGIN_PX, MARGIN_PX, MARGIN_PX)
+        layout.addWidget(self.message)
+        layout.addSpacing(GROUP_GAP_PX)
+        layout.addWidget(self.reason_label)
+        layout.addLayout(reasons)
+        layout.addSpacing(GROUP_GAP_PX)
+        layout.addLayout(buttons)
+
+    def choice(self) -> str:
+        """The chosen option's key, or "" before one is chosen."""
+        return next((key for key, option in self.options.items() if option.isChecked()), "")
 
 
 class MessageDialog(QDialog):

@@ -34,6 +34,8 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from tatp import config as cfg  # noqa: E402
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source  # noqa: E402
+
+RECORDING = "recording"
 from tatp.ui.application import application  # noqa: E402
 
 # Every keyboard is the remote in the tests (docs/LOG.md N7.D22). The lab's `raw_input` tells
@@ -41,16 +43,19 @@ from tatp.ui.application import application  # noqa: E402
 # and no test has the remote plugged in. Set here, once, for the same reason as the platform: a
 # fixture that forgot it would fail only on the machine with the remote. Rebound before any test
 # module is imported, so a module-level `cfg.load` gets it too.
+# The sound is the recording double for the same reason: no test has the lab's headphones, and
+# preflight refuses a session whose sound device cannot be found (docs/LOG.md N7.F10c).
 _load = cfg.load
 
 
-def _load_without_the_remote(*args, **kwargs):
+def _load_without_the_lab(*args, **kwargs):
     loaded = _load(*args, **kwargs)
     hardware = with_key_source(loaded.hardware, ANY_KEYBOARD)
+    hardware = {**hardware, "audio": {**hardware["audio"], "backend": RECORDING}}
     return cfg.Config(**{**loaded.__dict__, "hardware": hardware})
 
 
-cfg.load = _load_without_the_remote
+cfg.load = _load_without_the_lab
 
 
 @pytest.fixture(scope="session", autouse=True)

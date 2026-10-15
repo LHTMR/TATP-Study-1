@@ -19,9 +19,11 @@ logs, because an append-only file cannot be rewritten to say so.
 **What is reloaded, not redone.** The F40 estimates and the chosen filament
 (`calibration_pinprick`), the touch calibration and the preferred pattern
 (`touchcal_channels`), the masking check's level, the stop rehearsal, the ceiling ratings that
-cap the time point in progress, the mapping distances still outstanding, and the RNG seed. Each
-is read from every file in the resume chain, since a session resumed twice has its history in
-three sets of files.
+cap the time point in progress, the mapping distances still outstanding, the counts of stops,
+re-calibrations and calibrations used (docs/LOG.md N7.F12a1), and the RNG seed. Each is read
+from every file in the resume chain, since a session resumed twice has its history in three
+sets of files. The touch calibration reloaded is the latest to have governed the touch: a
+re-calibration during the intervention writes its channels as a new set.
 
 The RNG is not reloaded as a state: every stage draws from a stream derived from the seed and
 its own id (`tatp/session_runner.py`), so the stages after the crash draw exactly what they
@@ -37,6 +39,8 @@ import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from tatp.interruption import EMERGENCY_STOP
+from tatp.session import CONDITION_PHASES
 from tatp.touchcal_maths import Delivery
 from tatp.units import S_PER_MIN
 
@@ -45,12 +49,23 @@ STAGE_COMPLETED = "stage_completed"
 STAGE_STARTED = "stage_started"
 SCHEDULED_STEP_STARTED = "scheduled_step_started"
 REKINDLE = "rekindle"
+# The experimenter's Next step once the rekindle's thermode is off (docs/DATA_SCHEMA.md).
+REKINDLE_THERMODE_REMOVED = "rekindle_thermode_removed"
 SENSITISATION_STARTED = "sensitisation_started"
 MAPPING_PATH_STARTED = "mapping_path_started"
 PATH_MARKER = ", path "
 # Written by `tatp/trials.py`'s `VasTraining`, which takes the name from here.
 VAS_TRAINING_CONFIRMED = "vas_training_confirmed"
 CONDITIONS = ("sham", "ct_targeted", "participant_preferred")
+# The re-calibrations, with the choice of a plain resume after a stop (docs/LOG.md N7.F12a1),
+# which `tatp/touchcal.py` takes from here; and how its `detail` is read:
+# `<choice>; <trigger>; <where>; ...`, `<where>` being `<stage>` or `<stage>/<step>`.
+RECALIBRATION_EVENT = "recalibration"
+RESUME_CHOICE = "resume"
+DETAIL_SEPARATOR = "; "
+WHERE_FIELD = 2
+WHERE_STEP_SEPARATOR = "/"
+TOUCH_CALIBRATION_STAGE = "touch_calibration"
 
 
 class ResumeError(Exception):
@@ -100,11 +115,12 @@ def find_open_session(
     if not files or not is_open(files[-1]):
         return None
     chain = _chain(files[-1])
+    log = _rows(chain, "log")
     return OpenSession(
         session_file=files[-1],
         session_start_iso=read_session_values(chain[0])["session_start_iso"],
-        sensitisation_start_iso=_sensitisation_start(chain),
-        completed_stages=tuple(_completed(chain)),
+        sensitisation_start_iso=_sensitisation_start(log),
+        completed_stages=tuple(_completed(log)),
     )
 
 
@@ -139,9 +155,23 @@ class ResumeState:
     in_progress: str | None = None
     # Session time the rekindle's heat was launched, if it was (LOG N7.D14).
     rekindle_heat_t_s: float | None = None
+    # Whether the experimenter had said the rekindle's thermode was off (LOG N7.F11b10).
+    rekindle_thermode_removed: bool = False
     current_file: str = ""
     # The scales whose VAS training the participant had already confirmed (SPEC.md 10.6).
     vas_trained: frozenset[str] = frozenset()
+    # docs/LOG.md N7.F12a1: the stops and re-calibrations during the intervention, for the
+    # session file; every re-calibration, against `recalibrations_max`; and how many
+    # calibrations have governed the touch (`touchcal_channels.calibration_index`).
+    intervention_emergency_stops: int = 0
+    intervention_recalibrations: int = 0
+    recalibrations: int = 0
+    calibrations_used: int = 0
+    # The highest touch-calibration run, evenness question and comparison numbers in the
+    # chain, which a new calibration goes on from.
+    touchcal_runs: int = 0
+    evenness_checks: int = 0
+    comparisons: int = 0
 
     @property
     def after_t_zero(self) -> bool:
@@ -163,16 +193,18 @@ def load(open_session: OpenSession, config, per_channel_pressure: bool) -> Resum
             f40[row["phase"]] = float(row["f40_mn"])
             chosen[row["phase"]] = row["chosen_filament_label_g"]
 
-    deliveries, preferred = _deliveries(_rows(chain, "touchcal_channels"), config,
-                                        per_channel_pressure)
+    channels = _rows(chain, "touchcal_channels")
+    deliveries, preferred = _deliveries(channels, config, per_channel_pressure)
+    log = _rows(chain, "log")
     return ResumeState(
         open=open_session,
         rng_seed=int(first["rng_seed"]),
         # The first file's: t=0 was set in it, and every later file had to match it.
         clock_speed=float(first["clock_speed"]),
         completed_stages=frozenset(open_session.completed_stages),
-        in_progress=_in_progress(chain),
-        rekindle_heat_t_s=_rekindle_heat(chain),
+        in_progress=_in_progress(log),
+        rekindle_heat_t_s=_rekindle_heat(log),
+        rekindle_thermode_removed=any(row["event"] == REKINDLE_THERMODE_REMOVED for row in log),
         current_file=latest_file_name(chain),
         masking=None if setup is None else (
             float(setup["white_noise_level_dbfs"]),
@@ -193,12 +225,63 @@ def load(open_session: OpenSession, config, per_channel_pressure: bool) -> Resum
             for row in _rows(chain, "pinprick")
             if row["intolerable"] == "true"
         ),
-        mapping=_mapping(chain, list(config.study1["mapping"]["path_ids"])),
+        mapping=_mapping(chain, log, list(config.study1["mapping"]["path_ids"])),
         vas_trained=frozenset(
-            row["detail"] for row in _rows(chain, "log")
-            if row["event"] == VAS_TRAINING_CONFIRMED
+            row["detail"] for row in log if row["event"] == VAS_TRAINING_CONFIRMED
+        ),
+        intervention_emergency_stops=_intervention_stops(log),
+        intervention_recalibrations=sum(
+            _recalibrated(row) and _recalibrated_in_intervention(row) for row in log
+        ),
+        recalibrations=sum(_recalibrated(row) for row in log),
+        # Files before 15 Oct 2026 have no calibration_index: one calibration, if any.
+        calibrations_used=max(
+            (int(row.get("calibration_index") or 1) for row in channels), default=0
+        ),
+        touchcal_runs=max(
+            (int(row["run_index"])
+             for table in ("touchcal_fit", "touchcal_adjust", "touchcal_estimate")
+             for row in _rows(chain, table)),
+            default=0,
+        ),
+        evenness_checks=max(
+            (int(row["check_index"]) for row in _rows(chain, "touchcal_evenness")), default=0
+        ),
+        comparisons=max(
+            (int(row["comparison_index"]) for row in _rows(chain, "touchcal_compare")),
+            default=0,
         ),
     )
+
+
+def _intervention_stops(log: list[dict[str, str]]) -> int:
+    """The stops during the intervention, a re-calibration there included, whose phase is
+    `touch_calibration`: once the intervention has begun, that phase means one (the touch
+    calibration stage and its baseline come before it). A stop pressed again while stopped
+    has a detail saying so, and is not another stop."""
+    begun, count = False, 0
+    for row in log:
+        begun = begun or row["phase"] in CONDITION_PHASES
+        if row["event"] == EMERGENCY_STOP and not row["detail"] and (
+            row["phase"] in CONDITION_PHASES
+            or (begun and row["phase"] == TOUCH_CALIBRATION_STAGE)
+        ):
+            count += 1
+    return count
+
+
+def _recalibrated(row: dict[str, str]) -> bool:
+    """A rebalance or a restart, not the plain resume the same event records."""
+    return (row["event"] == RECALIBRATION_EVENT
+            and not row["detail"].startswith(f"{RESUME_CHOICE};"))
+
+
+def _recalibrated_in_intervention(row: dict[str, str]) -> bool:
+    """By the stage in `<where>`, not the row's phase: one chosen inside a re-calibration
+    during the intervention has phase `touch_calibration`, but its stage is the
+    intervention's."""
+    where = row["detail"].split(DETAIL_SEPARATOR)[WHERE_FIELD]
+    return where.split(WHERE_STEP_SEPARATOR)[0] != TOUCH_CALIBRATION_STAGE
 
 
 def previous_session_f40(
@@ -236,19 +319,19 @@ def _rows(chain: list[Path], table: str) -> list[dict[str, str]]:
     return [row for path in chain for row in read_rows(table_path(path, table))]
 
 
-def _completed(chain: list[Path]) -> list[str]:
-    return [row["detail"] for row in _rows(chain, "log") if row["event"] == STAGE_COMPLETED]
+def _completed(log: list[dict[str, str]]) -> list[str]:
+    return [row["detail"] for row in log if row["event"] == STAGE_COMPLETED]
 
 
-def _in_progress(chain: list[Path]) -> str | None:
-    started = [r["detail"] for r in _rows(chain, "log") if r["event"] == STAGE_STARTED]
-    completed = set(_completed(chain))
+def _in_progress(log: list[dict[str, str]]) -> str | None:
+    started = [r["detail"] for r in log if r["event"] == STAGE_STARTED]
+    completed = set(_completed(log))
     unfinished = [stage for stage in started if stage not in completed]
     return unfinished[-1] if unfinished else None
 
 
-def _rekindle_heat(chain: list[Path]) -> float | None:
-    for row in _rows(chain, "log"):
+def _rekindle_heat(log: list[dict[str, str]]) -> float | None:
+    for row in log:
         if row["event"] == SCHEDULED_STEP_STARTED and row["detail"].startswith(REKINDLE + ";"):
             return float(row["t_session_s"])
     return None
@@ -258,8 +341,8 @@ def latest_file_name(chain: list[Path]) -> str:
     return chain[-1].name
 
 
-def _sensitisation_start(chain: list[Path]) -> str | None:
-    for row in _rows(chain, "log"):
+def _sensitisation_start(log: list[dict[str, str]]) -> str | None:
+    for row in log:
         if row["event"] == SENSITISATION_STARTED:
             return row["detail"] or row["timestamp_iso"]
     return None
@@ -283,9 +366,10 @@ def _deliveries(rows, config, per_channel_pressure):
     return deliveries, preferred
 
 
-def _mapping(chain: list[Path], path_ids: list[str]) -> dict[str, MappingPoint]:
+def _mapping(chain: list[Path], log: list[dict[str, str]],
+             path_ids: list[str]) -> dict[str, MappingPoint]:
     points: dict[str, MappingPoint] = {}
-    for row in _rows(chain, "log"):
+    for row in log:
         if row["event"] == MAPPING_PATH_STARTED:
             path = int(row["detail"].rpartition(PATH_MARKER)[2])
             t_s = float(row["t_session_s"]) if row["t_session_s"] else None

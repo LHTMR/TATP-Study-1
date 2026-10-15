@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
@@ -49,14 +50,17 @@ from tatp import pattern_design as pd
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
 from tatp.demo import OFF, DemoControls
-from tatp.hardware_check import HardwareCheckDialog
+from tatp.devices import ON_SCREEN, check_key, matching_outputs
+from tatp.garment.base import Limits
+from tatp.garment.mock import MockGarment
+from tatp.hardware_check import Detectors, HardwareCheckDialog
 from tatp.instruments import InstrumentsDialog
 from tatp.launcher import WARN, LauncherWindow
 from tatp.pinprick import F40Fit, LongResult
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source
 from tatp.responder import Action, Responder
 from tatp.resume import offer_wording
-from tatp.touchcal import FitReady
+from tatp.touchcal import MATCH_TARGET, FitReady
 from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -100,6 +104,8 @@ SAMPLE_CHANNEL = 2
 # Part-way through the estimation run: ten amplitudes and two catch trials (R32).
 SAMPLE_ANSWERED = 3
 SAMPLE_PRESENTATIONS = 12
+# The channel matched, which of the channels matched it is, and how many there are.
+SAMPLE_MATCH = {"channel": SAMPLE_CHANNEL, "index": 2, "count": 4}
 SAMPLE_PATH = "lateral"
 SAMPLE_DISTANCES = ("42", "37,5")
 SAMPLE_BLOCK = {"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch"}
@@ -110,6 +116,8 @@ SAMPLE_HARDWARE = {"connected": True, "link_lost": False, "faults": [],
                    "channel_pressure_kpa": None}
 SAMPLE_PRESSURES_KPA = {1: 38.5, 2: 41.0, 3: 40.0, 4: 39.5, 5: 42.0}
 SAMPLE_FAULT = "channel 4: valve did not report"
+# Unresolved open items as `config.OpenItem.__str__` gives them, "[number] summary".
+SAMPLE_OPEN_ITEMS = ["[L3] audio levels", "[5] patterns"]
 # What the prototype driver reports when its link goes, at full length (arduino_mosfet.py).
 SAMPLE_LINK_FAULT = ("serial write failed on COM3: WriteFile failed (PermissionError(13, "
                      "'The device does not recognize the command.', None, 22))")
@@ -134,6 +142,15 @@ SAMPLE_DATA_FOLDER = "data"
 # The resume offer's completed phases and blocks, and how long ago sensitisation began,
 # worded by the same `resume.offer_wording` the real offer is.
 SAMPLE_RESUME_COMPLETED = ("setup", "touch_calibration", "pre_sensitisation", "sensitisation")
+# The channel the hardware check is drawn with on (docs/LOG.md N7.F10b).
+SAMPLE_CHANNEL_ON = 2
+# The demonstration's garment display (docs/LOG.md N7.F12f): every channel set to this share
+# of the ceiling, these channels on, then this one turned on and drawn this long after.
+SAMPLE_DEMO_PRESSURE_FRACTION = 0.6
+SAMPLE_DEMO_CHANNELS_ON = (2, 3)
+SAMPLE_DEMO_CHANGED = 4
+SAMPLE_DEMO_CHANGED_AGO_S = 0.2
+SAMPLE_DEMO_LOST = "no reply from the device"
 SAMPLE_RESUME_BLOCKS = ("1", "2", "3", "4")
 SAMPLE_RESUME_AGO_MIN = 72
 SAMPLE_SESSION_NUMBER = 1
@@ -229,6 +246,16 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             _grab(window),
         )
 
+    window.show_adjustment(MATCH_TARGET, paired=True)
+    window.emphasise_adjustment(0)
+    yield Shot(
+        f"participant_{language}_adjust_{MATCH_TARGET}_first_playing",
+        f"The channel match (SPEC.md 9 step 3) while the first of its two alternating touches "
+        f"plays: 'the first' and 'the second' between the buttons, the one playing in bold and "
+        f"underlined (docs/LOG.md N7.F11c5), {language}.",
+        _grab(window),
+    )
+
     for key in sorted(k for k, v in text["audio_setup"].items() if isinstance(v, str)):
         window.show_audio_setup(key)
         yield Shot(
@@ -258,7 +285,8 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     window.show_warning_cue()
     yield Shot(
         f"participant_{language}_cue",
-        "The visual warning cue: one filled disc, centred, no wording.",
+        f"The visual warning cue: the `warning_cue` text alone, at the message position in "
+        f"the button symbols' size, {language}.",
         _grab(window),
     )
 
@@ -295,6 +323,23 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     )
 
     yield from _vas_variant_shots(window, language)
+
+    # The remote's buttons on screen, for a pilot or a demonstration without it (docs/LOG.md
+    # N7.F12e4). Every other participant screen is the remote's, with no buttons below it.
+    responder = {**config.hardware["responder"], "participant_input": ON_SCREEN}
+    on_screen = cfg.Config(**{**config.__dict__,
+                              "hardware": {**config.hardware, "responder": responder}})
+    buttons = ParticipantWindow(on_screen, Responder(on_screen.hardware), Clock())
+    buttons.show_adjustment(sorted(text["adjust_targets"])[0])
+    yield Shot(
+        f"participant_{language}_on_screen_buttons",
+        f"The adjustment screen with the remote's four buttons drawn below it, for a mouse or "
+        f"trackpad (hardware page, 'Mouse or trackpad'): ‹ and › at the left, ▶ apart, the "
+        f"stop alone at the right on its sticker's disc. Pilot codes and demonstrations only; "
+        f"with the remote the window has no such row ({language}).",
+        _grab(buttons),
+    )
+    _dispose(buttons)
 
 
 def _choice_shots(window: ParticipantWindow, text: dict, language: str) -> Iterator[Shot]:
@@ -405,14 +450,16 @@ def _sample_touch_fit() -> FitReady:
     )
 
 
-def _experimenter_states(text: dict) -> dict:
+def _experimenter_states(config: cfg.Config) -> dict:
     """Every state of the window: (description, view overrides, what the protocol pushes in).
 
     What the protocol pushes -- the instruction, the status, the target, the awaited actions --
     is a function of the window, applied after a fresh window is built for each state so no
     state inherits another's.
     """
+    text = config.experimenter_text
     instructions = text["instructions"]
+    step_mm = f"{float(config.study1['mapping']['step_size_mm']):g}"
     filament = SAMPLE_F40["filament"]
     apply_filament = instructions["apply_filament"].format(
         filament=filament, force_mn=f"{SAMPLE_F40['filament_mn']:g}", site=SAMPLE_SITE,
@@ -428,16 +475,25 @@ def _experimenter_states(text: dict) -> dict:
         window.set_instruction(apply_filament)
         window.set_target("primary", SAMPLE_SITE, filament=True)
         window.set_status(instructions["await_participant"])
+        # What a filament trial offers while it runs (tatp/pinprick.py `_connect_extra`).
+        window.set_actions_enabled(substitution=True)
 
-    def ready(window):
-        window.set_instruction(instructions["ready"])
+    def instruct(key, **values):
+        return lambda window: window.set_instruction(cfg.instruction(config, key, **values))
+
+    # What is up while a block is waited for, and once it is due: the sample block is a touch
+    # block.
+    waiting = instruct("waiting")
+    ready = instruct("ready_touch_block", block=SAMPLE_BLOCK["block_index"])
 
     return {
         "plain": (
             "No banners, no open items, nothing scheduled -- a correctly configured session "
-            "at setup. Controls along the bottom, Resume, Rebalance and the fit choice "
-            "disabled; the zone diagram with no zone marked; the hardware panel connected "
-            "with no pressures.",
+            "at setup. The routine controls along the bottom, Next step emphasised; the "
+            "situational ones (Resume, Discard, Rebalance, the fit choice, the filament "
+            "entry, Mapping distances) hidden in places kept for them; no zone diagram, "
+            "since there is no target; the garment connected, its button quiet at the foot "
+            "of the side column.",
             {}, None,
         ),
         "placeholder_banner": (
@@ -455,27 +511,37 @@ def _experimenter_states(text: dict) -> dict:
             {"demo": True}, None,
         ),
         "all_banners": (
-            "All three banners at once, in the space they need, which is fixed from the "
-            "session's start: no banner comes or goes during a session, so nothing below "
-            "moves (UI_PRINCIPLES.md 3.3). The fit-preview banner is amber like the "
-            "reduced-capability one (SPEC.md 11.1).",
+            "All three banners at once, one line each with the detail in the tooltip, in the "
+            "space they need, which is fixed from the session's start: no banner comes or "
+            "goes during a session, so nothing below moves (UI_PRINCIPLES.md 3.3). The "
+            "fit-preview banner is amber like the reduced-capability one (SPEC.md 11.1).",
             {"placeholder_text": True, "reduced_capability_device": True,
              "garment_driver": SAMPLE_GARMENT, "fit_preview_enabled": True}, None,
         ),
         "open_items": (
-            "Unresolved open items listed for the experimenter (SPEC.md 20).",
-            {"unresolved_open_items": ["L3 audio levels", "5 patterns"]}, None,
+            "Unresolved open items listed for the experimenter (SPEC.md 20): one small amber "
+            "line at the foot of the banner region, by number, the summaries in the tooltip.",
+            {"unresolved_open_items": SAMPLE_OPEN_ITEMS}, None,
         ),
         "disconnected": (
-            "The garment reported disconnected: red and bold in the hardware panel, Connect "
-            "enabled and Disconnect not.",
+            "The garment reported disconnected: red and bold in the hardware panel, and its "
+            "button reading Connect garment, emphasised as the way forward.",
             {"hardware": {**SAMPLE_HARDWARE, "connected": False}}, None,
         ),
         "pinprick_primary": (
             "A pinprick application: the filament by its gram label, the primary zone "
             "outlined on the diagram with its site beside it, the technique text below, and "
-            "the response pending -- never its value.",
+            "the response pending -- never its value. The filament-applied-instead entry is "
+            "offered, as it is only during a filament trial.",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S}, pinprick,
+        ),
+        "pilot_rig_pinprick": (
+            "What the 15 Oct 2026 pilot looked like: the prototype sleeve's reduced-capability "
+            "banner and the open items above a filament trial.",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
+             "reduced_capability_device": True, "garment_driver": SAMPLE_GARMENT,
+             "unresolved_open_items": SAMPLE_OPEN_ITEMS},
+            pinprick,
         ),
         "brush_secondary": (
             "A brush stroke in the secondary zone: the dashed ellipse outlined.",
@@ -487,11 +553,13 @@ def _experimenter_states(text: dict) -> dict:
         ),
         "mapping": (
             "A mapping path: the secondary zone outlined without a site, the technique text "
-            "shown because a filament is used, and Mapping distances enabled now that a "
+            "shown because a filament is used, and Mapping distances offered now that a "
             "phase has been mapped.",
             {"phase": "post_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: (
-                window.set_instruction(instructions["mapping_path"].format(path=path)),
+                window.set_instruction(
+                    cfg.instruction(config, "mapping_path", path=path, step=step_mm)
+                ),
                 window.set_target("secondary", filament=True),
                 window.set_mapping_phases(["post_sensitisation"]),
             ),
@@ -516,9 +584,10 @@ def _experimenter_states(text: dict) -> dict:
             lambda window: window.set_instruction(instructions["touch_start"]),
         ),
         "countdown": (
-            "Waiting for the next block: 'Next: block 3 (touch) in 04:05', grey.",
+            "Waiting for the next block: 'Next: block 3 (touch) in 04:05', grey, and nothing "
+            "to do meanwhile.",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S, "next_event": upcoming},
-            ready,
+            waiting,
         ),
         "block_due": (
             "The block is due: amber and bold in the same place as the countdown.",
@@ -533,25 +602,94 @@ def _experimenter_states(text: dict) -> dict:
             ready,
         ),
         "rekindle_due": (
-            "The rekindle is due: a timed event that is not a block, named by its phase.",
-            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
+            "The rekindle is due: a timed event that is not a block, named by its phase, and "
+            "the thermode to place.",
+            {"phase": "rekindle", "elapsed_s": SAMPLE_ELAPSED_S,
              "next_event": {"kind": "rekindle", "label_key": "rekindle", "block_index": None,
                             "block_type": None, "due_in_s": SAMPLE_DUE_NOW_S,
                             "overdue": False}},
-            ready,
+            instruct("thermode_rekindle"),
         ),
         "interrupted_emergency_stop": (
-            "The participant pressed the stop: the red line under the phase, Resume and "
-            "Abort the only controls enabled, and nothing else moved.",
+            "The participant pressed the stop: the red line under the phase, the step on hold "
+            "dimmed beneath it, Resume emphasised in its own slot and Abort the only controls "
+            "offered, Next step greyed, and nothing moved.",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "emergency_stop"},
-            pinprick,
+            # The stop cancels the trial, which withdraws the substitution entry
+            # (tatp/pinprick.py `_disconnect_extra`).
+            lambda window: (pinprick(window), window.withdraw_substitution()),
+        ),
+        "touchcal_stopped_recalibrate": (
+            "The participant pressed the stop during touch calibration's step 4, with step 2's "
+            "fit accepted: beside Resume, Rebalance channels… and Restart calibration… are "
+            "offered, each in the place of its kin in the situational row, and each asks why "
+            "(docs/LOG.md N7.F12a1). The same in every condition; nothing else moved.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
+             "interruption": "emergency_stop"},
+            lambda window: (
+                window.set_instruction(cfg.instruction(config, "touchcal_equalise",
+                                                       **SAMPLE_MATCH)),
+                window.set_actions_enabled(recalibrate_rebalance=True,
+                                           recalibrate_restart=True),
+            ),
+        ),
+        "intervention_recalibrate": (
+            "The intervention, waiting for the next block with the condition's touch on: "
+            "Rebalance channels… and Restart calibration… offered at any time, as during touch "
+            "calibration (S, 15 Oct 2026; docs/LOG.md N7.F12a1). The same in every condition, "
+            "and no pressures (SPEC.md 16).",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S, "next_event": upcoming},
+            lambda window: (
+                waiting(window),
+                window.set_actions_enabled(recalibrate_rebalance=True,
+                                           recalibrate_restart=True),
+            ),
+        ),
+        "touchcal_stopped_recalibration_used": (
+            "A stop during touch calibration once the re-calibrations a limit allows "
+            "(recalibrations_max, none by default) are used: Resume only, and one grey line "
+            "where the two offers were saying why.",
+            {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
+             "interruption": "emergency_stop"},
+            lambda window: (
+                window.set_instruction(instructions["touchcal_estimation"].format(
+                    answered=SAMPLE_ANSWERED, total=SAMPLE_PRESENTATIONS
+                )),
+                window.set_actions_enabled(recalibration_used=True),
+            ),
         ),
         "interrupted_pause": (
-            "The experimenter's pause: the same line in amber, Resume enabled.",
+            "The experimenter's pause: the same line in amber, the step dimmed, Resume "
+            "offered.",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "pause"},
-            ready,
+            instruct("ready_long", region=text["terms"]["regions"]["secondary"],
+                     filament=filament),
+        ),
+        "status_warning": (
+            "A warning in the status region, in amber, kept apart from the routine status so "
+            "the next 'Waiting for...' does not replace it (15 Oct 2026 pilot review). It goes "
+            "under the routine line; this one is too long for both, so it has the region.",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: (
+                pinprick(window),
+                window.set_warning(text["warnings"]["out_of_range"].format(
+                    value=text["terms"]["out_of_range"]["above"]
+                )),
+            ),
+        ),
+        "first_pain_measures": (
+            "Before the session's first pain measure: what to tell the participant, set down "
+            "the type scale to fit its region.",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
+            instruct("ready_long_first"),
+        ),
+        "fit_garment": (
+            "The first step of a session: the garment, the remote's buttons by their printed "
+            "symbols, the headphones and the cue, then Next step.",
+            {"phase": "setup"},
+            instruct("fit_garment"),
         ),
         "hardware_pressures": (
             "Touch calibration: the hardware panel with every channel's pressure and one "
@@ -559,9 +697,7 @@ def _experimenter_states(text: dict) -> dict:
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA,
                           "faults": [SAMPLE_FAULT]}},
-            lambda window: window.set_instruction(
-                instructions["touchcal_match"].format(channel=SAMPLE_CHANNEL)
-            ),
+            instruct("touchcal_match", **SAMPLE_MATCH),
         ),
         "link_lost": (
             "The prototype sleeve's link lost mid-session (docs/LOG.md N7.U16): shown "
@@ -571,19 +707,19 @@ def _experimenter_states(text: dict) -> dict:
              "garment_connected": False,
              "hardware": {**SAMPLE_HARDWARE, "connected": False, "link_lost": True,
                           "faults": [SAMPLE_FAULT, SAMPLE_LINK_FAULT]}},
-            lambda window: window.set_instruction(
-                instructions["touchcal_match"].format(channel=SAMPLE_CHANNEL)
-            ),
+            instruct("touchcal_match", **SAMPLE_MATCH),
         ),
         "long_instruction": (
             "The longest instruction the session gives, set down the type scale so it fits "
             "its region: nothing below it has moved, and the controls are where they always "
-            "are.",
+            "are. It asks for Accept, so Accept and Re-run are offered, as the procedure "
+            "offers them.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S},
-            lambda window: window.set_instruction(
-                instructions["touchcal_stage1_exhausted"].format(
-                    value=text["terms"]["stage1"]["flat"]
-                )
+            lambda window: (
+                window.set_instruction(cfg.instruction(
+                    config, "touchcal_stage1_exhausted", value=text["terms"]["stage1"]["flat"]
+                )),
+                window.set_actions_enabled(fit_decision=True),
             ),
         ),
         "touchcal_estimation_skip": (
@@ -601,34 +737,53 @@ def _experimenter_states(text: dict) -> dict:
             ),
         ),
         "awaiting_rebalance": (
-            "The evenness question answered 'uneven': Rebalance and Next step both "
-            "enabled, because the procedure waits on either.",
+            "The evenness question answered 'uneven': Rebalance offered beside Next step, "
+            "because the procedure waits on either.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA}},
             lambda window: (
-                window.set_instruction(instructions["touchcal_uneven"]),
+                window.set_instruction(cfg.instruction(config, "touchcal_uneven")),
                 window.set_actions_enabled(rebalance=True),
+            ),
+        ),
+        "intervention_end": (
+            "The intervention over and the garment off: what to tell the participant before "
+            "the measures begin again, then Next step (docs/LOG.md N7.F11c10). The same in "
+            "every condition.",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: window.set_instruction(cfg.instruction(config, "intervention_end")),
+        ),
+        "session_complete": (
+            "The last state: the session closed and every file written, the garment to come "
+            "off, and Next step to close the program (docs/LOG.md N7.F11c9). The garment is "
+            "shown disconnected, as closing the session leaves it, and Pause and the garment "
+            "button are withdrawn: nothing is left to pause or to connect again.",
+            {"phase": "session_end", "elapsed_s": SAMPLE_ELAPSED_S, "garment_connected": False,
+             "hardware": {**SAMPLE_HARDWARE, "connected": False}},
+            lambda window: (
+                window.set_instruction(cfg.instruction(config, "session_complete")),
+                window.set_actions_enabled(closed=True),
             ),
         ),
         "fit_preview_f40": (
             "The main window while the F40 fit preview (SPEC.md 11.1) is open, only with "
             "fit_preview.enabled: the banner saying what it costs, the instruction saying the "
-            "decision is due, Re-run and Accept enabled, and no rating anywhere on this "
+            "decision is due, Re-run and Accept offered, and no rating anywhere on this "
             "window -- they are in the preview window.",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
              "fit_preview_enabled": True},
             lambda window: (
-                window.set_instruction(instructions["f40_fit_review"]),
+                window.set_instruction(cfg.instruction(config, "f40_fit_review")),
                 window.show_fit_preview(_sample_f40_fit()),
             ),
         ),
         "fit_preview_touch": (
             "The main window while the touch-calibration fit preview is open: its instruction "
-            "at a smaller size because it is long, Accept and Re-run enabled.",
+            "at a smaller size because it is long, Accept and Re-run offered.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "fit_preview_enabled": True},
             lambda window: (
-                window.set_instruction(instructions["touchcal_fit_review"]),
+                window.set_instruction(cfg.instruction(config, "touchcal_fit_review")),
                 window.show_fit_preview(_sample_touch_fit()),
             ),
         ),
@@ -637,7 +792,7 @@ def _experimenter_states(text: dict) -> dict:
 
 def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     text = config.experimenter_text
-    for name, (description, overrides, push) in _experimenter_states(text).items():
+    for name, (description, overrides, push) in _experimenter_states(config).items():
         view = _experimenter_view(**overrides)
         window = ExperimenterWindow(text, lambda view=view: view)
         # Sized first, so a long instruction is fitted to the width it will be drawn at.
@@ -676,6 +831,17 @@ def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             "The error dialog: a red title and the message as raised.",
             window.error_dialog(SAMPLE_ERROR),
         ),
+        "recalibrate_rebalance_dialog": (
+            "Rebalance channels…: what it does, wherever it is offered, and why, from a fixed "
+            "list; Rebalance channels disabled until a reason is chosen (docs/LOG.md "
+            "N7.F12a1).",
+            window.recalibration_dialog("rebalance"),
+        ),
+        "recalibrate_restart_dialog": (
+            "Restart calibration…, with a reason chosen, shown pressed, so Restart calibration "
+            "is enabled (docs/LOG.md N7.F12a1).",
+            _chosen(window.recalibration_dialog("restart"), "channel_uneven"),
+        ),
     }
     window.set_mapping_phases(["post_sensitisation", "post_intervention"])
     for field, typed in zip(window.distances.fields, SAMPLE_DISTANCES, strict=False):
@@ -703,19 +869,42 @@ def _dispose(window: QWidget) -> None:
     QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
+def _chosen(dialog, reason: str):
+    """A re-calibration dialog with `reason` chosen, as the experimenter leaves it."""
+    dialog.options[reason].click()
+    return dialog
+
+
 def _grab_dialog(dialog: QWidget) -> QPixmap:
-    dialog.resize(DIALOG_WIDTH_PX, dialog.sizeHint().height())
+    # A long wrapped message needs more height at this width than the size hint, which is
+    # worked out at the dialog's own preferred width, gives it; it was cut off top and bottom.
+    layout = dialog.layout()
+    wrapped = (layout.totalHeightForWidth(DIALOG_WIDTH_PX)
+               if layout is not None and layout.hasHeightForWidth() else 0)
+    dialog.resize(DIALOG_WIDTH_PX, max(dialog.sizeHint().height(), wrapped))
     return dialog.grab()
 
 
 class _SampleDemo(QObject):
-    """What the Demo controls draw from, with nothing behind it: a person at both places."""
+    """What the Demo controls draw from, with no session behind it: a person at both places,
+    and a connected mock garment with every channel's pressure set and some channels on."""
 
     stage_started = Signal(str)
 
-    def __init__(self):
+    def __init__(self, config: cfg.Config, worn: bool = False):
         super().__init__()
         self.runner = self
+        self.session = self
+        # Drawn as on a worn garment (tatp/demo.py), the mock standing in for it.
+        self.worn = worn
+        self.settings = config.study1["demo"]
+        self.garment = MockGarment(Limits.from_config(config.hardware), Clock())
+        self.garment.connect()
+        kpa = self.garment.limits.pressure_ceiling_kpa * SAMPLE_DEMO_PRESSURE_FRACTION
+        for channel in self.garment.channels():
+            self.garment.set_pressure(channel, kpa)
+        for channel in SAMPLE_DEMO_CHANNELS_ON:
+            self.garment.set_channel(channel, True)
         self.participant_mode = OFF
         self.experimenter_mode = OFF
         self.finishing = False
@@ -724,30 +913,40 @@ class _SampleDemo(QObject):
         setattr(self, f"{who}_mode", mode)
 
 
-class _SampleSounddevice:
-    """The hardware check's device list, fixed for the picture: the lab laptop's outputs on
-    30 Sep 2026 as far as the screenshot needs them."""
+def _sample_detectors(screens, ports, remote, outputs) -> Detectors:
+    """What the hardware page is told is connected, fixed for the picture: the screens and the
+    devices attached differ between machines, and the picture is of the page, not of this
+    machine's hardware. The outputs are the lab laptop's on 30 Sep 2026, as far as needed."""
 
-    devices = (
-        {"name": "Speakers (Realtek(R) Audio)", "hostapi": 0, "max_output_channels": 2},
-        {"name": "Headphones (Realtek(R) Audio)", "hostapi": 0, "max_output_channels": 2},
-        {"name": "Headphones (Bose QC Headphones)", "hostapi": 0, "max_output_channels": 2},
-    )
+    def probe(request, on_done):
+        on_done(sample_probe(request, list(outputs), outputs[0]), "")
 
-    class PortAudioError(Exception):
-        pass
+    return Detectors(lambda: list(screens), lambda: list(ports), lambda: remote, probe)
 
-    def query_hostapis(self):
-        return [{"name": "Windows WASAPI"}]
 
-    def query_devices(self, device=None, kind=None):  # noqa: ARG002 -- sounddevice's signature
-        if device is None:
-            return list(self.devices)
-        matching = [d for d in self.devices
-                    if all(word in f"{d['name']}, Windows WASAPI" for word in device.split())]
-        if len(matching) != 1:
-            raise ValueError(f"No output device matching {device!r}")
-        return matching[0]
+def sample_probe(request: dict, outputs: list[str], default: str | None,
+                 unusable: dict[str, str] | None = None) -> dict:
+    """`tatp.devices.probe`'s answer for these outputs, with no PortAudio: a device can be
+    opened when its name matches exactly one output (and the default when there is one),
+    unless `unusable` gives a reason it cannot play at the configured settings."""
+    unusable = unusable or {}
+    checks = {}
+    for role, specs in request["candidates"].items():
+        checks[role] = {}
+        for spec in specs:
+            found = (default is not None if spec is None
+                     else len(matching_outputs(spec, outputs)) == 1)
+            why = "" if found else f"No output device matching {spec!r}"
+            checks[role][check_key(spec)] = unusable.get(spec, why) if found else why
+    return {"outputs": outputs, "default": default, "checks": checks}
+
+
+SAMPLE_OUTPUTS = (
+    "Speakers (Realtek(R) Audio), Windows WASAPI",
+    "Headphones (Realtek(R) Audio), Windows WASAPI",
+    "Headphones (Bose QC Headphones), Windows WASAPI",
+)
+SAMPLE_SCREEN = (WIDTH_PX, HEIGHT_PX)
 
 
 def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
@@ -773,17 +972,47 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"experimenter_{language}_launcher_demo",
         f"Run a demo (docs/LOG.md N7.D23): the session dialog with the demonstration's own "
         f"participant code shown and not editable, no data folder or REDCap form, the mock "
-        f"garment and the example patterns chosen, and the speed and who presses for the "
+        f"garment (changeable: another runs at real time only, with people pressing, "
+        f"N7.F12f) and the example "
+        f"patterns chosen, and the speed and who presses for the "
         f"participant and the experimenter ({language}).",
         _grab_dialog(demo),
     )
-    controls = DemoControls(_SampleDemo(), config.experimenter_text)
+    controls = DemoControls(_SampleDemo(config), config.experimenter_text)
+    # Drawn at the moments each shot names: its timer runs only while shown, which a grab
+    # does not do.
+    display = controls.garment_display
     yield Shot(
         f"experimenter_{language}_demo_controls",
-        f"The Demo controls window beside a demonstration (docs/LOG.md N7.D23): who presses "
-        f"for the participant and the experimenter, changeable at any time, Skip the wait, "
-        f"and Finish this stage ({language}).",
+        f"The Demo controls window beside a demonstration (docs/LOG.md N7.D23, N7.F12f): what "
+        f"the garment is commanded to do, steady -- every channel's pressure set, channels "
+        f"{', '.join(map(str, SAMPLE_DEMO_CHANNELS_ON))} on -- then who presses for the "
+        f"participant and the experimenter, changeable at any time, Skip the wait, and Finish "
+        f"this stage ({language}).",
         _grab_dialog(controls),
+    )
+    controls.demo.garment.set_channel(SAMPLE_DEMO_CHANGED, True)
+    changed_s = time.monotonic()
+    display.poll(changed_s)
+    display.poll(changed_s + SAMPLE_DEMO_CHANGED_AGO_S)
+    yield Shot(
+        f"experimenter_{language}_demo_controls_garment_changed",
+        f"The Demo controls' garment display {SAMPLE_DEMO_CHANGED_AGO_S:g} s after channel "
+        f"{SAMPLE_DEMO_CHANGED} was turned on (docs/LOG.md N7.F12f): its row lit and its bar "
+        f"outlined, fading back over demo.garment_highlight_s ({language}).",
+        _grab_dialog(controls),
+    )
+    worn = DemoControls(_SampleDemo(config, worn=True), config.experimenter_text)
+    worn.demo.garment.lost(SAMPLE_DEMO_LOST)
+    worn.garment_display.poll(time.monotonic())
+    yield Shot(
+        f"experimenter_{language}_demo_controls_worn_link_lost",
+        f"The Demo controls on a worn garment, its link lost (docs/LOG.md N7.F12f): the "
+        f"participant and the experimenter people and Finish this stage off, said in amber; "
+        f"the channels held "
+        f"at their last command in amber, not shown switching off, with the warning that the "
+        f"outputs may still hold it (N7.U16) ({language}).",
+        _grab_dialog(worn),
     )
 
     dialog = launcher.session_dialog()
@@ -850,25 +1079,55 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"({language}).",
         preview.grab(),
     )
-    # A sample device list, the mock and every keyboard as the remote: the real devices and the
-    # screens attached differ between machines, and the picture is of the dialog, not of this
-    # one's hardware. Nothing is played, because the output is built only when a sound is asked
-    # for, and Raw Input needs a native window the offscreen platform does not have.
+    # Sample hardware (`_sample_detectors`), the mock, the test double for the sound and every
+    # keyboard as the remote: nothing is played, nothing is opened, and Raw Input needs a native
+    # window the offscreen platform does not have. On the lab's platform wherever it is drawn,
+    # so a missing device is drawn as the lab would see it on every machine.
     hardware = {
         **with_key_source(config.hardware, ANY_KEYBOARD),
+        "lab_platform": sys.platform,
         "garment": {**config.hardware["garment"], "driver": "mock"},
-        "screens": {**config.hardware["screens"], "participant_screen_index": None,
-                    "experimenter_screen_index": None},
+        "audio": {**config.hardware["audio"], "backend": "recording"},
     }
-    check = HardwareCheckDialog(config.experimenter_text, hardware,
-                                sound=lambda: _SampleSounddevice())
-    check.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+    nothing = HardwareCheckDialog(
+        config.experimenter_text, hardware,
+        detectors=_sample_detectors([SAMPLE_SCREEN], [], False, SAMPLE_OUTPUTS[:1]),
+    )
+    # At the lab laptop's 1280 x 800 (docs/LOG.md N7.U10): the page opens fitted to the screen,
+    # and on a shorter one scrolls with Continue still in view.
+    nothing.resize(LAPTOP_WIDTH_PX, HEIGHT_PX)
+    yield Shot(
+        f"experimenter_{language}_launcher_hardware_check_nothing_found",
+        f"The hardware page (LOG N7.F12e1) with nothing of the lab's connected: one screen, so "
+        f"the participant's window shares it; the remote, the headphones and the sleeve's port "
+        f"missing, each in its own colour and saying what to do -- in the lab the keyboard is "
+        f"chosen by hand, never stood in automatically. Each is found when connected "
+        f"({language}).",
+        nothing.grab(),
+    )
+    nothing.release()
+    check = HardwareCheckDialog(
+        config.experimenter_text, hardware,
+        detectors=_sample_detectors([SAMPLE_SCREEN, SAMPLE_SCREEN], ["COM3"], True,
+                                    SAMPLE_OUTPUTS),
+    )
+    check.resize(LAPTOP_WIDTH_PX, HEIGHT_PX)
     yield Shot(
         f"experimenter_{language}_launcher_hardware_check",
-        f"The hardware check (LOG N7.F4), at the lab laptop's size, as it opens: a count for "
-        f"each remote button, where each screen lands, the sound devices, the noise within the "
-        f"participant's own range with the cue and the alert, and each garment channel on and "
-        f"off. Drawn with a sample device list and the mock garment ({language}).",
+        f"The hardware page (LOG N7.F4, N7.F12e1), shown before the launcher, at the lab "
+        f"laptop's size, with the lab's hardware connected: each choice on hardware.yaml's "
+        f"own, found; a count for each remote button; the noise within the participant's own "
+        f"range with the cue and the alert; each garment channel on and off. Continue opens "
+        f"the launcher ({language}).",
+        check.grab(),
+    )
+    check.toggle_garment()
+    check.channel_buttons[SAMPLE_CHANNEL_ON].setChecked(True)
+    yield Shot(
+        f"experimenter_{language}_launcher_hardware_check_channel_on",
+        f"The hardware check with the mock garment connected and channel {SAMPLE_CHANNEL_ON} "
+        f"on: each channel button says on or off, and one that is on is filled (LOG N7.F10b; "
+        f"{language}).",
         check.grab(),
     )
     check.release()

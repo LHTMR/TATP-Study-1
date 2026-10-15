@@ -86,6 +86,15 @@ OFFSET_KEYS = {
 # The `fit_preview.procedures` entry that names this protocol (SPEC.md 11.1).
 FIT_PREVIEW_KEY = "f40"
 
+# Keys in the experimenter text's `instructions`, not wording.
+BETWEEN_APPLICATIONS = "between_applications"
+BETWEEN_DISCARDED = "between_applications_discarded"
+READY_LONG = "ready_long"
+READY_LONG_FIRST = "ready_long_first"
+READY_SHORT = "ready_short"
+READY_BRUSH = "ready_brush"
+READY_PINPRICK_BLOCK = "ready_pinprick_block"
+
 # The fit is in log10 force (SPEC.md 8.2), so undoing it is a power of ten. Not a parameter.
 LOG_BASE = 10.0
 
@@ -763,6 +772,8 @@ class PinprickTrial(_RatedTrial):
         self.filaments = ladder(session.config)
         # Changed by the experimenter's substitution while the trial runs (SPEC.md 8.2).
         self.applied_label_g = application.applied_label_g
+        # The substitution warning this trial raised, withdrawn once a lower one is recorded.
+        self._substitution_warning: str | None = None
 
     def _filament(self, label_g: str) -> Filament:
         return self.filaments[ladder_index(self.filaments, label_g)]
@@ -782,9 +793,25 @@ class PinprickTrial(_RatedTrial):
 
     def _connect_extra(self) -> None:
         self.experimenter.substitution_entered.connect(self._on_substitution)
+        # The one owner of the entry's offer: it is shown exactly while it is listened to.
+        self.experimenter.set_actions_enabled(substitution=True)
 
     def _disconnect_extra(self) -> None:
         self.experimenter.substitution_entered.disconnect(self._on_substitution)
+        # A filament typed and not recorded is not this trial's data, but it is not lost
+        # without trace either: it was what the experimenter meant to say about it.
+        unrecorded = self.experimenter.withdraw_substitution()
+        if unrecorded:
+            self.session.log(
+                "substitution_not_recorded", origin="experimenter", severity="warning",
+                detail=f"trial {self.trial_index}: {unrecorded}",
+            )
+            # On screen too: the experimenter meant it, and the row says otherwise.
+            self.experimenter.set_warning(
+                self.experimenter.text["warnings"]["substitution_not_recorded"].format(
+                    value=unrecorded, controls=self.experimenter.text["controls"]
+                )
+            )
 
     def _on_substitution(self, label_g: str) -> None:
         """The experimenter applied another filament than the one asked for (SPEC.md 8.2).
@@ -800,8 +827,7 @@ class PinprickTrial(_RatedTrial):
                 "substitution_unknown", origin="experimenter", severity="warning",
                 detail=f"{label_g} g",
             )
-            self.experimenter.set_status(warnings["substitution_unknown"].format(filament=label_g))
-            self.experimenter.refresh()
+            self._warn_substitution(warnings["substitution_unknown"].format(filament=label_g))
             return
         self.applied_label_g = label_g
         asked = self._filament(self.application.filament_label_g).force_nominal_mn
@@ -813,10 +839,16 @@ class PinprickTrial(_RatedTrial):
             detail=f"asked {self.application.filament_label_g} g, applied {label_g} g",
         )
         if not lower:
-            self.experimenter.set_status(
-                warnings["substitution_not_lower"].format(filament=label_g)
-            )
-            self.experimenter.refresh()
+            self._warn_substitution(warnings["substitution_not_lower"].format(filament=label_g))
+        elif self._substitution_warning is not None:
+            # Resolved: a substitution the spec allows is now what is recorded.
+            self.experimenter.clear_warning(self._substitution_warning)
+            self._substitution_warning = None
+
+    def _warn_substitution(self, text: str) -> None:
+        self._substitution_warning = text
+        self.experimenter.set_warning(text)
+        self.experimenter.refresh()
 
     def _rated(self, response) -> None:
         if response.rating_percent >= self.intolerable_vas_pct:
@@ -944,6 +976,8 @@ class _Series(Procedure):
         self.applications = 0
         # (table, the row's timestamp_iso, its trial_index) while a discard is accepted.
         self._discardable: tuple[str, str, int] | None = None
+        # What was discardable when a re-calibration took this protocol's place.
+        self._held_discardable: tuple[str, str, int] | None = None
 
     def connect_actions(self) -> None:
         self.experimenter.discard_requested.connect(self._on_discard)
@@ -951,6 +985,17 @@ class _Series(Procedure):
     def disconnect_actions(self) -> None:
         self.experimenter.discard_requested.disconnect(self._on_discard)
         self._set_discardable(None)
+
+    def suspend_offers(self) -> None:
+        """A re-calibration runs in this protocol's place (docs/LOG.md N7.F12a1): Discard is
+        withdrawn, so neither it nor the interval its press would start runs under the
+        calibration, and offered again on the way back."""
+        self._held_discardable = self._discardable
+        self._set_discardable(None)
+
+    def restore_offers(self) -> None:
+        self._set_discardable(self._held_discardable)
+        self._held_discardable = None
 
     def _set_discardable(self, discardable: tuple[str, str, int] | None) -> None:
         # The button is enabled only while there is something to discard (docs/LOG.md N7.U10).
@@ -970,11 +1015,18 @@ class _Series(Procedure):
         """
 
         def prepare() -> None:
-            self.participant.show_blank()
-            self.experimenter.set_instruction(self.experimenter.text["instructions"]["ready"])
+            self.rig.show_between()
+            self.experimenter.set_instruction(self._ready_instruction())
             self.experimenter.refresh()
 
         self.await_proceed(lambda: self.train_then((self.rating_scale(),), then), prepare)
+
+    def _ready_instruction(self) -> str:
+        """What the experimenter is told before the start: what is about to be applied."""
+        raise NotImplementedError
+
+    def _region_name(self) -> str:
+        return self.experimenter.text["terms"]["regions"][self.region]
 
     # -- interruptions ------------------------------------------------------------------
 
@@ -1018,15 +1070,22 @@ class _Series(Procedure):
     def interval(self, table: str, trial: _RatedTrial) -> None:
         """The jittered wait after an application, during which it may be discarded."""
         self._set_discardable((table, trial.cue_onset_iso, trial.trial_index))
+        # The instruction says the response is in, so the status need not.
+        self.experimenter.set_status("")
         self._wait_then_next()
 
-    def _wait_then_next(self) -> None:
+    def _wait_then_next(self, discarded: bool = False) -> None:
+        """`discarded`: the gap follows a discard, which the status reports, rather than a
+        rating, so the line says nothing about a response received."""
         seconds = jittered_isi_s(self.session.rng, self.isi_min_s, self.isi_max_s)
         self.session.log("interval", detail=f"{seconds:.2f} s")
 
         def begin() -> None:
             # Also what a resume lands on, so the stop screen does not outlast the stop.
             self.participant.show_blank()
+            # The application just rated is done: its prompt and site come down, rather than
+            # reading as still to do through the gap (15 Oct 2026 pilot review).
+            self.instruct(BETWEEN_DISCARDED if discarded else BETWEEN_APPLICATIONS)
             self._after(seconds, self._advance)
 
         self.step(begin)
@@ -1076,7 +1135,7 @@ class _Series(Procedure):
         self.experimenter.refresh()
         # The interval restarts in full, so the repeat is as far from the discarded
         # application as any application is from the one before it.
-        self._wait_then_next()
+        self._wait_then_next(discarded=True)
 
 
 @dataclass(frozen=True)
@@ -1158,6 +1217,9 @@ class LongProtocol(_Series):
         self._awaiting_fit: LongResult | None = None
         self._last: tuple[Planned, int] | None = None  # the planned application and its site
         self._logged_plan: list[int] | None = None
+        # The warning the last run ended with, withdrawn when a re-run starts: it was about the
+        # run the re-run discards, not the one now under review.
+        self._run_warning: str | None = None
 
     def connect_actions(self) -> None:
         super().connect_actions()
@@ -1174,6 +1236,9 @@ class LongProtocol(_Series):
     def begin(self) -> None:
         pinprick = self.pinprick
         self.applications = 0
+        if self._run_warning is not None:
+            self.experimenter.clear_warning(self._run_warning)
+            self._run_warning = None
         self.state = LongProtocolState(
             n_filaments=len(self.filaments),
             start=self.start_index,
@@ -1190,6 +1255,15 @@ class LongProtocol(_Series):
             f"{self.prior.start_filament_label_g} g ({self.prior.source})",
         )
         self.wait_to_start(self._next)
+
+    def _ready_instruction(self) -> str:
+        # The session's first pain measure: what is about to happen is said to the participant
+        # first, and the pain scale's training follows the go (SPEC.md 10.6).
+        if self.session.vas_training_due(PAIN_SCALE):
+            return self.instruction_text(READY_LONG_FIRST)
+        return self.instruction_text(
+            READY_LONG, region=self._region_name(), filament=self.prior.start_filament_label_g
+        )
 
     def _next(self) -> None:
         state = self.state
@@ -1293,9 +1367,7 @@ class LongProtocol(_Series):
             self._awaiting_fit = result
             # What is due now, in place of the last trial's instruction and site (which this
             # clears), left up as if another application were wanted.
-            self.experimenter.set_instruction(
-                self.experimenter.text["instructions"]["f40_fit_review"]
-            )
+            self.experimenter.set_instruction(self.instruction_text("f40_fit_review"))
             # Accept and Re-run are live exactly while this waits on them (SPEC.md 11.1).
             self.experimenter.set_actions_enabled(fit_decision=True)
             self.fit_ready.emit(fit)
@@ -1332,8 +1404,10 @@ class LongProtocol(_Series):
                 "ordinal_consistency_low", severity="warning",
                 detail=f"rho {result.ordinal_rho}, threshold {rho_min}",
             )
-        self.experimenter.set_status(" ".join(warnings))
-        self.experimenter.refresh()
+        if warnings:
+            self._run_warning = " ".join(warnings)
+            self.experimenter.set_warning(self._run_warning)
+            self.experimenter.refresh()
 
     def _record(self, result: LongResult, superseded: bool, rerun_reason: str) -> None:
         clock = self.session.clock
@@ -1390,7 +1464,9 @@ class LongProtocol(_Series):
                 "fit_rerun_refused", origin="experimenter", severity="warning",
                 detail=f"run {self.run_index}; limit {self.max_reruns}. {reason}",
             )
-            self.experimenter.set_status(self.experimenter.text["dialogs"]["fit_rerun_exhausted"])
+            self.experimenter.set_warning(
+                self.experimenter.text["dialogs"]["fit_rerun_exhausted"]
+            )
             self.experimenter.refresh()
             self._record(result, superseded=False, rerun_reason="")
             self.finish(result)
@@ -1505,7 +1581,11 @@ class ShortProtocol(_RatingSeries):
         region: str,
         filament_label_g: str,
         cap: IntolerableCap,
+        block_index: int | None = None,
     ):
+        """`block_index` names an intervention block in the experimenter's instruction. The
+        session's own `block_index` is not set until the block is launched, by the go this
+        protocol waits for."""
         assert isinstance(cap, IntolerableCap), "the time point's IntolerableCap is required"
         pinprick = rig.session.config.study1["pinprick"]
         super().__init__(
@@ -1519,8 +1599,18 @@ class ShortProtocol(_RatingSeries):
         self.index = ladder_index(self.filaments, filament_label_g)
         self.filament_label_g = filament_label_g
         self.cap = cap
+        self.block_index = block_index
         self.intolerable_vas_pct = float(pinprick["intolerable_vas_pct"])
         self._site = 0
+
+    def _ready_instruction(self) -> str:
+        ready = self.instruction_text(
+            READY_SHORT, n=self.n_trials, filament=self.filament_label_g,
+            region=self._region_name(),
+        )
+        if self.block_index is None:
+            return ready
+        return self.instruction_text(READY_PINPRICK_BLOCK, block=self.block_index, ready=ready)
 
     def _stimulus(self) -> str:
         return self.filament_label_g
@@ -1581,6 +1671,9 @@ class BrushProtocol(_RatingSeries):
 
     def _stimulus(self) -> str:
         return BRUSH_TABLE
+
+    def _ready_instruction(self) -> str:
+        return self.instruction_text(READY_BRUSH, n=self.n_trials, region=self._region_name())
 
     def rating_scale(self) -> str:
         return self.session.config.study1["brush"]["rating_scale"]

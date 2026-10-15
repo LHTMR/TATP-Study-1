@@ -8,12 +8,13 @@
 screens:
   experimenter_en_abort_dialog: 'The abort confirmation: what happens to the data,
     a reason field, and Abort disabled until a reason is typed. (en)'
-  experimenter_en_all_banners: 'All three banners at once, in the space they need,
-    which is fixed from the session''s start: no banner comes or goes during a session,
-    so nothing below moves (UI_PRINCIPLES.md 3.3). The fit-preview banner is amber
-    like the reduced-capability one (SPEC.md 11.1). (en)'
+  experimenter_en_all_banners: 'All three banners at once, one line each with the
+    detail in the tooltip, in the space they need, which is fixed from the session''s
+    start: no banner comes or goes during a session, so nothing below moves (UI_PRINCIPLES.md
+    3.3). The fit-preview banner is amber like the reduced-capability one (SPEC.md
+    11.1). (en)'
   experimenter_en_awaiting_rebalance: 'The evenness question answered ''uneven'':
-    Rebalance and Next step both enabled, because the procedure waits on either. (en)'
+    Rebalance offered beside Next step, because the procedure waits on either. (en)'
   experimenter_en_block_due: 'The block is due: amber and bold in the same place as
     the countdown. (en)'
   experimenter_en_block_overdue: 'The block is overdue: red and bold, OVERDUE in capitals.
@@ -27,12 +28,22 @@ screens:
   experimenter_en_brush_secondary: 'A brush stroke in the secondary zone: the dashed
     ellipse outlined. (en)'
   experimenter_en_countdown: 'Waiting for the next block: ''Next: block 3 (touch)
-    in 04:05'', grey. (en)'
+    in 04:05'', grey, and nothing to do meanwhile. (en)'
   experimenter_en_demo_banner: The demonstration banner (docs/LOG.md N7.D23), amber
     like the others that say the session runs but what it records is not data. (en)
   experimenter_en_demo_controls: 'The Demo controls window beside a demonstration
-    (docs/LOG.md N7.D23): who presses for the participant and the experimenter, changeable
-    at any time, Skip the wait, and Finish this stage (en).'
+    (docs/LOG.md N7.D23, N7.F12f): what the garment is commanded to do, steady --
+    every channel''s pressure set, channels 2, 3 on -- then who presses for the participant
+    and the experimenter, changeable at any time, Skip the wait, and Finish this stage
+    (en).'
+  experimenter_en_demo_controls_garment_changed: 'The Demo controls'' garment display
+    0.2 s after channel 4 was turned on (docs/LOG.md N7.F12f): its row lit and its
+    bar outlined, fading back over demo.garment_highlight_s (en).'
+  experimenter_en_demo_controls_worn_link_lost: 'The Demo controls on a worn garment,
+    its link lost (docs/LOG.md N7.F12f): the participant and the experimenter people
+    and Finish this stage off, said in amber; the channels held at their last command
+    in amber, not shown switching off, with the warning that the outputs may still
+    hold it (N7.U16) (en).'
   experimenter_en_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column
@@ -57,45 +68,68 @@ screens:
   experimenter_en_designer_timed: 'Timed channels: onset and offset per channel in
     ms, converted. Played once, so the timeline draws one cycle. (en)'
   experimenter_en_disconnected: 'The garment reported disconnected: red and bold in
-    the hardware panel, Connect enabled and Disconnect not. (en)'
+    the hardware panel, and its button reading Connect garment, emphasised as the
+    way forward. (en)'
   experimenter_en_distances_dialog: 'The mapping distances window (SPEC.md 8.4): the
     latest mapped phase selected, one field per path in path order, two typed with
     either decimal mark. Non-modal: the session runs on behind it. (en)'
   experimenter_en_error_dialog: 'The error dialog: a red title and the message as
     raised. (en)'
+  experimenter_en_first_pain_measures: 'Before the session''s first pain measure:
+    what to tell the participant, set down the type scale to fit its region. (en)'
+  experimenter_en_fit_garment: 'The first step of a session: the garment, the remote''s
+    buttons by their printed symbols, the headphones and the cue, then Next step.
+    (en)'
   experimenter_en_fit_preview_f40: 'The main window while the F40 fit preview (SPEC.md
     11.1) is open, only with fit_preview.enabled: the banner saying what it costs,
-    the instruction saying the decision is due, Re-run and Accept enabled, and no
+    the instruction saying the decision is due, Re-run and Accept offered, and no
     rating anywhere on this window -- they are in the preview window. (en)'
   experimenter_en_fit_preview_f40_window: 'The fit preview window itself for `fit_preview_f40`:
     the plot, the quality, what the session will use, and Accept / Re-run (en).'
   experimenter_en_fit_preview_touch: 'The main window while the touch-calibration
     fit preview is open: its instruction at a smaller size because it is long, Accept
-    and Re-run enabled. (en)'
+    and Re-run offered. (en)'
   experimenter_en_fit_preview_touch_window: 'The fit preview window itself for `fit_preview_touch`:
     the plot, the quality, what the session will use, and Accept / Re-run (en).'
   experimenter_en_hardware_pressures: 'Touch calibration: the hardware panel with
     every channel''s pressure and one fault, in red. (en)'
   experimenter_en_interrupted_emergency_stop: 'The participant pressed the stop: the
-    red line under the phase, Resume and Abort the only controls enabled, and nothing
-    else moved. (en)'
+    red line under the phase, the step on hold dimmed beneath it, Resume emphasised
+    in its own slot and Abort the only controls offered, Next step greyed, and nothing
+    moved. (en)'
   experimenter_en_interrupted_pause: 'The experimenter''s pause: the same line in
-    amber, Resume enabled. (en)'
+    amber, the step dimmed, Resume offered. (en)'
+  experimenter_en_intervention_end: 'The intervention over and the garment off: what
+    to tell the participant before the measures begin again, then Next step (docs/LOG.md
+    N7.F11c10). The same in every condition. (en)'
   experimenter_en_intervention_fault: 'A garment fault during the intervention: shown
     in red, counted, and without the channel, which could say which pattern is running
     (SPEC.md 16). (en)'
+  experimenter_en_intervention_recalibrate: 'The intervention, waiting for the next
+    block with the condition''s touch on: Rebalance channels… and Restart calibration…
+    offered at any time, as during touch calibration (S, 15 Oct 2026; docs/LOG.md
+    N7.F12a1). The same in every condition, and no pressures (SPEC.md 16). (en)'
   experimenter_en_launcher: The launcher's four entries (SPEC.md 4.1), all enabled.
     Design a pattern says it is for S only, because it shows pattern names and shapes
     (en).
   experimenter_en_launcher_demo: 'Run a demo (docs/LOG.md N7.D23): the session dialog
     with the demonstration''s own participant code shown and not editable, no data
-    folder or REDCap form, the mock garment and the example patterns chosen, and the
+    folder or REDCap form, the mock garment (changeable: another runs at real time
+    only, with people pressing, N7.F12f) and the example patterns chosen, and the
     speed and who presses for the participant and the experimenter (en).'
-  experimenter_en_launcher_hardware_check: 'The hardware check (LOG N7.F4), at the
-    lab laptop''s size, as it opens: a count for each remote button, where each screen
-    lands, the sound devices, the noise within the participant''s own range with the
-    cue and the alert, and each garment channel on and off. Drawn with a sample device
-    list and the mock garment (en).'
+  experimenter_en_launcher_hardware_check: 'The hardware page (LOG N7.F4, N7.F12e1),
+    shown before the launcher, at the lab laptop''s size, with the lab''s hardware
+    connected: each choice on hardware.yaml''s own, found; a count for each remote
+    button; the noise within the participant''s own range with the cue and the alert;
+    each garment channel on and off. Continue opens the launcher (en).'
+  experimenter_en_launcher_hardware_check_channel_on: 'The hardware check with the
+    mock garment connected and channel 2 on: each channel button says on or off, and
+    one that is on is filled (LOG N7.F10b; en).'
+  experimenter_en_launcher_hardware_check_nothing_found: 'The hardware page (LOG N7.F12e1)
+    with nothing of the lab''s connected: one screen, so the participant''s window
+    shares it; the remote, the headphones and the sleeve''s port missing, each in
+    its own colour and saying what to do -- in the lab the keyboard is chosen by hand,
+    never stood in automatically. Each is found when connected (en).'
   experimenter_en_launcher_instruments: 'Instruments and environment (SPEC.md 8.1),
     at the lab laptop''s size: all twenty filaments in view at once, in two halves,
     each with its label, size and nominal force, a field for the weighing in grams
@@ -117,39 +151,72 @@ screens:
     to them. (en)'
   experimenter_en_long_instruction: 'The longest instruction the session gives, set
     down the type scale so it fits its region: nothing below it has moved, and the
-    controls are where they always are. (en)'
+    controls are where they always are. It asks for Accept, so Accept and Re-run are
+    offered, as the procedure offers them. (en)'
   experimenter_en_mapping: 'A mapping path: the secondary zone outlined without a
     site, the technique text shown because a filament is used, and Mapping distances
-    enabled now that a phase has been mapped. (en)'
-  experimenter_en_open_items: Unresolved open items listed for the experimenter (SPEC.md
-    20). (en)
+    offered now that a phase has been mapped. (en)'
+  experimenter_en_open_items: 'Unresolved open items listed for the experimenter (SPEC.md
+    20): one small amber line at the foot of the banner region, by number, the summaries
+    in the tooltip. (en)'
+  experimenter_en_pilot_rig_pinprick: 'What the 15 Oct 2026 pilot looked like: the
+    prototype sleeve''s reduced-capability banner and the open items above a filament
+    trial. (en)'
   experimenter_en_pinprick_primary: 'A pinprick application: the filament by its gram
     label, the primary zone outlined on the diagram with its site beside it, the technique
-    text below, and the response pending -- never its value. (en)'
+    text below, and the response pending -- never its value. The filament-applied-instead
+    entry is offered, as it is only during a filament trial. (en)'
   experimenter_en_placeholder_banner: The unapproved-wording banner (SPEC.md 12.4),
     red and unmissable. (en)
   experimenter_en_plain: No banners, no open items, nothing scheduled -- a correctly
-    configured session at setup. Controls along the bottom, Resume, Rebalance and
-    the fit choice disabled; the zone diagram with no zone marked; the hardware panel
-    connected with no pressures. (en)
+    configured session at setup. The routine controls along the bottom, Next step
+    emphasised; the situational ones (Resume, Discard, Rebalance, the fit choice,
+    the filament entry, Mapping distances) hidden in places kept for them; no zone
+    diagram, since there is no target; the garment connected, its button quiet at
+    the foot of the side column. (en)
+  experimenter_en_recalibrate_rebalance_dialog: 'Rebalance channels…: what it does,
+    wherever it is offered, and why, from a fixed list; Rebalance channels disabled
+    until a reason is chosen (docs/LOG.md N7.F12a1). (en)'
+  experimenter_en_recalibrate_restart_dialog: Restart calibration…, with a reason
+    chosen, shown pressed, so Restart calibration is enabled (docs/LOG.md N7.F12a1).
+    (en)
   experimenter_en_reduced_capability_banner: The reduced-capability banner naming
     the garment in use in words, as the launcher does (SPEC.md 12.4). (en)
   experimenter_en_rekindle_due: 'The rekindle is due: a timed event that is not a
-    block, named by its phase. (en)'
+    block, named by its phase, and the thermode to place. (en)'
   experimenter_en_rerun_dialog: The re-run reason, asked before a fit is discarded
     (SPEC.md 11.1). (en)
+  experimenter_en_session_complete: 'The last state: the session closed and every
+    file written, the garment to come off, and Next step to close the program (docs/LOG.md
+    N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
+    and Pause and the garment button are withdrawn: nothing is left to pause or to
+    connect again. (en)'
+  experimenter_en_status_warning: A warning in the status region, in amber, kept apart
+    from the routine status so the next 'Waiting for...' does not replace it (15 Oct
+    2026 pilot review). It goes under the routine line; this one is too long for both,
+    so it has the region. (en)
   experimenter_en_touchcal_estimation_skip: 'The estimation run with the mock or prototype
     garment: how many ratings are answered, and Skip calibration under the garment,
     shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).
     Nothing else has moved. (en)'
+  experimenter_en_touchcal_stopped_recalibrate: 'The participant pressed the stop
+    during touch calibration''s step 4, with step 2''s fit accepted: beside Resume,
+    Rebalance channels… and Restart calibration… are offered, each in the place of
+    its kin in the situational row, and each asks why (docs/LOG.md N7.F12a1). The
+    same in every condition; nothing else moved. (en)'
+  experimenter_en_touchcal_stopped_recalibration_used: 'A stop during touch calibration
+    once the re-calibrations a limit allows (recalibrations_max, none by default)
+    are used: Resume only, and one grey line where the two offers were saying why.
+    (en)'
   experimenter_sv_abort_dialog: 'The abort confirmation: what happens to the data,
     a reason field, and Abort disabled until a reason is typed. (sv)'
-  experimenter_sv_all_banners: 'All three banners at once, in the space they need,
-    which is fixed from the session''s start: no banner comes or goes during a session,
-    so nothing below moves (UI_PRINCIPLES.md 3.3). The fit-preview banner is amber
-    like the reduced-capability one (SPEC.md 11.1). (sv)'
+  experimenter_sv_all_banners: 'All three banners at once, one line each with the
+    detail in the tooltip, in the space they need, which is fixed from the session''s
+    start: no banner comes or goes during a session, so nothing below moves (UI_PRINCIPLES.md
+    3.3). The fit-preview banner is amber like the reduced-capability one (SPEC.md
+    11.1). (sv)'
   experimenter_sv_awaiting_rebalance: 'The evenness question answered ''uneven'':
-    Rebalance and Next step both enabled, because the procedure waits on either. (sv)'
+    Rebalance offered beside Next step, because the procedure waits on either. (sv)'
   experimenter_sv_block_due: 'The block is due: amber and bold in the same place as
     the countdown. (sv)'
   experimenter_sv_block_overdue: 'The block is overdue: red and bold, OVERDUE in capitals.
@@ -163,12 +230,22 @@ screens:
   experimenter_sv_brush_secondary: 'A brush stroke in the secondary zone: the dashed
     ellipse outlined. (sv)'
   experimenter_sv_countdown: 'Waiting for the next block: ''Next: block 3 (touch)
-    in 04:05'', grey. (sv)'
+    in 04:05'', grey, and nothing to do meanwhile. (sv)'
   experimenter_sv_demo_banner: The demonstration banner (docs/LOG.md N7.D23), amber
     like the others that say the session runs but what it records is not data. (sv)
   experimenter_sv_demo_controls: 'The Demo controls window beside a demonstration
-    (docs/LOG.md N7.D23): who presses for the participant and the experimenter, changeable
-    at any time, Skip the wait, and Finish this stage (sv).'
+    (docs/LOG.md N7.D23, N7.F12f): what the garment is commanded to do, steady --
+    every channel''s pressure set, channels 2, 3 on -- then who presses for the participant
+    and the experimenter, changeable at any time, Skip the wait, and Finish this stage
+    (sv).'
+  experimenter_sv_demo_controls_garment_changed: 'The Demo controls'' garment display
+    0.2 s after channel 4 was turned on (docs/LOG.md N7.F12f): its row lit and its
+    bar outlined, fading back over demo.garment_highlight_s (sv).'
+  experimenter_sv_demo_controls_worn_link_lost: 'The Demo controls on a worn garment,
+    its link lost (docs/LOG.md N7.F12f): the participant and the experimenter people
+    and Finish this stage off, said in amber; the channels held at their last command
+    in amber, not shown switching off, with the warning that the outputs may still
+    hold it (N7.U16) (sv).'
   experimenter_sv_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column
@@ -193,45 +270,68 @@ screens:
   experimenter_sv_designer_timed: 'Timed channels: onset and offset per channel in
     ms, converted. Played once, so the timeline draws one cycle. (sv)'
   experimenter_sv_disconnected: 'The garment reported disconnected: red and bold in
-    the hardware panel, Connect enabled and Disconnect not. (sv)'
+    the hardware panel, and its button reading Connect garment, emphasised as the
+    way forward. (sv)'
   experimenter_sv_distances_dialog: 'The mapping distances window (SPEC.md 8.4): the
     latest mapped phase selected, one field per path in path order, two typed with
     either decimal mark. Non-modal: the session runs on behind it. (sv)'
   experimenter_sv_error_dialog: 'The error dialog: a red title and the message as
     raised. (sv)'
+  experimenter_sv_first_pain_measures: 'Before the session''s first pain measure:
+    what to tell the participant, set down the type scale to fit its region. (sv)'
+  experimenter_sv_fit_garment: 'The first step of a session: the garment, the remote''s
+    buttons by their printed symbols, the headphones and the cue, then Next step.
+    (sv)'
   experimenter_sv_fit_preview_f40: 'The main window while the F40 fit preview (SPEC.md
     11.1) is open, only with fit_preview.enabled: the banner saying what it costs,
-    the instruction saying the decision is due, Re-run and Accept enabled, and no
+    the instruction saying the decision is due, Re-run and Accept offered, and no
     rating anywhere on this window -- they are in the preview window. (sv)'
   experimenter_sv_fit_preview_f40_window: 'The fit preview window itself for `fit_preview_f40`:
     the plot, the quality, what the session will use, and Accept / Re-run (sv).'
   experimenter_sv_fit_preview_touch: 'The main window while the touch-calibration
     fit preview is open: its instruction at a smaller size because it is long, Accept
-    and Re-run enabled. (sv)'
+    and Re-run offered. (sv)'
   experimenter_sv_fit_preview_touch_window: 'The fit preview window itself for `fit_preview_touch`:
     the plot, the quality, what the session will use, and Accept / Re-run (sv).'
   experimenter_sv_hardware_pressures: 'Touch calibration: the hardware panel with
     every channel''s pressure and one fault, in red. (sv)'
   experimenter_sv_interrupted_emergency_stop: 'The participant pressed the stop: the
-    red line under the phase, Resume and Abort the only controls enabled, and nothing
-    else moved. (sv)'
+    red line under the phase, the step on hold dimmed beneath it, Resume emphasised
+    in its own slot and Abort the only controls offered, Next step greyed, and nothing
+    moved. (sv)'
   experimenter_sv_interrupted_pause: 'The experimenter''s pause: the same line in
-    amber, Resume enabled. (sv)'
+    amber, the step dimmed, Resume offered. (sv)'
+  experimenter_sv_intervention_end: 'The intervention over and the garment off: what
+    to tell the participant before the measures begin again, then Next step (docs/LOG.md
+    N7.F11c10). The same in every condition. (sv)'
   experimenter_sv_intervention_fault: 'A garment fault during the intervention: shown
     in red, counted, and without the channel, which could say which pattern is running
     (SPEC.md 16). (sv)'
+  experimenter_sv_intervention_recalibrate: 'The intervention, waiting for the next
+    block with the condition''s touch on: Rebalance channels… and Restart calibration…
+    offered at any time, as during touch calibration (S, 15 Oct 2026; docs/LOG.md
+    N7.F12a1). The same in every condition, and no pressures (SPEC.md 16). (sv)'
   experimenter_sv_launcher: The launcher's four entries (SPEC.md 4.1), all enabled.
     Design a pattern says it is for S only, because it shows pattern names and shapes
     (sv).
   experimenter_sv_launcher_demo: 'Run a demo (docs/LOG.md N7.D23): the session dialog
     with the demonstration''s own participant code shown and not editable, no data
-    folder or REDCap form, the mock garment and the example patterns chosen, and the
+    folder or REDCap form, the mock garment (changeable: another runs at real time
+    only, with people pressing, N7.F12f) and the example patterns chosen, and the
     speed and who presses for the participant and the experimenter (sv).'
-  experimenter_sv_launcher_hardware_check: 'The hardware check (LOG N7.F4), at the
-    lab laptop''s size, as it opens: a count for each remote button, where each screen
-    lands, the sound devices, the noise within the participant''s own range with the
-    cue and the alert, and each garment channel on and off. Drawn with a sample device
-    list and the mock garment (sv).'
+  experimenter_sv_launcher_hardware_check: 'The hardware page (LOG N7.F4, N7.F12e1),
+    shown before the launcher, at the lab laptop''s size, with the lab''s hardware
+    connected: each choice on hardware.yaml''s own, found; a count for each remote
+    button; the noise within the participant''s own range with the cue and the alert;
+    each garment channel on and off. Continue opens the launcher (sv).'
+  experimenter_sv_launcher_hardware_check_channel_on: 'The hardware check with the
+    mock garment connected and channel 2 on: each channel button says on or off, and
+    one that is on is filled (LOG N7.F10b; sv).'
+  experimenter_sv_launcher_hardware_check_nothing_found: 'The hardware page (LOG N7.F12e1)
+    with nothing of the lab''s connected: one screen, so the participant''s window
+    shares it; the remote, the headphones and the sleeve''s port missing, each in
+    its own colour and saying what to do -- in the lab the keyboard is chosen by hand,
+    never stood in automatically. Each is found when connected (sv).'
   experimenter_sv_launcher_instruments: 'Instruments and environment (SPEC.md 8.1),
     at the lab laptop''s size: all twenty filaments in view at once, in two halves,
     each with its label, size and nominal force, a field for the weighing in grams
@@ -253,31 +353,63 @@ screens:
     to them. (sv)'
   experimenter_sv_long_instruction: 'The longest instruction the session gives, set
     down the type scale so it fits its region: nothing below it has moved, and the
-    controls are where they always are. (sv)'
+    controls are where they always are. It asks for Accept, so Accept and Re-run are
+    offered, as the procedure offers them. (sv)'
   experimenter_sv_mapping: 'A mapping path: the secondary zone outlined without a
     site, the technique text shown because a filament is used, and Mapping distances
-    enabled now that a phase has been mapped. (sv)'
-  experimenter_sv_open_items: Unresolved open items listed for the experimenter (SPEC.md
-    20). (sv)
+    offered now that a phase has been mapped. (sv)'
+  experimenter_sv_open_items: 'Unresolved open items listed for the experimenter (SPEC.md
+    20): one small amber line at the foot of the banner region, by number, the summaries
+    in the tooltip. (sv)'
+  experimenter_sv_pilot_rig_pinprick: 'What the 15 Oct 2026 pilot looked like: the
+    prototype sleeve''s reduced-capability banner and the open items above a filament
+    trial. (sv)'
   experimenter_sv_pinprick_primary: 'A pinprick application: the filament by its gram
     label, the primary zone outlined on the diagram with its site beside it, the technique
-    text below, and the response pending -- never its value. (sv)'
+    text below, and the response pending -- never its value. The filament-applied-instead
+    entry is offered, as it is only during a filament trial. (sv)'
   experimenter_sv_placeholder_banner: The unapproved-wording banner (SPEC.md 12.4),
     red and unmissable. (sv)
   experimenter_sv_plain: No banners, no open items, nothing scheduled -- a correctly
-    configured session at setup. Controls along the bottom, Resume, Rebalance and
-    the fit choice disabled; the zone diagram with no zone marked; the hardware panel
-    connected with no pressures. (sv)
+    configured session at setup. The routine controls along the bottom, Next step
+    emphasised; the situational ones (Resume, Discard, Rebalance, the fit choice,
+    the filament entry, Mapping distances) hidden in places kept for them; no zone
+    diagram, since there is no target; the garment connected, its button quiet at
+    the foot of the side column. (sv)
+  experimenter_sv_recalibrate_rebalance_dialog: 'Rebalance channels…: what it does,
+    wherever it is offered, and why, from a fixed list; Rebalance channels disabled
+    until a reason is chosen (docs/LOG.md N7.F12a1). (sv)'
+  experimenter_sv_recalibrate_restart_dialog: Restart calibration…, with a reason
+    chosen, shown pressed, so Restart calibration is enabled (docs/LOG.md N7.F12a1).
+    (sv)
   experimenter_sv_reduced_capability_banner: The reduced-capability banner naming
     the garment in use in words, as the launcher does (SPEC.md 12.4). (sv)
   experimenter_sv_rekindle_due: 'The rekindle is due: a timed event that is not a
-    block, named by its phase. (sv)'
+    block, named by its phase, and the thermode to place. (sv)'
   experimenter_sv_rerun_dialog: The re-run reason, asked before a fit is discarded
     (SPEC.md 11.1). (sv)
+  experimenter_sv_session_complete: 'The last state: the session closed and every
+    file written, the garment to come off, and Next step to close the program (docs/LOG.md
+    N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
+    and Pause and the garment button are withdrawn: nothing is left to pause or to
+    connect again. (sv)'
+  experimenter_sv_status_warning: A warning in the status region, in amber, kept apart
+    from the routine status so the next 'Waiting for...' does not replace it (15 Oct
+    2026 pilot review). It goes under the routine line; this one is too long for both,
+    so it has the region. (sv)
   experimenter_sv_touchcal_estimation_skip: 'The estimation run with the mock or prototype
     garment: how many ratings are answered, and Skip calibration under the garment,
     shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).
     Nothing else has moved. (sv)'
+  experimenter_sv_touchcal_stopped_recalibrate: 'The participant pressed the stop
+    during touch calibration''s step 4, with step 2''s fit accepted: beside Resume,
+    Rebalance channels… and Restart calibration… are offered, each in the place of
+    its kin in the situational row, and each asks why (docs/LOG.md N7.F12a1). The
+    same in every condition; nothing else moved. (sv)'
+  experimenter_sv_touchcal_stopped_recalibration_used: 'A stop during touch calibration
+    once the re-calibrations a limit allows (recalibrations_max, none by default)
+    are used: Resume only, and one grey line where the two offers were saying why.
+    (sv)'
   participant_en_adjust_just_noticeable: 'The adjustment screen for `just_noticeable`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     en.'
@@ -286,6 +418,10 @@ screens:
     en.'
   participant_en_adjust_match: 'The adjustment screen for `match`: the target, both
     large buttons drawn with their labels, and the confirm sentence, en.'
+  participant_en_adjust_match_first_playing: 'The channel match (SPEC.md 9 step 3)
+    while the first of its two alternating touches plays: ''the first'' and ''the
+    second'' between the buttons, the one playing in bold and underlined (docs/LOG.md
+    N7.F11c5), en.'
   participant_en_adjust_most_pleasant: 'The adjustment screen for `most_pleasant`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     en.'
@@ -318,10 +454,28 @@ screens:
     the press starts a timer that would blank the screen before it could be grabbed.
   participant_en_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
     and neither emphasised -- the state before the first stimulus, en.'
-  participant_en_cue: 'The visual warning cue: one filled disc, centred, no wording.'
+  participant_en_cue: 'The visual warning cue: the `warning_cue` text alone, at the
+    message position in the button symbols'' size, en.'
+  participant_en_on_screen_buttons: 'The adjustment screen with the remote''s four
+    buttons drawn below it, for a mouse or trackpad (hardware page, ''Mouse or trackpad''):
+    ‹ and › at the left, ▶ apart, the stop alone at the right on its sticker''s disc.
+    Pilot codes and demonstrations only; with the remote the window has no such row
+    (en).'
   participant_en_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, en.'
   participant_en_screen_emergency_stop: The participant text `screens.emergency_stop`,
+    centred, en.
+  participant_en_screen_intro_baseline: The participant text `screens.intro_baseline`,
+    centred, en.
+  participant_en_screen_intro_bracket: The participant text `screens.intro_bracket`,
+    centred, en.
+  participant_en_screen_intro_compare: The participant text `screens.intro_compare`,
+    centred, en.
+  participant_en_screen_intro_estimation: The participant text `screens.intro_estimation`,
+    centred, en.
+  participant_en_screen_intro_match: The participant text `screens.intro_match`, centred,
+    en.
+  participant_en_screen_intro_pleasant: The participant text `screens.intro_pleasant`,
     centred, en.
   participant_en_screen_paused: The participant text `screens.paused`, centred, en.
   participant_en_screen_self_start: The participant text `screens.self_start`, centred,
@@ -382,6 +536,10 @@ screens:
     sv.'
   participant_sv_adjust_match: 'The adjustment screen for `match`: the target, both
     large buttons drawn with their labels, and the confirm sentence, sv.'
+  participant_sv_adjust_match_first_playing: 'The channel match (SPEC.md 9 step 3)
+    while the first of its two alternating touches plays: ''the first'' and ''the
+    second'' between the buttons, the one playing in bold and underlined (docs/LOG.md
+    N7.F11c5), sv.'
   participant_sv_adjust_most_pleasant: 'The adjustment screen for `most_pleasant`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     sv.'
@@ -414,10 +572,28 @@ screens:
     the press starts a timer that would blank the screen before it could be grabbed.
   participant_sv_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
     and neither emphasised -- the state before the first stimulus, sv.'
-  participant_sv_cue: 'The visual warning cue: one filled disc, centred, no wording.'
+  participant_sv_cue: 'The visual warning cue: the `warning_cue` text alone, at the
+    message position in the button symbols'' size, sv.'
+  participant_sv_on_screen_buttons: 'The adjustment screen with the remote''s four
+    buttons drawn below it, for a mouse or trackpad (hardware page, ''Mouse or trackpad''):
+    ‹ and › at the left, ▶ apart, the stop alone at the right on its sticker''s disc.
+    Pilot codes and demonstrations only; with the remote the window has no such row
+    (sv).'
   participant_sv_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, sv.'
   participant_sv_screen_emergency_stop: The participant text `screens.emergency_stop`,
+    centred, sv.
+  participant_sv_screen_intro_baseline: The participant text `screens.intro_baseline`,
+    centred, sv.
+  participant_sv_screen_intro_bracket: The participant text `screens.intro_bracket`,
+    centred, sv.
+  participant_sv_screen_intro_compare: The participant text `screens.intro_compare`,
+    centred, sv.
+  participant_sv_screen_intro_estimation: The participant text `screens.intro_estimation`,
+    centred, sv.
+  participant_sv_screen_intro_match: The participant text `screens.intro_match`, centred,
+    sv.
+  participant_sv_screen_intro_pleasant: The participant text `screens.intro_pleasant`,
     centred, sv.
   participant_sv_screen_paused: The participant text `screens.paused`, centred, sv.
   participant_sv_screen_self_start: The participant text `screens.self_start`, centred,

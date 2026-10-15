@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import time
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtWidgets import QApplication
@@ -25,7 +26,7 @@ from tatp import touchcal
 from tatp import touchcal_maths as maths
 from tatp.garment.mock import MockGarment
 from tatp.touchcal_maths import REFERENCE_STRONGER, TEST_STRONGER
-from tatp.trials import ExperimenterChoice
+from tatp.trials import ExperimenterChoice, MessageConfirm
 
 
 @pytest.fixture(scope="module")
@@ -211,6 +212,28 @@ def test_a_failing_fit_is_put_to_the_experimenter_and_a_rerun_keeps_the_first(ri
     assert _events(session, "touchcal_stage1_rerun")
 
 
+def test_a_rerun_takes_down_the_warning_about_the_run_it_discards(rig):
+    """Code review of N7.F11b16: the first run's felt catch trials were still warned under the
+    second run's decision. Flat at 50 % on the first run, so its catch trials are felt too."""
+    window = rig.experimenter
+    warning_at_decision = []
+
+    def decide(trial):
+        warning_at_decision.append(window._warning_text)
+        return ("rerun", ("flat",)) if len(warning_at_decision) == 1 else ("accept", ())
+
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    virtual.decide = decide
+    virtual.before_step = lambda trial: (
+        _flat(rig)(trial) if procedure.run_index == 1 else None
+    )
+    virtual.run()
+    felt = window.text["warnings"]["catch_trials_felt"].split("(")[0]
+    assert felt in warning_at_decision[0]
+    assert felt not in window._warning_text, "the second run's catch trials were not felt"
+
+
 def test_an_estimate_that_cannot_be_inverted_cannot_be_accepted(rig):
     session = rig.session
     procedure = touchcal.TouchCalibration(rig)
@@ -258,13 +281,14 @@ def test_the_touch_preview_is_open_for_the_choice_and_closed_after(app, loaded, 
         seen = []
         virtual = Virtual(rig, procedure)
         virtual.decide = lambda trial: seen.append(
-            (window.fit_preview.isVisible(), window.fit_accept_button.isEnabled())
+            (window.fit_preview.isVisible(), not window.fit_accept_button.isHidden())
         ) or ("accept", ())
         virtual.run()
         assert seen and seen[0] == (True, True)
         assert not window.fit_preview.isVisible()
         assert window.fit_preview.plot.points == ()
-        assert not window.fit_accept_button.isEnabled()
+        # Hidden, not only disabled, once decided (15 Oct 2026 pilot review).
+        assert window.fit_accept_button.isHidden()
     finally:
         rig.session.close()
 
@@ -296,6 +320,14 @@ def test_felt_catch_trials_are_flagged(rig):
 def test_a_channel_winning_every_comparison_is_readjusted_then_accepted(rig):
     """docs/research/R33: an order-free winner in both pairs prompts one re-adjustment."""
     session = rig.session
+    shown = []
+    real = rig.experimenter.set_instruction
+
+    def spy(text):
+        shown.append(text)
+        real(text)
+
+    rig.experimenter.set_instruction = spy
 
     def choose(key, trial):
         if key != touchcal.COMPARISON_CHOICE:
@@ -320,6 +352,14 @@ def test_a_channel_winning_every_comparison_is_readjusted_then_accepted(rig):
     ]
     assert len(matches) == 4, "both start points again on re-adjustment"
     assert _events(session, "equalisation_mismatch")
+    # The re-adjustment is step 4's, and says so, rather than showing step 3 again
+    # (LOG N7.F11b6).
+    instructions = rig.experimenter.text["instructions"]
+    readjust = instructions["touchcal_readjust"].format(channel=1)
+    assert shown.count(readjust) == 1
+    assert shown.index(readjust) > shown.index(
+        instructions["touchcal_equalise"].format(channel=1, index=1, count=4)
+    )
 
 
 def test_a_mismatch_that_survives_readjustment_is_logged_and_the_session_goes_on(rig):
@@ -354,8 +394,12 @@ def test_uneven_offers_a_rebalance_which_reruns_steps_3_and_4(rig):
     def choose(key, trial):
         return next(answers) if key == touchcal.EVENNESS_CHOICE else "left"
 
+    participant = rig.participant
+    screens = []
+
     def decide(trial):
         decisions.append(trial.instruction)
+        screens.append(participant.message.text)
         return "rebalance", ()
 
     _calibrate(rig, choose=choose, decide=decide)
@@ -363,9 +407,52 @@ def test_uneven_offers_a_rebalance_which_reruns_steps_3_and_4(rig):
     assert [row["judgement"] for row in checks] == ["uneven", "even"]
     assert checks[0]["rebalance_offered"] == "true"
     assert decisions == ["touchcal_uneven"]
+    # Not a blank while the experimenter decides (LOG N7.F11c4).
+    assert screens == [participant.text["screens"]["standby"]]
     stages = [row["stage"] for row in _rows(session, "touchcal_adjust")]
     assert stages.count("channel_match") == 16
     assert stages.count("pleasantness") == 2, "the reference-scale level stands"
+    # Steps 3 and 4 introduced again when the rebalance returns to them (LOG N7.F11c1).
+    intros = [row["detail"] for row in _events(session, "message_confirmed")]
+    assert intros == [
+        "intro_bracket", "intro_estimation", "intro_match", "intro_compare", "intro_pleasant",
+        "intro_match", "intro_compare",
+    ]
+
+
+def test_step_1_asks_for_the_anchors_in_the_order_its_introduction_names_them(loaded):
+    """`screens.intro_bracket` says "first just noticeable, then just uncomfortable" in
+    words; reorder the anchors and that sentence must change with them (LOG N7.F11c1)."""
+    plans = touchcal.anchor_plans(loaded)
+    keys = list(dict.fromkeys(plan.target_key for plan in plans))
+    assert keys == ["just_noticeable", "just_uncomfortable"]
+    for language in ("sv", "en"):
+        text = cfg.load(language, language).participant_text
+        intro = text["screens"]["intro_bracket"]
+        names = [text["vas"]["intensity"]["anchors"][i]["label"] for i in (1, 2)]
+        assert 0 <= intro.index(names[0]) < intro.index(names[1]), language
+
+
+def test_the_match_shows_which_of_its_two_touches_is_playing(rig):
+    """Reference and test take turns; the screen names them and marks the one on (N7.F11c5)."""
+    participant, garment = rig.participant, rig.session.garment
+    seen = set()
+
+    def watch(trial):
+        if isinstance(trial, touchcal.MatchAdjustment):
+            control = participant.control
+            assert control.pair == (participant.text["choices"]["comparison"]["left"],
+                                    participant.text["choices"]["comparison"]["right"])
+            on = garment.status()["channels_on"]
+            expected = (0 if trial.plan.reference_channel in on
+                        else 1 if trial.plan.channel in on else None)
+            assert control.playing == expected
+            seen.add(expected)
+        elif isinstance(trial, touchcal.Adjustment):
+            assert participant.control.pair is None, "only the match names two touches"
+
+    _calibrate(rig, before_step=watch)
+    assert 0 in seen
 
 
 # -- interruptions ----------------------------------------------------------------------
@@ -411,6 +498,223 @@ def test_a_pause_during_a_comparison_repeats_it(rig):
     virtual.before_step = pause_once
     virtual.run()
     assert len(_rows(session, "touchcal_compare")) == 8
+
+
+# -- re-calibration, docs/LOG.md N7.F12a1 --------------------------------------------------
+# The session runner owns the choice, its record and what is offered
+# (tests/test_session_runner.py); here, what the procedure offers and the path it takes.
+
+
+def _garment_off(rig) -> bool:
+    status = rig.session.garment.status()
+    return (not status["channels_on"] and status["pattern_name"] is None
+            and not any(status["pressure_kpa"].values()))
+
+
+def _recalibrate(rig, procedure, choice, reason):
+    """What the runner does with a choice: end a stop unrestored, or abandon the step in
+    progress from the controls, then hand the path to the calibration."""
+    if rig.interruptions.active is not None:
+        rig.interruptions.end_without_restore(choice)
+    else:
+        rig.interruptions.take_over(choice)
+    procedure.recalibrate(choice, reason)
+
+
+def _recalibrate_at(rig, procedure, when, choice, reason, seen, stop=True):
+    """Once `when(trial)`, stop (or not), note what is offered, then take `choice`, and note
+    the state the moment after."""
+
+    def step(trial):
+        if seen or not when(trial):
+            return
+        if stop:
+            press(rig.participant, "period")
+        seen["offered"] = procedure.recalibration_offers()
+        _recalibrate(rig, procedure, choice, reason)
+        seen["active"] = rig.interruptions.active
+        seen["garment_off"] = _garment_off(rig)
+        seen["trial"] = procedure._trial
+        seen["screen"] = rig.participant.message.text
+
+    return step
+
+
+def test_a_rebalance_after_a_stop_in_step_4_reruns_steps_3_and_4_and_restores_nothing(rig):
+    session = rig.session
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    seen = {}
+    virtual.before_step = _recalibrate_at(
+        rig, procedure, lambda trial: isinstance(trial, touchcal.Comparison), "rebalance",
+        "channel_uneven", seen,
+    )
+    result = virtual.run()
+
+    assert seen["offered"] == (True, True)
+    assert seen["active"] is None and seen["garment_off"]
+    # Not the abandoned comparison: the re-run's introduction, waiting for the participant.
+    assert isinstance(seen["trial"], MessageConfirm)
+    assert seen["screen"] == rig.participant.text["screens"]["intro_match"]
+    events = [row["event"] for row in _rows(session, "log")]
+    after = events[events.index("emergency_stop"):]
+    assert "step_repeated" not in after and "garment_restored" not in after
+    adjust = _rows(session, "touchcal_adjust")
+    match = [row for row in adjust if row["stage"] == "channel_match"]
+    assert len(match) == 16, "steps 3 and 4 for every test channel again"
+    assert sorted({row["pass_index"] for row in match}) == ["1", "2"]
+    assert sum(row["stage"] == "pleasantness" for row in adjust) == 2
+    intros = [row["detail"] for row in _events(session, "message_confirmed")]
+    assert intros == ["intro_bracket", "intro_estimation", "intro_match", "intro_compare",
+                      "intro_match", "intro_compare", "intro_pleasant"]
+    (fit,) = _rows(session, "touchcal_fit")
+    assert fit["superseded"] == "false"
+    assert len(_rows(session, "touchcal_channels")) == 5, "written once, at the end"
+    assert result.run_index == 1 and result.valid_for_analysis
+
+
+def test_a_restart_after_a_stop_in_step_6_is_a_new_run_and_a_second_stop_resumes(rig):
+    session = rig.session
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    seen, again = {}, []
+    restart = _recalibrate_at(
+        rig, procedure, lambda trial: isinstance(trial, touchcal.PreferenceSelection),
+        "restart", "too_strong", seen,
+    )
+
+    def step(trial):
+        restart(trial)
+        # A second stop, in the restarted run, resumed as any stop is.
+        if (seen and not again and procedure.run_index == 2
+                and isinstance(trial, touchcal.TouchRating)):
+            again.append(True)
+            press(rig.participant, "period")
+
+    virtual.before_step = step
+    result = virtual.run()
+
+    assert seen["offered"] == (True, True) and again
+    assert seen["garment_off"] and seen["screen"] == rig.participant.text["screens"][
+        "intro_bracket"]
+    training = _events(session, "vas_training_shown")
+    restarted = _events(session, "touch_calibration_run")[1]["timestamp_iso"]
+    assert training and all(row["timestamp_iso"] < restarted for row in training), (
+        "the scale training is not given again"
+    )
+    fits = [(row["run_index"], row["superseded"], row["rerun_reason"])
+            for row in _rows(session, "touchcal_fit")]
+    assert fits == [("1", "false", ""), ("1", "true", "recalibration: too_strong"),
+                    ("2", "false", "")], "run 1 was never used, so it is superseded"
+    channels = _rows(session, "touchcal_channels")
+    assert len(channels) == 5 and {row["run_index"] for row in channels} == {"2"}
+    assert {row["calibration_index"] for row in channels} == {"1"}
+    assert result.run_index == 2
+    adjust = _rows(session, "touchcal_adjust")
+    assert [row["run_index"] for row in adjust if row["stage"] == "pleasantness"] == [
+        "1", "1", "2", "2"]
+    assert {row["pass_index"] for row in adjust if row["run_index"] == "2"} == {"1"}
+    estimate = [row for row in _rows(session, "touchcal_estimate") if row["run_index"] == "2"]
+    assert len(estimate) == 12, "the stopped presentation of run 2 is repeated, not lost"
+    assert [row["check_index"] for row in _rows(session, "touchcal_evenness")] == ["1", "2"]
+    assert len(_rows(session, "touchcal_preference")) == 1, "step 6 asked in run 2 only"
+
+
+def test_a_restart_from_the_controls_abandons_the_step_as_a_stop_would(rig):
+    """S, 15 Oct 2026: re-calibration at any time, not only after a stop."""
+    session = rig.session
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    seen = {}
+    virtual.before_step = _recalibrate_at(
+        rig, procedure, lambda trial: isinstance(trial, touchcal.MatchAdjustment), "restart",
+        "too_strong", seen, stop=False,
+    )
+    result = virtual.run()
+    assert seen["offered"] == (True, True)
+    assert seen["active"] is None and seen["garment_off"]
+    assert isinstance(seen["trial"], MessageConfirm)
+    assert seen["screen"] == rig.participant.text["screens"]["intro_bracket"]
+    names = [row["event"] for row in _rows(session, "log")]
+    assert "interrupted_for_recalibration" in names and "step_abandoned" in names
+    assert "emergency_stop" not in names and "step_repeated" not in names
+    assert result.run_index == 2
+    fits = [(row["run_index"], row["superseded"]) for row in _rows(session, "touchcal_fit")]
+    assert fits == [("1", "false"), ("1", "true"), ("2", "false")]
+
+
+def test_re_calibration_is_offered_as_the_calibration_allows(rig):
+    """Restart once a run has begun, Rebalance once a fit is accepted; and the runner is told
+    when that changes."""
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    seen, changed = {}, []
+    procedure.recalibration_changed.connect(lambda: changed.append(
+        procedure.recalibration_offers()))
+
+    def watch(trial):
+        if isinstance(trial, touchcal.TouchRating) and "estimation" not in seen:
+            seen["estimation"] = procedure.recalibration_offers()
+        elif isinstance(trial, touchcal.MatchAdjustment) and "match" not in seen:
+            seen["match"] = procedure.recalibration_offers()
+
+    virtual.before_step = watch
+    virtual.run()
+    assert seen == {"estimation": (False, True), "match": (True, True)}
+    assert changed == [(False, True), (True, True)], "at the run's start, at the fit accepted"
+
+
+def test_a_stop_before_the_fit_offers_only_the_restart_and_leaves_no_fit_row(rig):
+    session = rig.session
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    seen = {}
+    virtual.before_step = _recalibrate_at(
+        rig, procedure,
+        lambda trial: (isinstance(trial, touchcal.TouchRating)
+                       and len(_rows(session, "touchcal_estimate")) == 3),
+        "restart", "other", seen,
+    )
+    virtual.run()
+    assert seen["offered"] == (False, True), "steps 3 and 4 need an accepted fit"
+    fits = [(row["run_index"], row["superseded"]) for row in _rows(session, "touchcal_fit")]
+    assert fits == [("2", "false")], "run 1 had no fit, so no fit row"
+    assert [row["run_index"] for row in _rows(session, "touchcal_estimate")].count("1") == 3
+
+
+def test_a_calibration_run_again_for_the_intervention_keeps_its_preference(rig):
+    """Integrator's decision B: a re-calibration during the intervention does not ask step 6
+    again, so the participant-preferred condition's pattern cannot change mid-intervention;
+    its runs and passes go on from the first calibration's."""
+    session = rig.session
+    procedure = touchcal.TouchCalibration(rig)
+    first = Virtual(rig, procedure).run()
+    procedure.recalibrate_on_start("rebalance", "too_strong", first.preferred_pattern)
+    second = Virtual(rig, procedure).run()
+    assert second.preferred_pattern == first.preferred_pattern
+    assert len(_rows(session, "touchcal_preference")) == 1, "step 6 not asked again"
+    assert _events(session, "preference_kept")
+    assert second.run_index == first.run_index, "a rebalance keeps the run"
+    channels = _rows(session, "touchcal_channels")
+    assert sorted({row["calibration_index"] for row in channels}) == ["1", "2"]
+    procedure.recalibrate_on_start("restart", "other", first.preferred_pattern)
+    third = Virtual(rig, procedure).run()
+    assert third.run_index == first.run_index + 1
+    assert third.preferred_pattern == first.preferred_pattern
+    fits = [(row["run_index"], row["superseded"]) for row in _rows(session, "touchcal_fit")]
+    assert fits == [("1", "false"), ("2", "false")], "a run that governed is not superseded"
+
+
+def test_numbering_goes_on_from_a_resumed_sessions_files(rig):
+    """Code review and spec-review of N7.F12a1: a calibration made after a crash-resume does
+    not number its runs, evenness questions or comparisons from 1 again, which the earlier
+    files already have."""
+    resumed = SimpleNamespace(touchcal_runs=2, evenness_checks=3, comparisons=7)
+    result = Virtual(rig, touchcal.TouchCalibration(rig, resumed)).run()
+    assert result.run_index == 3
+    assert {row["run_index"] for row in _rows(rig.session, "touchcal_fit")} == {"3"}
+    assert [row["check_index"] for row in _rows(rig.session, "touchcal_evenness")] == ["4"]
+    assert _rows(rig.session, "touchcal_compare")[0]["comparison_index"] == "8"
 
 
 # -- timing-only mode, SPEC.md 12.4 -----------------------------------------------------

@@ -9,14 +9,18 @@ Six entries, so the auxiliary tools are reachable without the command line:
    refuses. An unfinished session found by the preflight is put to the experimenter as a
    question (SPEC.md 15).
 1a. **Run a demo.** The same dialog for a demonstration (`tatp/demo.py`, docs/LOG.md N7.D23):
-   its own code and folder, and the speed and who presses -- a person or a simulation, for the
-   participant and the experimenter apart.
+   its own code and folder, the garment -- the mock unless another is chosen, and then real
+   time only, with people pressing -- and the speed and who presses -- a person
+   or a simulation, for the participant and the experimenter apart.
 2. **Instruments and environment** (`tatp/instruments.py`).
 3. **Design a pattern.** `tools/design_pattern.py`, in its own window. For S only: it shows
    pattern names and shapes, which a blinded experimenter must not see (SPEC.md 16), and its
    entry says so.
 4. **Preview schedule.** `tools/preview_schedule.py`'s report, in a window.
-5. **Check the hardware** (`tatp/hardware_check.py`), before the participant arrives.
+5. **Check the hardware** (`tatp/hardware_check.py`), before the participant arrives: the
+   hardware page, which also opens before the launcher itself. What it chooses -- screens,
+   sound devices, the sleeve's port, the participant's input -- goes into every session started
+   from here, through `tatp.session.with_hardware_choices` (docs/LOG.md N7.F12e1).
 
 **The session is started by `run_session`'s `preflight` and `build`, not here.** Both are
 reached through `preflight()` and `build()` below, imported when called: `run_session.py`
@@ -72,10 +76,18 @@ from tatp.demo import (
     check_speed,
     demo_config,
     resolved,
+    worn_garment,
 )
-from tatp.hardware_check import HardwareCheckDialog
+from tatp.devices import HardwareChoices, configured, settle
+from tatp.hardware_check import HardwareCheckDialog, present_now
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
-from tatp.session import DRIVERS, canonical_initials, with_session_choices
+from tatp.session import (
+    DRIVERS,
+    canonical_initials,
+    with_hardware_choices,
+    with_session_choices,
+)
+from tatp.session_runner import stop_on_error
 from tatp.ui.application import application, scale_screens
 from tatp.ui.widgets import (
     DISCONNECTED_COLOUR,
@@ -347,14 +359,15 @@ class SessionDialog(QDialog):
         self.pattern_folder.setText(str(resolved(demo["pattern_folder"])))
         self.form.setRowVisible(self.data_folder.parentWidget(), False)
         self.form.setRowVisible(self.redcap_form, False)
-        # Nothing is worn at a demonstration (tatp/demo.py): shown, not chosen.
+        # The mock, where nothing is worn, unless another garment is chosen (tatp/demo.py).
         self.garment.setCurrentIndex(self.garment.findData(DEMO_GARMENT))
-        self.garment.setEnabled(False)
         self.demo_speed = sized(QDoubleSpinBox(), SIZE_BODY)
         self.demo_speed.setRange(REAL_TIME_SPEED, float(demo["max_clock_speed"]))
         # Checked, not clamped: a configured default out of range is refused at once, as the
         # command line refuses it (tatp.demo.check_speed).
-        self.demo_speed.setValue(check_speed(demo, float(demo["clock_speed"])))
+        self.demo_speed.setValue(check_speed(demo, float(demo["clock_speed"]), DEMO_GARMENT))
+        # The speed set while the mock was chosen, given back when it is chosen again.
+        self._mock_speed = self.demo_speed.value()
         modes = [(self.text["demo"]["modes"][mode], mode) for mode in MODES]
         self.sim_participant = self._options(modes)
         self.sim_experimenter = self._options(modes)
@@ -367,6 +380,23 @@ class SessionDialog(QDialog):
         self.demo_speed.valueChanged.connect(self._stale)
         self.sim_participant.currentIndexChanged.connect(self._stale)
         self.sim_experimenter.currentIndexChanged.connect(self._stale)
+        self.garment.currentIndexChanged.connect(self._demo_garment_changed)
+
+    def _demo_garment_changed(self, *_) -> None:
+        """A worn garment runs a demonstration at real time with people as the participant
+        and the experimenter (tatp.demo.check_speed, check_person). Where the command line
+        refuses the other choices, here they are set and held, and the speed set for the mock
+        is given back when it is chosen again."""
+        garment = self.garment.currentData()
+        worn = garment is not None and worn_garment(garment)
+        if worn and self.demo_speed.isEnabled():
+            self._mock_speed = self.demo_speed.value()
+        self.demo_speed.setValue(REAL_TIME_SPEED if worn else self._mock_speed)
+        self.demo_speed.setEnabled(not worn)
+        for simulation in (self.sim_participant, self.sim_experimenter):
+            if worn:
+                simulation.setCurrentIndex(simulation.findData(OFF))
+            simulation.setEnabled(not worn)
 
     def _options(self, options: list[tuple[str, object]]) -> QComboBox:
         """A choice with no placeholder: each option is a fair default."""
@@ -472,7 +502,7 @@ class SessionDialog(QDialog):
         demonstration's own (tatp/demo.py), with a fresh folder each time."""
         loaded = self._load(args.participant_language, args.experimenter_language)
         if args.demo:
-            return demo_config(loaded, args.clock_speed)
+            return demo_config(loaded, args.clock_speed, args.garment)
         return with_session_choices(loaded, args.data_folder, args.garment)
 
     # -- check, then start ------------------------------------------------------------
@@ -611,16 +641,21 @@ class LauncherWindow(QWidget):
         preflight: Callable = preflight,
         build: Callable = build,
         filaments_path: Path = FILAMENTS_PATH,
+        choices: HardwareChoices | None = None,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
         self.config = config
+        # The hardware page's choices (docs/LOG.md N7.F12e1), which every session started from
+        # here runs with; hardware.yaml's own until the page has been shown.
+        self.choices = choices or configured(config.hardware)
         self.text = config.experimenter_text
         self._preflight = preflight
         self._build = build
         self.filaments_path = filaments_path
         self.runner = None
         self.designer = None
+        self.error_dialog: MessageDialog | None = None
         # Handed from the instruments entry to the next session start (SPEC.md 8.1).
         self.environment = {"room_temperature_c": None, "relative_humidity_pct": None}
         words = self.text["launcher"]
@@ -665,9 +700,19 @@ class LauncherWindow(QWidget):
             self.environment,
             self._preflight,
             self._start_session,
+            load=self.load,
             demo=self.config.study1["demo"] if demo else None,
             parent=self,
         )
+
+    def load(self, participant_language: str, experimenter_language: str) -> cfg.Config:
+        """The configuration a session is checked and started with: these languages, and the
+        hardware page's choices settled against what is connected now (docs/LOG.md N7.F12e1):
+        what was chosen by hand stays, and the rest are worked out again, so a monitor or the
+        remote connected after the page closed is used."""
+        loaded = cfg.load(participant_language, experimenter_language)
+        present = present_now(loaded.hardware, self.choices)
+        return with_hardware_choices(loaded, settle(self.choices, loaded.hardware, present))
 
     def open_demo_dialog(self) -> SessionDialog:
         """Run a demo (tatp/demo.py): the session dialog, for a demonstration."""
@@ -724,7 +769,11 @@ class LauncherWindow(QWidget):
         return dialog
 
     def hardware_check_dialog(self) -> HardwareCheckDialog:
-        return HardwareCheckDialog(self.text, self.config.hardware, parent=self)
+        """The hardware page, as it was left (docs/LOG.md N7.F12e1). Continue keeps what it
+        chose for the sessions started after; Cancel keeps what there was."""
+        dialog = HardwareCheckDialog(self.text, self.config.hardware, self.choices, parent=self)
+        dialog.accepted.connect(lambda: setattr(self, "choices", dialog.choices()))
+        return dialog
 
     def open_hardware_check(self) -> HardwareCheckDialog:
         # Modal to the launcher, so no session can start while the check holds the garment's
@@ -735,6 +784,21 @@ class LauncherWindow(QWidget):
         dialog.setAttribute(Qt.WA_DeleteOnClose)
         dialog.open()
         return dialog
+
+    def show_error(self, summary: str) -> MessageDialog:
+        """An error nothing caught, with no session open: a Start that failed, say, which
+        otherwise left the launcher as it was with nothing to say why (15 Oct 2026). One at a
+        time: an error that repeats, a timer's, stays on the console rather than stacking
+        dialogs."""
+        if self.error_dialog is not None and self.error_dialog.isVisible():
+            return self.error_dialog
+        dialogs = self.text["dialogs"]
+        self.error_dialog = MessageDialog(
+            dialogs["error"], dialogs["launcher_error"].format(value=summary), dialogs["close"],
+            colour=DISCONNECTED_COLOUR, parent=self,
+        )
+        self.error_dialog.open()
+        return self.error_dialog
 
     def set_environment(self, temperature_c: float | None, humidity_pct: float | None) -> None:
         self.environment["room_temperature_c"] = temperature_c
@@ -772,7 +836,9 @@ def finish(runner) -> int:
     if runner is None:
         return 0
     # Closing twice is safe, and covers a window shut by hand (run_session.main does the same).
-    runner.session.close()
+    # Not a session an error left open on purpose, to be resumed (`stop_for_error`).
+    if not runner.left_open:
+        runner.session.close()
     return 0 if runner.completed else 1
 
 
@@ -785,7 +851,13 @@ def run_launcher(argv: list[str] | None = None) -> int:
     config = cfg.load(DEFAULT_PARTICIPANT_LANGUAGE, args.language)
     scale_screens(config.hardware)
     app = QApplication.instance() or application(config.hardware)
-    launcher = LauncherWindow(config)
+    # The hardware page first, as a videoconferencing program shows its devices before a call
+    # (docs/LOG.md N7.F12e1). Cancel there ends the program: there is nothing behind it yet.
+    page = HardwareCheckDialog(config.experimenter_text, config.hardware)
+    if page.exec() != QDialog.DialogCode.Accepted:
+        return 0
+    launcher = LauncherWindow(config, choices=page.choices())
+    stop_on_error(lambda: launcher.runner, launcher.show_error)
     launcher.show()
     app.exec()
     return finish(launcher.runner)
