@@ -1335,11 +1335,12 @@ class SessionRunner(Procedure):
         closing keys are not written. The garment and the sound are let go."""
         self.left_open = True
         self._clear_alarms()
-        self.session.files.retry_pending()
         if self.session.garment.connected:
             self.session.garment.stop()
             self.session.garment.disconnect()
         self.session.audio.close()
+        # Last, because stopping the garment writes rows of its own.
+        self.session.files.release()
         if self.lock is not None:
             self.lock.release()
         QApplication.instance().quit()

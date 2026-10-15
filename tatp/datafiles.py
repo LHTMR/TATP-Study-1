@@ -4,9 +4,14 @@ The column list is not duplicated here. `docs/DATA_SCHEMA.md` is parsed, so the 
 `tools/validate_session.py` read the same definition and cannot drift from the documentation or
 from each other. Editing the markdown changes both.
 
-Durability (SPEC.md 14.3): every row is opened, appended, flushed and closed as it is produced,
-so a crash loses at most the trial in progress. There is no long-lived file handle holding a
-buffer that a crash would discard.
+Durability (SPEC.md 14.3): every row is handed to the operating system as it is produced, so a
+crash of the program loses at most the trial in progress. Each table's file stays open between
+rows, because an endpoint-security scanner (Microsoft Defender for Endpoint, measured on S's
+LiU-managed MacBook) inspects every open and close: reopening per row cost about 14 ms a row
+there, enough to starve the event loop when the garment logs fast (docs/LOG.md N7.F13a). The
+files are unbuffered and each write's rows go in one call, so no buffer holds a row a crash
+would discard, and a failed write leaves nothing for the close to write a second time. Nothing
+forces the rows to the physical disk (`fsync`), before or after this change.
 
 This is the one module where a narrow `try`/`except` is permitted (CLAUDE.md), and only for the
 case it exists for: a row that has already been collected from a participant must not be lost
@@ -18,6 +23,8 @@ swallowed.
 from __future__ import annotations
 
 import csv
+import io
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -204,6 +211,9 @@ class DataFileCollection:
         self.stamp = stamp
         self.write_failures = 0
         self._pending: dict[str, list[list[str]]] = {}
+        self._handles: dict[str, io.FileIO] = {}
+        # Tables whose open file is still empty: the header goes in with their next rows.
+        self._headerless: set[str] = set()
         self._session_keys_written: list[str] = []
         folder.mkdir(parents=True, exist_ok=True)
 
@@ -234,7 +244,7 @@ class DataFileCollection:
         return [format_value(values.get(c.name), c, table_name) for c in table.columns]
 
     def write(self, table_name: str, **values: object) -> None:
-        """Append one row, flushed to disk before returning (SPEC.md 14.3)."""
+        """Append one row, handed to the operating system before returning (SPEC.md 14.3)."""
         row = self.row_values(table_name, values)
         self._append(table_name, row)
 
@@ -261,7 +271,8 @@ class DataFileCollection:
             self.write("session", key=key, value=_as_text(values[key]))
 
     def close(self) -> None:
-        """Write the session keys still outstanding, then retry anything a failed write held.
+        """Write the session keys still outstanding, retry anything a failed write held, and
+        close the files.
 
         An unknown value is still written, with an empty value: DATA_SCHEMA.md requires that an
         absent row and an empty value never be confusable.
@@ -269,7 +280,7 @@ class DataFileCollection:
         outstanding = {k: "" for k in self.session_keys if k not in self._session_keys_written}
         if outstanding:
             self.write_session(outstanding)
-        self.retry_pending()
+        self.release()
 
     def retry_pending(self) -> None:
         """Write whatever a failed write held, and nothing else: no closing keys, so a session
@@ -279,23 +290,57 @@ class DataFileCollection:
             for row in rows:
                 self._append(table_name, row)
 
+    def release(self) -> None:
+        """Retry anything held, then close every file. A later write reopens its file."""
+        self.retry_pending()
+        for table_name in list(self._handles):
+            self._drop(table_name)
+
+    def _handle(self, table_name: str) -> io.FileIO:
+        handle = self._handles.get(table_name)
+        # A file deleted while open still accepts writes on macOS, into a file no one can see,
+        # where reopening per row used to recreate it. Windows refuses the delete instead.
+        if handle is not None and os.fstat(handle.fileno()).st_nlink == 0:
+            self._drop(table_name)
+            handle = None
+        if handle is None:
+            handle = self.path(table_name).open("ab", buffering=0)
+            self._handles[table_name] = handle
+            # Empty, not new: a first write that failed can leave the file created but empty.
+            if os.fstat(handle.fileno()).st_size == 0:
+                self._headerless.add(table_name)
+        return handle
+
+    def _drop(self, table_name: str) -> None:
+        handle = self._handles.pop(table_name)
+        self._headerless.discard(table_name)  # decided again from the file when it reopens
+        try:
+            handle.close()
+        except OSError:
+            # Part of the same catch as `_append`: the file is unbuffered, so a close has no
+            # rows of its own to lose; every row was written or is held for a retry.
+            pass
+
     def _append(self, table_name: str, row: list[str]) -> None:
-        path = self.path(table_name)
         held = self._pending.pop(table_name, [])
         try:
-            new_file = not path.exists()
-            with path.open("a", encoding="utf-8", newline="") as handle:
-                writer = csv.writer(handle, lineterminator="\n")
-                if new_file:
-                    writer.writerow(self.tables[table_name].column_names)
-                for earlier in held:
-                    writer.writerow(earlier)
-                writer.writerow(row)
-                handle.flush()
+            handle = self._handle(table_name)
+            text = io.StringIO()
+            writer = csv.writer(text, lineterminator="\n")
+            if table_name in self._headerless:
+                writer.writerow(self.tables[table_name].column_names)
+            writer.writerows([*held, row])
+            data = text.getvalue().encode("utf-8")
+            while data:
+                data = data[handle.write(data):]
+            self._headerless.discard(table_name)
         except OSError:
             # The one permitted catch (CLAUDE.md): a trial already collected from a participant
             # must not be lost because the disk was busy or the folder briefly unavailable.
-            # Held rows are retried on the next write and again at close.
+            # Held rows are retried on the next write and again at close, through a fresh
+            # handle, so a folder that comes back is found again.
+            if table_name in self._handles:
+                self._drop(table_name)
             self._pending[table_name] = [*held, row]
             self.write_failures += 1
 
