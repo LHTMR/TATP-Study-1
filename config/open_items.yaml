@@ -260,10 +260,14 @@ items:
          drawn afresh and shown on neither screen. Its files still record the condition, as a
          session's do. A blinding choice, so S's: keep the shuffle, or let a demonstration name
          its condition (for training S, say). Record the choice in study1.yaml demo, then add
-         `condition_shuffle_decided: <date>`. Settled in part by S, 15 Oct 2026: a
-         demonstration shows what the garment is commanded to do, channel by channel, in every
-         phase, the intervention and rekindle included (the Demo controls window,
-         tatp/ui/garment_display.py; docs/LOG.md N7.F12f). It still names no condition or
-         pattern, and the shuffle, the DEMONSTRATION banner and data_demo stay. Still open:
-         whether a demonstration may name its condition."
+         `condition_shuffle_decided: <date>`. Decided in part by S, 15 Oct 2026, who asked
+         for it explicitly: a demonstration shows what the garment is commanded to do, channel
+         by channel, in every phase, the intervention and rekindle included (the Demo controls
+         window, tatp/ui/garment_display.py; docs/LOG.md N7.F12f). Which channels a pattern
+         uses differs by condition, so this does let a watcher infer the condition of a
+         demonstration's intervention, though it names none; the shuffle means a session
+         number still cannot be chosen to see one. It is a demonstration's only (never in a
+         session, tested), and the shuffle, the DEMONSTRATION banner and data_demo stay. Still
+         open: whether a demonstration may name its condition, and whether a blinded
+         experimenter may watch a demonstration's intervention with the display."
     blocks_use: false

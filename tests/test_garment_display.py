@@ -41,7 +41,7 @@ def _display(config, garment_class=MockGarment):
     display = GarmentDisplay(garment, config.experimenter_text["demo"],
                              float(demo["garment_display_refresh_s"]),
                              float(demo["garment_highlight_s"]))
-    display.timer.stop()  # polled by hand, at chosen moments
+    # Never shown, so its timer never runs: polled by hand, at chosen moments.
     display.poll(T0_S)
     return display, garment
 
@@ -92,6 +92,58 @@ def test_a_stop_is_seen_as_every_channel_that_was_on_changing(app, config):
     garment.stop()
     display.poll(T0_S + 10)
     assert [c for c in garment.channels() if display.highlight(c) == 1.0] == list(on)
+
+
+def test_a_lost_link_holds_the_last_command_and_says_so(app, config):
+    """The outputs may still hold their last state (N7.U16): not drawn as switching off."""
+    display, garment = _display(config)
+    on = garment.channels()[0]
+    garment.set_channel(on, True)
+    display.poll(T0_S + 1)
+    before = dict(display.states)
+    garment.lost("no reply")
+    display.poll(T0_S + 10)
+    assert display.states == before
+    assert display.states[on][0] is True
+    assert all(display.highlight(c) == 0 for c in garment.channels())
+    assert display.notice() == config.experimenter_text["demo"]["garment_link_lost"]
+
+
+def test_a_disconnect_shows_every_channel_off(app, config):
+    """The driver zeroes its outputs on the way out, whatever the status still holds."""
+    display, garment = _display(config)
+    on = garment.channels()[0]
+    garment.set_pressure(on, garment.limits.pressure_ceiling_kpa / 2)
+    garment.set_channel(on, True)
+    display.poll(T0_S + 1)
+    garment.disconnect()
+    display.poll(T0_S + 10)
+    assert all(state == (False, 0.0) for state in display.states.values())
+    assert display.notice() == config.experimenter_text["demo"]["garment_not_connected"]
+
+
+def test_it_redraws_only_on_a_change_or_a_fading_highlight(app, config, monkeypatch):
+    display, garment = _display(config)
+    redraws = []
+    monkeypatch.setattr(display, "update", lambda: redraws.append(True))
+    display.poll(T0_S + 1)
+    assert redraws == [], "steady: nothing to redraw"
+    garment.set_channel(garment.channels()[0], True)
+    display.poll(T0_S + 2)
+    display.poll(T0_S + 2 + display.highlight_s / 2)
+    display.poll(T0_S + 2 + display.highlight_s)
+    assert len(redraws) == 3, "the change, the fade, and its end"
+    display.poll(T0_S + 3 + display.highlight_s)
+    assert len(redraws) == 3
+
+
+def test_it_polls_only_while_shown(app, config):
+    display, _ = _display(config)
+    assert not display.timer.isActive()
+    display.show()
+    assert display.timer.isActive()
+    display.hide()
+    assert not display.timer.isActive()
 
 
 def test_its_size_holds_whatever_the_readings(app, config):

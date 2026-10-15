@@ -10,8 +10,8 @@ Six entries, so the auxiliary tools are reachable without the command line:
    question (SPEC.md 15).
 1a. **Run a demo.** The same dialog for a demonstration (`tatp/demo.py`, docs/LOG.md N7.D23):
    its own code and folder, the garment -- the mock unless another is chosen, and then real
-   time only -- and the speed and who presses -- a person or a simulation, for the
-   participant and the experimenter apart.
+   time only, with a person as the participant -- and the speed and who presses -- a person
+   or a simulation, for the participant and the experimenter apart.
 2. **Instruments and environment** (`tatp/instruments.py`).
 3. **Design a pattern.** `tools/design_pattern.py`, in its own window. For S only: it shows
    pattern names and shapes, which a blinded experimenter must not see (SPEC.md 16), and its
@@ -72,8 +72,8 @@ from tatp.demo import (
     REAL_TIME_SPEED,
     check_speed,
     demo_config,
-    real_garment,
     resolved,
+    worn_garment,
 )
 from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
@@ -356,8 +356,9 @@ class SessionDialog(QDialog):
         self.demo_speed.setRange(REAL_TIME_SPEED, float(demo["max_clock_speed"]))
         # Checked, not clamped: a configured default out of range is refused at once, as the
         # command line refuses it (tatp.demo.check_speed).
-        self.demo_speed.setValue(check_speed(demo, float(demo["clock_speed"])))
-        self.garment.currentIndexChanged.connect(self._demo_garment_changed)
+        self.demo_speed.setValue(check_speed(demo, float(demo["clock_speed"]), DEMO_GARMENT))
+        # The speed set while the mock was chosen, given back when it is chosen again.
+        self._mock_speed = self.demo_speed.value()
         modes = [(self.text["demo"]["modes"][mode], mode) for mode in MODES]
         self.sim_participant = self._options(modes)
         self.sim_experimenter = self._options(modes)
@@ -370,15 +371,22 @@ class SessionDialog(QDialog):
         self.demo_speed.valueChanged.connect(self._stale)
         self.sim_participant.currentIndexChanged.connect(self._stale)
         self.sim_experimenter.currentIndexChanged.connect(self._stale)
+        self.garment.currentIndexChanged.connect(self._demo_garment_changed)
 
     def _demo_garment_changed(self, *_) -> None:
-        """A real garment runs a demonstration at real time only (tatp.demo.check_speed): the
-        speed goes to it and stays there until the mock is chosen again."""
+        """A worn garment runs a demonstration at real time with a person as the participant
+        (tatp.demo.check_speed, check_participant). Where the command line refuses the
+        other choices, here they are set and held, and the speed set for the mock is given
+        back when it is chosen again."""
         garment = self.garment.currentData()
-        worn = garment is not None and real_garment(garment)
-        if worn:
-            self.demo_speed.setValue(REAL_TIME_SPEED)
+        worn = garment is not None and worn_garment(garment)
+        if worn and self.demo_speed.isEnabled():
+            self._mock_speed = self.demo_speed.value()
+        self.demo_speed.setValue(REAL_TIME_SPEED if worn else self._mock_speed)
         self.demo_speed.setEnabled(not worn)
+        if worn:
+            self.sim_participant.setCurrentIndex(self.sim_participant.findData(OFF))
+        self.sim_participant.setEnabled(not worn)
 
     def _options(self, options: list[tuple[str, object]]) -> QComboBox:
         """A choice with no placeholder: each option is a fair default."""

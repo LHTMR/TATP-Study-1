@@ -41,6 +41,7 @@ from tatp.demo import (
     DemoControls,
     DemoError,
     begin_run,
+    check_participant,
     check_speed,
     demo_config,
     resolved,
@@ -109,7 +110,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="the garment driver for this session, e.g. arduino_mosfet for the prototype "
         "sleeve; hardware.yaml's garment.driver when not given, and the mock for a "
-        "demonstration, which on any other garment runs at real time only",
+        "demonstration, which on any other garment runs at real time only, with a person as "
+        "the participant",
     )
     parser.add_argument(
         "--clock-speed",
@@ -366,7 +368,8 @@ def main(argv: list[str] | None = None) -> int:
 
 def demo_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:
     """A demonstration's configuration, and its code, speed and garment set in `args`: the
-    mock unless `--garment` names another, which then runs at real time only (tatp/demo.py)."""
+    mock unless `--garment` names another, which, being worn, is refused above real time or
+    with a simulated participant (tatp/demo.py)."""
     settings = loaded.study1["demo"]
     if args.garment is None:
         args.garment = DEMO_GARMENT
@@ -375,6 +378,7 @@ def demo_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:
     )
     try:
         check_speed(settings, args.clock_speed, args.garment)
+        check_participant(args.garment, args.sim_participant)
     except DemoError as error:
         raise SystemExit(str(error)) from error
     args.participant = settings["participant_code"]

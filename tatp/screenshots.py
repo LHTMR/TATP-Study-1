@@ -149,6 +149,7 @@ SAMPLE_DEMO_PRESSURE_FRACTION = 0.6
 SAMPLE_DEMO_CHANNELS_ON = (2, 3)
 SAMPLE_DEMO_CHANGED = 4
 SAMPLE_DEMO_CHANGED_AGO_S = 0.2
+SAMPLE_DEMO_LOST = "no reply from the device"
 SAMPLE_RESUME_BLOCKS = ("1", "2", "3", "4")
 SAMPLE_RESUME_AGO_MIN = 72
 SAMPLE_SESSION_NUMBER = 1
@@ -810,10 +811,12 @@ class _SampleDemo(QObject):
 
     stage_started = Signal(str)
 
-    def __init__(self, config: cfg.Config):
+    def __init__(self, config: cfg.Config, worn: bool = False):
         super().__init__()
         self.runner = self
         self.session = self
+        # Drawn as on a worn garment (tatp/demo.py), the mock standing in for it.
+        self.worn = worn
         self.settings = config.study1["demo"]
         self.garment = MockGarment(Limits.from_config(config.hardware), Clock())
         self.garment.connect()
@@ -888,9 +891,9 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         _grab_dialog(demo),
     )
     controls = DemoControls(_SampleDemo(config), config.experimenter_text)
+    # Drawn at the moments each shot names: its timer runs only while shown, which a grab
+    # does not do.
     display = controls.garment_display
-    # Drawn at the moments the shot names, not whenever its timer next fires.
-    display.timer.stop()
     yield Shot(
         f"experimenter_{language}_demo_controls",
         f"The Demo controls window beside a demonstration (docs/LOG.md N7.D23, N7.F12f): what "
@@ -910,6 +913,17 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"{SAMPLE_DEMO_CHANGED} was turned on (docs/LOG.md N7.F12f): its row lit and its bar "
         f"outlined, fading back over demo.garment_highlight_s ({language}).",
         _grab_dialog(controls),
+    )
+    worn = DemoControls(_SampleDemo(config, worn=True), config.experimenter_text)
+    worn.demo.garment.lost(SAMPLE_DEMO_LOST)
+    worn.garment_display.poll(time.monotonic())
+    yield Shot(
+        f"experimenter_{language}_demo_controls_worn_link_lost",
+        f"The Demo controls on a worn garment, its link lost (docs/LOG.md N7.F12f): the "
+        f"participant a person and Finish this stage off, said in amber; the channels held "
+        f"at their last command in amber, not shown switching off, with the warning that the "
+        f"outputs may still hold it (N7.U16) ({language}).",
+        _grab_dialog(worn),
     )
 
     dialog = launcher.session_dialog()
