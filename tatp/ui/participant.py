@@ -334,7 +334,8 @@ class _ControlScreen(QWidget):
         self.pair: tuple[str, str] | None = None
         self.playing: int | None = None
 
-    def present(self, opening: str, controls: dict, pair: tuple[str, str] | None = None) -> None:
+    def present(self, opening: str, controls: dict,
+                pair: tuple[str, str] | None = None) -> None:
         """`opening` goes above the buttons; `controls` is one `participant_controls` entry;
         `pair` names the two alternating touches, on the channel match only."""
         self.target = opening

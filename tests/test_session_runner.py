@@ -1250,7 +1250,8 @@ def test_a_resume_while_a_delivery_is_starting_never_leaves_the_paused_screen_up
     session, window = runner.session, runner.rig.participant
     interruptions = runner.rig.interruptions
     runner._deliver(lambda: None)
-    runner.run_child(lambda: TouchBlock(runner.rig, runner.reference_channel, 1), lambda _: None)
+    runner.run_child(lambda: TouchBlock(runner.rig, runner.reference_channel, 1),
+                     lambda _: None)
     interruptions.pause()
     paused = loaded.participant_text["screens"]["paused"]
     assert window.message.text == paused
@@ -1279,7 +1280,8 @@ def test_a_self_start_prompt_stays_up_while_a_block_waits_for_its_go(app, loaded
         assert time.monotonic() < deadline, "the self-start prompt never came up"
         QApplication.processEvents()
         time.sleep(0.0005)
-    runner.run_child(lambda: TouchBlock(runner.rig, runner.reference_channel, 1), lambda _: None)
+    runner.run_child(lambda: TouchBlock(runner.rig, runner.reference_channel, 1),
+                     lambda _: None)
     assert window.message.text == self_start
     press(window, "f5")
     assert window.message.text == loaded.participant_text["screens"]["standby"]

@@ -688,8 +688,8 @@ def _experimenter_states(config: cfg.Config) -> dict:
         "session_complete": (
             "The last state: the session closed and every file written, the garment to come "
             "off, and Next step to close the program (docs/LOG.md N7.F11c9). The garment is "
-            "shown disconnected, as closing the session leaves it, and Connect garment and Pause "
-            "are disabled: nothing is left to pause or to connect again.",
+            "shown disconnected, as closing the session leaves it, and Pause and the garment "
+            "button are withdrawn: nothing is left to pause or to connect again.",
             {"phase": "session_end", "elapsed_s": SAMPLE_ELAPSED_S, "garment_connected": False,
              "hardware": {**SAMPLE_HARDWARE, "connected": False}},
             lambda window: (
