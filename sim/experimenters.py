@@ -12,7 +12,8 @@ The normal experimenter runs a whole session from the experimenter screen, and o
   screen for well under a millisecond.
 - **It presses Next step whenever the screen says the software is waiting for it** -- the
   garment fitted, the thermode started, the capsaicin, the next block, the next mapping path,
-  the rekindle -- and presses it again to stop each mapping path. The software decides when a
+  the rekindle, the intervention's end, and at last the session complete, which closes the
+  program -- and presses it again to stop each mapping path. The software decides when a
   press counts (SPEC.md 7.4); a press it is not waiting for is ignored, as the lab's would be.
 - **It enters the four mapping distances** once a time point's four paths have run.
 - **It resumes after an interruption**, through `resume_requested`, after `resume_after_s` of
@@ -54,6 +55,9 @@ SCENARIO_ENDED = "validator: the scenario's error path is over"
 PROCEED_INSTRUCTIONS = (
     "fit_garment", "thermode_start", "capsaicin_apply", "capsaicin_remove",
     "intervention_start", "thermode_rekindle", "ready", "touchcal_uneven", "earplugs",
+    # The intervention's end, told to the participant, and the session complete, whose Next
+    # step closes the program (docs/LOG.md N7.F11c9, N7.F11c10).
+    "intervention_end", "session_complete",
 )
 # Templated instructions after which the software waits for Next step. The VAS training: the
 # anchors and proportionality explained aloud, then the go (SPEC.md 10.6).

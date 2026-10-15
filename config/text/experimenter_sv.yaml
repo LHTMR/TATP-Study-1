@@ -134,6 +134,8 @@ instructions:
     Övning med stoppknappen: deltagaren trycker nu på stoppknappen. När stoppskärmen visas,
     tryck på Återuppta. Tryck på Nästa steg bara om deltagaren inte kan trycka.
   stop_rehearsal_resume: Stoppet registrerades. Tryck på Återuppta för att fortsätta inför deltagaren.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  touchcal_intro: 'Beröringskalibrering, steg {step}: deltagaren läser om vad som kommer härnäst.'
   touchcal_bracket: 'Beröringskalibrering, steg 1: deltagaren ställer in beröringen på mittkanalen.'
   # DRAFT (LOG N7.F8c): the progress, "x/N answered" (S, 5 Oct 2026).
   touchcal_estimation: 'Beröringskalibrering, steg 2: deltagaren skattar en serie beröringar. {answered}/{total} besvarade.'
@@ -168,9 +170,17 @@ instructions:
   waiting: Väntar på nästa schemalagda steg. Nedräkningen visar när det ska starta.
   capsaicin_remove: Ta bort capsaicinet och tryck sedan på Nästa steg för att börja mätningarna efter sensitiseringen.
   intervention_start: Interventionen börjar nu. Tryck på Nästa steg för att starta beröringen.
-  touch_block: 'Skattningsblock för beröring: deltagaren skattar beröringen.'
+  # DRAFT (LOG N7.F11c7): written by the build, not ethics-sourced
+  touch_block: 'Skattningsblock för beröring: deltagaren skattar beröringen. {answered}/{total} besvarade.'
   baseline_ratings: 'Utgångsläge: deltagaren skattar hur hen känner sig just nu.'
-  intervention_end: Interventionen är slut och plagget har stängts av.
+  # DRAFT (LOG N7.F11c10): written by the build, not ethics-sourced
+  intervention_end: >-
+    Interventionen är slut och plagget är avstängt. Säg till deltagaren: ”Beröringen är slut. Nu
+    gör vi om hudmätningarna från början av besöket.” Tryck sedan på Nästa steg.
+  # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced
+  session_complete: >-
+    Sessionen är klar. Alla data är sparade. Ta av plagget och berätta för deltagaren att besöket
+    är slut. Tryck på Nästa steg för att stänga programmet.
   # SPEC.md 15: en session som återupptas under återuppvärmningen ber aldrig om värmen igen.
   rekindle_resumed: >-
     Sessionen återupptogs under återuppvärmningen. Värmen startades före avbrottet och efterfrågas
@@ -340,7 +350,8 @@ dialogs:
   resume_since_sensitisation: 'Sensitiseringen började för {hours} h {minutes} min sedan.'
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   resume_not_sensitised: Sensitiseringen hade inte börjat.
-  distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem nu, eller avsluta sessionen med dem flaggade som saknade.
+  # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced
+  distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem med Kartläggningsavstånd…, eller tryck på Nästa steg för att avsluta med dem registrerade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
   error: Fel

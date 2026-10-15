@@ -976,3 +976,120 @@ def test_the_touch_start_looks_the_same_to_the_experimenter_in_every_condition(
     for sequence in sequences:
         moved_s = sequence[-1][1] - sequence[0][1]
         assert display_s - EARLY_S <= moved_s < display_s + TIMING_TOLERANCE_S
+
+
+# -- around and between the tasks (15 Oct 2026 pilot review, LOG N7.F11c) --------------------
+
+
+def _confirmed_screens(session) -> list[str]:
+    return [r["detail"] for r in _events(session) if r["event"] == "message_confirmed"]
+
+
+def test_each_new_kind_of_task_is_introduced_and_confirmed(finished):
+    """Touch calibration ran seven tasks back to back with nothing saying the task had
+    changed (N7.F11c1). Each is now introduced, and the participant's ▶ starts it."""
+    intros = [s for s in _confirmed_screens(finished.session) if s.startswith("intro_")]
+    assert intros == [
+        "intro_bracket", "intro_estimation", "intro_match", "intro_compare", "intro_pleasant",
+        "intro_baseline",
+    ]
+
+
+def test_consecutive_ratings_are_separated_by_the_gap(finished):
+    """The next scale never replaces the last at once (UI_PRINCIPLES.md 1.10, N7.F11c7).
+    Timed in the blocks; the baseline's ratings come before t=0, with no session time, and
+    wait the same way."""
+    gap_s = float(finished.session.config.study1["touch_block"]["gap_s"])
+    confirmed_s = None
+    gaps = []
+    for row in _events(finished.session):
+        if not row["t_session_s"]:
+            continue
+        if row["event"] == "rating_confirmed":
+            confirmed_s = float(row["t_session_s"])
+        elif row["event"] == "rating_cued" and confirmed_s is not None:
+            gaps.append(float(row["t_session_s"]) - confirmed_s)
+            confirmed_s = None
+        elif row["event"] in ("stage_completed", "block_ended"):
+            confirmed_s = None
+    assert gaps, "a block or the baseline rates more than once"
+    assert min(gaps) >= gap_s * 0.95
+
+
+def test_the_intervention_end_waits_for_the_experimenter(finished):
+    """The experimenter tells the participant before the measures begin again (N7.F11c10)."""
+    events = [(r["event"], r["detail"]) for r in _events(finished.session)]
+    ended = events.index(("garment_deactivated", "the intervention has ended"))
+    done = events.index(("stage_completed", "intervention.end"))
+    assert ("proceed", "SessionRunner") in events[ended:done]
+
+
+def test_the_session_ends_on_the_experimenters_last_next_step(app, loaded, tmp_path,
+                                                              monkeypatch):
+    """Both windows vanished the moment the files closed, and nobody saw that the data were
+    saved (N7.F11c9). Now the files close, the screens say so, and Next step ends it."""
+    runner = make_runner(loaded, tmp_path)
+    quits = []
+    monkeypatch.setattr(runner, "_end_program", lambda: quits.append(1))
+    Driver(runner.rig, runner).run()
+    session, participant = runner.session, runner.rig.participant
+    assert runner.completed and session.closed and not quits
+    assert participant.message.text == participant.text["screens"]["session_end"]
+    assert runner.experimenter.instruction.text() == (
+        runner.experimenter.text["instructions"]["session_complete"]
+    )
+    rows = len(_events(session))
+    # Nothing is running to stop, and the files take no more rows.
+    participant.emergency_stop.emit()
+    runner.experimenter.pause_requested.emit()
+    assert len(_events(session)) == rows
+    assert participant.message.text == participant.text["screens"]["session_end"]
+    runner.experimenter.proceed_requested.emit()
+    assert quits == [1]
+
+
+def test_a_resume_after_the_intervention_has_ended_does_not_start_the_touch(app, loaded,
+                                                                             tmp_path):
+    """A crash while the experimenter is telling the participant the touch has finished: the
+    resume waits for them again, and the garment is not started in between (N7.F11c10)."""
+    crashed = _crash_after(app, loaded, tmp_path, "the intervention has ended",
+                           event="garment_deactivated")
+    runner = _resumed(loaded, tmp_path, crashed)
+    assert runner.resume.in_progress == "intervention.end"
+    Driver(runner.rig, runner, stop_when=lambda: any(
+        r["event"] == "stage_completed" and r["detail"] == "intervention.end"
+        for r in _events(runner.session)
+    )).run()
+    names = [r["event"] for r in _events(runner.session)]
+    assert "garment_activated" not in names
+    assert "proceed" in names[names.index("garment_deactivated"):]
+    runner.cancel()
+    runner.session.close()
+
+
+def test_a_self_start_prompt_stays_up_while_a_block_waits_for_its_go(app, loaded, tmp_path):
+    """A block arriving before the self-start press took the prompt down (N7.F11c8): its wait
+    for the go now shows what the runner shows between steps, and after the press, standby."""
+    runner = make_runner(loaded, tmp_path, condition="participant_preferred")
+    session, window = runner.session, runner.rig.participant
+    session.start_sensitisation()
+    session.set_phase("intervention")
+    session.vas_trained.update(session.trained_scales)
+    levels = {channel: 30.0 for channel in session.garment.channels()}
+    runner.deliveries = {
+        name: Delivery("sweep_03cms", levels)
+        for name in loaded.study1["design"]["conditions"]
+    }
+    self_start = loaded.participant_text["screens"]["self_start"]
+    runner._deliver(lambda: None)
+    deadline = time.monotonic() + RUN_TIMEOUT_S
+    while window.message.text != self_start:
+        assert time.monotonic() < deadline, "the self-start prompt never came up"
+        QApplication.processEvents()
+        time.sleep(0.0005)
+    runner.run_child(lambda: TouchBlock(runner.rig, runner.reference_channel), lambda _: None)
+    assert window.message.text == self_start
+    press(window, "f5")
+    assert window.message.text == loaded.participant_text["screens"]["standby"]
+    runner.cancel()
+    session.close()

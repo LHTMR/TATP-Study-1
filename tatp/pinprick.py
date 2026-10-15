@@ -970,7 +970,7 @@ class _Series(Procedure):
         """
 
         def prepare() -> None:
-            self.participant.show_blank()
+            self.rig.show_between()
             self.experimenter.set_instruction(self.experimenter.text["instructions"]["ready"])
             self.experimenter.refresh()
 

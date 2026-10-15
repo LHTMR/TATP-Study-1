@@ -55,7 +55,7 @@ from tatp.remote_keys import key_source
 from tatp.session import Session
 from tatp.trials import VasTraining
 from tatp.ui.experimenter import ExperimenterWindow
-from tatp.ui.participant import ParticipantWindow, RemoteKeyRouter
+from tatp.ui.participant import STANDBY_SCREEN, ParticipantWindow, RemoteKeyRouter
 from tatp.units import MS_PER_S
 
 # `log` event names (docs/DATA_SCHEMA.md) and an experimenter text key, not wording.
@@ -79,6 +79,11 @@ class Rig(QObject):
         self.session = session
         self.participant = participant
         self.experimenter = experimenter
+        # What the participant sees while a protocol waits for the experimenter's go before it
+        # starts: the rest screen, not a blank identical to the one under a stimulus (15 Oct
+        # 2026 pilot review, docs/LOG.md N7.F11c8). The session runner replaces it with its
+        # own, which leaves a self-start prompt still waiting for its press in place (N7.D17).
+        self.show_between: Callable[[], None] = lambda: participant.show_message(STANDBY_SCREEN)
         self.interruptions = Interruptions(session, participant, experimenter, self)
         session.attach_interruptions(lambda: self.interruptions.active)
         # The remote's presses reach the participant window whichever window is active. The

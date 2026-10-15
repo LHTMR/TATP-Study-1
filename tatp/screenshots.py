@@ -56,7 +56,7 @@ from tatp.pinprick import F40Fit, LongResult
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source
 from tatp.responder import Action, Responder
 from tatp.resume import offer_wording
-from tatp.touchcal import FitReady
+from tatp.touchcal import MATCH_TARGET, FitReady
 from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -230,6 +230,16 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             f"their labels, and the confirm sentence, {language}.",
             _grab(window),
         )
+
+    window.show_adjustment(MATCH_TARGET, paired=True)
+    window.emphasise_adjustment(0)
+    yield Shot(
+        f"participant_{language}_adjust_{MATCH_TARGET}_first_playing",
+        f"The channel match (SPEC.md 9 step 3) while the first of its two alternating touches "
+        f"plays: 'the first' and 'the second' between the buttons, the one playing in bold and "
+        f"underlined (docs/LOG.md N7.F11c5), {language}.",
+        _grab(window),
+    )
 
     for key in sorted(k for k, v in text["audio_setup"].items() if isinstance(v, str)):
         window.show_audio_setup(key)
@@ -611,6 +621,21 @@ def _experimenter_states(text: dict) -> dict:
                 window.set_instruction(instructions["touchcal_uneven"]),
                 window.set_actions_enabled(rebalance=True),
             ),
+        ),
+        "intervention_end": (
+            "The intervention over and the garment off: what to tell the participant before "
+            "the measures begin again, then Next step (docs/LOG.md N7.F11c10). The same in "
+            "every condition.",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: window.set_instruction(instructions["intervention_end"]),
+        ),
+        "session_complete": (
+            "The last state: the session closed and every file written, the garment to come "
+            "off, and Next step to close the program (docs/LOG.md N7.F11c9). The garment is "
+            "shown disconnected, as closing the session leaves it.",
+            {"phase": "session_end", "elapsed_s": SAMPLE_ELAPSED_S, "garment_connected": False,
+             "hardware": {**SAMPLE_HARDWARE, "connected": False}},
+            lambda window: window.set_instruction(instructions["session_complete"]),
         ),
         "fit_preview_f40": (
             "The main window while the F40 fit preview (SPEC.md 11.1) is open, only with "

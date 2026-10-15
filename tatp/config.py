@@ -90,6 +90,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "touch_block.repeated_scales[*]", str, None, None),
     ("study1.yaml", "touch_block.once_scales[*]", str, None, None),
     ("study1.yaml", "touch_block.baseline_scales[*]", str, None, None),
+    ("study1.yaml", "touch_block.gap_s", NUMBER, 0, None),
     # Its entries are checked by `Session`: `[*]` here would refuse the empty list, which is a
     # valid value meaning no training.
     ("study1.yaml", "training.vas_proportionality_sessions", list, None, None),

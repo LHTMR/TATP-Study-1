@@ -25,7 +25,8 @@ and skips any later stage it does find.
    it is reactivated after (7.4, 12.3). Pinprick blocks are the short protocol on the secondary
    region at the post-S filament; touch blocks are `TouchBlock`.
 7. **Post-intervention** -- once the intervention window has closed, the measures once more.
-8. **Session end** -- outstanding mapping distances are prompted for once (8.4), then close.
+8. **Session end** -- outstanding mapping distances are prompted for once (8.4), then close;
+   the program ends on the experimenter's last Next step.
 
 **Timing** (SPEC.md 7.4). The software times and the experimenter launches. A scheduled step is
 *armed* at its planned time -- it waits, never skips and never launches itself -- and its
@@ -83,6 +84,9 @@ WELCOME_SCREEN = "welcome"
 STANDBY_SCREEN = "standby"
 SESSION_STARTING_SCREEN = "session_starting"
 END_SCREEN = "session_end"
+BASELINE_INTRO_SCREEN = "intro_baseline"
+# An experimenter text key, not wording: the last instruction, once the files are closed.
+SESSION_COMPLETE_INSTRUCTION = "session_complete"
 # Controlled vocabularies (docs/DATA_SCHEMA.md), not wording.
 PRIMARY, SECONDARY = pinprick.REGIONS
 SETUP = "setup"
@@ -228,6 +232,7 @@ class TouchBlock(Procedure):
         )
         self.channel = channel
         self.done_count = 0
+        self.gap_s = float(touch_block["gap_s"])
         # Stage boundary (CLAUDE.md). No VAS training here: every touch scale was trained
         # during the touch calibration (SPEC.md 10.6), so the intervention never contains it.
         # A scale added to the block without being trained there is a defect, stopped here
@@ -237,18 +242,18 @@ class TouchBlock(Procedure):
 
     def begin(self) -> None:
         def prepare() -> None:
-            self.participant.show_blank()
+            self.rig.show_between()
             self.experimenter.set_instruction(self.experimenter.text["instructions"]["ready"])
             self.experimenter.refresh()
 
         self.await_proceed(self._next, prepare)
 
     def _next(self) -> None:
-        if self.done_count == len(self.plan):
-            self.finish(None)
-            return
+        # "x/N answered", as in the estimation run: the same in every condition.
         self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touch_block"]
+            self.experimenter.text["instructions"]["touch_block"].format(
+                answered=self.done_count, total=len(self.plan)
+            )
         )
         scale = self.plan[self.done_count]
         self.run_trial(
@@ -260,7 +265,11 @@ class TouchBlock(Procedure):
 
     def _rated(self, _response) -> None:
         self.done_count += 1
-        self._next()
+        if self.done_count == len(self.plan):
+            self.finish(None)
+            return
+        # A blank that reads as a break before the next scale (UI_PRINCIPLES.md 1.10).
+        self.wait(self.gap_s, self._next)
 
 
 class SessionRunner(Procedure):
@@ -331,6 +340,9 @@ class SessionRunner(Procedure):
         # afterwards may close it, or it could not be resumed.
         self.left_open = False
 
+        # A protocol's own wait for the go shows what the runner shows between steps, so a
+        # self-start prompt still waiting is not taken down by a block that arrives first.
+        rig.show_between = self._show_between
         self.experimenter.abort_requested.connect(self.abort)
         # For the whole session, interruptions included (SPEC.md 11, 13).
         self.experimenter.note_entered.connect(self._note)
@@ -512,24 +524,41 @@ class SessionRunner(Procedure):
         self.session.garment.stop()
         scales = list(self.session.config.study1["touch_block"]["baseline_scales"])
 
+        gap_s = float(self.session.config.study1["touch_block"]["gap_s"])
+
         def rate(index: int) -> None:
-            if index == len(scales):
-                self._stage_done()
-                return
+            def rated(_response) -> None:
+                if index + 1 == len(scales):
+                    self._stage_done()
+                    return
+                # A blank that reads as a break before the next scale (UI_PRINCIPLES.md 1.10).
+                self.wait(gap_s, lambda: rate(index + 1))
+
             self.run_trial(
                 lambda: TouchRating(
                     self.session, self.participant, self.experimenter, scales[index],
                     self.reference_channel,
                 ),
-                lambda _: rate(index + 1),
+                rated,
             )
 
         def begin() -> None:
-            self.experimenter.set_instruction(
-                self.experimenter.text["instructions"]["baseline_ratings"]
+            # Introduced, like each task of the calibration before it (N7.F11c1). The
+            # experimenter's line is the ratings' own: the participant is reading about them.
+            def show() -> None:
+                self.participant.show_message(BASELINE_INTRO_SCREEN)
+                self.experimenter.set_instruction(
+                    self.experimenter.text["instructions"]["baseline_ratings"]
+                )
+                self.experimenter.refresh()
+
+            self.run_trial(
+                lambda: MessageConfirm(
+                    self.session, self.participant, self.experimenter, show,
+                    BASELINE_INTRO_SCREEN,
+                ),
+                lambda _: rate(0),
             )
-            self.experimenter.refresh()
-            rate(0)
 
         # Relaxation and alertness have no training sentence today, so this gives none; it is
         # here so a scale given one later is trained at its first use like every other.
@@ -637,13 +666,13 @@ class SessionRunner(Procedure):
         self._arm(at, "intervention_start", lambda: self._deliver(self._stage_done))
 
     def _intervention_end(self, at: Upcoming) -> None:
+        """The touch off, then a wait for the experimenter: they tell the participant that it
+        has finished and what comes next before the measures begin again (N7.F11c10). Until
+        15 Oct 2026 the instruction was replaced by the next stage's in the same moment."""
+
         def ended() -> None:
             self._stop_touch("the intervention has ended")
-            self.experimenter.set_instruction(
-                self.experimenter.text["instructions"]["intervention_end"]
-            )
-            self.experimenter.refresh()
-            self._stage_done()
+            self.await_proceed(self._stage_done, self._standby("intervention_end"))
 
         self._wait_until(at.due_s, ended, self._standby("waiting"))
 
@@ -705,7 +734,9 @@ class SessionRunner(Procedure):
             return
         self._delivery = None
         self.session.log("garment_activated")
-        if self._child is None:
+        # Standby unless a protocol has the screen: a block still waiting for its go has not
+        # taken it yet (N7.F11c8).
+        if self._child is None or self._child._on_go is not None:
             self.participant.show_message(STANDBY_SCREEN)
         if self._settled_then is not None:
             then, self._settled_then = self._settled_then, None
@@ -903,6 +934,8 @@ class SessionRunner(Procedure):
 
     def _session_end(self) -> None:
         self.session.clear_upcoming()
+        # Nothing more is asked of the participant, whatever the experimenter still enters.
+        self.participant.show_message(END_SCREEN)
         if self.ledger.close():
             self._finish_session()
             return
@@ -913,14 +946,38 @@ class SessionRunner(Procedure):
 
         # The ledger has put its once-only prompt up; the next go closes the session with
         # whatever is still missing flagged (SPEC.md 8.4).
-        self.await_proceed(closing, lambda: self.participant.show_message(STANDBY_SCREEN))
+        self.await_proceed(closing, lambda: self.participant.show_message(END_SCREEN))
 
     def _finish_session(self) -> None:
+        """Close the session, then wait for the experimenter's last Next step to end the
+        program (N7.F11c9). Until 15 Oct 2026 the program ended the moment the files were
+        closed, so both screens vanished and nobody saw that the data were saved.
+
+        Every file is written before the wait, so closing the window then loses nothing, and
+        an error then finds the session closed and reopens nothing (`stop_on_error`). From
+        here the files take no more rows -- a note excepted, which is the experimenter's own
+        record -- so the stop and the pause are let go: the garment is already off and
+        disconnected, and nothing is running for them to interrupt.
+        """
         self.session.log("stage_completed", detail=self.stages[self.stage_index].id)
         self.completed = True
-        self.participant.show_message(END_SCREEN)
         self.finish(None)
-        self._close("")
+        self._close_session("")
+        interruptions = self.rig.interruptions
+        self.participant.emergency_stop.disconnect(interruptions.emergency_stop)
+        self.experimenter.pause_requested.disconnect(interruptions.pause)
+        self.experimenter.distances_entered.disconnect(self.ledger.enter)
+        self.experimenter.set_mapping_phases([])
+        self.experimenter.set_instruction(
+            self.experimenter.text["instructions"][SESSION_COMPLETE_INSTRUCTION]
+        )
+        self.experimenter.set_status("")
+        self.experimenter.refresh()
+        self.experimenter.proceed_requested.connect(self._end_program)
+
+    def _end_program(self) -> None:
+        """The experimenter's last Next step, on a session already closed."""
+        QApplication.instance().quit()
 
     def _note(self, note: str) -> None:
         """SPEC.md 11's timestamped note: written, then confirmed with the time it was written,
@@ -996,12 +1053,15 @@ class SessionRunner(Procedure):
         super().cancel()
 
     def _close(self, abort_reason: str) -> None:
+        self._close_session(abort_reason)
+        QApplication.instance().quit()
+
+    def _close_session(self, abort_reason: str) -> None:
         self._clear_alarms()
         self.experimenter.refresh()
         self.session.close(abort_reason)
         if self.lock is not None:
             self.lock.release()
-        QApplication.instance().quit()
 
     # == waiting, arming and alerts (SPEC.md 7.4) ==============================================
 
@@ -1169,7 +1229,12 @@ class SessionRunner(Procedure):
             if state.in_progress == REKINDLE:
                 self._resumed_heat_t_s = state.rekindle_heat_t_s
             self._run_stage(index)
-        elif stage.phase == INTERVENTION and stage.id != "intervention.start":
+        elif stage.phase == INTERVENTION and stage.id != "intervention.start" and not (
+            # The intervention is over: the touch it would start would be stopped again at
+            # once, under the experimenter telling the participant it has finished (N7.F11c10).
+            stage.id == "intervention.end"
+            and self.session.clock.t_session_s() >= stage.upcoming.due_s
+        ):
             # The garment was on when the session crashed; it is started again, with the cue.
             self.session.set_phase(INTERVENTION)
             self._deliver(lambda: self._run_stage(index))
