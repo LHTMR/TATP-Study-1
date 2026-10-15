@@ -1,12 +1,12 @@
 # STATUS
 
-**Last updated:** 15 October 2026 (night).
+**Last updated:** 16 October 2026 (early morning, on S's MacBook).
 **Milestone:** 6 (pilotable), in progress, in lab piloting.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
-back (`CLAUDE.md`, Committing). No branch of this session is open. `pilot/swedish-docs`
-belongs to another session. `make check` needs the PC to itself: parallel test runs stall the
-whole-demo test and the validator (an investigation of that stall is under way, below).
-`main` is ahead of `origin` and not pushed.
+back (`CLAUDE.md`, Committing). **`pilot/keep-files-open` is open, reviewed (`/code-review
+high`, spec-review, fixes applied) and not merged**: `make check` cannot pass on the Mac for
+reasons unrelated to it (below), so it waits for `make check` on the lab PC. `pilot/swedish-docs`
+belongs to another session. `main` is ahead of `origin` and not pushed.
 
 ---
 
@@ -56,33 +56,45 @@ high`, spec-review) with `make check` passing on the merged tree:
 
 ## Next steps
 
-1. **On S's MacBook** (once `main` is pushed and pulled; nothing here is verified on a Mac):
-   `conda env create -f environment.yml` (first time), `conda activate tatp-study-1`,
-   `python run_session.py`. The page should show a window on this screen, the system default
-   sound, the keyboard input (← → Return, full stop stops). Continue → Run a demo. From a
-   terminal: `python run_session.py --demo --sim-participant watch`. Report anything that
-   fails: always-on-top and Spaces, CoreAudio at 48 kHz, the `tatp.devices` child process,
-   fonts, key events.
-2. **The whole-demo test stall under load** (always at block.1, the first filament).
-   Investigated 15 Oct: reproduced with 10 parallel copies (1–2 of 10 fail). The session state
-   is consistent; one Qt timer (a pinprick trial's or the series' advance) is overdue and never
-   delivered to the test's own `processEvents()` + `sleep` pump; a `QTest.qWait` at the stall
-   delivers it and the session carries on. Real sessions run under `app.exec()` and are not
-   known to be affected. Not fully explained. Proposed (test only, not yet applied or proven):
-   replace the 300 s whole-run deadline with a stall detector that resets on log progress, and
-   pump with `QTest.qWait(1)`; re-run the 10-copy check
+1. **Merge `pilot/keep-files-open` from the lab PC** (N7.F13a): pull, `make check`; if it
+   passes, merge `--no-ff` into `main`, `make check` on `main`, delete the branch. It keeps the
+   data files open (unbuffered) instead of reopening them per row, which Microsoft Defender
+   made cost 14 ms a row on S's MacBook. That cost was the cause of the stalls: on the Mac it
+   took `make check` from 1 h 42 min with five stalled tests and a hung validator to a 3½-min
+   suite and a 206 s validator with no stalls. **Very probably the same as the lab PC's
+   whole-demo stall under parallel load** (formerly step 2 here; not checked on the lab PC).
+   Re-run the 10-copy check there after the merge
    (`make test-one ARGS="tests/test_demo.py::test_a_whole_demonstration_runs_quarantined_and_recorded_as_one -n 10 --dist=each"`).
-   The same pump idiom is in tests/test_protocol_a.py, test_protocol_b.py,
-   test_session_runner.py and tests/virtual_participant.py.
-3. **Re-run the lab session with the new screens**, starting at the hardware page: the sound
+2. **Make `make check` pass on a Mac** (all pre-existing, none caused by the change above):
+   - lint: conda-forge's osx `ruff` 0.17 has no Python module, so `python -m ruff` fails; the
+     Makefile could call `ruff check .`;
+   - two tests assume the lab platform without pinning it:
+     `test_devices.py::test_the_lab_setup_changes_nothing` (`key_source`) and
+     `test_hardware_check.py::test_a_device_that_cannot_play_at_the_configured_settings_says_why`
+     (`stand_in`, which N7.F12e5 says is right off `lab_platform`);
+   - six font-metric tests (`test_ui.py` interruption line 29 px > 28 px, `test_vas.py` ×4) and
+     218 of 220 screenshots differ, because the references and metrics come from the lab PC.
+   - The STATUS demo command lacked `--session` and `--experimenter`; it is
+     `python run_session.py --demo --sim-participant watch --session 1 --experimenter SM --garment mock`.
+3. **On S's MacBook, by hand** (only started so far: the automatic demo ran 90 s without an
+   error; no one watched the windows). Check always-on-top and Spaces, CoreAudio at 48 kHz, the
+   `tatp.devices` child process, fonts, key events. The conda shell function is broken in the
+   Claude app's shell there; `Makefile.local` points `make` at
+   `/Users/sarmc72/miniconda3/bin/conda`.
+4. **Left open from the review of N7.F13a:** at the validator's 1000× clock the pattern timer is
+   always due and can still starve every other timer, including the validator's own 120 s
+   guard, on a slow enough machine; a floor on timer intervals in wall time, or a guard outside
+   the Qt loop, would turn a hang into a failure. A batch only partly written before a write
+   error is retried whole, leaving a broken line (pre-existing, no row lost).
+5. **Re-run the lab session with the new screens**, starting at the hardware page: the sound
    device, a note and its confirmation, walk a session as both people (intros, read-aloud
    lines, the session end), try a re-calibration in calibration and in the intervention; and
    the 5 Oct checks still open (R400 hold acceleration N7.F7b, the touch-calibration pause R32,
    Skip calibration, the HP at 1.5, remote routing N7.I1, alerts over the noise, N2.9).
-4. **L15: the lab check N2.10** (seven steps in LOG).
-5. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
-6. **The adversarial review** (spec-review, §17.6) over the whole build before Milestone 6.
-7. **Left open, not blocking:** preflight's sound check can freeze the launcher up to 8 s
+6. **L15: the lab check N2.10** (seven steps in LOG).
+7. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
+8. **The adversarial review** (spec-review, §17.6) over the whole build before Milestone 6.
+9. **Left open, not blocking:** preflight's sound check can freeze the launcher up to 8 s
    (N7.F12e2); the 640 px laptop-height target is exceeded in the pilot case (fine at
    1280×800); the emergency stop does not stop the white noise; the hold-acceleration integral
    is duplicated (N7.F7b); the screenshot tolerance hides glyph-sized changes;
