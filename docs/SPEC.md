@@ -621,8 +621,13 @@ has no entry: it is a button the participant is told about, never one a screen d
 - **The marker is hidden until the first press.** It then appears at **25 % if the left button
   was pressed first, 75 % if the right was.** Log which.
 - A tap moves the marker one step; a hold moves it continuously and **accelerates**, in the
-  shape of §10.3 (`vas.hold_*` in `study1.yaml`, pilot-tunable; S, 5 Oct 2026). A hold the
-  device delivers as repeated presses is still one hold. Confirm with the play button.
+  shape of §10.3 (`vas.hold_*` in `study1.yaml`, pilot-tunable; S, 5 Oct 2026). The
+  operating system's auto-repeat is ignored. A hold the device delivers as repeated down/up
+  pairs is read as one hold **only if** the first press stays down at least `hold_delay_s`
+  before its first release, and each later press comes within `hold_regrip_max_s` of the
+  release before it, by the key events' own timestamps; otherwise each press is a tap. Whether
+  the R400 meets that is the pilot key-probe check (docs/LOG.md N7.F1). Confirm with the play
+  button.
 - No numbers, no tick marks beyond the labelled anchors.
 - Record: response percent, reaction time, first-press side, number of direction changes.
 

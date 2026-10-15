@@ -11,7 +11,7 @@ import shutil
 import pytest
 import yaml
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QFontMetrics, QKeyEvent
+from PySide6.QtGui import QFocusEvent, QFontMetrics, QKeyEvent
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
@@ -78,7 +78,7 @@ def test_the_marker_is_hidden_until_the_first_press(state):
 
 def test_the_first_press_puts_the_marker_on_the_side_that_was_pressed(state):
     state.cue()
-    state.press(Action.DECREASE)
+    state.press(Action.DECREASE, 0.0)
     assert state.visible
     assert state.percent == state.start_left_pct == 25.0
     assert state.first_press_side == "left"
@@ -86,41 +86,41 @@ def test_the_first_press_puts_the_marker_on_the_side_that_was_pressed(state):
 
 def test_the_right_button_starts_on_the_right(state):
     state.cue()
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     assert state.percent == state.start_right_pct == 75.0
     assert state.first_press_side == "right"
 
 
 def test_the_first_press_reveals_rather_than_moves(state):
     state.cue()
-    state.press(Action.INCREASE)
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
+    state.press(Action.INCREASE, 0.0)
     assert state.percent == pytest.approx(state.start_right_pct + state.step_pct)
 
 
 def test_the_marker_cannot_leave_the_line(state):
     state.cue()
-    state.press(Action.DECREASE)
+    state.press(Action.DECREASE, 0.0)
     for _ in range(200):
-        state.press(Action.DECREASE)
+        state.press(Action.DECREASE, 0.0)
     assert state.percent == 0.0
     for _ in range(400):
-        state.press(Action.INCREASE)
+        state.press(Action.INCREASE, 0.0)
     assert state.percent == 100.0
 
 
 def test_direction_changes_are_counted(state):
     state.cue()
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     assert state.direction_changes == 0
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     assert state.direction_changes == 0
-    state.press(Action.DECREASE)
+    state.press(Action.DECREASE, 0.0)
     # The first press has a direction even though it does not move, so this is a real reversal.
     assert state.direction_changes == 1
-    state.press(Action.DECREASE)
+    state.press(Action.DECREASE, 0.0)
     assert state.direction_changes == 1
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     assert state.direction_changes == 2
 
 
@@ -128,7 +128,7 @@ def test_reaction_time_runs_from_the_rating_cue(state):
     state.clock.now = 100.0
     state.cue()
     state.clock.now = 101.5
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     state.clock.now = 103.25
     response = state.confirm()
     assert response.rt_s == pytest.approx(3.25)
@@ -138,12 +138,12 @@ def test_reaction_time_runs_from_the_rating_cue(state):
 
 def test_a_press_before_the_cue_is_a_defect_not_a_rating(state):
     with pytest.raises(RuntimeError, match="before it was cued"):
-        state.press(Action.INCREASE)
+        state.press(Action.INCREASE, 0.0)
 
 
 def test_cueing_again_clears_the_previous_response(state):
     state.cue()
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     state.cue()
     assert not state.visible
     assert state.direction_changes == 0
@@ -164,7 +164,7 @@ def test_waiting_time_is_reported_and_never_auto_advances(state):
 def _revealed_and_held(state, at_s=0.0):
     """The marker shown at 75 %, then a second right press held from `at_s`."""
     state.cue()
-    state.press(Action.INCREASE)
+    state.press(Action.INCREASE, 0.0)
     state.press(Action.INCREASE, at_s)
     return state.percent
 
@@ -215,7 +215,7 @@ def test_the_distance_depends_on_the_hold_not_on_the_ticks(state, loaded):
 def test_a_hold_crosses_the_line_faster_than_the_old_fixed_rate(state):
     """The point of the change: the old hold took about 8 s for the whole line."""
     state.cue()
-    state.press(Action.DECREASE)
+    state.press(Action.DECREASE, 0.0)
     state.press(Action.DECREASE, 0.0)
     for index in range(1, 1000):
         state.tick(index * 0.01)
@@ -243,7 +243,9 @@ def test_a_device_repeat_after_a_hold_carries_the_hold_on(state):
     state.release(Action.INCREASE, released_s)
     held_at = state.percent
     changes = state.direction_changes
-    state.press(Action.INCREASE, released_s + state.regrip_max_s / 2)
+    pressed_s = released_s + state.regrip_max_s / 2
+    assert state.regrips(Action.INCREASE, pressed_s)
+    state.press(Action.INCREASE, pressed_s, regrip=True)
     assert state.percent == pytest.approx(held_at), "a repeat is not a tap"
     state.tick(released_s + 0.2)
     assert state.percent > held_at, "the hold carries on"
@@ -256,6 +258,7 @@ def test_a_press_after_a_hold_that_let_go_long_enough_ago_is_a_tap(state):
     state.tick(released_s)
     state.release(Action.INCREASE, released_s)
     held_at = state.percent
+    assert not state.regrips(Action.INCREASE, released_s + state.regrip_max_s * 2)
     state.press(Action.INCREASE, released_s + state.regrip_max_s * 2)
     assert state.percent == pytest.approx(held_at + state.step_pct)
 
@@ -276,6 +279,7 @@ def test_the_other_button_after_a_hold_is_a_tap_and_a_reversal(state):
     state.tick(released_s)
     state.release(Action.INCREASE, released_s)
     held_at = state.percent
+    assert not state.regrips(Action.DECREASE, released_s + state.regrip_max_s / 2)
     state.press(Action.DECREASE, released_s + state.regrip_max_s / 2)
     assert state.percent == pytest.approx(held_at - state.step_pct)
     assert state.direction_changes == 1
@@ -795,6 +799,105 @@ def test_taps_through_the_widget_are_one_step_each_however_fast(widget):
         _key(widget, QEvent.KeyPress, "pagedown", 5000 + index * 40)
         _key(widget, QEvent.KeyRelease, "pagedown", 5000 + index * 40 + 20)
         assert widget.state.percent == pytest.approx(start + index * widget.state.step_pct)
+
+
+# -- review findings on the hold (integrator, 15 Oct 2026) -----------------------------------
+
+
+def _hold_from(widget, start_s=10.0, stamp_ms=1000):
+    """The marker revealed at 75 %, then the left button pressed at `start_s` and held."""
+    _press(widget, "pagedown")
+    widget.clock.now = start_s
+    _key(widget, QEvent.KeyPress, "pageup", stamp_ms)
+    return widget.state.percent
+
+
+def test_a_stalled_tick_cannot_carry_a_hold_past_its_release(widget):
+    """The marker is where the hold put it at the release's own time, whatever ran late."""
+    tapped = _hold_from(widget)
+    widget.clock.now = 12.0  # a stall lets a tick run 1.2 s after the button went up
+    widget._on_tick()
+    _key(widget, QEvent.KeyRelease, "pageup", 1800)
+    assert tapped - widget.state.percent == pytest.approx(widget.state._travel(0.5))
+
+
+def test_a_clean_release_keeps_the_travel_since_the_last_tick(widget):
+    tapped = _hold_from(widget)
+    widget.clock.now = 10.78
+    widget._on_tick()
+    widget.clock.now = 10.8
+    _key(widget, QEvent.KeyRelease, "pageup", 1800)
+    assert tapped - widget.state.percent == pytest.approx(widget.state._travel(0.5), rel=1e-9)
+
+
+def test_a_tap_just_after_a_hold_is_judged_on_the_stamps(widget):
+    """Pressed 0.2 s after the hold let go by the device's stamps, it is a tap, even when its
+    handler runs only 10 ms after the release's."""
+    _hold_from(widget)
+    widget.clock.now = 10.8
+    widget._on_tick()
+    _key(widget, QEvent.KeyRelease, "pageup", 1800)
+    held_at = widget.state.percent
+    widget.clock.now = 10.81
+    _key(widget, QEvent.KeyPress, "pageup", 2000)
+    assert widget.state.percent == pytest.approx(held_at - widget.state.step_pct)
+
+
+@pytest.mark.parametrize("ending", ("focus_out", "hide", "show_scale"))
+def test_a_hold_whose_release_never_arrives_ends(widget, loaded, ending):
+    """A release routed to an experimenter text field, or lost when an emergency stop's screen
+    takes the focus, must not leave the marker running to the end of the line."""
+    widget.show()
+    _hold_from(widget)
+    if ending == "focus_out":
+        widget.focusOutEvent(QFocusEvent(QEvent.FocusOut))
+    elif ending == "hide":
+        widget.hide()
+    else:
+        widget.show_scale("pain", loaded.participant_text["vas"]["pain"])
+    stopped_at = widget.state.percent
+    assert widget.state.held is None
+    assert not widget._tick.isActive()
+    widget.clock.now = 20.0
+    widget._on_tick()
+    assert widget.state.percent == stopped_at
+
+
+def test_the_timer_waits_out_the_hold_delay(widget):
+    _hold_from(widget)
+    assert widget._tick.interval() == round(widget.state.hold_delay_s * 1000)
+
+
+def test_a_hold_repaints_only_when_the_marker_moves(widget, monkeypatch):
+    _hold_from(widget)
+    painted = []
+    monkeypatch.setattr(widget, "update", lambda *args: painted.append(1))
+    widget.clock.now = 10.0 + widget.state.hold_delay_s / 2
+    widget._on_tick()
+    assert painted == [], "repainted during the hold delay"
+    widget.clock.now = 30.0
+    widget._on_tick()
+    assert widget.state.percent == 0.0 and painted == [1]
+    widget.clock.now = 31.0
+    widget._on_tick()
+    assert painted == [1], "repainted with the marker clamped at the end of the line"
+
+
+def test_a_press_always_says_when(state):
+    state.cue()
+    with pytest.raises(TypeError):
+        state.press(Action.INCREASE)
+
+
+def test_a_tick_interval_of_zero_is_refused(tmp_path):
+    shutil.copytree(cfg.CONFIG_DIR, tmp_path / "config")
+    path = tmp_path / "config" / "study1.yaml"
+    text = path.read_text(encoding="utf-8")
+    old = "hold_tick_interval_s: 0.02"
+    assert old in text
+    path.write_text(text.replace(old, "hold_tick_interval_s: 0"), encoding="utf-8")
+    with pytest.raises(cfg.ConfigError, match="hold_tick_interval_s"):
+        cfg.load("en", "en", config_dir=tmp_path / "config")
 
 
 def test_the_widget_renders_headless(widget):

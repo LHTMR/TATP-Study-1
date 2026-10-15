@@ -467,6 +467,11 @@ def load(
                 f"scales {sorted(text['training'])}"
             )
 
+    # A VAS hold is redrawn every tick; at zero the timer would spin the event loop flat out.
+    # The schema's minimums are inclusive, so this one is checked here.
+    if loaded["study1.yaml"]["vas"]["hold_tick_interval_s"] <= 0:
+        raise ConfigError("study1.yaml: 'vas.hold_tick_interval_s' must be above 0")
+
     config = Config(
         study1=loaded["study1.yaml"],
         hardware=loaded["hardware.yaml"],
