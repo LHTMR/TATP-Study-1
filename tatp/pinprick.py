@@ -793,9 +793,25 @@ class PinprickTrial(_RatedTrial):
 
     def _connect_extra(self) -> None:
         self.experimenter.substitution_entered.connect(self._on_substitution)
+        # The one owner of the entry's offer: it is shown exactly while it is listened to.
+        self.experimenter.set_actions_enabled(substitution=True)
 
     def _disconnect_extra(self) -> None:
         self.experimenter.substitution_entered.disconnect(self._on_substitution)
+        # A filament typed and not recorded is not this trial's data, but it is not lost
+        # without trace either: it was what the experimenter meant to say about it.
+        unrecorded = self.experimenter.withdraw_substitution()
+        if unrecorded:
+            self.session.log(
+                "substitution_not_recorded", origin="experimenter", severity="warning",
+                detail=f"trial {self.trial_index}: {unrecorded}",
+            )
+            # On screen too: the experimenter meant it, and the row says otherwise.
+            self.experimenter.set_warning(
+                self.experimenter.text["warnings"]["substitution_not_recorded"].format(
+                    value=unrecorded, controls=self.experimenter.text["controls"]
+                )
+            )
 
     def _on_substitution(self, label_g: str) -> None:
         """The experimenter applied another filament than the one asked for (SPEC.md 8.2).

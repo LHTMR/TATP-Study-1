@@ -179,6 +179,13 @@ An experimenter's note (§11) is `experimenter_note`, origin `experimenter`, the
 2026 have no notes:** the field was never connected to the log, so anything typed into it then
 was lost (docs/LOG.md N7.F10a).
 
+`substitution_not_recorded` (origin `experimenter`, severity `warning`, `detail`
+`trial <n>: <what was typed>`) is written when a filament trial ends with something typed in
+the filament-applied-instead entry and Record filament never pressed. It did **not** change
+what the trial's row records as applied. The entry is offered only during a
+filament trial and emptied when it ends, so the text is never carried to the next trial
+(docs/LOG.md N7.F11a3).
+
 `software_error` (severity `error`, the exception in `detail`) is written when an error nothing
 in the software caught stops the session: the garment goes to zero, the experimenter is told
 (after setup without the exception's text, §16), and the program ends **with the session left

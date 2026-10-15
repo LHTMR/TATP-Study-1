@@ -411,6 +411,11 @@ warnings:
   substitution_unknown: No filament labelled {filament} g is held. The substitution was not recorded.
   substitution_not_lower: >-
     The {filament} g filament is not lighter than the one asked for. It is recorded as applied.
+  # DRAFT (LOG N7.F11b20): written by the build, not ethics-sourced. A filament typed in the
+  # substitution entry and never recorded when its trial ended; {controls[...]} is a button.
+  substitution_not_recorded: >-
+    "{value}" was typed as the filament applied but not recorded, so the trial keeps the one
+    asked for. If it was applied, add a note or press {controls[discard_repeat]}.
   distance_implausible: >-
     Path {path}: {value} mm is outside the plausible range. Enter the same value again to
     confirm it, or enter the corrected value.
@@ -439,16 +444,25 @@ warnings:
 banners:
   # SPEC.md 12.4: persistent and unmissable. A session run this way must be impossible to
   # mistake for a real one afterwards.
-  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. {value} is the garment's
+  # Each banner is one line on the screen; its _detail is the tooltip (LOG N7.F11a4).
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced. {value} is the garment's
   # name from terms.garments, which carries brackets of its own.
-  reduced_capability: >-
-    THIS SESSION IS NOT COLLECTING VALID TOUCH-CALIBRATION DATA. The connected device cannot
+  reduced_capability: 'NOT COLLECTING VALID TOUCH-CALIBRATION DATA: {value}'
+  # DRAFT (LOG N7.U4, N7.F11a4): written by the build, not ethics-sourced
+  reduced_capability_detail: >-
+    This session is not collecting valid touch-calibration data. The connected device cannot
     set pressure per channel: {value}. Timings are real; pressures are not.
-  placeholder_text: >-
-    PARTICIPANT SCREENS STILL CONTAIN PLACEHOLDER TEXT. Do not run a real participant.
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced
+  placeholder_text: 'DO NOT RUN A REAL PARTICIPANT: participant screens contain placeholder text.'
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced
+  placeholder_text_detail: >-
+    Some participant-screen wording is still a placeholder and has not been approved. Run
+    tests and pilots only until it is replaced.
   # SPEC.md 11.1. Unmissable, because the experimenter must not switch this on without seeing
   # what it costs.
-  fit_preview: >-
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced
+  fit_preview: 'FIT PREVIEW IS ON: you will see the participant''s ratings.'
+  fit_preview_detail: >-
     FIT PREVIEW IS ON. You will see the participant's ratings, which Bilaga 1 3.3 and the
     information sheet say you do not. The session is recorded as unblinded in that respect.
   # DRAFT (LOG N7.D23): written by the build, not ethics-sourced

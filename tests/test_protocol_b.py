@@ -280,13 +280,14 @@ def test_the_touch_preview_is_open_for_the_choice_and_closed_after(app, loaded, 
         seen = []
         virtual = Virtual(rig, procedure)
         virtual.decide = lambda trial: seen.append(
-            (window.fit_preview.isVisible(), window.fit_accept_button.isEnabled())
+            (window.fit_preview.isVisible(), not window.fit_accept_button.isHidden())
         ) or ("accept", ())
         virtual.run()
         assert seen and seen[0] == (True, True)
         assert not window.fit_preview.isVisible()
         assert window.fit_preview.plot.points == ()
-        assert not window.fit_accept_button.isEnabled()
+        # Hidden, not only disabled, once decided (15 Oct 2026 pilot review).
+        assert window.fit_accept_button.isHidden()
     finally:
         rig.session.close()
 

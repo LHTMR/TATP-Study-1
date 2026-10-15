@@ -382,22 +382,75 @@ def test_a_discard_writes_a_discards_row_and_repeats(rig):
     assert done[0].applications_total == len(rows)
 
 
-def test_discard_is_enabled_only_while_there_is_something_to_discard(rig):
+def test_discard_is_offered_only_while_there_is_something_to_discard(rig):
     """docs/LOG.md N7.U10: during the interval after a completed application, and not before,
-    during the next one, or once the protocol has ended."""
+    during the next one, or once the protocol has ended. Hidden rather than disabled when not
+    offered, since the 15 Oct 2026 pilot review."""
     experimenter, participant = rig.experimenter, rig.participant
     protocol = _long(rig)
     protocol.start()
-    assert not experimenter.discard_button.isEnabled(), "nothing has been applied yet"
+    assert experimenter.discard_button.isHidden(), "nothing has been applied yet"
     experimenter.proceed_requested.emit()
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
-    assert not experimenter.discard_button.isEnabled(), "the application is not complete"
+    assert experimenter.discard_button.isHidden(), "the application is not complete"
     _answer(participant, _observer(protocol._trial))
-    assert experimenter.discard_button.isEnabled(), "the interval after a rated application"
+    assert not experimenter.discard_button.isHidden(), "the interval after a rated application"
+    assert experimenter.discard_button.isEnabled()
     experimenter.discard_requested.emit()
-    assert not experimenter.discard_button.isEnabled(), "discarded, nothing is left to discard"
+    assert experimenter.discard_button.isHidden(), "discarded, nothing is left to discard"
     protocol.cancel()
-    assert not experimenter.discard_button.isEnabled(), "the protocol has ended"
+    assert experimenter.discard_button.isHidden(), "the protocol has ended"
+
+
+def test_the_substitution_entry_is_offered_only_while_a_filament_trial_listens(rig):
+    """A filament typed outside a filament trial reached no listener and was cleared and lost
+    (15 Oct 2026 pilot review). The trial that listens is the one that offers the entry."""
+    experimenter, participant = rig.experimenter, rig.participant
+    protocol = _long(rig)
+    assert experimenter.substitution.isHidden()
+    protocol.start()
+    experimenter.proceed_requested.emit()
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    for widget in (experimenter.substitution, experimenter.substitution_button):
+        assert not widget.isHidden() and widget.isEnabled(), "a filament trial is running"
+    # Typed and never recorded: not applied, but logged when the trial withdraws the entry.
+    experimenter.substitution.setText("15")
+    _answer(participant, _observer(protocol._trial))
+    assert experimenter.substitution.isHidden(), "the trial has ended"
+    assert experimenter.substitution_button.isHidden()
+    assert experimenter.substitution.text() == ""
+    (logged,) = [row for row in _rows(rig.session, "log")
+                 if row["event"] == "substitution_not_recorded"]
+    assert logged["origin"] == "experimenter" and logged["severity"] == "warning"
+    assert logged["detail"].endswith(": 15")
+    assert not [row for row in _rows(rig.session, "log")
+                if row["event"] == "substitution_entered"]
+    # And on screen, where it was typed (spec-review of N7.F11a; LOG N7.F11b20).
+    assert experimenter._warning_text == _not_recorded(experimenter, "15")
+    protocol.cancel()
+    assert experimenter.substitution.isHidden(), "the protocol has ended"
+
+
+def _not_recorded(experimenter, typed: str) -> str:
+    return experimenter.text["warnings"]["substitution_not_recorded"].format(
+        value=typed, controls=experimenter.text["controls"]
+    )
+
+
+def test_a_filament_typed_when_the_stop_ends_the_trial_is_warned(rig):
+    """The emergency stop cancels the trial with the entry still holding text: logged and
+    shown, as when the trial ends by its rating."""
+    experimenter, participant = rig.experimenter, rig.participant
+    protocol = _long(rig)
+    _start(protocol)
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    experimenter.substitution.setText("10")
+    participant.emergency_stop.emit()
+    assert "substitution_not_recorded" in _events(rig.session)
+    assert experimenter._warning_text == _not_recorded(experimenter, "10")
+    assert experimenter.substitution.text() == ""
+    experimenter.resume_requested.emit()
+    protocol.cancel()
 
 
 def test_a_discard_with_nothing_to_discard_is_ignored_and_logged(rig):
@@ -554,16 +607,17 @@ def test_the_f40_preview_enables_the_choice_and_closes_on_it(app, loaded, tmp_pa
     while not fits:
         _spin(lambda: fits or (rig.participant.stack.currentWidget() is rig.participant.vas))
         if not fits:
-            assert not experimenter.fit_accept_button.isEnabled()
+            assert experimenter.fit_accept_button.isHidden()
             _answer(rig.participant, _observer(protocol._trial))
+    assert not experimenter.fit_accept_button.isHidden()
     assert experimenter.fit_accept_button.isEnabled()
     assert experimenter.fit_preview.isVisible()
     experimenter.fit_accept_button.click()
     assert done
     assert not experimenter.fit_preview.isVisible()
     assert experimenter.fit_preview.plot.points == ()
-    assert not experimenter.fit_accept_button.isEnabled()
-    assert not experimenter.fit_rerun_button.isEnabled()
+    assert experimenter.fit_accept_button.isHidden()
+    assert experimenter.fit_rerun_button.isHidden()
     rig.session.close()
 
 
