@@ -3,9 +3,10 @@
 **Last updated:** 15 October 2026.
 **Milestone:** 6 (pilotable), in progress, in lab piloting. Everything to date is in `main`.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
-back (`CLAUDE.md`, Committing). Open: `pilot/remote-raw-input`, L15 (the participant's stop lost
-in a focused experimenter text field), the remote told from the experimenter's keyboard by
-Windows Raw Input (LOG N7.D22).
+back (`CLAUDE.md`, Committing). No branch open. The remote is now read by Windows Raw Input,
+apart from the experimenter's keyboard (LOG N7.D22, merged 15 Oct 2026), waiting on its lab
+check N2.10. `make check` needs the PC to itself: other sessions' test runs at 99% CPU stall
+the session runner and the validator even on `main`.
 
 ---
 
@@ -72,8 +73,8 @@ the hardware) and 5 Oct (N7.F5: the repaint stall, Run a session fits the laptop
   - L13, the noise ceiling and the cue;
   - L3, alert metering;
   - L14, a lost sleeve link;
-  - **L15, the participant's stop typed into a focused experimenter text field.** Fixed in
-    `pilot/remote-raw-input` (N7.D22); closes when the lab check N2.10 passes.
+  - **L15, the participant's stop typed into a focused experimenter text field.** Fixed
+    (N7.D22, in `main`); closes when the lab check N2.10 passes.
 
 ---
 
@@ -102,10 +103,10 @@ the hardware) and 5 Oct (N7.F5: the repaint stall, Run a session fits the laptop
        counts as ▶;
      - whether the alerts are audible over the noise;
      - taps on the adjustment are never lost or misread (N2.9).
-2. **L15:** merge `pilot/remote-raw-input` once its re-review findings are fixed and
-   `make check` passes on a quiet machine (other sessions' test runs at 99% CPU stall `main`'s
-   own code too), then run the lab check N2.10 with the R400 and the laptop keyboard. If that
-   fails, `responder.key_source: any_keyboard` restores the old routing.
+2. **L15: run the lab check N2.10** with the R400 and the laptop keyboard (seven steps in
+   `docs/LOG.md`, including Shift held, the laptop's full stop held, another program focused
+   and the receiver unplugged). If it fails, `responder.key_source: any_keyboard` restores the
+   old routing; if it passes, add `text_field_stop_decided` and L15 closes.
 3. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
 4. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
    Milestone 6 done.
