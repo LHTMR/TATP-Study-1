@@ -26,7 +26,13 @@ from typing import NamedTuple
 
 from tatp import allocation as alloc
 from tatp.config import REPO_ROOT, Config
-from tatp.remote_keys import KEY_SOURCES, RAW_INPUT, raw_input_available, remote_present
+from tatp.remote_keys import (
+    KEY_SOURCES,
+    RAW_INPUT,
+    RemoteButtons,
+    raw_input_available,
+    remote_present,
+)
 from tatp.resume import previous_session_f40, read_session_values, session_files
 from tatp.session import canonical_initials, earlier_experimenters
 
@@ -164,6 +170,8 @@ def preflight(
         f"responder.key_source is {responder['key_source']!r}; one of {KEY_SOURCES}"
     )
     if responder["key_source"] == RAW_INPUT:
+        # Every configured key must be one Windows can be asked for (asserts if not).
+        RemoteButtons([name for names in responder["keys"].values() for name in names])
         if not raw_input_available():
             findings.append(Finding(REFUSE, "preflight.remote_needs_windows", sys.platform))
         elif not remote_present(responder):

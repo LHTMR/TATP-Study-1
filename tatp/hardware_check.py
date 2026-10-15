@@ -46,6 +46,9 @@ from tatp.clock import Clock
 from tatp.garment.base import GarmentController, GarmentError, Limits
 from tatp.remote_keys import (
     RAW_INPUT,
+    RAW_INPUT_FAILED,
+    REMOTE_DISCONNECTED,
+    REMOTE_RECONNECTED,
     AnyKeyboard,
     key_source,
     raw_input_available,
@@ -203,12 +206,15 @@ class HardwareCheckDialog(QDialog):
         if responder["key_source"] == RAW_INPUT and not raw_input_available():
             self.key_source = AnyKeyboard()
         else:
-            self.key_source = key_source(
-                responder, self, self.remote_key, self._remote_changed
-            )
-        self.remote_keys = RemoteKeys(self.responder, self.pressed, self)
+            self.key_source = key_source(responder, self, self.remote_key, self._remote_event)
+        self.remote_keys: RemoteKeys | None = None
         if not self.key_source.distinguishes:
-            QApplication.instance().installEventFilter(self.remote_keys)
+            self._count_key_events()
+
+    def _count_key_events(self) -> None:
+        """Count Qt's key events, as any_keyboard does: every keyboard is the remote."""
+        self.remote_keys = RemoteKeys(self.responder, self.pressed, self)
+        QApplication.instance().installEventFilter(self.remote_keys)
 
     # -- sections ------------------------------------------------------------------------
 
@@ -254,8 +260,16 @@ class HardwareCheckDialog(QDialog):
             return self.words["remote_needs_windows"]
         return self.words["remote_found" if remote_present(responder) else "remote_missing"]
 
-    def _remote_changed(self, present: bool) -> None:
-        self.last_key.setText(self.words["remote_found" if present else "remote_missing"])
+    def _remote_event(self, event: str, _severity: str, _detail: str) -> None:
+        if event == RAW_INPUT_FAILED and self.remote_keys is None:
+            # The source now takes every keyboard as the remote, and so does the count.
+            self._count_key_events()
+        elif event in (REMOTE_DISCONNECTED, REMOTE_RECONNECTED) and not any(
+            self.presses.values()
+        ):
+            # Until the first press, the line says whether the remote is there (_remote).
+            present = event == REMOTE_RECONNECTED
+            self.last_key.setText(self.words["remote_found" if present else "remote_missing"])
 
     def remote_key(self, name: str, released: bool, repeat: bool, _time_ms: int) -> None:
         """One of the remote's raw key reports (raw_input). Counted as the filter counts."""
@@ -519,7 +533,8 @@ class HardwareCheckDialog(QDialog):
 
     def release(self, *_result) -> None:
         """Everything let go, by Close, Esc from the keyboard or the window's own X."""
-        QApplication.instance().removeEventFilter(self.remote_keys)
+        if self.remote_keys is not None:
+            QApplication.instance().removeEventFilter(self.remote_keys)
         self.key_source.close()
         self._hide_label()
         if self.audio.noise_running:

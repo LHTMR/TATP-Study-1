@@ -613,10 +613,13 @@ raw_input`, `docs/LOG.md` N7.D22). The remote is a keyboard to the operating sys
 reports keys, not devices, so the remote's buttons are read from Windows' Raw Input, which reports
 each keystroke with the device that sent it (matched by `responder.device_match`). Its presses
 reach the participant whichever window or application has focus, and whatever the experimenter's
-keyboard is doing (Shift held, a key down), so its emergency stop always stops; its own key
-messages are dropped, so it never types. Nothing typed on the experimenter's keyboard reaches the
-participant: a full stop is typed, and Esc or F5 is not a ▶. A session does not start with the
-remote missing, and the remote unplugged mid-session is logged as an error. `any_keyboard`, for
+keyboard is doing (Shift held, a key down), so its emergency stop always stops. While the session
+has focus its own key messages are dropped, so it never types; while another program has focus
+they reach that program too, which nothing can prevent for one keyboard alone. Nothing typed on
+the experimenter's keyboard reaches the participant: a full stop is typed, and Esc or F5 is not a
+▶. A session does not start with the remote missing; the remote unplugged mid-session is logged
+as an error, and if Raw Input stops reporting, that is logged and every keyboard becomes the
+remote, as under `any_keyboard`. `any_keyboard`, for
 development and the headless tests, takes every keyboard as the remote except inside a text
 field (N7.I1).
 

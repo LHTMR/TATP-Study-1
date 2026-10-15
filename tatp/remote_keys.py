@@ -22,10 +22,12 @@ an auto-repeat. A raw report carries the remote's own key, and whether the press
 decided from the remote's own reports. The safety path -- the emergency stop -- depends on
 nothing else, whichever window or application has focus.
 
-**The remote's ordinary key messages are dropped**, so its keys are never typed into whatever
-has focus as well: each key message is paired with the raw report it came from (by scan code
-and direction) and consumed when that report was the remote's. A message that cannot be paired
-is let through as typing. Either way the stop has already been delivered from the raw report.
+**The remote's ordinary key messages are dropped** while this application has focus, so its keys
+are not typed into whatever has focus as well: each key message is paired with the raw report it
+came from (by scan code and direction) and consumed when that report was the remote's. A message
+that cannot be paired is let through as typing. Either way the stop has already been delivered
+from the raw report. While another program has focus the remote's keys reach it too: Windows can
+withhold key messages only from every keyboard at once (`RIDEV_NOLEGACY`), not from one.
 """
 
 from __future__ import annotations
@@ -87,6 +89,15 @@ PENDING_REPORTS = 64
 # The keyboard list can change between asking its length and reading it; Windows then asks for
 # the call to be repeated.
 DEVICE_LIST_ATTEMPTS = 5
+# Key messages in a row with no raw report before Raw Input is taken to have stopped. More than
+# one, so a single key a driver synthesises without a report of its own does not trip it.
+UNPAIRED_LIMIT = 3
+
+# `log` event names (docs/DATA_SCHEMA.md), reported through a source's `on_event`.
+REMOTE_DISCONNECTED = "remote_disconnected"
+REMOTE_RECONNECTED = "remote_reconnected"
+REMOTE_KEY_UNKNOWN = "remote_key_unknown"
+RAW_INPUT_FAILED = "raw_input_failed"
 
 
 class RemoteKeyError(RuntimeError):
@@ -212,6 +223,10 @@ class RemoteButtons:
         self._down.add(vkey)
         return name, False, repeat
 
+    def release_all(self) -> None:
+        """Forget every held key: the remote went, and their releases will not come."""
+        self._down.clear()
+
 
 class Pairing:
     """Each key message paired with the raw report it came from. No Windows calls.
@@ -221,7 +236,7 @@ class Pairing:
     and direction (not by virtual key, which differs between the two for numpad keys), and says
     whether to drop the message. Reports ahead of the match belong to keystrokes whose message
     never came (a key some other window took), and are dropped too. A message with no report
-    of its own leaves the queue alone and is let through.
+    of its own leaves the queue alone, is let through, and is told apart (`None`).
     """
 
     def __init__(self):
@@ -230,14 +245,15 @@ class Pairing:
     def report(self, scan_code: int, extended: bool, released: bool, remote: bool) -> None:
         self._reports.append((scan_code, extended, released, remote))
 
-    def message(self, scan_code: int, extended: bool, released: bool) -> bool:
-        """Whether this key message is the remote's, and so to be dropped."""
+    def message(self, scan_code: int, extended: bool, released: bool) -> bool | None:
+        """Whether this key message is the remote's, and so to be dropped; None if it has no
+        report."""
         for index, (code, ext, up, remote) in enumerate(self._reports):
             if (code, ext, up) == (scan_code, extended, released):
                 for _ in range(index + 1):
                     self._reports.popleft()
                 return remote
-        return False
+        return None
 
 
 class AnyKeyboard:
@@ -261,16 +277,20 @@ class RawInputKeyboards(QAbstractNativeEventFilter):
     Registered to `window`, whose native window receives every keystroke's raw report whichever
     window or application has focus (`RIDEV_INPUTSINK`), and every keyboard's arrival and
     removal (`RIDEV_DEVNOTIFY`). Unregistered by `close()`, or when that window is destroyed.
+    Only the newest open source acts: Windows sends the reports to its window alone.
 
-    `on_key(name, released, repeat, time_ms)` is called for each of the remote's key reports;
-    `on_change(present)` whenever the remote is plugged in or unplugged.
+    `on_key(name, released, repeat, time_ms)` is called for each of the remote's key reports.
+    `on_event(event, severity, detail)` reports what the session's log must show: the remote
+    unplugged and back (`REMOTE_DISCONNECTED`, `REMOTE_RECONNECTED`), a key the remote sent that
+    no button is configured for (`REMOTE_KEY_UNKNOWN`), and Raw Input failing
+    (`RAW_INPUT_FAILED`). On that last, `distinguishes` becomes False: every keyboard is then
+    the remote, as under any_keyboard, rather than none -- a spurious stop is recoverable, and a
+    lost one is not.
     """
-
-    distinguishes = True
 
     def __init__(self, responder: dict, window: QWidget,
                  on_key: Callable[[str, bool, bool, int], None],
-                 on_change: Callable[[bool], None]):
+                 on_event: Callable[[str, str, str], None]):
         super().__init__()
         self._win = _win()
         if QApplication.platformName() != "windows":
@@ -278,14 +298,19 @@ class RawInputKeyboards(QAbstractNativeEventFilter):
                 f"responder.key_source raw_input needs a real display, not the "
                 f"{QApplication.platformName()!r} platform"
             )
+        self.distinguishes = True
         self._match = responder["device_match"].upper()
         self._buttons = RemoteButtons(
             [name for names in responder["keys"].values() for name in names]
         )
         self._on_key = on_key
-        self._on_change = on_change
-        self._remotes = {handle for handle, path in _keyboards() if self._match in path.upper()}
+        self._on_event = on_event
+        self._remotes = {handle for handle, path in _keyboards() if self._is_remote(path)}
         self._pairing = Pairing()
+        self._unpaired = 0
+        self._unknown: set[int] = set()
+        # The last native message acted on: each reaches this filter twice (below).
+        self._last_message: tuple | None = None
         self._hwnd = int(window.winId())
         self._register(self._hwnd, RIDEV_INPUTSINK | RIDEV_DEVNOTIFY)
         _open.append(self)
@@ -295,6 +320,9 @@ class RawInputKeyboards(QAbstractNativeEventFilter):
     @property
     def remote_present(self) -> bool:
         return bool(self._remotes)
+
+    def _is_remote(self, path: str) -> bool:
+        return self._match in path.upper()
 
     def _register(self, hwnd: int, flags: int) -> None:
         device = self._win.RawInputDevice(
@@ -325,38 +353,63 @@ class RawInputKeyboards(QAbstractNativeEventFilter):
     # -- the native message stream -------------------------------------------------------
 
     def nativeEventFilter(self, event_type, message):  # noqa: N802 -- Qt's name
-        # Called for every native message, so the cheap test first: the message's id.
+        # Called for every native message, so the cheap tests first.
         message_id = ctypes.c_uint.from_address(int(message) + MSG_ID_OFFSET).value
-        if message_id not in WANTED_MESSAGES:
+        if message_id not in WANTED_MESSAGES or not _open or _open[-1] is not self:
             return False, 0
-        # The window procedure's copy only: the dispatcher sees the same message too.
-        if bytes(event_type) != b"windows_generic_MSG":
-            return False, 0
+        # Acted on once. Qt 6.11 passes keyboard and raw-input messages to this filter once,
+        # from the window procedure, but other posted messages twice, and other Qt versions
+        # also pass the dispatcher's copy. A key message dropped here leaves no character
+        # behind: Qt's key mapper translates it into one only after the filter lets it pass
+        # (checked with a probe on the lab laptop, 15 Oct 2026).
         msg = self._win.wintypes.MSG.from_address(int(message))
+        identity = (msg.message, msg.wParam, msg.lParam, msg.time)
+        if identity == self._last_message:
+            return False, 0
+        self._last_message = identity
         if msg.message == WM_INPUT:
             self._read(msg.lParam, msg.time, (msg.wParam & RIM_CODE_MASK) == RIM_INPUT)
             return False, 0
         if msg.message == WM_INPUT_DEVICE_CHANGE:
             self._device_changed(msg.wParam, msg.lParam or 0)
             return False, 0
+        return self._key_message(msg), 0
+
+    def _key_message(self, msg) -> bool:
+        """Pair a key message with its report; True to drop it as the remote's."""
         remote = self._pairing.message(
             (msg.lParam >> LPARAM_SCAN_SHIFT) & SCAN_CODE_MASK,
             bool((msg.lParam >> LPARAM_EXTENDED_BIT) & 1),
             KEY_MESSAGES[msg.message],
         )
-        # The remote's key message is consumed: its press has been delivered from the report.
-        return remote, 0
+        if remote is not None:
+            self._unpaired = 0
+            return remote
+        # Every keystroke this application receives brings its raw report first, so a run of
+        # key messages without one means Raw Input has stopped -- and with it the remote.
+        self._unpaired += 1
+        if self.distinguishes and self._unpaired >= UNPAIRED_LIMIT:
+            self.distinguishes = False
+            self._on_event(RAW_INPUT_FAILED, "error",
+                           f"{self._unpaired} keystrokes in a row without a raw report")
+        return False
 
     def _device_changed(self, change: int, handle: int) -> None:
         # A removed device's path cannot be asked for any more, so the remote's handles are
         # remembered from when they arrived.
         was_present = self.remote_present
-        if change == GIDC_ARRIVAL and self._match in _device_path(handle).upper():
+        if change == GIDC_ARRIVAL and self._is_remote(_device_path(handle)):
             self._remotes.add(handle)
         elif change == GIDC_REMOVAL:
             self._remotes.discard(handle)
-        if self.remote_present != was_present:
-            self._on_change(self.remote_present)
+        if self.remote_present == was_present:
+            return
+        if self.remote_present:
+            self._on_event(REMOTE_RECONNECTED, "warning", "")
+        else:
+            # A button held as it went has no release to come; its next press is not a repeat.
+            self._buttons.release_all()
+            self._on_event(REMOTE_DISCONNECTED, "error", "")
 
     def _read(self, handle, time_ms: int, foreground: bool) -> None:
         win = self._win
@@ -370,24 +423,29 @@ class RawInputKeyboards(QAbstractNativeEventFilter):
             return
         flags = report.keyboard.Flags
         released = bool(flags & RI_KEY_BREAK)
+        vkey = report.keyboard.VKey
         remote = (report.header.hDevice or 0) in self._remotes
-        # Only a report made while this application has focus becomes a key message here.
+        button = self._buttons.report(vkey, released) if remote else None
+        # Only a report made while this application has focus becomes a key message here. A
+        # remote key no button is configured for is let through as a key, not silently lost.
         if foreground:
             self._pairing.report(
-                report.keyboard.MakeCode, bool(flags & RI_KEY_E0), released, remote
+                report.keyboard.MakeCode, bool(flags & RI_KEY_E0), released,
+                button is not None,
             )
-        if remote:
-            button = self._buttons.report(report.keyboard.VKey, released)
-            if button is not None:
-                self._on_key(*button, time_ms)
+        if remote and button is None and vkey not in self._unknown:
+            self._unknown.add(vkey)
+            self._on_event(REMOTE_KEY_UNKNOWN, "warning", f"virtual key 0x{vkey:02X}")
+        if button is not None and self.distinguishes:
+            self._on_key(*button, time_ms)
 
 
 def key_source(responder: dict, window: QWidget,
                on_key: Callable[[str, bool, bool, int], None],
-               on_change: Callable[[bool], None]):
+               on_event: Callable[[str, str, str], None]):
     """The configured key source, registered to `window` (callbacks: `RawInputKeyboards`)."""
     source = responder["key_source"]
     assert source in KEY_SOURCES, f"responder.key_source is {source!r}; one of {KEY_SOURCES}"
     if source == ANY_KEYBOARD:
         return AnyKeyboard()
-    return RawInputKeyboards(responder, window, on_key, on_change)
+    return RawInputKeyboards(responder, window, on_key, on_event)

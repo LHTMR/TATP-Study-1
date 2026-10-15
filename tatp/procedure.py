@@ -63,8 +63,6 @@ VAS_TRAINING_SHOWN = "vas_training_shown"
 VAS_TRAINING_EXPLAINED = "vas_training_explained"
 VAS_TRAINING_INSTRUCTION = "vas_training"
 VAS_TRAINING_EXPLAIN = "vas_training_explain"
-REMOTE_DISCONNECTED = "remote_disconnected"
-REMOTE_RECONNECTED = "remote_reconnected"
 
 
 class Rig(QObject):
@@ -90,14 +88,16 @@ class Rig(QObject):
         # the garbage collector's timing -- and a key event anywhere then reached a filter
         # whose window was gone (docs/LOG.md N7.I3).
         # Under raw_input the remote's presses come from its raw reports, straight to the
-        # participant window, and losing the remote mid-session is an error the log must show:
-        # from then on nothing the participant presses arrives, the stop included.
+        # participant window, and what the log must show of the remote comes with them
+        # (tatp.remote_keys): unplugged, an unknown key, Raw Input failing. Not once the session
+        # has closed -- the end screen stays up while the experimenter packs away.
+        def remote_event(event: str, severity: str, detail: str) -> None:
+            if not session.closed:
+                session.log(event, severity=severity, detail=detail)
+
         source = key_source(
             session.config.hardware["responder"], participant, participant.deliver_remote_key,
-            lambda present: session.log(
-                REMOTE_RECONNECTED if present else REMOTE_DISCONNECTED,
-                severity="warning" if present else "error",
-            ),
+            remote_event,
         )
         self._remote_keys = RemoteKeyRouter(participant, source, participant)
         QApplication.instance().installEventFilter(self._remote_keys)
