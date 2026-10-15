@@ -606,8 +606,22 @@ auto-repeat; the other three do when held, and a repeat is never a second press.
 
 **Both of the play button's keys are a confirm, and `escape` must never reach a quit binding.**
 Bound to one only, every other ▶ would be lost; left to Qt's default, every other ▶ would close
-the window. Since the remote is a keyboard to the operating system, the same keys typed on the
-experimenter's keyboard act as the remote's, except inside a text field (docs/LOG.md N7.I1).
+the window.
+
+**The remote is told apart from every other keyboard by its device** (`responder.key_source:
+raw_input`, `docs/LOG.md` N7.D22). The remote is a keyboard to the operating system, and Qt
+reports keys, not devices, so the remote's buttons are read from Windows' Raw Input, which reports
+each keystroke with the device that sent it (matched by `responder.device_match`). Its presses
+reach the participant whichever window or application has focus, and whatever the experimenter's
+keyboard is doing (Shift held, a key down), so its emergency stop always stops. While the session
+has focus its own key messages are dropped, so it never types; while another program has focus
+they reach that program too, which nothing can prevent for one keyboard alone. Nothing typed on
+the experimenter's keyboard reaches the participant: a full stop is typed, and Esc or F5 is not a
+▶. A session does not start with the remote missing; the remote unplugged mid-session is logged
+as an error, and if Raw Input stops reporting, that is logged and every keyboard becomes the
+remote, as under `any_keyboard`. `any_keyboard`, for
+development and the headless tests, takes every keyboard as the remote except inside a text
+field (N7.I1).
 
 **What is printed on each button is configuration, not code.** `responder.button_symbols` in
 `hardware.yaml` records the glyph on each button, and a screen that draws a control draws that

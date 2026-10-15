@@ -288,13 +288,80 @@ def test_a_forwarded_key_keeps_its_timestamp(rig):
 
 
 def test_typing_in_an_experimenter_field_is_not_taken_for_the_remote(rig):
-    """The stop key is a full stop, which the experimenter types in notes and distances."""
+    """Under any_keyboard: the stop key is a full stop, which the experimenter types in notes
+    and distances, and nothing tells the two apart (docs/LOG.md N7.I1)."""
     rig.participant.show()
     field = QLineEdit()
     field.show()
     rig.participant.show_message("welcome")
     _key(field, QT_KEYS["period"], QEvent.KeyPress)
     assert rig.interruptions.active is None
+
+
+class _Keyboards:
+    """A key source that tells keyboards apart, as Raw Input does. The remote's presses then
+    arrive through `ParticipantWindow.deliver_remote_key`, and every key event is another
+    keyboard's."""
+
+    distinguishes = True
+
+
+def _remote(rig, name, released=False, repeat=False):
+    """A press of the remote's, as its raw report delivers it (posted, so processed here)."""
+    rig.participant.deliver_remote_key(name, released, repeat, 100)
+    QApplication.processEvents()
+
+
+def test_the_remotes_stop_works_while_the_experimenter_is_typing(rig):
+    """Under raw_input the participant's stop never depends on focus (open item L15)."""
+    rig._remote_keys.source = _Keyboards()
+    rig.participant.show()
+    field = QLineEdit()
+    field.show()
+    field.setFocus()
+    rig.participant.show_message("welcome")
+    _remote(rig, "period")
+    assert rig.interruptions.active == "emergency_stop"
+    assert field.text() == ""
+
+
+def test_the_remotes_stop_held_is_one_stop(rig):
+    """Repeats are the remote's own (tatp.remote_keys.RemoteButtons), and ignored as before."""
+    rig._remote_keys.source = _Keyboards()
+    rig.participant.show()
+    stops = []
+    rig.participant.emergency_stop.connect(lambda: stops.append(1))
+    rig.participant.show_message("welcome")
+    _remote(rig, "period")
+    _remote(rig, "period", repeat=True)
+    assert stops == [1]
+
+
+def test_the_experimenters_full_stop_is_typed_not_a_stop(rig):
+    rig._remote_keys.source = _Keyboards()
+    rig.participant.show()
+    field = QLineEdit()
+    field.show()
+    rig.participant.show_message("welcome")
+    QApplication.sendEvent(
+        field, QKeyEvent(QEvent.KeyPress, QT_KEYS["period"], Qt.NoModifier, ".")
+    )
+    assert rig.interruptions.active is None
+    assert field.text() == ".", "typed into the field, not swallowed"
+
+
+def test_the_experimenters_keyboard_never_answers_for_the_participant(rig):
+    """Esc or F5 on the experimenter's keyboard is not ▶, even aimed at the participant."""
+    rig._remote_keys.source = _Keyboards()
+    rig.participant.show()
+    confirmed = []
+    rig.participant.message_confirmed.connect(lambda: confirmed.append(1))
+    rig.participant.show_message("welcome")
+    _key(rig.participant, QT_KEYS["f5"])
+    _key(QPushButton(), QT_KEYS["escape"])
+    assert confirmed == []
+    _remote(rig, "f5")
+    assert confirmed == [1]
 
 
 def test_a_deleted_participant_window_takes_its_key_router_with_it(app, loaded, tmp_path):

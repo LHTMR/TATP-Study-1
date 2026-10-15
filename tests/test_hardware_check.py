@@ -63,6 +63,20 @@ def test_a_held_button_counts_once(check):
     assert check.presses[Action.INCREASE] == 1
 
 
+def test_the_remotes_raw_reports_count_as_presses_once_each(check):
+    """Under raw_input the remote's presses arrive from its raw reports (docs/LOG.md N7.D22):
+    a press counts, its repeats and its release do not."""
+    check.remote_key("period", False, False, 100)
+    check.remote_key("period", False, True, 150)
+    check.remote_key("period", True, False, 200)
+    assert check.presses[Action.EMERGENCY_STOP] == 1
+
+
+def test_the_check_says_every_keyboard_counts_when_it_cannot_tell(check, loaded):
+    words = loaded.experimenter_text["hardware_check"]
+    assert check.last_key.text() == words["remote_any_keyboard"]
+
+
 def test_the_play_buttons_escape_does_not_close_the_check(check):
     """Every other ▶ is escape; it is a press to count, not Qt's 'close this dialog'."""
     _press(check, "escape")

@@ -75,6 +75,17 @@ responder:
   repeat_confirm_lockout_s: 0.5
   ignore_keys: []                    # Keys the device emits that must do nothing. None: every
                                      # key the R400 sends is bound (SPEC.md 10.1).
+  # Which keyboard counts as the remote (tatp/remote_keys.py, docs/LOG.md N7.D22).
+  # raw_input: only the device device_match names, told apart from the experimenter's keyboard
+  # by Windows' Raw Input, so the experimenter can type a full stop and the participant's stop
+  # still works from any window (open item L15). any_keyboard: every keyboard is the remote --
+  # development, the headless tests and the validator, which have neither the remote nor Windows.
+  key_source: raw_input
+  # A substring of the remote's device path, matched ignoring case. The R400's receiver on the
+  # lab laptop, read with Raw Input on 14 Oct 2026: Logitech's vendor ID and its USB receiver.
+  # The laptop's own keyboard is an ACPI device (HPQ8002). A second Logitech receiver plugged in
+  # would match too.
+  device_match: VID_046D&PID_C538
   # WHAT IS PHYSICALLY PRINTED ON EACH BUTTON. A screen that draws a control draws the symbol
   # the participant's thumb is resting on, at its physical arrangement (UI_PRINCIPLES.md 5.9),
   # so relabelling the remote is a change here and nowhere else. This lives in hardware.yaml

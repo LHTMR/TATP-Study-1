@@ -798,11 +798,41 @@ class ParticipantWindow(QWidget):
             return False
         return name in self.responder.keys or self.responder.is_ignored(name)
 
+    def key_target(self) -> QWidget:
+        """Where a remote key lands: the VAS reads its own keys, the window the rest."""
+        return self.vas if self.stack.currentWidget() is self.vas else self
 
-# Widgets the experimenter types into. A key reaching one of these is the experimenter typing,
-# not the participant pressing -- the remote's emergency stop is the full stop, which is also
-# typed.
+    def deliver_remote_key(self, name: str, released: bool, repeat: bool, time_ms: int) -> None:
+        """One of the remote's key reports, read by Raw Input (`tatp.remote_keys`), as a press.
+
+        Posted rather than sent: this is called from inside the native message handling. Marked
+        as the remote's, so the router lets it through (`REMOTE_KEY_MARK`).
+        """
+        if not shiboken6.isValid(self) or not self.isVisible():
+            return
+        kind = QEvent.KeyRelease if released else QEvent.KeyPress
+        QApplication.postEvent(
+            self.key_target(), remote_key_event(kind, QT_KEYS[name], repeat, time_ms)
+        )
+
+
+# Widgets the experimenter types into. Under any_keyboard, a key reaching one of these is the
+# experimenter typing, not the participant pressing -- the remote's emergency stop is the full
+# stop, which is also typed.
 TEXT_ENTRY_WIDGETS = (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
+
+# Set in a key event's native modifiers to mark it as the remote's own, delivered to the
+# participant: from its raw report, or forwarded by the router. Bit 31, which Windows' native
+# modifiers (Shift, Ctrl, Alt, the Windows key, Caps and Num Lock) never use.
+REMOTE_KEY_MARK = 0x80000000
+
+
+def remote_key_event(kind: QEvent.Type, key: Qt.Key, repeat: bool, time_ms: int) -> QKeyEvent:
+    """A key event marked as the remote's, stamped when the button moved. The adjustment times
+    a press from these stamps (tatp.touchcal.PressTiming)."""
+    event = QKeyEvent(kind, key, Qt.NoModifier, 0, 0, REMOTE_KEY_MARK, "", repeat, 1)
+    event.setTimestamp(time_ms)
+    return event
 
 
 class RemoteKeyRouter(QObject):
@@ -813,16 +843,25 @@ class RemoteKeyRouter(QObject):
     click Next step. Without this, the participant's next rating, and their emergency stop,
     would land on the experimenter's screen and do nothing (SPEC.md 10.1, 13).
 
-    Installed on the application by the `Rig`. The one exception is a key typed into a text
-    field on the experimenter's side: that is the experimenter writing a note or a distance, and
-    the device's emergency-stop key is a full stop. A participant press made while the
-    experimenter is typing therefore reaches the field, not the participant window (docs/LOG.md
-    N7.I1).
+    Installed on the application by the `Rig`, with the session's key source
+    (`tatp.remote_keys`). What it does depends on whether the source can tell keyboards apart:
+
+    - **It can** (`raw_input`, the lab): the remote's presses are read from its raw reports and
+      reach the participant marked as its own (`ParticipantWindow.deliver_remote_key`),
+      whatever has focus, and its ordinary key events never arrive. Every other key event is
+      another keyboard's: kept from the participant window, and left to reach anything else as
+      typing. The experimenter types full stops and presses Esc freely, and the participant's
+      stop always stops (open item L15).
+    - **It cannot** (`any_keyboard`): every keyboard is the remote, and its keys are forwarded
+      to the participant, except a key typed into an experimenter text field, which is taken as
+      the experimenter writing a note or a distance (docs/LOG.md N7.I1). A participant's stop
+      pressed while the experimenter is typing then reaches the field.
     """
 
-    def __init__(self, participant: ParticipantWindow, parent: QObject | None = None):
+    def __init__(self, participant: ParticipantWindow, source, parent: QObject | None = None):
         super().__init__(parent)
         self.participant = participant
+        self.source = source
 
     def eventFilter(self, watched, event) -> bool:  # noqa: N802 -- Qt's name
         if event.type() not in (QEvent.KeyPress, QEvent.KeyRelease):
@@ -832,32 +871,34 @@ class RemoteKeyRouter(QObject):
         # the window's C++ object is gone but a queued event still reaches the filter.
         if not shiboken6.isValid(participant):
             return False
-        # A key already addressed to a participant window -- this one, or the one another
-        # router has just forwarded it to -- is left alone. Without that, two routers alive at
-        # once would forward each other's events back and forth without end.
         if (
             not isinstance(watched, QWidget)
-            or isinstance(watched.window(), ParticipantWindow)
-            or not participant.isVisible()
-            or isinstance(watched, TEXT_ENTRY_WIDGETS)
+            or event.nativeModifiers() & REMOTE_KEY_MARK
             or not participant.is_remote_key(event)
         ):
             return False
-        target = (
-            participant.vas
-            if participant.stack.currentWidget() is participant.vas
-            else participant
-        )
+        at_participant = isinstance(watched.window(), ParticipantWindow)
+        if self.source.distinguishes:
+            # Not the remote's, which arrive marked: another keyboard's. Kept from the
+            # participant window, and left to reach anything else as typing.
+            return at_participant
+        if at_participant or not participant.isVisible():
+            return False
+        if isinstance(watched, TEXT_ENTRY_WIDGETS):
+            return False
+        # The native codes go with it, as the remote's own event would carry them.
         forwarded = QKeyEvent(
             event.type(),
             event.key(),
             event.modifiers(),
+            event.nativeScanCode(),
+            event.nativeVirtualKey(),
+            event.nativeModifiers() | REMOTE_KEY_MARK,
             event.text(),
             event.isAutoRepeat(),
             event.count(),
         )
-        # The adjustment times a press from these stamps (tatp.touchcal.PressTiming), and a
-        # press can start in one window and end in the other.
+        # A press can start in one window and end in the other, so the stamps go too.
         forwarded.setTimestamp(event.timestamp())
-        QApplication.sendEvent(target, forwarded)
+        QApplication.sendEvent(participant.key_target(), forwarded)
         return True

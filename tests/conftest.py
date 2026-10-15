@@ -33,7 +33,24 @@ from PySide6.QtCore import QEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from tatp import config as cfg  # noqa: E402
+from tatp.remote_keys import ANY_KEYBOARD, with_key_source  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
+
+# Every keyboard is the remote in the tests (docs/LOG.md N7.D22). The lab's `raw_input` tells
+# the remote apart through Windows' native windows, which the offscreen platform does not have,
+# and no test has the remote plugged in. Set here, once, for the same reason as the platform: a
+# fixture that forgot it would fail only on the machine with the remote. Rebound before any test
+# module is imported, so a module-level `cfg.load` gets it too.
+_load = cfg.load
+
+
+def _load_without_the_remote(*args, **kwargs):
+    loaded = _load(*args, **kwargs)
+    hardware = with_key_source(loaded.hardware, ANY_KEYBOARD)
+    return cfg.Config(**{**loaded.__dict__, "hardware": hardware})
+
+
+cfg.load = _load_without_the_remote
 
 
 @pytest.fixture(scope="session", autouse=True)

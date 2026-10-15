@@ -52,6 +52,7 @@ from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import InstrumentsDialog
 from tatp.launcher import WARN, LauncherWindow
 from tatp.pinprick import F40Fit, LongResult
+from tatp.remote_keys import ANY_KEYBOARD, with_key_source
 from tatp.responder import Action, Responder
 from tatp.resume import offer_wording
 from tatp.touchcal import FitReady
@@ -806,11 +807,12 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"({language}).",
         preview.grab(),
     )
-    # A sample device list and the mock: the real devices and the screens attached differ
-    # between machines, and the picture is of the dialog, not of this one's hardware. Nothing
-    # is played, because the output is built only when a sound is asked for.
+    # A sample device list, the mock and every keyboard as the remote: the real devices and the
+    # screens attached differ between machines, and the picture is of the dialog, not of this
+    # one's hardware. Nothing is played, because the output is built only when a sound is asked
+    # for, and Raw Input needs a native window the offscreen platform does not have.
     hardware = {
-        **config.hardware,
+        **with_key_source(config.hardware, ANY_KEYBOARD),
         "garment": {**config.hardware["garment"], "driver": "mock"},
         "screens": {**config.hardware["screens"], "participant_screen_index": None,
                     "experimenter_screen_index": None},

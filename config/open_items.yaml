@@ -243,6 +243,9 @@ items:
          full stop the experimenter types an emergency stop. Possible ways out: decimal commas
          in the distance fields and the stop routed everywhere; the hardware stop as the
          safeguard while a field has focus, written into the SOP; or the fields refusing '.'.
-         A safety procedure, so not the build's. Record the choice, then add
-         `text_field_stop_decided: <date>` under responder:."
+         A safety procedure, so not the build's. S chose, 14 Oct 2026, to tell the remote from
+         the experimenter's keyboard by device (Windows Raw Input, docs/LOG.md N7.D22), which is
+         built: under responder.key_source raw_input the stop works from any focus and the
+         experimenter's full stop is only typed. Closes when the lab check N2.10 passes on the
+         lab laptop: then add `text_field_stop_decided: <date>` under responder:."
     blocks_use: true

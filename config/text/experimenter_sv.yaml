@@ -344,6 +344,10 @@ preflight:
     Session {value} för denna deltagare har startats tidigare och avbrutits. En ny session
     registreras vid sidan av den.
   another_instance: En annan session körs redan från den här datamappen ({value}). Stäng den först.
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_missing: Deltagarens fjärrkontroll är inte ansluten (inget tangentbord matchar {value}). Anslut mottagaren och starta igen.
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_needs_windows: Den här datorn ({value}) kan inte skilja fjärrkontrollen från andra tangentbord. Sätt responder.key_source till any_keyboard i hardware.yaml, eller kör sessionen på labbdatorn.
 
 zones:
   # Bredvid zondiagrammet (SPEC.md 11): var den aktuella stimuleringen ska ges.
@@ -632,8 +636,15 @@ hardware_check:
   title: Kontrollera utrustningen
   remote: Fjärrkontroll
   remote_hint: Tryck på varje knapp; just dess räknare ska öka. ▶ skickar två tangenter i tur och ordning, och båda räknas.
-  remote_none: Inget tryck än.
   remote_last: 'Senaste tryck: {symbol} ({value})'
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_found: Fjärrkontrollen hittad; bara den räknas.
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_missing: 'Fjärrkontrollen saknas: anslut den.'
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_any_keyboard: Alla tangentbord räknas här.
+  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
+  remote_needs_windows: 'Kräver Windows: alla tangentbord räknas.'
   screens: Skärmar
   role_participant: Deltagarens skärm
   role_experimenter: Försöksledarens skärm

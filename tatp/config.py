@@ -164,6 +164,8 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "responder.repeat_confirm_lockout_s", NUMBER, 0, None),
     ("hardware.yaml", "responder.keys.emergency_stop", list, None, None),
     ("hardware.yaml", "responder.ignore_keys", list, None, None),
+    ("hardware.yaml", "responder.key_source", str, None, None),
+    ("hardware.yaml", "responder.device_match", str, None, None),
     ("hardware.yaml", "responder.button_symbols.decrease", str, None, None),
     ("hardware.yaml", "responder.button_symbols.increase", str, None, None),
     ("hardware.yaml", "responder.button_symbols.confirm", str, None, None),
