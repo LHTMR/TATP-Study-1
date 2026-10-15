@@ -255,6 +255,11 @@ warnings:
     are fitted.
   masking_failed_after_earplugs: >-
     Still audible with earplugs. The session will continue and is recorded as not fully masked.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. SPEC.md 10.7 step 3: the
+  # participant confirmed at the noise ceiling, so the noise may only just cover the garment.
+  masking_at_ceiling: >-
+    The participant confirmed the noise at its maximum, so it may only just cover the garment.
+    This is recorded.
   equalisation_mismatch: >-
     Channel {channel} still does not match the middle channel after re-adjustment. The session
     continues and this is recorded.

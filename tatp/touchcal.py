@@ -298,11 +298,12 @@ class PressTiming:
 
     The press handler writes a log row before the release handler can run, so timing a press
     from handler calls would add any stall in that write to the hold -- turning a tap into a
-    press too long to be a tap and too short to be a hold, which moves nothing. The press is
-    placed when its handler runs and the release that many event milliseconds after it.
+    hold of however long the stall lasted. The press is placed when its handler runs and the
+    release that many event milliseconds after it.
 
-    A long enough stall can still let a tick run before the release, so the press moves as a
-    hold (docs/LOG.md N2.9).
+    A stall longer than the hold delay can still let a tick run before the release, so the
+    press moves as a hold for that long (docs/LOG.md N2.9); `AdjustmentState.tick` never runs
+    it backwards when the stamped release then falls before that tick.
     """
 
     def __init__(self):

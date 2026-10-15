@@ -106,13 +106,15 @@ screens:
   # beröringen börjar FÖR ATT deltagaren tryckte. Mildra den inte till "tryck för att fortsätta".
   self_start: Tryck på ▶ när du är redo att beröringen ska börja.
   # SPEC.md 10.9, övningen med nödstoppet. Godkänd av S 10 sep 2026 och ordagrant kopierad från
-  # specifikationen; S kortade "at any time, in any part of the visit" till "at any time" 5 okt
-  # 2026, och den svenska raden följer genom att sista ledet stryks. Den första ritas med stoppknappen under sig -- "den här knappen" pekar på
+  # specifikationen. Den första ritas med stoppknappen under sig -- "den här knappen" pekar på
   # den; skärmen mellan de två är den riktiga `emergency_stop`, oförändrad.
   stop_rehearsal: |-
     Beröringen är igång nu.
     Tryck på den här knappen för att stänga av den.
     Ingenting går förlorat — vi fortsätter direkt efteråt.
+  # DRAFT (LOG N7.F6a): written by the build, not ethics-sourced. S kortade 5 okt 2026 "at
+  # any time, in any part of the visit" till "at any time"; "Den fungerar när som helst." är
+  # byggets översättning.
   stop_rehearsal_done: |-
     Det där är stoppknappen.
     Den fungerar när som helst.

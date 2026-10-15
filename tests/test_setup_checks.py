@@ -192,6 +192,78 @@ def test_still_audible_is_reported_and_earplugs_restart_the_check(rig):
     assert len(_events(session, "masking_threshold")) == 2
 
 
+def test_a_double_clicked_next_step_does_not_record_earplugs_never_fitted(rig):
+    """Review of 9c84769: the second click of a double click must not be taken as "the
+    earplugs are in". Within the lockout it is ignored, and the earplugs are recorded only
+    by a Next step after it."""
+    session = rig.session
+    virtual = Virtual(rig, MaskingCheck(rig))
+    after_double = []
+
+    def double_click(trial):
+        if _is_masking_step(trial) and not after_double:
+            rig.experimenter.proceed_requested.emit()
+            rig.experimenter.proceed_requested.emit()
+            after_double.append(len(_events(session, "earplugs_fitted")))
+
+    virtual.before_step = double_click
+    result = virtual.run()
+    assert after_double == [0], "the second click fitted no earplugs"
+    assert result.earplugs_used, "the Next step after the lockout did"
+    proceeds = [r for r in _events(session, "proceed") if r["detail"] == "MaskingCheck"]
+    assert proceeds, "the report goes through the procedure's own Next step, and is logged"
+
+
+def test_a_next_step_during_a_stop_in_the_masking_step_reports_nothing(rig):
+    """The report is the procedure's proceed, so a Next step while interrupted is ignored."""
+    session = rig.session
+    virtual = Virtual(rig, MaskingCheck(rig))
+    done = []
+
+    def stop_then_next(trial):
+        if _is_masking_step(trial) and not done:
+            done.append(True)
+            press(rig.participant, "period")
+            rig.experimenter.proceed_requested.emit()
+
+    virtual.before_step = stop_then_next
+    result = virtual.run()
+    assert done and not result.earplugs_used
+    assert not _events(session, "masking_reported_audible")
+
+
+def test_a_confirm_at_the_ceiling_is_flagged_in_the_data_and_to_the_experimenter(rig):
+    session = rig.session
+    virtual = Virtual(rig, MaskingCheck(rig))
+    virtual.noise_levels["mask_level"] = session.audio.max_dbfs
+    result = virtual.run()
+    assert result.confirmed, "the confirm keeps its meaning"
+    flagged = _events(session, "masking_at_ceiling")
+    assert len(flagged) == 1 and flagged[0]["severity"] == "warning"
+    warning = rig.experimenter.text["warnings"]["masking_at_ceiling"]
+    assert rig.experimenter._status_text == warning
+
+
+def test_a_confirm_below_the_ceiling_is_not_flagged(rig):
+    Virtual(rig, MaskingCheck(rig)).run()
+    assert not _events(rig.session, "masking_at_ceiling")
+
+
+def test_the_earplug_warning_is_cleared_when_the_check_restarts(rig):
+    warning = rig.experimenter.text["warnings"]["masking_failed"]
+    statuses = []
+
+    def watch(trial):
+        if isinstance(trial, NoiseAdjustment):
+            statuses.append(rig.experimenter._status_text)
+
+    virtual = Virtual(rig, MaskingCheck(rig))
+    virtual.before_step = _reports_audible(rig, 1, also=watch)
+    virtual.run()
+    assert warning not in statuses[1:], "gone once the earplugs are in"
+    assert rig.experimenter._status_text != warning
+
+
 def test_the_experimenter_is_told_what_next_step_does_in_the_masking_step(rig):
     instructions = rig.experimenter.text["instructions"]
     shown = []

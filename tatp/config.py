@@ -179,6 +179,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "audio.white_noise_max_dbfs", NUMBER, None, 0),
     ("hardware.yaml", "audio.white_noise_step_db", NUMBER, 0, None),
     ("hardware.yaml", "audio.masking_check_pressure_kpa", NUMBER, 0, None),
+    ("hardware.yaml", "audio.earplugs_proceed_lockout_s", NUMBER, 0, None),
     ("hardware.yaml", "audio.participant_cue_hz", NUMBER, 0, None),
     ("hardware.yaml", "audio.participant_cue_duration_s", NUMBER, 0, None),
     ("hardware.yaml", "audio.participant_cue_over_noise_db", NUMBER, 0, None),

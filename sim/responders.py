@@ -591,7 +591,7 @@ class VirtualParticipant(QObject):
     def _now_ms() -> int:
         # Real time, as the device stamps its events: the hold is the hand's, not the session's.
         # perf_counter, not monotonic, which ticks in 15.6 ms steps on Windows -- coarse enough
-        # to move a planned hold across the tap threshold.
+        # to move a planned hold across the hold delay.
         return int(time.perf_counter() * MS_PER_S)
 
     def _send(self, action: Action, kind: QEvent.Type, stamp_ms: int) -> None:

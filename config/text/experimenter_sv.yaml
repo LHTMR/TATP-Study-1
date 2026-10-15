@@ -260,6 +260,11 @@ warnings:
   masking_failed_after_earplugs: >-
     Fortfarande hörbart med öronproppar. Sessionen fortsätter och registreras som inte helt
     maskerad.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. SPEC.md 10.7 steg 3:
+  # deltagaren bekräftade vid brusets tak, så bruset kanske bara precis döljer plagget.
+  masking_at_ceiling: >-
+    Deltagaren bekräftade bruset på högsta nivå, så det döljer kanske bara precis plagget. Detta
+    registreras.
   equalisation_mismatch: >-
     Kanal {channel} matchar fortfarande inte mittkanalen efter omjustering. Sessionen fortsätter
     och detta registreras.
