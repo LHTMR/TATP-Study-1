@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import sys
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -19,6 +20,7 @@ from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
+from tatp import devices, hardware_check
 from tatp.audio import amplitude
 from tatp.devices import KEYBOARD, ON_SCREEN, REMOTE
 from tatp.hardware_check import (
@@ -27,10 +29,13 @@ from tatp.hardware_check import (
     OK,
     STAND_IN,
     STATE_COLOURS,
+    ChildAudio,
+    ChildProbe,
     Detectors,
     HardwareCheckDialog,
 )
 from tatp.responder import Action
+from tatp.screenshots import sample_probe
 from tatp.ui.vas import QT_KEYS
 
 BOSE = "Bose QC Headphones, Windows WASAPI"
@@ -61,13 +66,13 @@ def connected():
     """The lab, as the page is told it is: two screens, the sleeve's port, the remote, and
     both sound devices. Each test changes what it needs."""
     return SimpleNamespace(screens=[(1280, 800), (1280, 800)], ports=["COM3"], remote=True,
-                           outputs=[BOSE, SPEAKERS, LAPTOP], default=LAPTOP)
+                           outputs=[BOSE, SPEAKERS, LAPTOP], default=LAPTOP, unusable={})
 
 
 def _detectors(connected) -> Detectors:
-    def probe(_audio, on_done):
-        on_done({"outputs": list(connected.outputs), "default": connected.default,
-                 "unresolved": {}}, "")
+    def probe(request, on_done):
+        on_done(sample_probe(request, list(connected.outputs), connected.default,
+                             connected.unusable), "")
 
     return Detectors(lambda: list(connected.screens), lambda: list(connected.ports),
                      lambda: connected.remote, probe)
@@ -179,11 +184,14 @@ def test_where_the_remote_cannot_be_told_apart_the_keyboard_is_chosen(page_for, 
 def test_the_keyboard_counts_its_own_keys(page_for, connected):
     connected.remote = False
     page = page_for()
-    for name in ("left", "right", "return", "escape"):
+    for name in ("left", "right", "return", "period"):
         _press(page.cancel_button, name)
     assert page.presses == {action: 1 for action in Action}
     _press(page.cancel_button, "pageup")
-    assert page.presses[Action.DECREASE] == 1, "the remote's keys are not the keyboard's"
+    _press(page.cancel_button, "escape")
+    assert page.presses == {action: 1 for action in Action}, (
+        "the remote's large buttons and Esc are not the keyboard's"
+    )
 
 
 def test_a_chosen_input_stays_chosen_whatever_is_connected(page_for, connected):
@@ -263,6 +271,74 @@ def test_choosing_the_labs_device_from_the_list_keeps_its_configured_name(page_f
     page.choose(name, 0)  # the system default
     page.choose(name, page.combos[name].findText(BOSE))
     assert page.values[name] == page.lab.participant_audio_device
+
+
+def test_a_device_that_cannot_play_at_the_configured_settings_says_why(page_for, connected):
+    """The page decides as the preflight does, not by the name alone (code review)."""
+    connected.unusable = {"Bose QC Headphones WASAPI": "Invalid sample rate 48000"}
+    page = page_for()
+    name = "participant_audio_device"
+    assert _state(page, name) == MISSING
+    assert page.status[name].text() == page.words["audio_unusable"].format(
+        value="Invalid sample rate 48000")
+
+
+def test_a_chosen_device_is_checked_as_the_session_would_open_it(page_for, connected):
+    page = page_for()
+    name = "experimenter_audio_device"
+    connected.unusable = {LAPTOP: "Invalid number of channels"}
+    page.choose(name, page.combos[name].findText(LAPTOP))
+    assert "Invalid number of channels" in page.status[name].text()
+
+
+def test_a_probe_child_that_cannot_start_is_reported_and_the_next_one_runs(app, qtbot,
+                                                                         monkeypatch):
+    """QProcess says nothing on `finished` for a program that never started (code review)."""
+    monkeypatch.setattr(hardware_check, "probe_command",
+                        lambda request: ("no-such-program-tatp", []))
+    probe = ChildProbe(5.0, None)
+    answers = []
+    probe({}, lambda result, error: answers.append((result, error)))
+    qtbot.waitUntil(lambda: bool(answers), timeout=5000)
+    assert answers[0][0] is None and answers[0][1]
+    assert probe.process is None, "a later listing is not skipped"
+
+
+def _child_audio(monkeypatch, hardware, script):
+    monkeypatch.setattr(hardware_check, "serve_command",
+                        lambda audio: (sys.executable, ["-c", script]))
+    failures, changes = [], []
+    audio = ChildAudio(hardware["audio"], failures.append, lambda: changes.append(True),
+                       hardware["devices"]["child_stop_timeout_s"], None)
+    return audio, failures, changes
+
+
+def test_the_noise_is_running_only_once_the_child_says_so(app, qtbot, monkeypatch, hardware):
+    script = f"import sys; sys.stdin.readline(); print({devices.STARTED!r}, flush=True); " \
+             "sys.stdin.read()"
+    audio, failures, changes = _child_audio(monkeypatch, hardware, script)
+    audio.start_noise(-40)
+    assert not audio.noise_running
+    qtbot.waitUntil(lambda: audio.noise_running, timeout=10000)
+    assert changes and not failures
+    audio.close()
+    assert not failures, "closing it is not a failure"
+
+
+def test_a_test_sound_child_that_dies_is_reported(app, qtbot, monkeypatch, hardware):
+    script = "import sys; sys.stderr.write('PortAudio not initialized\\n'); sys.exit(1)"
+    audio, failures, _ = _child_audio(monkeypatch, hardware, script)
+    qtbot.waitUntil(lambda: bool(failures), timeout=10000)
+    assert failures == ["PortAudio not initialized"]
+    assert not audio.noise_running
+
+
+def test_a_child_that_will_not_end_is_killed_after_the_stop_timeout(app, monkeypatch, hardware):
+    audio, _, _ = _child_audio(monkeypatch, hardware, "import time; time.sleep(60)")
+    audio.process.waitForStarted()
+    started = time.monotonic()
+    audio.close()
+    assert time.monotonic() - started < 5 * hardware["devices"]["child_stop_timeout_s"]
 
 
 def test_a_listing_that_fails_says_why(page_for, hardware):

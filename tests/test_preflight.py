@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -10,8 +11,10 @@ import pytest
 from tatp import config as cfg
 from tatp import devices
 from tatp import preflight as pre
+from tatp import session as session_module
 from tatp.audio import SOUNDDEVICE, unresolved_devices
 from tatp.clock import Clock
+from tatp.devices import configured
 from tatp.remote_keys import RAW_INPUT, with_key_source
 from tatp.session import Session
 
@@ -244,16 +247,55 @@ def test_the_sound_devices_are_checked_in_a_child_process(config, monkeypatch):
 
     def run(command, **kwargs):
         asked.append(command)
+        request = json.loads(command[4])
+        checks = {role: {spec: ("gone" if role == "participant" else "")
+                         for spec in specs} for role, specs in request["candidates"].items()}
         return SimpleNamespace(stdout=json.dumps(
-            {"outputs": [], "default": None, "unresolved": {"participant": "gone"}}
+            {"outputs": [], "default": None, "checks": checks}
         ))
 
     monkeypatch.setattr(devices.subprocess, "run", run)
     config = _played_through_sounddevice(config)
     findings = pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config))
-    assert _keys(findings) == ["preflight.participant_audio_missing"]
+    assert findings == [pre.Finding(pre.REFUSE, "preflight.participant_audio_missing", "gone")]
     assert asked[0][1:4] == ["-m", "tatp.devices", devices.PROBE]
-    assert json.loads(asked[0][4]) == config.hardware["audio"]
+    assert json.loads(asked[0][4])["audio"] == config.hardware["audio"]
+
+
+@pytest.mark.parametrize("failure", [
+    subprocess.TimeoutExpired("python", 8.0),
+    subprocess.CalledProcessError(1, "python", stderr="Traceback ...\nOSError: PortAudio "
+                                                      "library not found\n"),
+])
+def test_a_sound_check_that_fails_says_what_failed(config, monkeypatch, failure):
+    """Code review: the child's own words, or how long it was given, rather than a traceback
+    in the launcher."""
+    def run(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(devices.subprocess, "run", run)
+    config = _played_through_sounddevice(config)
+    findings = pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config))
+    assert _keys(findings) == ["preflight.audio_check_failed"]
+    expected = ("PortAudio library not found"
+                if isinstance(failure, subprocess.CalledProcessError) else "within")
+    assert expected in findings[0].value
+
+
+def test_the_remote_off_windows_is_refused_for_a_study_participant(config, monkeypatch):
+    """Every keyboard is then the remote, the experimenter's too (open item L15); a pilot or a
+    demonstration may (code review of N7.F12e4)."""
+    monkeypatch.setattr(session_module, "raw_input_available", lambda: False)
+    lab = with_key_source(config.hardware, RAW_INPUT)
+    config = cfg.Config(**{**config.__dict__, "hardware": lab})
+    config = session_module.with_hardware_choices(config, configured(lab))
+    assert config.hardware["responder"]["key_source"] == "any_keyboard"
+    folder = pre.data_folder_for(config)
+    assert _keys(pre.preflight(config, "01", 1, "SM", folder), pre.REFUSE) == [
+        "preflight.remote_needs_windows"
+    ]
+    pilot = str(config.study1["design"]["pilot_code_offset"] + 1)
+    assert pre.refusals(pre.preflight(config, pilot, 1, "SM", folder)) == []
 
 
 def _with_input(config, participant_input):
@@ -299,7 +341,8 @@ def test_every_finding_has_its_text_in_both_languages(loaded):
                 "preflight.another_instance", "preflight.remote_missing",
                 "preflight.remote_needs_windows", "preflight.participant_audio_missing",
                 "preflight.experimenter_audio_missing", "warnings.experimenter_changed",
-                "preflight.alternative_input_study_code", "preflight.hardware_changed"):
+                "preflight.alternative_input_study_code", "preflight.hardware_changed",
+                "preflight.audio_check_failed"):
         for text in (english, swedish):
             node = text
             for part in key.split("."):

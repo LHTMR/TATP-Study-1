@@ -25,6 +25,7 @@ import json
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 from tatp.audio import Audio, unresolved_devices
 from tatp.clock import Clock
@@ -39,8 +40,12 @@ SET_LEVEL = "level"
 STOP_NOISE = "stop"
 CUE = "cue"
 ALERT = "alert"
-# What the serve command prints when a sound fails: this, then why.
+# What the serve command prints when a sound fails: this, then why; and once the noise is
+# actually playing.
 FAILED = "failed "
+STARTED = "started"
+# A probe's key for the system's default output (`check_key`).
+DEFAULT_KEY = ""
 
 # The participant's response, `responder.participant_input` (docs/LOG.md N7.F12e4). The remote
 # is the study's; the two alternatives are for a pilot code or a demonstration only.
@@ -89,31 +94,57 @@ def default_output_label(sd) -> str | None:
     return f"{device['name']}, {sd.query_hostapis(device['hostapi'])['name']}"
 
 
-def probe(audio_config: dict, sd) -> dict:
-    """What the child reports: every output, the default, and each configured device that
-    cannot be opened, with why."""
-    return {
-        "outputs": output_labels(sd),
-        "default": default_output_label(sd),
-        "unresolved": unresolved_devices(audio_config, sd),
-    }
+def check_key(spec: str | None) -> str:
+    """A device's key in a probe's `checks`: its name, or "" for the system default."""
+    return DEFAULT_KEY if spec is None else spec
 
 
-def _child(command: str, audio_config: dict) -> list[str]:
-    return [sys.executable, "-m", "tatp.devices", command, json.dumps(audio_config)]
+def probe(request: dict, sd) -> dict:
+    """What the child reports: every output, the default, and, for each role, whether each
+    candidate device can be opened as a session opens it (`tatp.audio.resolve_device`: found by
+    name, once, and able to play at the configured rate and channels) -- "" when it can, else
+    why not. The same resolution the preflight refuses a session by."""
+    audio = request["audio"]
+    checks = {}
+    for role, candidates in request["candidates"].items():
+        checks[role] = {}
+        for spec in candidates:
+            why = unresolved_devices({**audio, f"{role}_device": spec}, sd).get(role, "")
+            checks[role][check_key(spec)] = why
+    return {"outputs": output_labels(sd), "default": default_output_label(sd), "checks": checks}
 
 
-def probe_in_child(audio_config: dict, timeout_s: float) -> dict:
-    """`probe`, in a child process of its own, so this one never loads PortAudio. A child that
-    fails or does not answer raises: there is no list to fall back on."""
-    done = subprocess.run(_child(PROBE, audio_config), cwd=REPO_ROOT, capture_output=True,
-                          text=True, timeout=timeout_s, check=True)
+def probe_request(audio_config: dict, candidates: dict[str, list[str | None]]) -> dict:
+    return {"audio": audio_config, "candidates": candidates}
+
+
+def _child(command: str, payload: dict) -> list[str]:
+    return [sys.executable, "-m", "tatp.devices", command, json.dumps(payload)]
+
+
+class ProbeError(RuntimeError):
+    """The child that lists the sound devices failed, or did not answer in time."""
+
+
+def probe_in_child(request: dict, timeout_s: float) -> dict:
+    """`probe`, in a child process of its own, so this one never loads PortAudio. Waits at most
+    `timeout_s`. A child that fails or does not answer raises `ProbeError`, saying what it said:
+    there is no list to fall back on."""
+    try:
+        done = subprocess.run(_child(PROBE, request), cwd=REPO_ROOT, capture_output=True,
+                              text=True, timeout=timeout_s, check=True)
+    except subprocess.TimeoutExpired as error:
+        raise ProbeError(f"PortAudio did not list the sound devices within {timeout_s:g} s"
+                         ) from error
+    except subprocess.CalledProcessError as error:
+        lines = error.stderr.strip().splitlines()
+        raise ProbeError(lines[-1] if lines else f"exit code {error.returncode}") from error
     return json.loads(done.stdout)
 
 
-def probe_command(audio_config: dict) -> tuple[str, list[str]]:
+def probe_command(request: dict) -> tuple[str, list[str]]:
     """The program and arguments for a probe run another way (the page's, without waiting)."""
-    program, *arguments = _child(PROBE, audio_config)
+    program, *arguments = _child(PROBE, request)
     return program, arguments
 
 
@@ -134,6 +165,8 @@ def serve(audio_config: dict, commands, sd) -> None:
         try:
             if command == START_NOISE:
                 audio.start_noise(float(value))
+                # Only now is it playing: the page shows it running from this line.
+                print(STARTED, flush=True)
             elif command == SET_LEVEL:
                 audio.set_noise_level(float(value))
             elif command == STOP_NOISE:
@@ -167,6 +200,9 @@ class HardwareChoices:
     chosen: frozenset[str] = field(default_factory=frozenset)
 
 
+# In `hardware_changed` beside the choices: the remote read from every keyboard where the lab
+# tells it apart (off Windows), which a study participant may not run with.
+KEY_SOURCE_CHANGE = "key_source"
 # Every choice, by its field: what the session file's `hardware_changed` names.
 CHOICE_NAMES = (
     "participant_screen_index",
@@ -197,15 +233,74 @@ def on_lab_platform(hardware: dict) -> bool:
     return sys.platform == hardware["lab_platform"]
 
 
+SCREEN_NAMES = ("participant_screen_index", "experimenter_screen_index")
+# Each sound-device choice, by the role `tatp.audio` names it.
+AUDIO_ROLES = {"participant_audio_device": "participant",
+               "experimenter_audio_device": "experimenter"}
+
+
+class Present(NamedTuple):
+    """What is connected now. `remote` is None where it cannot be told from a keyboard.
+    `outputs` is None until the sound devices have been listed (or when nothing plays through
+    them); `checks` is the probe's, by role and `check_key`."""
+
+    screens: list[tuple[int, int]]
+    ports: list[str]
+    remote: bool | None
+    outputs: list[str] | None = None
+    default_output: str | None = None
+    checks: dict = {}
+    audio_error: str = ""
+
+
+def usable(present: Present, role: str, spec: str | None) -> bool | None:
+    """Whether the probe found `spec` can be opened for `role`; None when it was not asked."""
+    why = present.checks.get(role, {}).get(check_key(spec))
+    return None if why is None else why == ""
+
+
+def candidates(hardware: dict, choices: HardwareChoices) -> dict[str, list[str | None]]:
+    """The devices a probe checks for each role: the lab's, the one chosen, and the default."""
+    lab = configured(hardware)
+    return {role: list(dict.fromkeys([getattr(lab, name), getattr(choices, name), None]))
+            for name, role in AUDIO_ROLES.items()}
+
+
+def automatic(name: str, hardware: dict, present: Present) -> object:
+    """What a choice is while nobody has changed it by hand: the lab's while it is there, and
+    what stands in for it while it is not."""
+    lab = getattr(configured(hardware), name)
+    if name in SCREEN_NAMES:
+        return lab if lab is not None and lab < len(present.screens) else None
+    if name in AUDIO_ROLES:
+        # Off the lab's platform its devices cannot exist; on it, a missing one is shown
+        # missing, for someone to connect, rather than quietly replaced by the speakers.
+        if present.outputs is None or usable(present, AUDIO_ROLES[name], lab):
+            return lab
+        return lab if on_lab_platform(hardware) else None
+    if name == "participant_input":
+        return REMOTE if present.remote else KEYBOARD
+    return lab
+
+
+def settle(choices: HardwareChoices, hardware: dict, present: Present) -> HardwareChoices:
+    """`choices` against what is connected now: what was chosen by hand stays as chosen, and
+    every other choice is worked out again (docs/LOG.md N7.F12e1). The launcher does this at
+    every session start, so a monitor or the remote connected after the page closed is used."""
+    values = {name: getattr(choices, name) if name in choices.chosen
+              else automatic(name, hardware, present) for name in CHOICE_NAMES}
+    return HardwareChoices(**values, chosen=choices.chosen)
+
+
 def main(argv: list[str]) -> int:
-    command, audio_json = argv
-    audio_config = json.loads(audio_json)
+    command, payload = argv
+    payload = json.loads(payload)
     import sounddevice
 
     if command == PROBE:
-        print(json.dumps(probe(audio_config, sounddevice)))
+        print(json.dumps(probe(payload, sounddevice)))
     elif command == SERVE:
-        serve(audio_config, sys.stdin, sounddevice)
+        serve(payload, sys.stdin, sounddevice)
     else:
         raise SystemExit(f"tatp.devices: {command!r} is not one of {PROBE}, {SERVE}")
     return 0

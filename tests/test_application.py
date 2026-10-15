@@ -71,9 +71,8 @@ SCALED_PROBE = """
 import os, sys
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.path.insert(0, sys.argv[1])
-from tatp.ui import application
-application.SCALED_PLATFORM = sys.platform  # the factors are the lab's, Windows'; here anywhere
-application.scale_screens({"screens": {"scale_factors": [2]}})
+from tatp.ui.application import scale_screens
+scale_screens({"lab_platform": sys.platform, "screens": {"scale_factors": [2]}})
 from PySide6.QtWidgets import QApplication
 app = QApplication([])
 size = app.screens()[0].geometry()
@@ -94,19 +93,18 @@ def test_the_scale_factors_are_left_alone_once_qt_is_running(monkeypatch):
     """The tests start Qt themselves, so a session or the launcher driven by one draws at the
     design size, unscaled, whatever the lab's factors say."""
     monkeypatch.delenv(SCALE_FACTORS_VARIABLE, raising=False)
-    scale_screens({"screens": {"scale_factors": [1.5]}})
+    scale_screens({"lab_platform": sys.platform, "screens": {"scale_factors": [1.5]}})
     assert SCALE_FACTORS_VARIABLE not in os.environ
 
 
-def test_off_windows_the_platforms_own_scale_is_kept(monkeypatch):
+def test_off_the_lab_platform_the_platforms_own_scale_is_kept(monkeypatch):
     """macOS multiplies a factor on top of its own, and a MacBook's screen would shrink below
     the 1280x800 every screen needs (docs/LOG.md N7.F12e5)."""
     from tatp.ui import application as module
 
     monkeypatch.delenv(SCALE_FACTORS_VARIABLE, raising=False)
     monkeypatch.setattr(module.QApplication, "instance", staticmethod(lambda: None))
-    monkeypatch.setattr(module.sys, "platform", "darwin")
-    scale_screens({"screens": {"scale_factors": [1.5]}})
+    scale_screens({"lab_platform": "not-this-one", "screens": {"scale_factors": [1.5]}})
     assert SCALE_FACTORS_VARIABLE not in os.environ
 
 

@@ -49,7 +49,7 @@ from tatp import pattern_design as pd
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
 from tatp.demo import OFF, DemoControls
-from tatp.devices import ON_SCREEN
+from tatp.devices import ON_SCREEN, check_key, matching_outputs
 from tatp.hardware_check import Detectors, HardwareCheckDialog
 from tatp.instruments import InstrumentsDialog
 from tatp.launcher import WARN, LauncherWindow
@@ -835,10 +835,27 @@ def _sample_detectors(screens, ports, remote, outputs) -> Detectors:
     devices attached differ between machines, and the picture is of the page, not of this
     machine's hardware. The outputs are the lab laptop's on 30 Sep 2026, as far as needed."""
 
-    def probe(_audio, on_done):
-        on_done({"outputs": list(outputs), "default": outputs[0], "unresolved": {}}, "")
+    def probe(request, on_done):
+        on_done(sample_probe(request, list(outputs), outputs[0]), "")
 
     return Detectors(lambda: list(screens), lambda: list(ports), lambda: remote, probe)
+
+
+def sample_probe(request: dict, outputs: list[str], default: str | None,
+                 unusable: dict[str, str] | None = None) -> dict:
+    """`tatp.devices.probe`'s answer for these outputs, with no PortAudio: a device can be
+    opened when its name matches exactly one output (and the default when there is one),
+    unless `unusable` gives a reason it cannot play at the configured settings."""
+    unusable = unusable or {}
+    checks = {}
+    for role, specs in request["candidates"].items():
+        checks[role] = {}
+        for spec in specs:
+            found = (default is not None if spec is None
+                     else len(matching_outputs(spec, outputs)) == 1)
+            why = "" if found else f"No output device matching {spec!r}"
+            checks[role][check_key(spec)] = unusable.get(spec, why) if found else why
+    return {"outputs": outputs, "default": default, "checks": checks}
 
 
 SAMPLE_OUTPUTS = (

@@ -67,19 +67,26 @@ from tatp.clock import Clock
 from tatp.config import REPO_ROOT
 from tatp.devices import (
     ALERT,
+    AUDIO_ROLES,
     CUE,
     FAILED,
-    KEYBOARD,
     PARTICIPANT_INPUTS,
     REMOTE,
     SET_LEVEL,
     START_NOISE,
+    STARTED,
     STOP_NOISE,
     HardwareChoices,
+    Present,
+    ProbeError,
+    automatic,
+    candidates,
+    check_key,
     configured,
     matching_outputs,
-    on_lab_platform,
     probe_command,
+    probe_in_child,
+    probe_request,
     serve_command,
 )
 from tatp.garment.base import GarmentController, GarmentError, Limits
@@ -119,7 +126,6 @@ from tatp.units import MS_PER_S
 HARDWARE_CHECK_WIDTH_PX = 1200
 HARDWARE_CHECK_HEIGHT_PX = 790
 SLIDER_MIN_WIDTH_PX = 200
-CAPTION_WIDTH_PX = 240
 COMBO_MIN_CHARACTERS = 16
 # Between the sections of a column: less than between the columns, so the four sections fit the
 # laptop's height (docs/LOG.md N7.F12e1).
@@ -142,21 +148,9 @@ OK, STAND_IN, MISSING = "ok", "stand_in", "missing"
 STATE_COLOURS = {OK: SECONDARY, STAND_IN: WARNING_COLOUR, MISSING: DISCONNECTED_COLOUR}
 
 
-class Present(NamedTuple):
-    """What is connected now. `remote` is None where it cannot be told from a keyboard;
-    `outputs` is None until the sound devices have first been listed."""
-
-    screens: list[tuple[int, int]]
-    ports: list[str]
-    remote: bool | None
-    outputs: list[str] | None = None
-    default_output: str | None = None
-    audio_error: str = ""
-
-
 class Detectors(NamedTuple):
     """How the page finds what is connected; the tests and the screenshots pass their own.
-    `probe(audio_config, on_done)` lists the sound devices without waiting, then calls
+    `probe(request, on_done)` lists and checks the sound devices without waiting, then calls
     `on_done(result, error)` with `tatp.devices.probe`'s dict, or None and why not."""
 
     screens: Callable[[], list[tuple[int, int]]]
@@ -183,15 +177,26 @@ class ChildProbe(QObject):
         self.timeout_ms = int(timeout_s * MS_PER_S)
         self.process: QProcess | None = None
 
-    def __call__(self, audio_config: dict, on_done) -> None:
+    def __call__(self, request: dict, on_done) -> None:
         if self.process is not None:
             return
         process = self.process = QProcess(self)
         process.setWorkingDirectory(str(REPO_ROOT))
         process.finished.connect(lambda *_: self._finished(process, on_done))
-        program, arguments = probe_command(audio_config)
+        process.errorOccurred.connect(lambda error: self._error(process, error, on_done))
+        program, arguments = probe_command(request)
         process.start(program, arguments)
         QTimer.singleShot(self.timeout_ms, process, process.kill)
+
+    def _error(self, process: QProcess, error, on_done) -> None:
+        """A child that never started says nothing on `finished`, and would leave every later
+        listing waiting for it."""
+        if error != QProcess.FailedToStart or not shiboken6.isValid(process):
+            return
+        self.process = None
+        on_done(None, process.errorString())
+        # Not deleted here: this is emitted from inside `start`, and a deferred delete of it
+        # aborted the process. It goes with this probe.
 
     def _finished(self, process: QProcess, on_done) -> None:
         # A page deleted with a listing under way kills the child as it goes, and that says
@@ -213,26 +218,46 @@ class ChildProbe(QObject):
             self.process.waitForFinished()
 
 
+def remote_now(hardware: dict) -> bool | None:
+    """Whether the remote is plugged in; None where it cannot be told from a keyboard."""
+    responder = hardware["responder"]
+    if responder["key_source"] != RAW_INPUT or not raw_input_available():
+        return None
+    return remote_present(responder)
+
+
 def live_detectors(hardware: dict, parent: QObject) -> Detectors:
     """What the lab uses: Qt's screens, pyserial's ports, Raw Input's keyboards, and a child
     process for the sound devices."""
-    responder = hardware["responder"]
-
-    def remote() -> bool | None:
-        if responder["key_source"] != RAW_INPUT or not raw_input_available():
-            return None
-        return remote_present(responder)
-
-    return Detectors(qt_screens, serial_ports, remote,
+    return Detectors(qt_screens, serial_ports, lambda: remote_now(hardware),
                      ChildProbe(hardware["devices"]["probe_timeout_s"], parent))
+
+
+def present_now(hardware: dict, choices: HardwareChoices) -> Present:
+    """What is connected at this moment, waited for: the launcher asks at each session start
+    (`tatp.devices.settle`). The sound devices are listed by a child, at most
+    `devices.probe_timeout_s`, and only when a session would play through them; a listing that
+    fails leaves them as the lab's, for the preflight to refuse with its reason."""
+    present = Present(qt_screens(), serial_ports(), remote_now(hardware))
+    if hardware["audio"]["backend"] != SOUNDDEVICE:
+        return present
+    request = probe_request(hardware["audio"], candidates(hardware, choices))
+    try:
+        result = probe_in_child(request, hardware["devices"]["probe_timeout_s"])
+    except ProbeError as error:
+        return present._replace(audio_error=str(error))
+    return present._replace(outputs=result["outputs"], default_output=result["default"],
+                            checks=result["checks"])
 
 
 class ChildAudio(QObject):
     """The page's test sounds, played by a child process through the session's own `Audio`
     (`tatp.devices serve`), so this process never loads PortAudio. What the page asks of an
-    `Audio`, sent as commands; a sound that fails comes back as a line, to `on_failed`."""
+    `Audio`, sent as commands. The noise is running once the child says it started; a sound
+    that fails, or the child dying, is told to `on_failed`, and every change to `on_changed`."""
 
-    def __init__(self, audio_config: dict, on_failed: Callable[[str], None], parent: QObject):
+    def __init__(self, audio_config: dict, on_failed: Callable[[str], None],
+                 on_changed: Callable[[], None], stop_timeout_s: float, parent: QObject):
         super().__init__(parent)
         self.backend_name = SOUNDDEVICE
         self.start_dbfs = float(audio_config["white_noise_start_dbfs"])
@@ -240,9 +265,14 @@ class ChildAudio(QObject):
         self.noise_level_dbfs: float | None = None
         self.noise_running = False
         self.on_failed = on_failed
+        self.on_changed = on_changed
+        self.stop_timeout_ms = int(stop_timeout_s * MS_PER_S)
+        self.closing = False
         self.process = QProcess(self)
         self.process.setWorkingDirectory(str(REPO_ROOT))
         self.process.readyReadStandardOutput.connect(self._read)
+        self.process.finished.connect(self._ended)
+        self.process.errorOccurred.connect(self._error)
         program, arguments = serve_command(audio_config)
         self.process.start(program, arguments)
 
@@ -251,17 +281,31 @@ class ChildAudio(QObject):
 
     def _read(self) -> None:
         for line in bytes(self.process.readAllStandardOutput()).decode().splitlines():
-            if not line.startswith(FAILED):
-                continue
-            command, _, why = line.removeprefix(FAILED).partition(" ")
-            if command == START_NOISE:
-                self.noise_running = False
-            self.on_failed(why)
+            if line == STARTED:
+                self.noise_running = True
+                self.on_changed()
+            elif line.startswith(FAILED):
+                command, _, why = line.removeprefix(FAILED).partition(" ")
+                if command == START_NOISE:
+                    self.noise_running = False
+                self.on_failed(why)
+
+    def _ended(self, *_) -> None:
+        if self.closing:
+            return
+        self.noise_running = False
+        error = bytes(self.process.readAllStandardError()).decode().strip().splitlines()
+        self.on_failed(error[-1] if error else self.process.errorString())
+
+    def _error(self, error) -> None:
+        # Only a child that never started has no `finished` to report it.
+        if error == QProcess.FailedToStart and not self.closing:
+            self.noise_running = False
+            self.on_failed(self.process.errorString())
 
     def start_noise(self, level_dbfs: float) -> None:
         self.noise_level_dbfs = min(float(level_dbfs), self.max_dbfs)
         self._send(f"{START_NOISE} {level_dbfs}")
-        self.noise_running = True
 
     def set_noise_level(self, level_dbfs: float) -> None:
         self.noise_level_dbfs = min(float(level_dbfs), self.max_dbfs)
@@ -278,9 +322,13 @@ class ChildAudio(QObject):
         self._send(ALERT)
 
     def close(self) -> None:
-        # End of input ends the child, which closes its streams first.
+        """End of input ends the child, which closes its streams first; one that has not
+        ended within `devices.child_stop_timeout_s` is killed, so the page never waits long."""
+        self.closing = True
         self.process.closeWriteChannel()
-        self.process.waitForFinished()
+        if not self.process.waitForFinished(self.stop_timeout_ms):
+            self.process.kill()
+            self.process.waitForFinished(self.stop_timeout_ms)
 
 
 class RemoteKeys(QObject):
@@ -340,6 +388,7 @@ class HardwareCheckDialog(QDialog):
         self.combos: dict[str, QComboBox] = {}
         self.options: dict[str, list] = {}
         self.status: dict[str, QLabel] = {}
+        self._captions: list[QLabel] = []
         # What each choice last showed, so a poll that finds nothing new leaves an open list be.
         self._shown: dict[str, tuple] = {}
         # Made last (below); until then a change of input has nothing to count with.
@@ -364,13 +413,19 @@ class HardwareCheckDialog(QDialog):
         columns = QHBoxLayout(content)
         columns.setContentsMargins(0, 0, 0, 0)
         columns.setSpacing(GROUP_GAP_PX * 2)
-        for sections in ((self._input(), self._screens()),
-                         (self._sound_section(), self._garment())):
+        for build in ((self._input, self._screens), (self._sound_section, self._garment)):
+            first = len(self._captions)
             column = QVBoxLayout()
             column.setSpacing(SECTION_GAP_PX)
-            for section in sections:
-                column.addLayout(section)
+            for section in build:
+                column.addLayout(section())
             column.addStretch(1)
+            # Each column's captions as wide as its longest, so its boxes line up and the
+            # boxes get the rest: the keyboard input's whole key list shows in its box.
+            captions = self._captions[first:]
+            width = max(caption.sizeHint().width() for caption in captions)
+            for caption in captions:
+                caption.setFixedWidth(width)
             columns.addLayout(column, 1)
         scroll = QScrollArea()
         scroll.setWidget(content)
@@ -461,7 +516,7 @@ class HardwareCheckDialog(QDialog):
         """A caption, its choice, and the line under it saying whether it is there."""
         caption = label(SIZE_SMALL, colour=SECONDARY)
         caption.setText(self.words[caption_key])
-        caption.setFixedWidth(CAPTION_WIDTH_PX)
+        self._captions.append(caption)
         combo = sized(QComboBox(), SIZE_SMALL)
         # A device's name can be long, and a combo box sized to its longest would push the page
         # wider than the laptop's screen; the list itself opens as wide as it needs.
@@ -574,7 +629,11 @@ class HardwareCheckDialog(QDialog):
         self._update()
 
     def probe_audio(self) -> None:
-        self.detectors.probe(self.hardware["audio"], self._probed)
+        """List the sound devices, and check the lab's, the chosen and the default for each
+        role as a session would open them (`tatp.devices.probe`)."""
+        request = probe_request(self.hardware["audio"],
+                                candidates(self.hardware, self.choices()))
+        self.detectors.probe(request, self._probed)
 
     def _probed(self, result: dict | None, error: str) -> None:
         if self.released:
@@ -583,36 +642,17 @@ class HardwareCheckDialog(QDialog):
             self.present = self.present._replace(audio_error=error)
         else:
             self.present = self.present._replace(
-                outputs=result["outputs"], default_output=result["default"], audio_error="",
+                outputs=result["outputs"], default_output=result["default"],
+                checks=result["checks"], audio_error="",
             )
         before = {name: self.values[name] for name in AUDIO_CHOICES.values()}
         self._update()
         if {name: self.values[name] for name in AUDIO_CHOICES.values()} != before:
             self._start_sound()
 
-    def _output_found(self, spec: str | None) -> bool:
-        outputs = self.present.outputs
-        if outputs is None:
-            return False
-        if spec is None:
-            return self.present.default_output is not None
-        return len(matching_outputs(spec, outputs)) == 1
-
     def automatic(self, name: str) -> object:
-        """What a choice is while nobody has changed it: the lab's while it is there, and what
-        stands in for it while it is not."""
-        lab = getattr(self.lab, name)
-        if name in SCREEN_CHOICES.values():
-            return lab if lab is not None and lab < len(self.present.screens) else None
-        if name in AUDIO_CHOICES.values():
-            # Off the lab's platform its devices cannot exist; on it, a missing one is shown
-            # missing, for someone to connect, rather than quietly replaced by the speakers.
-            if self.present.outputs is None or self._output_found(lab):
-                return lab
-            return lab if on_lab_platform(self.hardware) else None
-        if name == INPUT:
-            return REMOTE if self.present.remote else KEYBOARD
-        return lab
+        """What a choice is while nobody has changed it (`tatp.devices.automatic`)."""
+        return automatic(name, self.hardware, self.present)
 
     def choose(self, name: str, index: int) -> None:
         """A choice made by hand."""
@@ -621,6 +661,8 @@ class HardwareCheckDialog(QDialog):
         self._update()
         if name in AUDIO_CHOICES.values():
             self._start_sound()
+            # Checked at once, as a session would open it, rather than at the next listing.
+            self.probe_audio()
 
     def _update(self) -> None:
         before = self.values[INPUT]
@@ -698,10 +740,15 @@ class HardwareCheckDialog(QDialog):
             if self.present.audio_error:
                 return MISSING, words["audio_list_failed"].format(
                     value=self.present.audio_error)
-            if self.present.outputs is None:
+            why = self.present.checks.get(AUDIO_ROLES[name], {}).get(check_key(value))
+            if self.present.outputs is None or why is None:
+                # Not yet checked: the listing under way checks it.
                 return OK, words["audio_listing"]
-            if not self._output_found(value):
-                return MISSING, words["audio_missing"]
+            if why:
+                # The preflight's own reason, unless the device is simply not there.
+                if value is not None and not matching_outputs(value, self.present.outputs):
+                    return MISSING, words["audio_missing"]
+                return MISSING, words["audio_unusable"].format(value=why)
             if value is None:
                 return STAND_IN, words["audio_default_line"]
             return (OK if value == lab else STAND_IN), words["found"]
@@ -803,7 +850,8 @@ class HardwareCheckDialog(QDialog):
         self._stop_sound()
         audio_config = self.session_hardware()["audio"]
         if audio_config["backend"] == SOUNDDEVICE:
-            self.audio = ChildAudio(audio_config, self._sound_failed, self)
+            self.audio = ChildAudio(audio_config, self._sound_failed, self._show_noise,
+                                    self.hardware["devices"]["child_stop_timeout_s"], self)
         else:
             self.audio = Audio(audio_config, self.clock, lambda *_, **__: None)
         self._show_noise()

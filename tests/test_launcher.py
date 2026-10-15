@@ -18,9 +18,10 @@ from PySide6.QtWidgets import QApplication
 from tatp import config as cfg
 from tatp import hardware_check, launcher, screenshots
 from tatp import schedule as sched
-from tatp.devices import KEYBOARD, ON_SCREEN, HardwareChoices
+from tatp.devices import CHOICE_NAMES, KEYBOARD, ON_SCREEN, REMOTE, HardwareChoices, Present
 from tatp.hardware_check import Detectors
 from tatp.launcher import REFUSE, RESUME_KEY, WARN, LauncherWindow
+from tatp.screenshots import sample_probe
 from tools import preview_schedule
 
 T_ZERO = datetime(2026, 9, 24, 9, 30)
@@ -102,8 +103,30 @@ def test_the_chosen_garment_is_the_session_driver(app, loaded, tmp_path):
 MACBOOK = HardwareChoices(
     participant_screen_index=None, experimenter_screen_index=0,
     participant_audio_device=None, experimenter_audio_device=None, garment_port=None,
-    participant_input=KEYBOARD, chosen=frozenset({"participant_input"}),
+    participant_input=KEYBOARD, chosen=frozenset(CHOICE_NAMES),
 )
+
+
+def test_what_was_not_chosen_by_hand_is_worked_out_again_at_each_start(app, loaded, tmp_path,
+                                                                        monkeypatch):
+    """Code review: a second monitor or the remote connected after Continue is used, while a
+    choice made by hand stays (docs/LOG.md N7.F12e1)."""
+    connected = SimpleNamespace(screens=[(1280, 800)], remote=False)
+    monkeypatch.setattr(launcher, "present_now", lambda hardware, choices: Present(
+        list(connected.screens), [], connected.remote))
+    automatic = HardwareChoices(None, 0, None, None, None, KEYBOARD,
+                                chosen=frozenset({"experimenter_audio_device"}))
+    window = LauncherWindow(loaded, Fakes().preflight, Fakes().build, choices=automatic)
+    dialog = _filled(window, tmp_path)
+    hardware = dialog.config(dialog.args()).hardware
+    assert hardware["screens"]["participant_screen_index"] is None
+    assert hardware["responder"]["participant_input"] == KEYBOARD
+    connected.screens = [(1280, 800), (1280, 800)]
+    connected.remote = True
+    hardware = dialog.config(dialog.args()).hardware
+    assert hardware["screens"]["participant_screen_index"] == 1
+    assert hardware["responder"]["participant_input"] == REMOTE
+    assert hardware["audio"]["experimenter_device"] is None, "chosen by hand: kept"
 
 
 @pytest.mark.parametrize("demo", [False, True])
@@ -131,7 +154,7 @@ def test_the_hardware_entry_reopens_the_page_and_continue_keeps_its_choices(
     connected = SimpleNamespace(screens=[(1280, 800)], ports=[], remote=None)
     monkeypatch.setattr(hardware_check, "live_detectors", lambda hardware, parent: Detectors(
         lambda: connected.screens, lambda: connected.ports, lambda: connected.remote,
-        lambda _audio, on_done: on_done({"outputs": [], "default": None, "unresolved": {}}, ""),
+        lambda request, on_done: on_done(sample_probe(request, [], None), ""),
     ))
     window = LauncherWindow(loaded, Fakes().preflight, Fakes().build, choices=MACBOOK)
     page = window.hardware_check_dialog()

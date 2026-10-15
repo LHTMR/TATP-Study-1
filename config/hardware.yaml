@@ -11,7 +11,10 @@ lab_platform: win32
 devices:
   poll_interval_s: 2.0               # screens, serial ports and the remote, read again
   audio_poll_interval_s: 6.0         # sound devices, listed again in a child process
-  probe_timeout_s: 20.0              # a child process that has not listed them by then failed
+  # A child process that has not listed them by then failed. The preflight waits for it on the
+  # GUI thread, so this is also the longest Check can freeze the launcher.
+  probe_timeout_s: 8.0
+  child_stop_timeout_s: 1.0          # the test-sound child given this long to end, then killed
 
 garment:
   driver: mock                       # mock | arduino_mosfet | arduino_valves
@@ -105,17 +108,17 @@ responder:
   # pilot code or a demonstration only: preflight refuses them for a study participant, whose
   # responses must come from the device the study describes (tatp/preflight.py).
   participant_input: remote
-  # `keyboard`: keys on every keyboard, a MacBook's included, that nobody types by accident
-  # while a session runs. The arrows are the large buttons, left and right where they sit;
-  # Return is ▶. Esc is the emergency stop: the key that means stop, alone in its corner and
-  # pressed on purpose, never by a hand resting on the arrows. It is also one of the remote's
-  # ▶ keys, so with the remote plugged in, choose the remote instead. Every keyboard counts
-  # (any_keyboard), except inside a text field (docs/LOG.md N7.I1).
+  # `keyboard`: keys on every keyboard, a MacBook's included. The arrows are the large buttons,
+  # left and right where they sit; Return is ▶. The emergency stop is the full stop, the key
+  # the remote's own stop button sends, so the mapping mirrors the remote. Not Esc, which
+  # dismisses every dialog and would have made closing one an emergency stop (code review,
+  # docs/LOG.md N7.F12e4). Every keyboard counts (any_keyboard), except in a text field, a
+  # dialog, a list or a combo box, which use these keys themselves (tatp/ui/participant.py).
   alternative_keys:
     decrease: [left]
     increase: [right]
     confirm: [return, enter]
-    emergency_stop: [escape]
+    emergency_stop: [period]
   # WHAT IS PHYSICALLY PRINTED ON EACH BUTTON. A screen that draws a control draws the symbol
   # the participant's thumb is resting on, at its physical arrangement (UI_PRINCIPLES.md 5.9),
   # so relabelling the remote is a change here and nowhere else. This lives in hardware.yaml

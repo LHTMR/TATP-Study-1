@@ -212,6 +212,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "devices.poll_interval_s", NUMBER, 0, None),
     ("hardware.yaml", "devices.audio_poll_interval_s", NUMBER, 0, None),
     ("hardware.yaml", "devices.probe_timeout_s", NUMBER, 0, None),
+    ("hardware.yaml", "devices.child_stop_timeout_s", NUMBER, 0, None),
     ("hardware.yaml", "responder.participant_input", str, None, None),
     ("hardware.yaml", "responder.alternative_keys.decrease", list, None, None),
     ("hardware.yaml", "responder.alternative_keys.increase", list, None, None),

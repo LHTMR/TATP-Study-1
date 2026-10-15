@@ -567,8 +567,10 @@ preflight:
   another_instance: En annan session körs redan från den här datamappen ({value}). Stäng den först.
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_missing: Deltagarens fjärrkontroll är inte ansluten (inget tangentbord matchar {value}). Anslut mottagaren och starta igen.
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_needs_windows: Den här datorn ({value}) kan inte skilja fjärrkontrollen från andra tangentbord. Sätt responder.key_source till any_keyboard i hardware.yaml, eller kör sessionen på labbdatorn.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  remote_needs_windows: Den här datorn ({value}) kan inte skilja fjärrkontrollen från andra tangentbord, så en studiedeltagares session kan inte köras här. Kör den på labbdatorn. En pilotkod eller en demonstration kan köras här.
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_check_failed: 'Ljudenheterna kunde inte kontrolleras ({value}). Ingenting kan starta förrän de kan det: kontrollera att ljudenheterna fungerar och kontrollera sedan igen.'
   # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
   participant_audio_missing: 'Deltagarens hörlurar kan inte användas ({value}). Anslut eller slå på dem, eller välj en annan utgång under Kontrollera utrustningen, och kontrollera sedan igen. Programmet behöver inte startas om.'
   # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
@@ -886,7 +888,7 @@ hardware_check:
   # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
   inputs:
     remote: Fjärrkontrollen
-    keyboard: 'Tangentbord: ← → Retur, Esc stoppar'
+    keyboard: 'Tangentbord: ← → Retur, punkt stoppar'
     on_screen: 'Mus eller styrplatta: knappar i deltagarens fönster'
   # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
   remote_hint: Tryck på varje knapp; just dess räknare ska öka. ▶ skickar två tangenter i tur och ordning, och båda räknas.
@@ -910,6 +912,9 @@ hardware_check:
     experimenter_audio_device: försöksledarens högtalare
     garment_port: ärmens port
     participant_input: deltagarens svar
+    key_source: vilket tangentbord som räknas som fjärrkontrollen
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_unusable: 'Kan inte användas: {value}'
   # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
   found: Hittad.
   # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced

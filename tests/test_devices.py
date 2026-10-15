@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import sys
 
 import pytest
@@ -67,7 +68,7 @@ def test_a_macbook_with_one_screen_and_no_lab_device(lab):
     assert hardware["responder"]["keys"] == lab["responder"]["alternative_keys"]
     assert hardware["changed_at_launch"].split(";") == [
         "participant_screen_index", "participant_audio_device", "experimenter_audio_device",
-        "garment_port", "participant_input",
+        "garment_port", "participant_input", devices.KEY_SOURCE_CHANGE,
     ]
 
 
@@ -84,22 +85,54 @@ def test_off_windows_the_remote_is_read_from_every_keyboard(lab, monkeypatch):
     monkeypatch.setattr(session, "raw_input_available", lambda: False)
     hardware = hardware_with_choices(lab, _choices(lab, participant_input=REMOTE))
     assert hardware["responder"]["key_source"] == ANY_KEYBOARD
-    assert hardware["changed_at_launch"] == ""
+    assert hardware["changed_at_launch"] == devices.KEY_SOURCE_CHANGE, (
+        "recorded, never silent: preflight refuses it for a study participant"
+    )
 
 
-def test_the_alternative_keys_are_none_of_the_remotes_but_its_play_buttons_escape(lab):
+def test_the_keyboards_stop_is_the_remotes_own_and_no_dialog_key(lab):
+    """The full stop mirrors the remote's stop button; Esc, which dismisses dialogs, is not a
+    key of the keyboard input at all (code review of N7.F12e4)."""
     responder = lab["responder"]
     alternative = {key for keys in responder["alternative_keys"].values() for key in keys}
-    remote = {key for keys in responder["keys"].values() for key in keys}
-    assert alternative & remote == {"escape"}, "hardware.yaml says why Esc is allowed"
+    stop = responder["alternative_keys"]["emergency_stop"]
+    assert stop == responder["keys"]["emergency_stop"]
+    assert "escape" not in alternative
+
+
+def test_what_was_not_chosen_follows_what_is_connected(lab):
+    choices = dataclasses.replace(configured(lab), chosen=frozenset({"garment_port"}),
+                                  garment_port="COM9")
+    one_screen = devices.Present([(1470, 956)], [], None)
+    settled = devices.settle(choices, lab, one_screen)
+    assert settled.participant_screen_index is None
+    assert settled.participant_input == KEYBOARD
+    assert settled.garment_port == "COM9", "chosen by hand: kept"
+    two_screens = devices.Present([(1280, 800), (1280, 800)], [], True)
+    settled = devices.settle(choices, lab, two_screens)
+    assert settled.participant_screen_index == lab["screens"]["participant_screen_index"]
+    assert settled.participant_input == REMOTE
+
+
+def test_off_the_lab_platform_an_unusable_lab_device_gives_way_to_the_default(lab):
+    lab_device = lab["audio"]["participant_device"]
+    present = devices.Present([(1280, 800)], [], None, outputs=["Speakers, Core Audio"],
+                              checks={"participant": {lab_device: "No output device",
+                                                      devices.DEFAULT_KEY: ""}})
+    elsewhere = {**lab, "lab_platform": "elsewhere"}
+    assert devices.automatic("participant_audio_device", elsewhere, present) is None
+    here = {**lab, "lab_platform": sys.platform}
+    assert devices.automatic("participant_audio_device", here, present) == lab_device
 
 
 def test_the_sound_devices_are_listed_by_a_child_process(lab):
     """The child path end to end, on whatever this machine has: it loads PortAudio, and this
-    process does not (docs/LOG.md N7.F12e2)."""
-    listed = devices.probe_in_child(lab["audio"], lab["devices"]["probe_timeout_s"])
-    assert set(listed) == {"outputs", "default", "unresolved"}
+    process does not (docs/LOG.md N7.F12e2). Each candidate is checked as a session opens it."""
+    request = devices.probe_request(lab["audio"], {"participant": [None, "no such device"]})
+    listed = devices.probe_in_child(request, lab["devices"]["probe_timeout_s"])
+    assert set(listed) == {"outputs", "default", "checks"}
     assert all(isinstance(output, str) for output in listed["outputs"])
+    assert listed["checks"]["participant"]["no such device"], "a reason it cannot be opened"
 
 
 def test_the_test_sound_child_plays_through_the_sessions_audio(lab, capsys):
@@ -113,7 +146,7 @@ def test_the_test_sound_child_plays_through_the_sessions_audio(lab, capsys):
     commands = [f"{devices.START_NOISE} -30", f"{devices.SET_LEVEL} -20", devices.CUE,
                 devices.ALERT, devices.STOP_NOISE]
     devices.serve(audio, commands, _NoPortAudio)
-    assert capsys.readouterr().out == ""
+    assert capsys.readouterr().out == f"{devices.STARTED}\n", "only that the noise started"
 
 
 def test_a_failed_sound_is_reported_and_the_child_carries_on(lab, capsys):

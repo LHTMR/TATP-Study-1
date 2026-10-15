@@ -25,7 +25,9 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication, QDialog
 
 from tatp import config as cfg
 from tatp import preflight as pre
@@ -46,6 +48,7 @@ from tatp.demo import (
     demo_config,
     resolved,
 )
+from tatp.devices import configured, settle
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import (
@@ -53,6 +56,7 @@ from tatp.session import (
     Session,
     SessionError,
     canonical_initials,
+    with_hardware_choices,
     with_session_choices,
 )
 from tatp.session_runner import SessionRunner, stage_layout, stop_on_error, summary_phase
@@ -308,14 +312,49 @@ def _build_holding(config, args, resume_decision, data_folder) -> SessionRunner:
 
 def share_screen(participant: ParticipantWindow, screens: dict) -> None:
     """The participant window on the experimenter's screen: one display, a MacBook or a
-    development machine (docs/LOG.md N7.F12e5). A window of its own size in the screen's
+    development machine (docs/LOG.md N7.F12e5). A window of its own size in that screen's
     lower right, kept above the experimenter window, which is maximised and would otherwise
-    hide it at every click of Next step. It can be moved and resized."""
+    hide it at every click of Next step. It can be moved and resized. While an experimenter
+    dialog is open it is not kept above, so it never hides one (`DialogsAbove`)."""
     width, height = screens["shared_participant_window_px"]
+    index = screens["experimenter_screen_index"]
+    available_screens = QGuiApplication.screens()
+    screen = (available_screens[index] if index is not None and index < len(available_screens)
+              else QGuiApplication.primaryScreen())
     participant.setWindowFlag(Qt.WindowStaysOnTopHint)
+    # Shown again whenever its flags change; it must not take the keys from the experimenter.
+    participant.setAttribute(Qt.WA_ShowWithoutActivating)
     participant.resize(width, height)
-    available = participant.screen().availableGeometry()
+    available = screen.availableGeometry()
     participant.move(available.right() - width, available.bottom() - height)
+    QApplication.instance().installEventFilter(DialogsAbove(participant))
+
+
+class DialogsAbove(QObject):
+    """Drops the shared participant window's always-on-top while any dialog is shown, and
+    raises the dialog, so a modal question is never hidden behind it; restores it after."""
+
+    def __init__(self, participant: ParticipantWindow):
+        super().__init__(participant)
+        self.participant = participant
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802 -- Qt's name
+        if event.type() not in (QEvent.Show, QEvent.Hide) or not isinstance(watched, QDialog):
+            return False
+        if not watched.isWindow():
+            return False
+        participant = self.participant
+        dialog_open = any(isinstance(widget, QDialog) and widget.isVisible()
+                          for widget in QApplication.topLevelWidgets())
+        on_top = bool(participant.windowFlags() & Qt.WindowStaysOnTopHint)
+        if dialog_open == on_top:
+            participant.setWindowFlag(Qt.WindowStaysOnTopHint, not dialog_open)
+            if participant.isHidden():
+                participant.show()
+        if event.type() == QEvent.Show:
+            watched.raise_()
+            watched.activateWindow()
+        return False
 
 
 def shut_down(runner: SessionRunner) -> None:
@@ -349,8 +388,11 @@ def main(argv: list[str] | None = None) -> int:
         return run_launcher(argv)
     args = parse_args(argv)
     loaded = cfg.load(args.participant_language, args.experimenter_language)
+    # Qt first: what is connected is asked of it.
+    scale_screens(loaded.hardware)
+    app = application(loaded.hardware)
     if args.demo:
-        config = demo_session(loaded, args)
+        config = demo_session(on_this_computer(loaded), args)
     else:
         config = with_session_choices(loaded, garment=args.garment)
     for line in warnings_for(config):
@@ -366,8 +408,6 @@ def main(argv: list[str] | None = None) -> int:
     if any(key == RESUME_OFFER for _, key, _ in findings) and args.resume is None:
         return EXIT_OPEN_SESSION  # the terminal's answer is --resume or --new
 
-    scale_screens(config.hardware)
-    app = application(config.hardware)
     runner = build(config, args)
     demo = attach_demo(runner, args) if args.demo else None
     # With no session open the error is on the console already, and there is nowhere else.
@@ -379,6 +419,19 @@ def main(argv: list[str] | None = None) -> int:
         demo.stop()
     shut_down(runner)
     return 0 if runner.completed else 1
+
+
+def on_this_computer(loaded: cfg.Config) -> cfg.Config:
+    """hardware.yaml settled against what is connected, as the hardware page settles it with
+    nothing chosen by hand (`tatp.devices.settle`, docs/LOG.md N7.F12e5): a configured screen
+    that is not there becomes a window, a lab sound device off the lab's platform the default
+    output, and a remote that cannot be seen the keyboard. For a demonstration named on the
+    command line, so it runs from a MacBook's terminal too."""
+    from tatp.hardware_check import present_now  # Qt widgets, needed only here
+
+    lab = configured(loaded.hardware)
+    present = present_now(loaded.hardware, lab)
+    return with_hardware_choices(loaded, settle(lab, loaded.hardware, present))
 
 
 def demo_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:

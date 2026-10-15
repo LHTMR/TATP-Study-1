@@ -12,11 +12,13 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication, QDialog
 
 import run_session
 from tatp import config as cfg
 from tatp import preflight as pre
+from tatp.devices import Present, candidates, check_key
 from tatp.session import SessionError
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
@@ -256,7 +258,43 @@ def test_one_screen_puts_the_participant_window_above_the_experimenters(app, con
     width, height = config.hardware["screens"]["shared_participant_window_px"]
     assert participant.windowFlags() & Qt.WindowStaysOnTopHint
     assert (participant.width(), participant.height()) == (width, height)
+    available = QGuiApplication.primaryScreen().availableGeometry()
+    assert participant.geometry().bottomRight().x() <= available.right() + 1
     run_session.shut_down(runner)
+
+
+def test_a_shared_participant_window_never_hides_an_experimenter_dialog(app, config):
+    """Code review: kept above the experimenter window, but not above a modal question."""
+    runner = run_session.build(config, run_session.parse_args(ARGV), _never)
+    participant = runner.rig.participant
+    dialog = QDialog(runner.rig.experimenter)
+    dialog.show()
+    assert not participant.windowFlags() & Qt.WindowStaysOnTopHint
+    assert participant.isVisible()
+    dialog.hide()
+    assert participant.windowFlags() & Qt.WindowStaysOnTopHint
+    assert participant.isVisible()
+    run_session.shut_down(runner)
+
+
+def test_a_demonstration_from_the_command_line_runs_on_whatever_is_connected(app, loaded,
+                                                                             monkeypatch):
+    """S's MacBook from a terminal: one screen, its own speakers, no remote (code review)."""
+    import tatp.hardware_check
+
+    monkeypatch.setattr(tatp.hardware_check, "present_now", lambda hardware, choices: Present(
+        [(1470, 956)], [], None, outputs=["Speakers, Core Audio"], default_output="Speakers",
+        checks={role: {check_key(spec): ("" if spec is None else "No output device")
+                       for spec in specs}
+                for role, specs in candidates(hardware, choices).items()},
+    ))
+    elsewhere = cfg.Config(**{**loaded.__dict__,
+                              "hardware": {**loaded.hardware, "lab_platform": "elsewhere"}})
+    config = run_session.on_this_computer(elsewhere)
+    assert config.hardware["screens"]["participant_screen_index"] is None
+    assert config.hardware["audio"]["participant_device"] is None
+    assert config.hardware["audio"]["experimenter_device"] is None
+    assert config.hardware["responder"]["key_source"] == "any_keyboard"
 
 
 def test_build_returns_an_unstarted_runner_holding_the_lock(app, config):

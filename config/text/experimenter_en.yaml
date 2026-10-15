@@ -561,8 +561,10 @@ preflight:
   another_instance: Another session is already running from this data folder ({value}). Close it first.
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_missing: The participant's remote is not plugged in (no keyboard matching {value}). Plug in its receiver, then start again.
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_needs_windows: This computer ({value}) cannot tell the remote from other keyboards. Set responder.key_source to any_keyboard in hardware.yaml, or run the session on the lab PC.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  remote_needs_windows: This computer ({value}) cannot tell the remote from other keyboards, so a study participant's session cannot run here. Run it on the lab PC. A pilot code or a demonstration can run here.
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_check_failed: 'The sound devices could not be checked ({value}). Nothing can start until they can: check that the sound devices are working, then check again.'
   # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
   participant_audio_missing: 'The participant''s headphones cannot be used ({value}). Connect or switch them on, or choose another output in Check the hardware, then check again. There is no need to restart.'
   # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
@@ -879,7 +881,7 @@ hardware_check:
   # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
   inputs:
     remote: The remote
-    keyboard: 'Keyboard: ← → Return, Esc stops'
+    keyboard: 'Keyboard: ← → Return, . (full stop) stops'
     on_screen: 'Mouse or trackpad: buttons on the participant''s window'
   # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
   remote_hint: Press each button; its own count should go up. ▶ sends two keys in turn, and both count.
@@ -903,6 +905,9 @@ hardware_check:
     experimenter_audio_device: the experimenter's speakers
     garment_port: the sleeve's port
     participant_input: the participant's responses
+    key_source: which keyboard counts as the remote
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_unusable: 'Cannot be used: {value}'
   # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
   found: Found.
   # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced

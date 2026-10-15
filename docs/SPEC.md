@@ -656,12 +656,16 @@ field (N7.I1).
 
 **Without the remote, a pilot or a demonstration may respond otherwise** (docs/LOG.md
 N7.F12e4), chosen on the hardware page: the keyboard (`responder.alternative_keys`: ← and → for
-the large buttons, Return for ▶, Esc for the emergency stop), or buttons on the participant
-window for a mouse or trackpad, which press and release the remote's own keys at the mouse's own
-times, so a hold is a hold. Both read every keyboard (`any_keyboard`), are the same in every
-condition, and are recorded (`participant_input`). Preflight refuses either for a study
-participant's code: only a pilot code (above `design.pilot_code_offset`) or a demonstration may
-use them. With the remote the participant window is the approved screens, with no buttons.
+the large buttons, Return for ▶, and the full stop, the remote's own stop key, for the emergency
+stop -- never Esc, which dismisses dialogs), or buttons on the participant window for a mouse or
+trackpad, which press and release the remote's own keys at the mouse's own times, so a hold is a
+hold. Both read every keyboard (`any_keyboard`), are the same in every condition, and are
+recorded (`participant_input`). Under any_keyboard a key is not forwarded to the participant
+from a dialog, a popup, a list or a combo box, which use these keys themselves, except the stop,
+which always is. Preflight refuses either alternative for a study participant's code, and so
+the remote off Windows, where it cannot be told from the experimenter's keyboard: only a pilot
+code (above `design.pilot_code_offset`) or a demonstration may. With the remote the participant
+window is the approved screens, with no buttons.
 
 **What is printed on each button is configuration, not code.** `responder.button_symbols` in
 `hardware.yaml` records the glyph on each button, and a screen that draws a control draws that

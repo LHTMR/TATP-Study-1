@@ -28,6 +28,7 @@ from tatp.config import REPO_ROOT, Config, hash_files
 from tatp.datafiles import DataFileCollection
 from tatp.devices import (
     CHOICE_NAMES,
+    KEY_SOURCE_CHANGE,
     KEYBOARD,
     PARTICIPANT_INPUTS,
     REMOTE,
@@ -134,6 +135,10 @@ def hardware_with_choices(hardware: dict, choices: HardwareChoices) -> dict:
     changed = [
         name for name in CHOICE_NAMES if getattr(choices, name) != getattr(lab, name)
     ]
+    # Recorded, never silent: off Windows "the remote" is every keyboard, which preflight
+    # refuses for a study participant (docs/LOG.md N7.F12e4).
+    if responder["key_source"] != hardware["responder"]["key_source"]:
+        changed.append(KEY_SOURCE_CHANGE)
     garment = hardware["garment"]
     return {
         **hardware,

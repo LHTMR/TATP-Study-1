@@ -5,19 +5,28 @@ everything behind it -- the adjustment's hold, the VAS, the emergency stop -- is
 from __future__ import annotations
 
 import dataclasses
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QDialog,
+    QListWidget,
+    QPushButton,
+    QWidget,
+)
 
 from tatp import config as cfg
 from tatp.clock import Clock
 from tatp.devices import KEYBOARD, ON_SCREEN, configured
+from tatp.remote_keys import AnyKeyboard
 from tatp.responder import Action, Responder
 from tatp.session import with_hardware_choices
-from tatp.ui.participant import ParticipantWindow
+from tatp.ui.participant import ParticipantWindow, RemoteKeyRouter, uses_keys
 from tatp.ui.vas import QT_KEYS
 
 HOLD_MS = 400
@@ -91,15 +100,64 @@ def test_the_keyboards_arrows_are_the_large_buttons(app, loaded):
     window.show_adjustment(sorted(loaded.participant_text["adjust_targets"])[0])
     seen = _record(window)
     for name, kind in (("left", QEvent.KeyPress), ("left", QEvent.KeyRelease),
-                       ("escape", QEvent.KeyPress)):
+                       ("period", QEvent.KeyPress)):
         QApplication.sendEvent(window, QKeyEvent(kind, QT_KEYS[name], Qt.NoModifier))
     assert [event[:2] for event in seen] == [("pressed", "decrease"), ("released", "decrease"),
                                             ("stop",)]
 
 
-def test_the_remotes_keys_do_nothing_under_the_keyboard(app, loaded):
+def test_the_remotes_other_keys_do_nothing_under_the_keyboard(app, loaded):
+    """Esc above all: it closes dialogs, so it is no key of the keyboard input (code review)."""
     window = _window(_with_input(loaded, KEYBOARD))
     window.show_adjustment(sorted(loaded.participant_text["adjust_targets"])[0])
     seen = _record(window)
-    QApplication.sendEvent(window, QKeyEvent(QEvent.KeyPress, QT_KEYS["period"], Qt.NoModifier))
+    for name in ("pageup", "escape", "f5"):
+        QApplication.sendEvent(window, QKeyEvent(QEvent.KeyPress, QT_KEYS[name], Qt.NoModifier))
     assert seen == []
+
+
+@pytest.fixture
+def routed(app, loaded):
+    """The keyboard input routed as a session routes it, beside an experimenter window and a
+    dialog of the experimenter's."""
+    window = _window(_with_input(loaded, KEYBOARD))
+    window.show_adjustment(sorted(loaded.participant_text["adjust_targets"])[0])
+    router = RemoteKeyRouter(window, AnyKeyboard(), window)
+    QApplication.instance().installEventFilter(router)
+    experimenter = QWidget()
+    surface = QPushButton("Next step", experimenter)
+    experimenter.show()
+    dialog = QDialog()
+    accept = QPushButton("OK", dialog)
+    dialog.show()
+    yield SimpleNamespace(window=window, seen=_record(window), surface=surface, accept=accept,
+                          combo=QComboBox(experimenter))
+    QApplication.instance().removeEventFilter(router)
+
+
+def _key(widget, name, kind=QEvent.KeyPress):
+    QApplication.sendEvent(widget, QKeyEvent(kind, QT_KEYS[name], Qt.NoModifier))
+
+
+def test_keys_over_the_experimenter_windows_surface_reach_the_participant(routed):
+    """One person playing both parts on one screen presses the arrows after Next step."""
+    _key(routed.surface, "left")
+    assert [event[:2] for event in routed.seen] == [("pressed", "decrease")]
+
+
+def test_return_or_an_arrow_in_a_dialog_or_a_list_is_the_experimenters(routed):
+    """Code review: Return accepting a dialog is not ▶, an arrow in a combo box does not move
+    the participant's control."""
+    _key(routed.accept, "return")
+    _key(routed.accept, "left")
+    assert routed.seen == []
+    # A key a list or a combo box uses is its own; one it leaves goes on to the window's
+    # surface, as Qt passes it, and is the participant's from there.
+    assert uses_keys(routed.combo) and uses_keys(QListWidget())
+    assert not uses_keys(routed.surface)
+
+
+def test_the_stop_is_forwarded_even_from_a_dialog(routed):
+    """No dialog uses the full stop, and a stop is never to be lost."""
+    _key(routed.accept, "period")
+    assert routed.seen == [("stop",)]

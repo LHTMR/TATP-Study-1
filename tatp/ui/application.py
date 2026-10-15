@@ -19,10 +19,10 @@ from PySide6.QtGui import QFont, QFontDatabase, QFontInfo
 from PySide6.QtWidgets import QApplication
 
 from tatp.config import REPO_ROOT
+from tatp.devices import on_lab_platform
 
 SCALE_FACTORS_VARIABLE = "QT_SCREEN_SCALE_FACTORS"
 SCALE_FACTORS_SEPARATOR = ";"
-SCALED_PLATFORM = "win32"
 
 
 def scale_screens(hardware: dict) -> None:
@@ -36,12 +36,12 @@ def scale_screens(hardware: dict) -> None:
     1920x1200 screens at 1.5 are both 1280x800, which is the size every screen is laid out,
     tested and approved at (docs/LOG.md N7.U10).
 
-    Windows only. The factors describe the lab laptop's screens in place of the Windows
-    setting; macOS already draws in points, and multiplies any factor given here on top of its
-    own, so a MacBook's 1470x956 points would shrink to 980x637 at 1.5 and no screen would fit
-    (docs/LOG.md N7.F12e5).
+    On the lab's platform only (hardware.yaml `lab_platform`). The factors describe the lab
+    laptop's screens in place of the Windows setting; macOS already draws in points, and
+    multiplies any factor given here on top of its own, so a MacBook's 1470x956 points would
+    shrink to 980x637 at 1.5 and no screen would fit (docs/LOG.md N7.F12e5).
     """
-    if QApplication.instance() is not None or sys.platform != SCALED_PLATFORM:
+    if QApplication.instance() is not None or not on_lab_platform(hardware):
         return
     factors = hardware["screens"]["scale_factors"]
     if factors is not None:

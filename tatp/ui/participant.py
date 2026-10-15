@@ -35,10 +35,15 @@ from PySide6.QtGui import (
     QPen,
 )
 from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QAbstractSlider,
     QAbstractSpinBox,
     QApplication,
+    QComboBox,
+    QDialog,
     QHBoxLayout,
     QLineEdit,
+    QMenu,
     QPlainTextEdit,
     QPushButton,
     QStackedWidget,
@@ -970,6 +975,21 @@ class ParticipantWindow(QWidget):
 # experimenter typing, not the participant pressing -- the remote's emergency stop is the full
 # stop, which is also typed.
 TEXT_ENTRY_WIDGETS = (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
+# Widgets that act on the arrows, Return and Esc themselves (code review of N7.F12e4). Under
+# any_keyboard a key reaching one of these, or any widget in a dialog or a popup, is the
+# experimenter's: Return accepting a dialog is not ▶, and an arrow in a list does not move the
+# participant's marker. The stop is still forwarded from them: no dialog uses the full stop, and
+# a stop is never to be lost.
+KEY_USING_WIDGETS = (QComboBox, QAbstractItemView, QAbstractSlider, QMenu)
+
+
+def uses_keys(widget: QWidget) -> bool:
+    window = widget.window()
+    return (
+        isinstance(widget, KEY_USING_WIDGETS)
+        or isinstance(window, QDialog)
+        or window.windowType() == Qt.Popup
+    )
 
 # Set in a key event's native modifiers to mark it as the remote's own, delivered to the
 # participant: from its raw report, or forwarded by the router. Bit 31, which Windows' native
@@ -1005,7 +1025,11 @@ class RemoteKeyRouter(QObject):
     - **It cannot** (`any_keyboard`): every keyboard is the remote, and its keys are forwarded
       to the participant, except a key typed into an experimenter text field, which is taken as
       the experimenter writing a note or a distance (docs/LOG.md N7.I1). A participant's stop
-      pressed while the experimenter is typing then reaches the field.
+      pressed while the experimenter is typing then reaches the field. Nor are the other
+      buttons' keys forwarded from a dialog, a popup, a list or a combo box, which use them
+      (`uses_keys`); the stop still is. So on one screen, with one person playing both parts
+      (a MacBook, N7.F12e4), keys pressed over the experimenter window's own surface -- after
+      clicking Next step, say -- still reach the participant.
     """
 
     def __init__(self, participant: ParticipantWindow, source, parent: QObject | None = None):
@@ -1035,6 +1059,8 @@ class RemoteKeyRouter(QObject):
         if at_participant or not participant.isVisible():
             return False
         if isinstance(watched, TEXT_ENTRY_WIDGETS):
+            return False
+        if participant._action(event) is not Action.EMERGENCY_STOP and uses_keys(watched):
             return False
         # The native codes go with it, as the remote's own event would carry them.
         forwarded = QKeyEvent(

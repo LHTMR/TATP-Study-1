@@ -76,8 +76,8 @@ from tatp.demo import (
     demo_config,
     resolved,
 )
-from tatp.devices import HardwareChoices, configured
-from tatp.hardware_check import HardwareCheckDialog
+from tatp.devices import HardwareChoices, configured, settle
+from tatp.hardware_check import HardwareCheckDialog, present_now
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
 from tatp.session import (
     DRIVERS,
@@ -687,10 +687,12 @@ class LauncherWindow(QWidget):
 
     def load(self, participant_language: str, experimenter_language: str) -> cfg.Config:
         """The configuration a session is checked and started with: these languages, and the
-        hardware page's choices."""
-        return with_hardware_choices(
-            cfg.load(participant_language, experimenter_language), self.choices
-        )
+        hardware page's choices settled against what is connected now (docs/LOG.md N7.F12e1):
+        what was chosen by hand stays, and the rest are worked out again, so a monitor or the
+        remote connected after the page closed is used."""
+        loaded = cfg.load(participant_language, experimenter_language)
+        present = present_now(loaded.hardware, self.choices)
+        return with_hardware_choices(loaded, settle(self.choices, loaded.hardware, present))
 
     def open_demo_dialog(self) -> SessionDialog:
         """Run a demo (tatp/demo.py): the session dialog, for a demonstration."""
