@@ -40,10 +40,10 @@ screens:
     0.2 s after channel 4 was turned on (docs/LOG.md N7.F12f): its row lit and its
     bar outlined, fading back over demo.garment_highlight_s (en).'
   experimenter_en_demo_controls_worn_link_lost: 'The Demo controls on a worn garment,
-    its link lost (docs/LOG.md N7.F12f): the participant a person and Finish this
-    stage off, said in amber; the channels held at their last command in amber, not
-    shown switching off, with the warning that the outputs may still hold it (N7.U16)
-    (en).'
+    its link lost (docs/LOG.md N7.F12f): the participant and the experimenter people
+    and Finish this stage off, said in amber; the channels held at their last command
+    in amber, not shown switching off, with the warning that the outputs may still
+    hold it (N7.U16) (en).'
   experimenter_en_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column
@@ -111,8 +111,8 @@ screens:
   experimenter_en_launcher_demo: 'Run a demo (docs/LOG.md N7.D23): the session dialog
     with the demonstration''s own participant code shown and not editable, no data
     folder or REDCap form, the mock garment (changeable: another runs at real time
-    only, N7.F12f) and the example patterns chosen, and the speed and who presses
-    for the participant and the experimenter (en).'
+    only, with people pressing, N7.F12f) and the example patterns chosen, and the
+    speed and who presses for the participant and the experimenter (en).'
   experimenter_en_launcher_hardware_check: 'The hardware check (LOG N7.F4), at the
     lab laptop''s size, as it opens: a count for each remote button, where each screen
     lands, the sound devices, the noise within the participant''s own range with the
@@ -218,10 +218,10 @@ screens:
     0.2 s after channel 4 was turned on (docs/LOG.md N7.F12f): its row lit and its
     bar outlined, fading back over demo.garment_highlight_s (sv).'
   experimenter_sv_demo_controls_worn_link_lost: 'The Demo controls on a worn garment,
-    its link lost (docs/LOG.md N7.F12f): the participant a person and Finish this
-    stage off, said in amber; the channels held at their last command in amber, not
-    shown switching off, with the warning that the outputs may still hold it (N7.U16)
-    (sv).'
+    its link lost (docs/LOG.md N7.F12f): the participant and the experimenter people
+    and Finish this stage off, said in amber; the channels held at their last command
+    in amber, not shown switching off, with the warning that the outputs may still
+    hold it (N7.U16) (sv).'
   experimenter_sv_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column
@@ -289,8 +289,8 @@ screens:
   experimenter_sv_launcher_demo: 'Run a demo (docs/LOG.md N7.D23): the session dialog
     with the demonstration''s own participant code shown and not editable, no data
     folder or REDCap form, the mock garment (changeable: another runs at real time
-    only, N7.F12f) and the example patterns chosen, and the speed and who presses
-    for the participant and the experimenter (sv).'
+    only, with people pressing, N7.F12f) and the example patterns chosen, and the
+    speed and who presses for the participant and the experimenter (sv).'
   experimenter_sv_launcher_hardware_check: 'The hardware check (LOG N7.F4), at the
     lab laptop''s size, as it opens: a count for each remote button, where each screen
     lands, the sound devices, the noise within the participant''s own range with the

@@ -886,7 +886,8 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"experimenter_{language}_launcher_demo",
         f"Run a demo (docs/LOG.md N7.D23): the session dialog with the demonstration's own "
         f"participant code shown and not editable, no data folder or REDCap form, the mock "
-        f"garment (changeable: another runs at real time only, N7.F12f) and the example "
+        f"garment (changeable: another runs at real time only, with people pressing, "
+        f"N7.F12f) and the example "
         f"patterns chosen, and the speed and who presses for the "
         f"participant and the experimenter ({language}).",
         _grab_dialog(demo),
@@ -921,7 +922,8 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     yield Shot(
         f"experimenter_{language}_demo_controls_worn_link_lost",
         f"The Demo controls on a worn garment, its link lost (docs/LOG.md N7.F12f): the "
-        f"participant a person and Finish this stage off, said in amber; the channels held "
+        f"participant and the experimenter people and Finish this stage off, said in amber; "
+        f"the channels held "
         f"at their last command in amber, not shown switching off, with the warning that the "
         f"outputs may still hold it (N7.U16) ({language}).",
         _grab_dialog(worn),
