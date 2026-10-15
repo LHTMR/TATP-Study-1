@@ -94,6 +94,8 @@ def stylesheet() -> str:
         f"QPushButton {{ background-color: {CONTROL_BACKGROUND}; color: {FOREGROUND}; "
         f"border: 1px solid {CONTROL_BORDER}; padding: {CONTROL_PADDING_PX}px; }}"
         f"QPushButton:disabled {{ color: {DISABLED}; border-color: {CONTROL_BACKGROUND}; }}"
+        # A button that stays down says so: otherwise on and off look the same (N7.F10b).
+        f"QPushButton:checked {{ background-color: {TARGET_COLOUR}; color: {BACKGROUND}; }}"
         f"QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {{ "
         f"background-color: {CONTROL_BACKGROUND}; color: {FOREGROUND}; "
         f"border: 1px solid {CONTROL_BORDER}; padding: {CONTROL_PADDING_PX // 2}px; }}"

@@ -162,10 +162,16 @@ class _FakeSounddevice:
             raise ValueError(f"No output device matching {device!r}")
         return found[0]
 
+    class PortAudioError(Exception):
+        pass
+
+    def check_output_settings(self, device=None, channels=None, samplerate=None):
+        pass
+
 
 def test_a_missing_device_is_named_and_every_output_listed(loaded):
     """S's lab run: the headphones were on a cable, and the configured device is Bluetooth."""
-    audio = {"participant_device": "Bose QC Headphones WASAPI",
+    audio = {**loaded.hardware["audio"], "participant_device": "Bose QC Headphones WASAPI",
              "experimenter_device": "Speakers Realtek WASAPI"}
     words = loaded.experimenter_text["hardware_check"]
     lines, available = device_lines(audio, words, _FakeSounddevice())

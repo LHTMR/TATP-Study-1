@@ -751,6 +751,9 @@ class _SampleSounddevice:
             raise ValueError(f"No output device matching {device!r}")
         return matching[0]
 
+    def check_output_settings(self, device=None, channels=None, samplerate=None):
+        """Every sample device plays at the configured settings."""
+
 
 def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     """The launcher and its dialogs (SPEC.md 4.1). Nothing is started and nothing is written."""

@@ -52,6 +52,8 @@ from PySide6.QtWidgets import QApplication
 
 from tatp import pinprick
 from tatp import resume as resumption
+from tatp.clock import time_of
+from tatp.interruption import PAUSED_SCREEN
 from tatp.mapping import AreaMapping, MappingLedger
 from tatp.pinprick import (
     BrushProtocol,
@@ -74,6 +76,7 @@ from tatp.touchcal import (
 )
 from tatp.touchcal_maths import Delivery
 from tatp.trials import MessageConfirm
+from tatp.ui.experimenter import BLINDED_PHASES
 from tatp.units import S_PER_MIN
 
 # Keys in config/text/participant_*.yaml, not wording.
@@ -100,7 +103,6 @@ NOTE_EVENT = "experimenter_note"
 # An error nothing caught (`stop_on_error`): its `log` event, and the session's abort reason.
 SOFTWARE_ERROR_EVENT = "software_error"
 SOFTWARE_ERROR_REASON = "software error"
-PAUSED_SCREEN = "paused"
 # `Session.set_upcoming` kinds.
 BLOCK, PHASE = "block", "phase"
 FIRST_SESSION = 1
@@ -922,30 +924,44 @@ class SessionRunner(Procedure):
     def _note(self, note: str) -> None:
         """SPEC.md 11's timestamped note: written, then confirmed with the time it was written,
         so a note the experimenter sees confirmed is one that is in the log."""
-        self.session.log(NOTE_EVENT, origin="experimenter", detail=note)
-        self.experimenter.confirm_note(self.session.clock.wall_time_text())
+        stamp = self.session.log(NOTE_EVENT, origin="experimenter", detail=note)
+        self.experimenter.confirm_note(time_of(stamp))
 
     def stop_for_error(self, summary: str) -> None:
         """An error nothing caught, in a session still open (`stop_on_error`).
 
         Qt keeps its event loop running past an exception in a slot, so without this the
         session stood still with nothing on either screen to say why (the masking check, 15
-        Oct 2026). The garment goes to zero first, then the error is logged and told to the
-        experimenter, then the session is aborted -- which keeps everything collected, and
-        leaves it open to a resume (SPEC.md 15).
+        Oct 2026). Everything that could move the session on is cancelled first, so nothing
+        runs under the dialog's own event loop; then the error is logged, the garment goes to
+        zero, the experimenter is told, and the session is aborted -- which keeps everything
+        collected and leaves it open to a resume (SPEC.md 15). The abort happens whatever goes
+        wrong on the way to it, so an error in here cannot leave the session standing.
+
+        During the intervention and the rekindle the experimenter is told that there was an
+        error but not what it was: an exception's text can name a pattern or a condition
+        (SPEC.md 16). The log has it.
         """
-        # The dialog runs its own event loop, so a timer the error left behind can raise again
-        # under it. That one is on the console; the session is already being stopped.
+        # A timer the error left behind can still raise under the dialog. That one is on the
+        # console; the session is already being stopped.
         if self._stopping_for_error:
             return
         self._stopping_for_error = True
-        if self.session.garment.connected:
-            self.session.garment.stop()
-        self.session.log(SOFTWARE_ERROR_EVENT, severity="error", detail=summary)
-        self.participant.show_message(PAUSED_SCREEN)
-        text = self.experimenter.text["dialogs"]["software_error"]
-        self.experimenter.error_dialog(text.format(value=summary)).exec()
-        self.abort(f"{SOFTWARE_ERROR_REASON}: {summary}")
+        try:
+            self.cancel()
+            self.rig.interruptions.cancel_resume()
+            self.session.log(SOFTWARE_ERROR_EVENT, severity="error", detail=summary)
+            if self.session.garment.connected:
+                self.session.garment.stop()
+            self.participant.show_message(PAUSED_SCREEN)
+            dialogs = self.experimenter.text["dialogs"]
+            if self.session.phase in BLINDED_PHASES:
+                message = dialogs["software_error_withheld"]
+            else:
+                message = dialogs["software_error"].format(value=summary)
+            self.experimenter.error_dialog(message).exec()
+        finally:
+            self.abort(f"{SOFTWARE_ERROR_REASON}: {summary}")
 
     def abort(self, reason: str) -> None:
         """The experimenter's abort (SPEC.md 11). Everything collected so far is kept."""

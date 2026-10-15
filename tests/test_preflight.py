@@ -163,16 +163,25 @@ def test_raw_input_off_windows_is_refused_before_anything_is_written(config, mon
 
 
 class _FakeSounddevice:
-    """sounddevice's device matching, with only the devices named here present."""
+    """sounddevice's device matching, with only the devices named here present, and any named
+    in `wrong_rate` present but unable to play at the configured settings."""
 
-    def __init__(self, *present):
+    class PortAudioError(Exception):
+        pass
+
+    def __init__(self, *present, wrong_rate=()):
         self.present = present
+        self.wrong_rate = wrong_rate
 
     def query_devices(self, device, kind):
         assert kind == "output"
         if device not in self.present:
             raise ValueError(f"No output device matching {device!r}")
         return {"name": device}
+
+    def check_output_settings(self, device, channels, samplerate):
+        if device in self.wrong_rate:
+            raise self.PortAudioError(f"Invalid sample rate {samplerate} for {device!r}")
 
 
 def _played_through_sounddevice(config):
@@ -199,6 +208,18 @@ def test_a_sound_device_that_cannot_be_found_is_refused(config):
     assert _keys(pre.preflight(config, "01", 1, "SM", folder, sound=lambda: headphones)) == [
         "preflight.experimenter_audio_missing"
     ]
+
+
+def test_a_sound_device_that_cannot_play_the_configured_settings_is_refused(config):
+    """Found by name is not enough: the noise opens at the configured rate and channels, and a
+    device that refuses them fails in the masking check just the same (review of N7.F10c)."""
+    config = _played_through_sounddevice(config)
+    sd = _FakeSounddevice("Bose QC Headphones WASAPI", "Speakers Realtek WASAPI",
+                          wrong_rate=("Bose QC Headphones WASAPI",))
+    findings = pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config),
+                             sound=lambda: sd)
+    assert _keys(findings) == ["preflight.participant_audio_missing"]
+    assert "Invalid sample rate" in findings[0].value
 
 
 def test_the_recording_double_asks_for_no_device(config):

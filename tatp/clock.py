@@ -23,6 +23,11 @@ FILENAME_FORMAT = "%Y-%m-%d_%H-%M-%S"
 TIME_FORMAT = "%H:%M:%S"
 
 
+def time_of(wall_iso: str) -> str:
+    """A `wall_iso` stamp's time to the second, as the experimenter reads it off the log."""
+    return datetime.fromisoformat(wall_iso).strftime(TIME_FORMAT)
+
+
 class Clock:
     def __init__(self, speed: float = 1.0):
         if speed <= 0:
@@ -91,10 +96,6 @@ class Clock:
     def wall_iso(self) -> str:
         """Wall clock, ISO 8601 local with milliseconds. Recorded, never differenced."""
         return datetime.now().strftime(ISO_FORMAT)[:-3]
-
-    def wall_time_text(self) -> str:
-        """Wall clock to the second, as the experimenter reads it off the log's timestamp."""
-        return datetime.now().strftime(TIME_FORMAT)
 
     def filename_stamp(self) -> str:
         return datetime.now().strftime(FILENAME_FORMAT)

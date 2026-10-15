@@ -346,8 +346,11 @@ dialogs:
   # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. An error nothing caught,
   # during a session; on Close the session is aborted.
   software_error: 'The software hit an error, so the session has been stopped and the garment turned off. Everything recorded so far is saved. Start the session again from the launcher to resume it. The error: {value}'
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. The same in the intervention
+  # and the rekindle, where the error's own text could name a pattern (SPEC.md 16); the log has it.
+  software_error_withheld: 'The software hit an error, so the session has been stopped and the garment turned off. Everything recorded so far is saved. Start the session again from the launcher to resume it. What the error was is in the session''s log.'
   # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. The same, with no session open.
-  launcher_error: 'The software hit an error, and nothing was started. The error: {value}'
+  launcher_error: 'The software hit an error: {value}. If you were starting a session, check the details and start it again.'
   # Buttons of the resume question.
   resume_yes: Resume the session
   resume_no: Start a new session
@@ -374,9 +377,9 @@ preflight:
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_needs_windows: This computer ({value}) cannot tell the remote from other keyboards. Set responder.key_source to any_keyboard in hardware.yaml, or run the session on the lab PC.
   # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
-  participant_audio_missing: 'The participant''s headphones cannot be found ({value}). Connect or switch them on, then check again. Check the hardware lists the sound devices this computer has; audio.participant_device in hardware.yaml names the one used.'
+  participant_audio_missing: 'The participant''s headphones cannot be used ({value}). Connect or switch them on, then close and reopen this program: it sees only the devices there were when it opened. Check the hardware lists the sound devices this computer has; audio.participant_device in hardware.yaml names the one used.'
   # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
-  experimenter_audio_missing: 'The experimenter''s speakers cannot be found ({value}). Connect them, then check again. Check the hardware lists the sound devices this computer has; audio.experimenter_device in hardware.yaml names the one used.'
+  experimenter_audio_missing: 'The experimenter''s speakers cannot be used ({value}). Connect them, then close and reopen this program: it sees only the devices there were when it opened. Check the hardware lists the sound devices this computer has; audio.experimenter_device in hardware.yaml names the one used.'
 
 zones:
   # Beside the zone diagram (SPEC.md 11): where the current stimulus goes.

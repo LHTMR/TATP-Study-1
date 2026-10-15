@@ -756,6 +756,54 @@ def test_an_uncaught_error_stops_the_session_and_says_so(app, loaded, tmp_path, 
     assert values["abort_reason"].startswith("software error: ")
 
 
+def _error_during(runner, monkeypatch, shown: list) -> None:
+    """Raise an error nothing catches, through the hook a session installs."""
+    monkeypatch.setattr(runner.experimenter, "error_dialog",
+                        lambda message: _ShownError(shown, message))
+    monkeypatch.setattr(sys, "excepthook", lambda *_: None)
+    stop_on_error(lambda: runner, lambda summary: pytest.fail(f"not the session's: {summary}"))
+    try:
+        raise KeyError("ct_targeted")
+    except KeyError:
+        sys.excepthook(*sys.exc_info())
+
+
+def test_in_the_intervention_the_error_text_is_withheld_from_the_experimenter(
+        app, loaded, tmp_path, monkeypatch):
+    """An exception's text can name a pattern or a condition (SPEC.md 16): the experimenter is
+    told there was an error, and the log has what it was (the review of N7.F10c)."""
+    runner = make_runner(loaded, tmp_path)
+    runner.start()
+    runner.session.set_phase("intervention")
+    shown: list[str] = []
+    _error_during(runner, monkeypatch, shown)
+    assert shown == [runner.experimenter.text["dialogs"]["software_error_withheld"]]
+    assert "ct_targeted" not in shown[0]
+    errors = [r["detail"] for r in _events(runner.session) if r["event"] == "software_error"]
+    assert errors == ["KeyError: 'ct_targeted'"]
+    assert runner.session.closed
+
+
+def test_an_error_while_stopping_for_an_error_still_ends_the_session(
+        app, loaded, tmp_path, monkeypatch):
+    """The abort is in a `finally`: a session must never be left standing (N7.F10c)."""
+    runner = make_runner(loaded, tmp_path)
+    runner.start()
+
+    def broken(_message):
+        raise RuntimeError("the dialog could not be built")
+
+    monkeypatch.setattr(runner.experimenter, "error_dialog", broken)
+    monkeypatch.setattr(sys, "excepthook", lambda *_: None)
+    stop_on_error(lambda: runner, lambda summary: pytest.fail(summary))
+    with pytest.raises(RuntimeError, match="could not be built"):
+        try:
+            raise KeyError("first")
+        except KeyError:
+            sys.excepthook(*sys.exc_info())
+    assert runner.session.closed and not runner.completed
+
+
 def test_with_no_session_open_an_uncaught_error_goes_elsewhere(monkeypatch):
     """A Start that failed in the launcher, before any session existed (N7.F10c)."""
     told: list[str] = []

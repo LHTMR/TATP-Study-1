@@ -41,7 +41,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from tatp.audio import Audio, AudioError, query_sounddevice
+from tatp.audio import (
+    DEVICE_ROLES,
+    SOUNDDEVICE,
+    Audio,
+    AudioError,
+    query_sounddevice,
+    resolve_device,
+)
 from tatp.clock import Clock
 from tatp.garment.base import GarmentController, GarmentError, Limits
 from tatp.remote_keys import (
@@ -58,7 +65,6 @@ from tatp.responder import Action, Responder
 from tatp.session import DRIVERS
 from tatp.ui.vas import QT_KEYS
 from tatp.ui.widgets import (
-    BACKGROUND,
     DISCONNECTED_COLOUR,
     GROUP_GAP_PX,
     ITEM_GAP_PX,
@@ -68,7 +74,6 @@ from tatp.ui.widgets import (
     SIZE_HEADLINE,
     SIZE_LARGE,
     SIZE_SMALL,
-    TARGET_COLOUR,
     button,
     fit_to_screen,
     label,
@@ -90,19 +95,18 @@ EXPERIMENTER = "experimenter"
 
 
 def device_lines(audio_config: dict, words: dict, sd) -> tuple[list[str], str]:
-    """Each configured output device resolved by name, or why not; and every output device.
+    """Each configured output device resolved, or why not; and every output device.
 
-    Resolved exactly as `SounddeviceOutput` will resolve it, by sounddevice's own matching, so
-    a name that works here works in the session.
+    Resolved as preflight resolves it (`tatp.audio.resolve_device`), so a device that works
+    here is one a session will start with.
     """
     hostapis = [api["name"] for api in sd.query_hostapis()]
     lines = []
-    for role in (PARTICIPANT, EXPERIMENTER):
-        name = audio_config[f"{role}_device"]
+    for role in DEVICE_ROLES:
         role_words = words[f"role_{role}_audio"]
         try:
-            found = sd.query_devices(name, "output")
-        except ValueError as error:
+            found = resolve_device(sd, audio_config, role)
+        except (ValueError, sd.PortAudioError) as error:
             lines.append(words["device_missing"].format(role=role_words, value=error))
             continue
         lines.append(words["device_found"].format(
@@ -308,7 +312,7 @@ class HardwareCheckDialog(QDialog):
             self.device_list.fontMetrics().lineSpacing() * (DEVICE_LIST_LINES + 1)
         )
         self.audio_errors = AUDIO_ERRORS
-        if self.audio.backend_name == "sounddevice":
+        if self.audio.backend_name == SOUNDDEVICE:
             sd = self._sound()
             self.audio_errors = (*AUDIO_ERRORS, sd.PortAudioError)
             lines, available = device_lines(self.hardware["audio"], self.words, sd)
@@ -366,11 +370,6 @@ class HardwareCheckDialog(QDialog):
             made = button("")
             made.setCheckable(True)
             made.setEnabled(False)
-            # On is filled as well as named, so the state reads at a glance (S, 15 Oct 2026).
-            made.setStyleSheet(
-                f"QPushButton:checked {{ background-color: {TARGET_COLOUR}; "
-                f"color: {BACKGROUND}; }}"
-            )
             made.toggled.connect(lambda on, channel=channel: self.set_channel(channel, on))
             self.channel_buttons[channel] = made
             channels.addWidget(made)

@@ -622,6 +622,7 @@ class LauncherWindow(QWidget):
         self.filaments_path = filaments_path
         self.runner = None
         self.designer = None
+        self.error_dialog: MessageDialog | None = None
         # Handed from the instruments entry to the next session start (SPEC.md 8.1).
         self.environment = {"room_temperature_c": None, "relative_humidity_pct": None}
         words = self.text["launcher"]
@@ -739,14 +740,18 @@ class LauncherWindow(QWidget):
 
     def show_error(self, summary: str) -> MessageDialog:
         """An error nothing caught, with no session open: a Start that failed, say, which
-        otherwise left the launcher as it was with nothing to say why (15 Oct 2026)."""
+        otherwise left the launcher as it was with nothing to say why (15 Oct 2026). One at a
+        time: an error that repeats, a timer's, stays on the console rather than stacking
+        dialogs."""
+        if self.error_dialog is not None and self.error_dialog.isVisible():
+            return self.error_dialog
         dialogs = self.text["dialogs"]
-        dialog = MessageDialog(
+        self.error_dialog = MessageDialog(
             dialogs["error"], dialogs["launcher_error"].format(value=summary), dialogs["close"],
             colour=DISCONNECTED_COLOUR, parent=self,
         )
-        dialog.open()
-        return dialog
+        self.error_dialog.open()
+        return self.error_dialog
 
     def set_environment(self, temperature_c: float | None, humidity_pct: float | None) -> None:
         self.environment["room_temperature_c"] = temperature_c

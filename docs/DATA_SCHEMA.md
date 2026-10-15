@@ -171,8 +171,9 @@ An experimenter's note (§11) is `experimenter_note`, origin `experimenter`, the
 was lost (docs/LOG.md N7.F10a).
 
 `software_error` (severity `error`, the exception in `detail`) is written when an error nothing
-in the software caught stops the session: the garment goes to zero, the experimenter is told,
-and the session is aborted with `abort_reason` `software error: <the exception>`, so it can be
+in the software caught stops the session: the garment goes to zero, the experimenter is told
+(during the intervention and the rekindle without the exception's text, §16), and the session
+is aborted with `abort_reason` `software error: <the exception>`, so it can be
 resumed (§15; docs/LOG.md N7.F10c).
 
 The garment's own events are logged too, because no command wrote them (§14.2): every

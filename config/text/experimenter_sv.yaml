@@ -348,8 +348,11 @@ dialogs:
   # DRAFT (LOG N7.F10c): skrivet av bygget, inte från etikansökan. Ett fel som inget fångade,
   # under en session; när dialogen stängs avbryts sessionen.
   software_error: 'Programmet stötte på ett fel, så sessionen har stoppats och plagget stängts av. Allt som registrerats hittills är sparat. Starta sessionen igen från startfönstret för att återuppta den. Felet: {value}'
+  # DRAFT (LOG N7.F10c): skrivet av bygget, inte från etikansökan. Detsamma under interventionen
+  # och återuppvärmningen, där felets egen text kan namnge ett mönster (SPEC.md 16).
+  software_error_withheld: 'Programmet stötte på ett fel, så sessionen har stoppats och plagget stängts av. Allt som registrerats hittills är sparat. Starta sessionen igen från startfönstret för att återuppta den. Vad felet var står i sessionens logg.'
   # DRAFT (LOG N7.F10c): skrivet av bygget, inte från etikansökan. Detsamma, utan öppen session.
-  launcher_error: 'Programmet stötte på ett fel, och inget startades. Felet: {value}'
+  launcher_error: 'Programmet stötte på ett fel: {value}. Om du höll på att starta en session, kontrollera uppgifterna och starta den igen.'
   # Knapparna till frågan om att återuppta.
   resume_yes: Återuppta sessionen
   resume_no: Starta en ny session
@@ -376,9 +379,9 @@ preflight:
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_needs_windows: Den här datorn ({value}) kan inte skilja fjärrkontrollen från andra tangentbord. Sätt responder.key_source till any_keyboard i hardware.yaml, eller kör sessionen på labbdatorn.
   # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
-  participant_audio_missing: 'Deltagarens hörlurar hittas inte ({value}). Anslut eller slå på dem och kontrollera igen. Under Kontrollera utrustningen listas datorns ljudenheter; audio.participant_device i hardware.yaml anger vilken som används.'
+  participant_audio_missing: 'Deltagarens hörlurar kan inte användas ({value}). Anslut eller slå på dem, och stäng sedan programmet och öppna det igen: det ser bara de enheter som fanns när det öppnades. Under Kontrollera utrustningen listas datorns ljudenheter; audio.participant_device i hardware.yaml anger vilken som används.'
   # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
-  experimenter_audio_missing: 'Försöksledarens högtalare hittas inte ({value}). Anslut dem och kontrollera igen. Under Kontrollera utrustningen listas datorns ljudenheter; audio.experimenter_device i hardware.yaml anger vilken som används.'
+  experimenter_audio_missing: 'Försöksledarens högtalare kan inte användas ({value}). Anslut dem, och stäng sedan programmet och öppna det igen: det ser bara de enheter som fanns när det öppnades. Under Kontrollera utrustningen listas datorns ljudenheter; audio.experimenter_device i hardware.yaml anger vilken som används.'
 
 zones:
   # Bredvid zondiagrammet (SPEC.md 11): var den aktuella stimuleringen ska ges.
