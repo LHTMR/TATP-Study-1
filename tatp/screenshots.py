@@ -274,7 +274,8 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     window.show_warning_cue()
     yield Shot(
         f"participant_{language}_cue",
-        "The visual warning cue: one filled disc, centred, no wording.",
+        f"The visual warning cue: the `warning_cue` text alone, at the message position in "
+        f"the button symbols' size, {language}.",
         _grab(window),
     )
 

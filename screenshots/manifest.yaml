@@ -422,7 +422,8 @@ screens:
     the press starts a timer that would blank the screen before it could be grabbed.
   participant_en_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
     and neither emphasised -- the state before the first stimulus, en.'
-  participant_en_cue: 'The visual warning cue: one filled disc, centred, no wording.'
+  participant_en_cue: 'The visual warning cue: the `warning_cue` text alone, at the
+    message position in the button symbols'' size, en.'
   participant_en_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, en.'
   participant_en_screen_emergency_stop: The participant text `screens.emergency_stop`,
@@ -534,7 +535,8 @@ screens:
     the press starts a timer that would blank the screen before it could be grabbed.
   participant_sv_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
     and neither emphasised -- the state before the first stimulus, sv.'
-  participant_sv_cue: 'The visual warning cue: one filled disc, centred, no wording.'
+  participant_sv_cue: 'The visual warning cue: the `warning_cue` text alone, at the
+    message position in the button symbols'' size, sv.'
   participant_sv_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, sv.'
   participant_sv_screen_emergency_stop: The participant text `screens.emergency_stop`,
