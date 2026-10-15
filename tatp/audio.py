@@ -307,7 +307,7 @@ class Audio:
         self.log("participant_cue_tone", detail=f"{level:.1f} dBFS")
 
     def experimenter_alert(self, reason: str) -> None:
-        """Lab-side only (SPEC.md 10.5). Block due, rekindle approaching, masking failed."""
+        """Lab-side only (SPEC.md 10.5). Block due, rekindle approaching."""
         self.output.experimenter_tone(
             tone(
                 float(self.config["experimenter_alert_hz"]),

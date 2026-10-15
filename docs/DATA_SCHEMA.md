@@ -96,12 +96,12 @@ written, with an empty value — an absent row and an empty value must not be co
 | `resumed_from_session_file` | - | Filename resumed from, else empty (§15) |
 | `clock_speed` | - | `Clock.speed`. `1.0` in every real session; anything else is a development run with every session-paced interval accelerated (§17.3), and must never be analysed as data |
 | `session_start_iso` | - | Process start, wall clock |
-| `white_noise_level_dbfs` | dBFS | The level the participant set in the masking check (§10.7). Per session, not configured. This key and the next five are written when their setup procedure ends, not at session start, so they follow the start keys; each value is also in `log` from the moment it is measured |
-| `masking_confirmed` | - | `true` when the participant reported the garment no longer audible |
-| `masking_attempts` | - | How many times the level was raised and re-asked, accumulated across an earplug restart. Above 1 means the first setting did not mask |
-| `earplugs_used` | - | `true` when earplugs were fitted under the headphones because raising the noise was not enough (§10.7) |
-| `stop_rehearsal_ran` | - | `true` once the emergency-stop rehearsal has run (§10.9); empty if it never did |
+| `stop_rehearsal_ran` | - | `true` once the emergency-stop rehearsal has run (§10.9); empty if it never did. This key and the next five are written when their setup procedure ends, not at session start, so they follow the start keys, in the order the procedures run (the rehearsal first since 5 Oct 2026); each value is also in `log` from the moment it is measured |
 | `stop_rehearsal_press_detected` | - | `true` when the participant's stop press was detected during the rehearsal; `false` if the experimenter moved on without one |
+| `white_noise_level_dbfs` | dBFS | The level the participant set in the masking check (§10.7). Per session, not configured |
+| `masking_confirmed` | - | `true` when the participant confirmed the noise covers the garment; `false` when the experimenter reported it still audible with earplugs in |
+| `masking_attempts` | - | How many times the participant set the masking level, accumulated across an earplug restart: 1 normally, 2 when earplugs were fitted. Before 5 Oct 2026, how many times the level was raised and re-asked |
+| `earplugs_used` | - | `true` when earplugs were fitted under the headphones because the participant could still hear the garment (§10.7) |
 | `fit_preview_reruns` | - | Total re-runs the experimenter chose with the fit preview on, across the session (§11.1); `0` when none. Written at close, with the keys below it, because a re-run can come at any time point |
 | `sensitisation_start_iso` | - | Session t=0; empty until sensitisation begins |
 | `session_end_iso` | - | Written at close |

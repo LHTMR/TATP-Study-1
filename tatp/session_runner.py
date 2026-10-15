@@ -9,8 +9,8 @@ the rekindle, or one timed step. `_plan` builds it once from the configuration, 
 `stage_completed` with its id when it ends. That log line is what "completed" means for a
 resume (`tatp/resume.py`): a resumed session starts at the first stage it does not find there.
 
-1. **Setup** -- the garment fitted, the welcome screen, the masking check (SPEC.md 10.7) and the
-   stop rehearsal (10.9).
+1. **Setup** -- the garment fitted, the welcome screen, the stop rehearsal (SPEC.md 10.9) and
+   the masking check (10.7).
 2. **Touch calibration** (9), then the baseline relaxation and alertness ratings (Bilaga 1
    Table 2).
 3. **Pre-sensitisation** -- the long protocol on the secondary region, the short protocol on the
@@ -138,8 +138,9 @@ def stage_layout(schedule: Schedule) -> list[tuple[str, str, Upcoming | None]]:
 
     add("setup.garment", SETUP)
     add("setup.welcome", SETUP)
-    add("setup.masking_check", SETUP)
+    # The stop is rehearsed before the masking check (S, 5 Oct 2026; SPEC.md 10.9).
     add("setup.stop_rehearsal", SETUP)
+    add("setup.masking_check", SETUP)
     # Its own phase is set by the calibration itself.
     add("touch_calibration", SETUP)
     add("touch_calibration.baseline", TOUCH_CALIBRATION)
@@ -1020,12 +1021,13 @@ class SessionRunner(Procedure):
             self.session.resume_sensitisation(
                 state.open.sensitisation_start_iso, state.clock_speed
             )
+        # In the session's order, so the file keeps DATA_SCHEMA.md's key order.
+        if "setup.stop_rehearsal" in done and state.stop_rehearsal_press_detected is not None:
+            self.session.record_stop_rehearsal(state.stop_rehearsal_press_detected)
         if "setup.masking_check" in done:
             assert state.masking is not None, "a completed masking check recorded its result"
             self.session.record_masking(*state.masking)
             self.session.audio.start_noise(state.masking[0])
-        if "setup.stop_rehearsal" in done and state.stop_rehearsal_press_detected is not None:
-            self.session.record_stop_rehearsal(state.stop_rehearsal_press_detected)
         # SPEC.md 10.6: training already given in this session is not given again.
         self.session.vas_trained.update(state.vas_trained)
         if "touch_calibration" in done:

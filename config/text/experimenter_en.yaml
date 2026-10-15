@@ -110,6 +110,18 @@ instructions:
   vas_training_wait: 'Rating scale training: waiting for the participant to press ▶.'
   # Setup and touch calibration (SPEC.md 9, 10.7, 10.9). None names a pattern or a condition.
   masking_check: 'Audio setup: the participant is setting the noise level against the garment.'
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. The masking step (SPEC.md
+  # 10.7): the participant is told to say so if they can still hear the garment, and the
+  # experimenter's Next step is what records it.
+  masking_check_mask: >-
+    Audio setup: the garment is running and the participant is raising the noise to cover it.
+    If they say they can still hear the garment, press Next step. The noise stops so you can
+    offer earplugs.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. The same step with earplugs in.
+  masking_check_mask_earplugs: >-
+    Audio setup, with earplugs: the participant is raising the noise to cover the garment. If
+    they say they can still hear it, press Next step. The session continues, recorded as not
+    fully masked.
   earplugs: Fit the earplugs under the headphones, then press Next step.
   stop_rehearsal: >-
     Stop rehearsal: the participant will now press the stop button. When the stop screen shows,
@@ -234,12 +246,13 @@ warnings:
     More than the allowed share of zero-pressure catch trials were reported as felt ({value}).
   schedule: 'Schedule warning, block {block}: {value}'
   no_response: No response for {value} s.
-  # SPEC.md 10.7 step 5. Raising the noise has stopped helping, so the remedy is physical.
-  # Audible as well as on screen: the experimenter may be looking at the participant.
+  # SPEC.md 10.7 step 4. Raising the noise has not helped, so the remedy is physical.
+  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. Reworded 5 Oct 2026: the
+  # experimenter now reports this, so it no longer says the noise cannot be raised further.
   masking_failed: >-
-    The participant can still hear the garment and the noise cannot be raised further. Offer
-    earplugs under the headphones. The noise has stopped so you can talk, and the check will
-    start again from the beginning once they are fitted.
+    The participant can still hear the garment. Offer earplugs under the headphones. The noise
+    has stopped so you can talk, and the check will start again from the beginning once they
+    are fitted.
   masking_failed_after_earplugs: >-
     Still audible with earplugs. The session will continue and is recorded as not fully masked.
   equalisation_mismatch: >-

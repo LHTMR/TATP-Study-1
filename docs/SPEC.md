@@ -628,9 +628,14 @@ has no entry: it is a button the participant is told about, never one a screen d
 
 Starting values, all config and pilot-tunable:
 
-- Tap under ~150 ms → **1 kPa** (0.4 % of range).
+- **Every press moves at least one step**, **1 kPa** (0.4 % of range), however short.
 - Hold → **5 kPa/s** after a 300 ms delay, ramping linearly to **50 kPa/s** over 1.5 s, then
-  constant. Full range in about 6 s of continuous holding.
+  constant. Full range in about 6 s of continuous holding. A press the hold has carried less
+  than one step is made up to one step on release.
+
+An earlier version made a step only for a tap under ~150 ms, so a press between that and the
+hold delay moved nothing. A deliberate press on the remote often lasts about 200 ms, and S's
+5 Oct 2026 lab run found the masking check's noise could not be turned down (docs/LOG.md).
 
 **Log every button-down and button-up with timestamps**, not just the final setting, so the
 search path is recoverable. Independently enforce a **hard pressure ceiling** and a rate limit
@@ -736,35 +741,43 @@ item L3). A meter fixes one number for every participant, every pair of headphon
 room; what actually matters is whether *this* participant can hear *this* garment, and the only
 instrument that answers that is the participant.
 
-**It runs in setup, before touch calibration** — the calibration itself commands the garment, so
-the masking has to be working before it starts.
+**It runs in setup, after the emergency stop rehearsal (§10.9) and before touch calibration** —
+the calibration itself commands the garment, so the masking has to be working before it starts.
 
 1. **Find the noise.** White noise begins at `audio.white_noise_start_dbfs`, deliberately below
-   audibility. The participant raises it with the §10.3 two-button control until they can just
-   hear it, and confirms.
+   audibility. The participant raises it with the §10.3 two-button control until they **can
+   hear it easily**, and confirms. (Until 5 Oct 2026 this said "until they can just hear it",
+   which made it a threshold task; S changed it.)
 2. **Start the garment.** The **fixed CT-targeted pattern** plays at
    `audio.masking_check_pressure_kpa`, low and looping. It must be a *moving* pattern: the valve
    switching is the sound being masked, and a static hold does not produce it.
-3. **Raise to mask.** The participant raises the noise until it covers the garment, **stopping
-   before it becomes uncomfortable**. That instruction is the participant's own limit; the
+3. **Raise to mask, and confirm.** The participant raises the noise until it covers the garment,
+   **stopping before it becomes uncomfortable**, and confirms. **The confirm is the answer that
+   the garment is covered**: the same screen tells the participant to **tell the experimenter
+   if they can still hear the garment**. That instruction is the participant's own limit; the
    software's limit is `audio.white_noise_max_dbfs`, a hard ceiling in the same sense as the
    pressure ceiling of §13, which the instruction working correctly never reaches.
-4. **Check it.** Ask whether the garment is still audible. If it is, return to step 3, up to
-   `audio.masking_check_max_attempts` times; the count is recorded either way.
-5. **Escalate to the experimenter.** When raising can no longer help — the attempts are used up
-   or `white_noise_max_dbfs` is reached — **alert the experimenter audibly and on screen** (S,
-   23 Aug 2026). The remedy is physical: **offer the participant earplugs** under the
-   headphones. The white noise stops for the exchange, as it does for the area mapping (§10.5),
-   and the participant screen shows `paused`.
+
+   Until 5 Oct 2026 the question "Can you still hear the garment?" was a separate yes/no choice
+   screen after the adjustment, repeated up to a configured number of attempts, with an audible
+   experimenter alert when they ran out or the ceiling was reached. S found the separate screen
+   confusing, so the question became part of the masking screen's own instruction and the
+   report goes to the experimenter in words.
+4. **Earplugs.** When the participant says they can still hear the garment, the experimenter
+   presses Next step, which the experimenter screen explains during this step. The remedy is
+   physical: **offer the participant earplugs** under the headphones. The white noise stops for
+   the exchange, as it does for the area mapping (§10.5), and the participant screen shows
+   `paused`.
 
    After earplugs are fitted the check **restarts from step 1**, because earplugs move the
    participant's threshold as well as the garment's loudness — resuming at step 3 would leave
    the noise at a level chosen for unplugged ears. `earplugs_used` is recorded in the session
-   file, and the attempt count accumulates across the restart rather than resetting.
+   file, and the attempt count (one per masking step) accumulates across the restart rather
+   than resetting.
 
-   If it still cannot be masked, log a warning and continue. **A session run without full
-   masking is a limitation to record, not a reason to refuse** — but it must be visible in the
-   data rather than only in someone's memory.
+   If the experimenter reports it still audible with earplugs in, log a warning and continue.
+   **A session run without full masking is a limitation to record, not a reason to refuse** —
+   but it must be visible in the data rather than only in someone's memory.
 
 **The pattern is fixed and identical in every session, so it carries no information about the
 condition** (§16). This is why it may not be the participant's own condition pattern: that would
@@ -775,11 +788,10 @@ value — the cue must be audible over whatever level the participant chose, so 
 `audio.participant_cue_over_noise_db` above it. The experimenter alert is unaffected: it plays
 lab-side and must stay inaudible to the participant, which a *higher* noise level only helps.
 
-**Yes/no answers are positional.** The two options are drawn at the left and right of the screen
-and selected with the corresponding large button, matching the physical layout of the response
-device (S, 23 Aug 2026). The affirmative is on the left throughout, so the mapping is one
-convention rather than one per question. This is the §10.8 choice screen; `still_audible` moves
-into the `choices` block when `audio.py` is built.
+**Yes/no answers are positional** wherever the study asks one (§10.8): the two options are drawn
+at the left and right of the screen and selected with the corresponding large button, matching
+the physical layout of the response device (S, 23 Aug 2026), with the affirmative on the left
+throughout. The masking check no longer asks one (step 3).
 
 Record the chosen level, whether masking was confirmed, the number of attempts, and whether
 earplugs were used, in the session file.
@@ -788,8 +800,8 @@ earplugs were used, in the session file.
 
 Decided 26 Aug 2026 with S, from the session-11 UI review. Everywhere the participant chooses
 between two options mapped to the two large buttons — the equalisation comparison of §9 step 4,
-the masking check's `still_audible` (§10.7) — **the buttons are drawn and the press is the
-answer.**
+the evenness check of §9 — **the buttons are drawn and the press is the answer.** (The masking
+check's `still_audible` was one until 5 Oct 2026; §10.7.)
 
 - **The control is drawn, not described.** The screen renders the two large buttons carrying the
   symbols physically printed on them, in their physical arrangement, with an option label under
@@ -851,10 +863,15 @@ experiment. Rehearsing it converts the sentence into something they have seen ha
 - **It is recorded** — that the rehearsal ran, and that the press was detected. A rehearsal the
   participant did not actually complete is a different session from one they did.
 
-**Placement: immediately after the masking check (§10.7) and before touch calibration.** The
-garment is warm, the participant is already holding the remote and has just met the fixed
-pattern, and nothing is being measured yet, so a stop costs nothing. It cannot go *inside* the
-masking check, which the stop would abort.
+**Placement: in setup, after the welcome and immediately before the masking check (§10.7)**
+(S, 5 Oct 2026; until then it came straight after the masking check). The participant learns
+the stop before anything else is asked of them, so a stop pressed during the audio setup is
+one they already know, and nothing is being measured yet, so a stop costs nothing. The white
+noise has not started, so the participant hears the garment unmasked here: the fixed pattern
+is identical in every session, so this carries nothing about the condition (§16), and it
+introduces the sound the masking check then covers. Its warning cue is visual only, since the
+audible cue is set relative to a noise level that does not exist yet (§10.7). It cannot go
+*inside* the masking check, which the stop would abort.
 
 **Wording, approved by S 10 Sep 2026.** Goes under `screens:` in the participant text files when
 the rehearsal is built. The screen between the two is the real `screens.emergency_stop`,
@@ -867,7 +884,9 @@ preceded by the §10.5 warning cue.
 | Key | English | Svenska |
 |---|---|---|
 | `stop_rehearsal` | The touch is running now. / Press this button to stop it. / Nothing is lost — we carry straight on afterwards. | Beröringen är igång nu. / Tryck på den här knappen för att stänga av den. / Ingenting går förlorat — vi fortsätter direkt efteråt. |
-| `stop_rehearsal_done` | That is the stop button. / It works at any time, in any part of the visit. / (blank line) / Press ▶ to continue. | Det där är stoppknappen. / Den fungerar när som helst, under alla delar av besöket. / (tom rad) / Tryck på ▶ för att fortsätta. |
+| `stop_rehearsal_done` | That is the stop button. / It works at any time. / (blank line) / Press ▶ to continue. | Det där är stoppknappen. / Den fungerar när som helst. / (tom rad) / Tryck på ▶ för att fortsätta. |
+
+S shortened the second line from "It works at any time, in any part of the visit." on 5 Oct 2026.
 
 **Built** in `tatp/setup_checks.py` (`StopRehearsal`), 24 Sep 2026. Its pressure and the stop
 button's printed symbol are open items L11 and L12.

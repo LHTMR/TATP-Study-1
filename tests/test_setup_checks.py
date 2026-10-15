@@ -9,6 +9,8 @@ from __future__ import annotations
 import csv
 
 import pytest
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
 from virtual_participant import Virtual, make_config, make_rig, press
 
@@ -18,12 +20,13 @@ from tatp.setup_checks import (
     AwaitStop,
     MaskingCheck,
     MaskingResult,
+    NoiseAdjustment,
     StopRehearsal,
     StopRehearsalResult,
     noise_control,
 )
 from tatp.touchcal import AdjustmentState
-from tatp.trials import Choice
+from tatp.ui.vas import QT_KEYS
 
 
 @pytest.fixture(scope="module")
@@ -60,14 +63,22 @@ def _session_values(session):
     return {row["key"]: row["value"] for row in _rows(session, "session")}
 
 
-def _answers(*sides):
-    """Answer `still_audible` with these sides in turn; anything else on the left."""
-    queue = list(sides)
+def _is_masking_step(trial) -> bool:
+    return isinstance(trial, NoiseAdjustment) and trial.screen_key == "mask_level"
 
-    def choose(key, trial):
-        return queue.pop(0) if key == "still_audible" else "left"
 
-    return choose
+def _reports_audible(rig, times: int, also=lambda trial: None):
+    """The experimenter's Next step on the first `times` masking steps: the participant has
+    said they can still hear the garment (SPEC.md 10.7)."""
+    reported = []
+
+    def report(trial):
+        also(trial)
+        if _is_masking_step(trial) and len(reported) < times and trial not in reported:
+            reported.append(trial)
+            rig.experimenter.proceed_requested.emit()
+
+    return report
 
 
 # -- the noise control ------------------------------------------------------------------
@@ -90,7 +101,6 @@ def test_the_noise_control_is_the_pressure_control_in_decibels(loaded):
 def test_masking_confirmed_first_time(rig):
     session = rig.session
     virtual = Virtual(rig, MaskingCheck(rig))
-    virtual.choose = _answers("right")
     result = virtual.run()
 
     assert result == MaskingResult(level_dbfs=-30.0, confirmed=True, attempts=1,
@@ -114,24 +124,50 @@ def test_masking_confirmed_first_time(rig):
     assert values["earplugs_used"] == "false"
 
 
-def test_the_masking_keys_keep_the_schema_order(rig):
-    """They are written after the start keys and before the closing ones (DATA_SCHEMA.md)."""
+def test_there_is_no_separate_still_audible_screen(rig):
+    """S, 5 Oct 2026: the question is the masking screen's own instruction, not a screen."""
+    virtual = Virtual(rig, MaskingCheck(rig))
+    seen = []
+    virtual.before_step = lambda trial: seen.append(type(trial).__name__)
+    virtual.run()
+    assert "Choice" not in seen
+    assert "still_audible" not in rig.session.config.participant_text["choices"]
+
+
+def test_the_setup_keys_keep_the_schema_order(rig):
+    """Rehearsal, then masking, after the start keys and before the closing ones
+    (DATA_SCHEMA.md), in the order the session runs them."""
     from tatp.datafiles import parse_schema
 
-    virtual = Virtual(rig, MaskingCheck(rig))
-    virtual.choose = _answers("right")
-    virtual.run()
+    Virtual(rig, StopRehearsal(rig)).run()
+    Virtual(rig, MaskingCheck(rig)).run()
     rig.session.close()
     _, keys = parse_schema()
     assert [row["key"] for row in _rows(rig.session, "session")] == list(keys)
 
 
-def test_still_audible_raises_again_then_escalates_to_earplugs(rig):
+def test_the_experimenters_next_step_during_the_first_step_does_nothing(rig):
+    """Only the masking step takes the report: before the garment runs there is nothing to
+    hear."""
     session = rig.session
-    attempts = session.config.hardware["audio"]["masking_check_max_attempts"]
     virtual = Virtual(rig, MaskingCheck(rig))
-    # Audible on every try of the first round, then masked on the first try with earplugs.
-    virtual.choose = _answers(*(["left"] * attempts + ["right"]))
+    pressed = []
+
+    def press_next(trial):
+        finding = isinstance(trial, NoiseAdjustment) and trial.screen_key == "find_level"
+        if finding and not pressed:
+            pressed.append(trial)
+            rig.experimenter.proceed_requested.emit()
+
+    virtual.before_step = press_next
+    result = virtual.run()
+    assert pressed and result.confirmed and not result.earplugs_used
+    assert not _events(session, "masking_reported_audible")
+
+
+def test_still_audible_is_reported_and_earplugs_restart_the_check(rig):
+    session = rig.session
+    virtual = Virtual(rig, MaskingCheck(rig))
     seen_paused = []
 
     def watch(trial):
@@ -139,58 +175,131 @@ def test_still_audible_raises_again_then_escalates_to_earplugs(rig):
         if rig.participant.message.text == screens["paused"]:
             seen_paused.append(session.audio.noise_running)
 
-    virtual.before_step = watch
+    # Audible on the first masking step, then covered with earplugs in.
+    virtual.before_step = _reports_audible(rig, 1, also=watch)
     result = virtual.run()
 
     assert result.earplugs_used and result.confirmed
-    assert result.attempts == attempts + 1, "the count carries on across the restart"
+    assert result.attempts == 2, "the count carries on across the restart"
     assert seen_paused and not any(seen_paused), "the noise is off for the exchange"
-    assert _events(session, "experimenter_alert")
+    reported = _events(session, "masking_reported_audible")
+    assert len(reported) == 1 and reported[0]["origin"] == "experimenter"
+    assert _events(session, "masking_escalated")[0]["severity"] == "warning"
     assert _events(session, "white_noise_stopped")
-    assert "experimenter_tone" in [event[0] for event in session.audio.output.events]
     # Restarted from step 1: the noise went back to the start level after earplugs.
     starts = [e for e in session.audio.output.events if e[0] == "start_noise"]
     assert starts[-1] == ("start_noise", amplitude(session.audio.start_dbfs))
     assert len(_events(session, "masking_threshold")) == 2
 
 
-def test_the_ceiling_escalates_before_the_attempts_run_out(rig):
-    session = rig.session
+def test_the_experimenter_is_told_what_next_step_does_in_the_masking_step(rig):
+    instructions = rig.experimenter.text["instructions"]
+    shown = []
+
+    def watch(trial):
+        if _is_masking_step(trial):
+            shown.append(rig.experimenter._instruction_text)
+
     virtual = Virtual(rig, MaskingCheck(rig))
-    virtual.noise_levels["mask_level"] = session.audio.max_dbfs
-    virtual.choose = _answers("left", "right")
-    result = virtual.run()
-    assert result.earplugs_used and result.attempts == 2
-    assert "ceiling" in _events(session, "masking_escalated")[0]["detail"]
+    virtual.before_step = _reports_audible(rig, 1, also=watch)
+    virtual.run()
+    assert shown[0] == instructions["masking_check_mask"]
+    assert shown[-1] == instructions["masking_check_mask_earplugs"]
 
 
 def test_unmaskable_even_with_earplugs_is_recorded_not_refused(rig):
     session = rig.session
-    attempts = session.config.hardware["audio"]["masking_check_max_attempts"]
     virtual = Virtual(rig, MaskingCheck(rig))
-    virtual.choose = _answers(*(["left"] * (2 * attempts)))
+    virtual.before_step = _reports_audible(rig, 2)
     result = virtual.run()
     assert not result.confirmed and result.earplugs_used
-    assert result.attempts == 2 * attempts
+    assert result.attempts == 2
     assert _events(session, "masking_not_confirmed")[0]["severity"] == "warning"
     assert _session_values(session)["masking_confirmed"] == "false"
+
+
+def _stamped_press(window, name: str, held_ms: int) -> None:
+    """A press of `held_ms` by the key events' own stamps, as the remote's arrive."""
+    for kind, stamp_ms in ((QEvent.KeyPress, 1000), (QEvent.KeyRelease, 1000 + held_ms)):
+        event = QKeyEvent(kind, QT_KEYS[name], Qt.NoModifier)
+        event.setTimestamp(stamp_ms)
+        (window.keyPressEvent if kind == QEvent.KeyPress else window.keyReleaseEvent)(event)
+
+
+def test_an_ordinary_press_turns_the_noise_down_while_the_garment_plays(rig):
+    """S's 5 Oct 2026 lab run: "the noise cannot be turned down in the second step".
+
+    A deliberate press on the remote lasts about 200 ms. That fell between the old tap
+    threshold and the hold delay, where a press moved nothing, and turning down is done by
+    single presses. Here each button gets that press in the masking step.
+    """
+    session = rig.session
+    step_db = session.config.hardware["audio"]["white_noise_step_db"]
+    held_ms = int(round(session.config.hardware["adjustment"]["hold_delay_s"] * 2 / 3 * 1000))
+    virtual = Virtual(rig, MaskingCheck(rig))
+    moved = []
+
+    def press_each_way(trial):
+        if _is_masking_step(trial) and not moved:
+            start = session.audio.noise_level_dbfs
+            _stamped_press(rig.participant, "pageup", held_ms)
+            down = session.audio.noise_level_dbfs
+            _stamped_press(rig.participant, "pagedown", held_ms)
+            moved.append((start - down, session.audio.noise_level_dbfs - down))
+
+    virtual.before_step = press_each_way
+    virtual.run()
+    assert moved == [(step_db, step_db)]
 
 
 def test_a_stop_during_the_masking_check_repeats_the_step(rig):
     session = rig.session
     virtual = Virtual(rig, MaskingCheck(rig))
-    virtual.choose = _answers("right")
     stopped = []
 
     def stop_once(trial):
-        if not stopped and isinstance(trial, Choice):
+        if not stopped and _is_masking_step(trial):
             stopped.append(True)
             press(rig.participant, "period")
 
     virtual.before_step = stop_once
     result = virtual.run()
-    assert stopped and result.confirmed
+    assert stopped and result.confirmed and result.attempts == 1, "the same attempt, repeated"
     assert _events(session, "garment_restored"), "the pattern came back after the cue"
+
+
+@pytest.mark.parametrize("screen_key", ["find_level", "mask_level"])
+def test_a_stop_during_audio_setup_is_shown_to_the_participant(rig, app, monkeypatch,
+                                                               screen_key):
+    """S's 5 Oct 2026 lab run: a stop pressed during audio setup was not acknowledged.
+
+    Both noise screens and the stop screen are the same message widget, which before
+    docs/LOG.md N7.F5 was never repainted when one message replaced another: the participant
+    kept looking at the instruction. Checked painted, not only set.
+    """
+    participant = rig.participant
+    painted = []
+    paint = participant.message.paintEvent
+    monkeypatch.setattr(
+        participant.message, "paintEvent", lambda event: (painted.append(1), paint(event))
+    )
+    participant.show()
+    virtual = Virtual(rig, MaskingCheck(rig))
+    seen = []
+
+    def stop_once(trial):
+        if not seen and isinstance(trial, NoiseAdjustment) and trial.screen_key == screen_key:
+            app.processEvents()
+            painted.clear()
+            press(participant, "period")
+            app.processEvents()
+            seen.append((participant.message.text, bool(painted)))
+
+    virtual.before_step = stop_once
+    virtual.run()
+    participant.close()
+    stop_text = rig.session.config.participant_text["screens"]["emergency_stop"]
+    assert seen == [(stop_text, True)]
 
 
 # -- the stop rehearsal -----------------------------------------------------------------

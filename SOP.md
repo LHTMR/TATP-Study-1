@@ -283,37 +283,11 @@ shown to the participant (Bilaga 1 §3.10). The software rehearses only the soft
    participant's response.**
 2. The participant reads it and presses play. The session moves on by itself.
 
-### 4.3 Audio setup: the masking check
+### 4.3 The stop rehearsal
 
-The participant sets their own white-noise level against the sound of the garment. It takes a few
-minutes.
-
-1. The screen shows **Audio setup: the participant is setting the noise level against the
-   garment.**
-2. The participant works through it on their own screen: they find the noise, the garment starts,
-   they raise the noise until it covers the garment, and they say whether they can still hear it.
-   You do nothing unless the software alerts you.
-3. **If an alert sounds and the status says:**
-
-   > The participant can still hear the garment and the noise cannot be raised further. Offer
-   > earplugs under the headphones. The noise has stopped so you can talk, and the check will
-   > start again from the beginning once they are fitted.
-
-   1. The noise and the garment have stopped. The participant's screen says the session is paused.
-   2. Offer the earplugs. Fit them under the headphones.
-   3. The instruction says **Fit the earplugs under the headphones, then press Next step.**
-      Press **Next step**.
-   4. The check starts again from the beginning.
-4. **If the status says Still audible with earplugs. The session will continue and is recorded as
-   not fully masked.**: nothing to do. The session carries on and the data records it. Write a note
-   if the participant says anything about it.
-5. The noise stays on at the participant's level from here on, except during the mapping and the
-   earplug exchange.
-
-### 4.4 The stop rehearsal
-
-The participant presses the software stop once, for real, with the garment running. It takes
-about a minute and a half.
+The participant presses the software stop once, for real, with the garment running. It comes
+before the audio setup, so the participant knows the stop before anything else is asked of them.
+The noise has not started yet, so they may hear the garment. It takes about a minute and a half.
 
 1. The screen shows:
 
@@ -335,6 +309,37 @@ about a minute and a half.
 pressure, so the participant sees the stop and the resume without feeling the touch stop. Open
 item L12: the stop button is drawn on the participant's screen as a red circle, a placeholder
 until the symbol printed on the remote's blank-screen button is confirmed.]**
+
+### 4.4 Audio setup: the masking check
+
+The participant sets their own white-noise level against the sound of the garment. It takes a few
+minutes.
+
+1. The screen shows **Audio setup: the participant is setting the noise level against the
+   garment.**
+2. The participant works through it on their own screen: they turn the noise up until they can
+   hear it easily, the garment starts, and they raise the noise until it covers the garment and
+   press play. Their screen tells them to tell you if they can still hear the garment.
+3. While the garment is running your screen says:
+
+   > Audio setup: the garment is running and the participant is raising the noise to cover it.
+   > If they say they can still hear the garment, press Next step. The noise stops so you can
+   > offer earplugs.
+
+4. **If the participant says they can still hear the garment**, press **Next step**.
+   1. The noise and the garment stop. The participant's screen says the session is paused, and
+      the status says **The participant can still hear the garment. Offer earplugs under the
+      headphones. …**
+   2. Offer the earplugs. Fit them under the headphones.
+   3. The instruction says **Fit the earplugs under the headphones, then press Next step.**
+      Press **Next step**.
+   4. The check starts again from the beginning.
+5. **If they say it again with earplugs in**, press **Next step** again. The status says **Still
+   audible with earplugs. The session will continue and is recorded as not fully masked.** The
+   session carries on and the data records it. Write a note if the participant says anything
+   about it.
+6. The noise stays on at the participant's level from here on, except during the mapping and the
+   earplug exchange.
 
 ---
 

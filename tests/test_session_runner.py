@@ -207,7 +207,7 @@ def test_every_stage_runs_once_in_the_planned_order(finished):
 def test_the_order_of_the_session(finished):
     ids = [stage.id for stage in finished.stages]
     assert ids[:6] == [
-        "setup.garment", "setup.welcome", "setup.masking_check", "setup.stop_rehearsal",
+        "setup.garment", "setup.welcome", "setup.stop_rehearsal", "setup.masking_check",
         "touch_calibration", "touch_calibration.baseline",
     ]
     assert ids.index("pre_sensitisation.long") < ids.index("sensitisation")

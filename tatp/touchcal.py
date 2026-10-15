@@ -7,15 +7,16 @@ adjustment are later milestones -- what exists here is the path through every la
 protocol in full.
 
 **The accelerating control (SPEC.md 10.3) is `AdjustmentState`, which imports no Qt and takes
-the time as an argument.** Every rule that matters -- a tap moves one step, a hold accelerates
-from the initial rate to the final one over the ramp, the pressure stays inside the adjustable
-range -- is then tested at exact times rather than at whatever times a timer happened to fire.
+the time as an argument.** Every rule that matters -- a press moves at least one step, a hold
+accelerates from the initial rate to the final one over the ramp, the pressure stays inside the
+adjustable range -- is then tested at exact times rather than at whatever times a timer happened
+to fire.
 `Adjustment` is the thin Qt driver around it: it turns the participant window's button signals
 into calls, ticks the state, and commands the garment.
 
-**The control runs on real seconds, not on the accelerated clock.** A tap threshold and a ramp
+**The control runs on real seconds, not on the accelerated clock.** A hold delay and a ramp
 rate describe the participant's hand, so scaling them does not make a session faster, it makes
-the control different -- at speed 100 no press could be short enough to be a tap. The one
+the control different -- at speed 100 every press would be a hold. The one
 duration here that *is* scaled is the adjustment time-out, which is the session waiting for the
 participant rather than the participant acting.
 
@@ -166,7 +167,6 @@ def anchor_plans(config, run_index: int = 1) -> tuple[AdjustmentPlan, ...]:
 def pressure_control(adjustment_config: dict) -> dict:
     """The accelerating control's settings for a pressure, in kPa (SPEC.md 10.3)."""
     return {
-        "tap_max_duration_s": adjustment_config["tap_max_duration_s"],
         "tap_step": adjustment_config["tap_step_kpa"],
         "hold_delay_s": adjustment_config["hold_delay_s"],
         "hold_rate_initial_per_s": adjustment_config["hold_rate_initial_kpa_s"],
@@ -180,11 +180,18 @@ class AdjustmentState:
 
     Unit-neutral: the value is whatever the caller controls -- kPa for a pressure
     (`pressure_control`), dB for the noise (`tatp.setup_checks.noise_control`) -- and the step
-    and rates are in that unit. The tap and hold timings describe the participant's hand.
+    and rates are in that unit. The hold timings describe the participant's hand.
+
+    **Every press moves at least one step.** A press the hold has not yet carried a full step
+    -- released before the hold delay, or just after it, when the ramp has barely begun -- is
+    made up to one step on release. An earlier rule moved one step only for a press released
+    within a tap threshold (150 ms) and nothing at all between that and the hold delay
+    (300 ms), so an ordinary deliberate press on the remote, which often lasts about 200 ms, was
+    lost: S's 5 Oct 2026 lab run found the noise "cannot be turned down in the second step",
+    where turning down is done by single presses (docs/LOG.md, the audio-calibration fixes).
     """
 
     def __init__(self, control: dict, range_min: float, range_max: float, start: float):
-        self.tap_max_duration_s = float(control["tap_max_duration_s"])
         self.tap_step = float(control["tap_step"])
         self.hold_delay_s = float(control["hold_delay_s"])
         self.rate_initial_per_s = float(control["hold_rate_initial_per_s"])
@@ -204,7 +211,6 @@ class AdjustmentState:
         self._held: Action | None = None
         self._pressed_at_s = 0.0
         self._held_travel_s = 0.0
-        self._moved_by_hold = False
 
     @property
     def held(self) -> Action | None:
@@ -218,16 +224,18 @@ class AdjustmentState:
             self._held = action
             self._pressed_at_s = now_s
             self._held_travel_s = 0.0
-            self._moved_by_hold = False
 
     def release(self, action: Action, now_s: float) -> None:
         self.button_events += 1
         if action is not self._held:
             return
-        # A press short enough to be a tap moves one step; a press long enough to have moved the
-        # pressure already has moved it, and adding a step on release would double the last one.
-        if not self._moved_by_hold and now_s - self._pressed_at_s <= self.tap_max_duration_s:
-            self._move(self._direction(action) * self.tap_step)
+        # The hold's travel up to the release itself, not only to the last tick.
+        self.tick(now_s)
+        # Made up to one step, never more: a hold that has already carried the value a step or
+        # further has moved it, and adding a step would double the last one.
+        shortfall = self.tap_step - self._travel(self._held_travel_s)
+        if shortfall > 0:
+            self._move(self._direction(action) * shortfall)
         self._held = None
 
     def tick(self, now_s: float) -> None:
@@ -235,13 +243,13 @@ class AdjustmentState:
         if self._held is None:
             return
         held_s = now_s - self._pressed_at_s - self.hold_delay_s
-        if held_s <= 0:
+        # Never backwards: a release timed from its key event's stamp can fall before the last
+        # tick, when a stall let that tick run late (`PressTiming`).
+        if held_s <= self._held_travel_s:
             return
         travelled = self._travel(held_s) - self._travel(self._held_travel_s)
         self._held_travel_s = held_s
-        if travelled > 0:
-            self._moved_by_hold = True
-            self._move(self._direction(self._held) * travelled)
+        self._move(self._direction(self._held) * travelled)
 
     # -- the ramp ----------------------------------------------------------------------
 
