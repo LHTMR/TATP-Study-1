@@ -429,7 +429,13 @@ def test_finish_reports_whether_the_session_completed():
     class Runner:
         session = Session()
         completed = False
+        left_open = False
 
+    assert launcher.finish(Runner()) == 1
+    assert Session.closed == 1
+
+    # An error left it open on purpose, to be resumed (docs/LOG.md N7.F10c): not closed here.
+    Runner.left_open = True
     assert launcher.finish(Runner()) == 1
     assert Session.closed == 1
 

@@ -307,7 +307,8 @@ def shut_down(runner: SessionRunner) -> None:
     That is recorded as an abort, with the block it happened in marked aborted and any mapping
     distance still missing flagged -- every row already written stays as it is (SPEC.md 17.5).
     """
-    if not runner.session.closed:
+    # An error left the session open on purpose, to be resumed (`SessionRunner.stop_for_error`).
+    if not runner.session.closed and not runner.left_open:
         runner.abort(WINDOW_CLOSED)
     if runner.lock is not None:
         runner.lock.release()

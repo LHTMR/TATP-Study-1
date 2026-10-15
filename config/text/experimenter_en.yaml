@@ -344,11 +344,11 @@ dialogs:
   error: Error
   close: Close
   # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. An error nothing caught,
-  # during a session; on Close the session is aborted.
-  software_error: 'The software hit an error, so the session has been stopped and the garment turned off. Everything recorded so far is saved. Start the session again from the launcher to resume it. The error: {value}'
-  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. The same in the intervention
-  # and the rekindle, where the error's own text could name a pattern (SPEC.md 16); the log has it.
-  software_error_withheld: 'The software hit an error, so the session has been stopped and the garment turned off. Everything recorded so far is saved. Start the session again from the launcher to resume it. What the error was is in the session''s log.'
+  # during setup; on Close the program ends with the session open to a resume.
+  software_error: 'The software hit an error, so the session has been stopped and the garment turned off. Everything recorded so far is saved. The program closes now; start it again and choose Resume the session to carry on. The error: {value}'
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. The same from touch
+  # calibration on, where the error's own text could name a pattern (SPEC.md 16); the log has it.
+  software_error_withheld: 'The software hit an error, so the session has been stopped and the garment turned off. Everything recorded so far is saved. The program closes now; start it again and choose Resume the session to carry on. What the error was is in the session''s log.'
   # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. The same, with no session open.
   launcher_error: 'The software hit an error: {value}. If you were starting a session, check the details and start it again.'
   # Buttons of the resume question.

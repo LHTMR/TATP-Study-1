@@ -745,15 +745,20 @@ def test_an_uncaught_error_stops_the_session_and_says_so(app, loaded, tmp_path, 
         sys.excepthook(*sys.exc_info())
 
     session = runner.session
-    assert session.closed and not runner.completed
+    assert runner.left_open and not session.closed and not runner.completed
+    assert not session.garment.connected
     errors = [r for r in _events(session) if r["event"] == "software_error"]
     assert len(errors) == 1 and "Bose QC Headphones" in errors[0]["detail"]
     assert errors[0]["severity"] == "error"
     assert len(shown) == 1 and "Bose QC Headphones" in shown[0]
     participant = runner.rig.participant
     assert participant.message.text == participant.text["screens"]["paused"]
+    # Left open as a crash leaves it, so the next start offers the resume (SPEC.md 15); an
+    # abort would have written session_end_iso, and a fresh session would have begun.
     values = resumption.read_session_values(session.files.path("session"))
-    assert values["abort_reason"].startswith("software error: ")
+    assert not values.get("session_end_iso")
+    found = resumption.find_open_session(session.files.folder, "01", 1)
+    assert found is not None and found.session_file == session.files.path("session")
 
 
 def _error_during(runner, monkeypatch, shown: list) -> None:
@@ -768,25 +773,27 @@ def _error_during(runner, monkeypatch, shown: list) -> None:
         sys.excepthook(*sys.exc_info())
 
 
-def test_in_the_intervention_the_error_text_is_withheld_from_the_experimenter(
-        app, loaded, tmp_path, monkeypatch):
-    """An exception's text can name a pattern or a condition (SPEC.md 16): the experimenter is
-    told there was an error, and the log has what it was (the review of N7.F10c)."""
+@pytest.mark.parametrize("phase", ["touch_calibration", "intervention"])
+def test_after_setup_the_error_text_is_withheld_from_the_experimenter(
+        app, loaded, tmp_path, monkeypatch, phase):
+    """An exception's text can name a pattern -- the preference selection's in touch
+    calibration -- or a condition (SPEC.md 16): the experimenter is told there was an error,
+    and the log has what it was (the reviews of N7.F10c)."""
     runner = make_runner(loaded, tmp_path)
     runner.start()
-    runner.session.set_phase("intervention")
+    runner.session.set_phase(phase)
     shown: list[str] = []
     _error_during(runner, monkeypatch, shown)
     assert shown == [runner.experimenter.text["dialogs"]["software_error_withheld"]]
-    assert "ct_targeted" not in shown[0]
     errors = [r["detail"] for r in _events(runner.session) if r["event"] == "software_error"]
     assert errors == ["KeyError: 'ct_targeted'"]
-    assert runner.session.closed
+    assert runner.left_open
 
 
 def test_an_error_while_stopping_for_an_error_still_ends_the_session(
         app, loaded, tmp_path, monkeypatch):
-    """The abort is in a `finally`: a session must never be left standing (N7.F10c)."""
+    """Ending the program is in a `finally`: a session must never be left standing
+    (N7.F10c)."""
     runner = make_runner(loaded, tmp_path)
     runner.start()
 
@@ -801,7 +808,8 @@ def test_an_error_while_stopping_for_an_error_still_ends_the_session(
             raise KeyError("first")
         except KeyError:
             sys.excepthook(*sys.exc_info())
-    assert runner.session.closed and not runner.completed
+    assert runner.left_open and not runner.completed
+    assert not runner.session.garment.connected
 
 
 def test_with_no_session_open_an_uncaught_error_goes_elsewhere(monkeypatch):

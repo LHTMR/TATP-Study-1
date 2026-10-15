@@ -172,9 +172,10 @@ was lost (docs/LOG.md N7.F10a).
 
 `software_error` (severity `error`, the exception in `detail`) is written when an error nothing
 in the software caught stops the session: the garment goes to zero, the experimenter is told
-(during the intervention and the rekindle without the exception's text, §16), and the session
-is aborted with `abort_reason` `software error: <the exception>`, so it can be
-resumed (§15; docs/LOG.md N7.F10c).
+(after setup without the exception's text, §16), and the program ends **with the session left
+open, as a crash leaves it**: no `session_end_iso`, no `abort_reason`, and no closing keys. The
+next start therefore offers the resume (§15; docs/LOG.md N7.F10c). `software_error` is the last
+row of such a file.
 
 The garment's own events are logged too, because no command wrote them (§14.2): every
 `garment` table `fault` row is also a `garment_fault` row here (severity `error`, the fault in

@@ -76,7 +76,6 @@ from tatp.touchcal import (
 )
 from tatp.touchcal_maths import Delivery
 from tatp.trials import MessageConfirm
-from tatp.ui.experimenter import BLINDED_PHASES
 from tatp.units import S_PER_MIN
 
 # Keys in config/text/participant_*.yaml, not wording.
@@ -100,9 +99,8 @@ MAPPED = (POST_S, POST_I)
 SELF_STARTED = "participant_preferred"
 # The `log` event an experimenter's note is written as (docs/DATA_SCHEMA.md).
 NOTE_EVENT = "experimenter_note"
-# An error nothing caught (`stop_on_error`): its `log` event, and the session's abort reason.
+# The `log` event of an error nothing caught (`stop_on_error`).
 SOFTWARE_ERROR_EVENT = "software_error"
-SOFTWARE_ERROR_REASON = "software error"
 # `Session.set_upcoming` kinds.
 BLOCK, PHASE = "block", "phase"
 FIRST_SESSION = 1
@@ -329,6 +327,9 @@ class SessionRunner(Procedure):
         # Set for a session resumed after its rekindle heat was launched (LOG N7.D14).
         self._resumed_heat_t_s: float | None = None
         self._stopping_for_error = False
+        # Set when an error ended the program with the session open (`_leave_open`): nothing
+        # afterwards may close it, or it could not be resumed.
+        self.left_open = False
 
         self.experimenter.abort_requested.connect(self.abort)
         # For the whole session, interruptions included (SPEC.md 11, 13).
@@ -934,13 +935,15 @@ class SessionRunner(Procedure):
         session stood still with nothing on either screen to say why (the masking check, 15
         Oct 2026). Everything that could move the session on is cancelled first, so nothing
         runs under the dialog's own event loop; then the error is logged, the garment goes to
-        zero, the experimenter is told, and the session is aborted -- which keeps everything
-        collected and leaves it open to a resume (SPEC.md 15). The abort happens whatever goes
-        wrong on the way to it, so an error in here cannot leave the session standing.
+        zero and the experimenter is told. The session is then **left open, as a crash leaves
+        it** (`_leave_open`), not aborted: an abort writes `session_end_iso`, and a session with
+        one is never offered for resume, so the next start would have begun again from setup
+        with a new t=0 (spec-review of N7.F10c). That happens whatever goes wrong on the way, so
+        an error in here cannot leave the session standing.
 
-        During the intervention and the rekindle the experimenter is told that there was an
-        error but not what it was: an exception's text can name a pattern or a condition
-        (SPEC.md 16). The log has it.
+        From touch calibration on the experimenter is told that there was an error but not
+        what it was: an exception's text can name a pattern or a condition (SPEC.md 16). The
+        log has it.
         """
         # A timer the error left behind can still raise under the dialog. That one is on the
         # console; the session is already being stopped.
@@ -955,13 +958,28 @@ class SessionRunner(Procedure):
                 self.session.garment.stop()
             self.participant.show_message(PAUSED_SCREEN)
             dialogs = self.experimenter.text["dialogs"]
-            if self.session.phase in BLINDED_PHASES:
-                message = dialogs["software_error_withheld"]
-            else:
+            if self.session.phase == SETUP:
                 message = dialogs["software_error"].format(value=summary)
+            else:
+                message = dialogs["software_error_withheld"]
             self.experimenter.error_dialog(message).exec()
         finally:
-            self.abort(f"{SOFTWARE_ERROR_REASON}: {summary}")
+            self._leave_open()
+
+    def _leave_open(self) -> None:
+        """End the program as a crash would, with the session still open to a resume (SPEC.md
+        15): every row already written stays, a row a failed write held is retried, and the
+        closing keys are not written. The garment and the sound are let go."""
+        self.left_open = True
+        self._clear_alarms()
+        self.session.files.retry_pending()
+        if self.session.garment.connected:
+            self.session.garment.stop()
+            self.session.garment.disconnect()
+        self.session.audio.close()
+        if self.lock is not None:
+            self.lock.release()
+        QApplication.instance().quit()
 
     def abort(self, reason: str) -> None:
         """The experimenter's abort (SPEC.md 11). Everything collected so far is kept."""

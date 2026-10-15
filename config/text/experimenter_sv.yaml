@@ -346,11 +346,11 @@ dialogs:
   error: Fel
   close: Stäng
   # DRAFT (LOG N7.F10c): skrivet av bygget, inte från etikansökan. Ett fel som inget fångade,
-  # under en session; när dialogen stängs avbryts sessionen.
-  software_error: 'Programmet stötte på ett fel, så sessionen har stoppats och plagget stängts av. Allt som registrerats hittills är sparat. Starta sessionen igen från startfönstret för att återuppta den. Felet: {value}'
-  # DRAFT (LOG N7.F10c): skrivet av bygget, inte från etikansökan. Detsamma under interventionen
-  # och återuppvärmningen, där felets egen text kan namnge ett mönster (SPEC.md 16).
-  software_error_withheld: 'Programmet stötte på ett fel, så sessionen har stoppats och plagget stängts av. Allt som registrerats hittills är sparat. Starta sessionen igen från startfönstret för att återuppta den. Vad felet var står i sessionens logg.'
+  # under förberedelsen; när dialogen stängs avslutas programmet med sessionen öppen att återuppta.
+  software_error: 'Programmet stötte på ett fel, så sessionen har stoppats och plagget stängts av. Allt som registrerats hittills är sparat. Programmet stängs nu; starta det igen och välj Återuppta sessionen för att fortsätta. Felet: {value}'
+  # DRAFT (LOG N7.F10c): skrivet av bygget, inte från etikansökan. Detsamma från
+  # beröringskalibreringen och framåt, där felets egen text kan namnge ett mönster (SPEC.md 16).
+  software_error_withheld: 'Programmet stötte på ett fel, så sessionen har stoppats och plagget stängts av. Allt som registrerats hittills är sparat. Programmet stängs nu; starta det igen och välj Återuppta sessionen för att fortsätta. Vad felet var står i sessionens logg.'
   # DRAFT (LOG N7.F10c): skrivet av bygget, inte från etikansökan. Detsamma, utan öppen session.
   launcher_error: 'Programmet stötte på ett fel: {value}. Om du höll på att starta en session, kontrollera uppgifterna och starta den igen.'
   # Knapparna till frågan om att återuppta.

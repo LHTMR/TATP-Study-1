@@ -789,7 +789,9 @@ def finish(runner) -> int:
     if runner is None:
         return 0
     # Closing twice is safe, and covers a window shut by hand (run_session.main does the same).
-    runner.session.close()
+    # Not a session an error left open on purpose, to be resumed (`stop_for_error`).
+    if not runner.left_open:
+        runner.session.close()
     return 0 if runner.completed else 1
 
 
