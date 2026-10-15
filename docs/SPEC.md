@@ -1281,8 +1281,9 @@ Write `docs/DATA_SCHEMA.md` with the exact column list, type and unit for every 
 
 ### 14.3 Durability
 
-Every row is appended and flushed **as it is produced**, following `DataFileCollection`'s
-open-append-close pattern. A crash at any moment loses at most the trial in progress. Filenames
+Every row is appended and flushed **as it is produced**: `DataFileCollection` keeps each
+table's file open for the session and flushes after every row, so the file on disk is current
+after each row (docs/LOG.md N7.F13a). A crash at any moment loses at most the trial in progress. Filenames
 are unique by timestamp; the software never overwrites an existing data file.
 
 ---

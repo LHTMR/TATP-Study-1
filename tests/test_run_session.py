@@ -62,6 +62,14 @@ def _rows(session, table):
         return list(csv.DictReader(handle))
 
 
+def _crash(runner):
+    """What a crash leaves: rows written, no closing keys, the files and the lock let go by the
+    operating system as the process ends."""
+    runner.cancel()
+    runner.session.files.release()
+    runner.lock.release()
+
+
 def _never(open_session):
     raise AssertionError("no open session was expected")
 
@@ -111,8 +119,7 @@ def test_preflight_offers_the_resume_of_an_open_session(app, config):
     assert run_session.preflight(config, args) == []
     first = run_session.build(config, args)
     first.start()
-    first.cancel()
-    first.lock.release()
+    _crash(first)
     findings = run_session.preflight(config, args)
     assert [(severity, key) for severity, key, _ in findings] == [
         ("warn", run_session.RESUME_OFFER)
@@ -141,8 +148,7 @@ def test_a_session_started_in_lower_case_resumes_in_upper_case(app, config):
     assert lower.experimenter == "SM"
     first = run_session.build(config, lower)
     first.start()
-    first.cancel()
-    first.lock.release()
+    _crash(first)
     findings = run_session.preflight(config, run_session.parse_args(ARGV))
     assert [key for _, key, _ in findings] == [run_session.RESUME_OFFER]
     resumed = run_session.build(config, run_session.parse_args([*ARGV, "--resume"]))
@@ -198,8 +204,7 @@ def test_a_failed_build_releases_the_lock(app, config, monkeypatch):
 def test_a_resume_at_another_clock_speed_is_refused_before_anything_is_written(app, config):
     first = run_session.build(config, run_session.parse_args(ARGV))
     first.start()
-    first.cancel()
-    first.lock.release()
+    _crash(first)
     folder = pre.data_folder_for(config)
     before = sorted(folder.glob("*.csv"))
     args = run_session.parse_args([*ARGV, "--resume", "--clock-speed", "5"])
@@ -212,8 +217,7 @@ def test_a_resume_at_another_clock_speed_is_refused_before_anything_is_written(a
 def test_two_sessions_started_in_one_second_never_share_files(app, config):
     first = run_session.build(config, run_session.parse_args(ARGV))
     first.start()
-    first.cancel()
-    first.lock.release()
+    _crash(first)
     second = run_session.build(config, run_session.parse_args([*ARGV, "--new"]))
     assert second.session.files.stamp != first.session.files.stamp
     run_session.shut_down(second)
@@ -346,8 +350,7 @@ def test_closing_the_window_before_the_end_is_recorded_as_an_abort(app, config):
 def test_an_open_session_is_offered_and_declining_starts_again(app, config):
     first = run_session.build(config, run_session.parse_args(ARGV), _never)
     first.start()
-    first.cancel()          # a crash: the session file never gets its end
-    first.lock.release()
+    _crash(first)           # the session file never gets its end
     asked = []
 
     def decline(open_session):
@@ -365,8 +368,7 @@ def test_an_open_session_is_offered_and_declining_starts_again(app, config):
 def test_accepting_resumes_with_the_recorded_seed(app, config):
     first = run_session.build(config, run_session.parse_args([*ARGV, "--seed", "11"]), _never)
     first.start()
-    first.cancel()
-    first.lock.release()
+    _crash(first)
     second = run_session.build(config, run_session.parse_args(ARGV), lambda _: True)
     assert second.resume is not None
     assert second.session.rng_seed == 11

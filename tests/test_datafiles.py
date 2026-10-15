@@ -44,7 +44,9 @@ def schema():
 
 @pytest.fixture
 def files(tmp_path):
-    return DataFileCollection(tmp_path / "data", "01", 1, STAMP)
+    collection = DataFileCollection(tmp_path / "data", "01", 1, STAMP)
+    yield collection
+    collection.release()
 
 
 def test_every_table_in_spec_14_2_is_defined(schema):
@@ -158,6 +160,7 @@ def test_a_second_collection_appends_rather_than_overwriting(tmp_path):
             origin="software",
             severity="info",
         )
+        collection.release()
     rows = _read(tmp_path / "data" / f"TATP1_{STAMP}_P01_S1_log.csv")
     assert len(rows) == 3
 
@@ -257,15 +260,14 @@ def test_a_write_failure_holds_the_row_and_retries_it(files):
         "log", timestamp_iso=ISO, phase="setup", event="first", origin="software",
         severity="info",
     )
-    os.chmod(files.path("log"), 0o400)
-    try:
-        files.write(
-            "log", timestamp_iso=ISO, phase="setup", event="lost?", origin="software",
-            severity="info",
-        )
-        assert files.write_failures == 1
-    finally:
-        os.chmod(files.path("log"), 0o600)
+    # The file is held open between rows, so a failure has to come from the open handle: closing
+    # its descriptor underneath it makes the next flush raise, as a vanished disk would.
+    os.close(files._handles["log"].fileno())
+    files.write(
+        "log", timestamp_iso=ISO, phase="setup", event="lost?", origin="software",
+        severity="info",
+    )
+    assert files.write_failures == 1
 
     files.write(
         "log", timestamp_iso=ISO, phase="setup", event="third", origin="software",
@@ -273,3 +275,41 @@ def test_a_write_failure_holds_the_row_and_retries_it(files):
     )
     rows = _read(files.path("log"))
     assert [r[4] for r in rows[1:]] == ["first", "lost?", "third"]
+
+
+def _log(files, event):
+    files.write(
+        "log", timestamp_iso=ISO, phase="setup", event=event, origin="software",
+        severity="info",
+    )
+
+
+def test_each_row_is_on_disk_before_write_returns(files):
+    """SPEC.md 14.3: the file stays open, so the flush is what makes a row survive a crash."""
+    _log(files, "first")
+    assert [r[4] for r in _read(files.path("log"))[1:]] == ["first"]
+    _log(files, "second")
+    assert [r[4] for r in _read(files.path("log"))[1:]] == ["first", "second"]
+
+
+def test_a_file_deleted_while_open_is_recreated_with_its_header(files):
+    """Reopening per row recreated a deleted file; holding it open must not write into the
+    deleted one instead, which macOS allows (docs/LOG.md N7.F13a)."""
+    _log(files, "gone")
+    files.path("log").unlink()
+    _log(files, "after")
+    rows = _read(files.path("log"))
+    assert rows[0] == list(files.tables["log"].column_names)
+    assert [r[4] for r in rows[1:]] == ["after"]
+
+
+def test_release_closes_the_files_and_a_later_write_reopens_them(files):
+    """A session left open for a resume lets its files go (SPEC.md 15) without closing keys."""
+    _log(files, "before")
+    files.release()
+    assert not files._handles
+    _log(files, "after")
+    rows = _read(files.path("log"))
+    assert [r[4] for r in rows[1:]] == ["before", "after"], "the header is written once"
+    assert not files.path("session").exists(), "release writes no session keys"
+    files.release()

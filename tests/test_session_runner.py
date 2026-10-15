@@ -107,7 +107,15 @@ def make_runner(loaded, tmp_path, resume=None, condition=None, seed=7,
     participant = ParticipantWindow(config, Responder(config.hardware), session.clock)
     participant.resize(1280, 800)
     experimenter = ExperimenterWindow(config.experimenter_text, session.experimenter_view)
-    return SessionRunner(Rig(session, participant, experimenter), resume=resume)
+    handed_over = False
+    try:
+        runner = SessionRunner(Rig(session, participant, experimenter), resume=resume)
+        handed_over = True
+        return runner
+    finally:
+        # As `run_session.build`: a refused runner lets the session's files go.
+        if not handed_over:
+            session.files.release()
 
 
 class Driver(Virtual):

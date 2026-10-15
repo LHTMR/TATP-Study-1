@@ -4,9 +4,13 @@ The column list is not duplicated here. `docs/DATA_SCHEMA.md` is parsed, so the 
 `tools/validate_session.py` read the same definition and cannot drift from the documentation or
 from each other. Editing the markdown changes both.
 
-Durability (SPEC.md 14.3): every row is opened, appended, flushed and closed as it is produced,
-so a crash loses at most the trial in progress. There is no long-lived file handle holding a
-buffer that a crash would discard.
+Durability (SPEC.md 14.3): every row is appended and flushed as it is produced, so a crash
+loses at most the trial in progress. Each table's file stays open between rows, because an
+endpoint-security scanner (Microsoft Defender on the lab's managed machines) inspects every open
+and close: reopening per row cost about 14 ms a row on a managed Mac, enough to starve the event
+loop when the garment logs fast (docs/LOG.md N7.F13a). Flushing hands each row to the operating
+system before `write` returns, which is all the old close did, so nothing is left in a buffer a
+crash would discard.
 
 This is the one module where a narrow `try`/`except` is permitted (CLAUDE.md), and only for the
 case it exists for: a row that has already been collected from a participant must not be lost
@@ -18,9 +22,11 @@ swallowed.
 from __future__ import annotations
 
 import csv
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import TextIO
 
 from tatp.clock import ISO_FORMAT
 from tatp.config import REPO_ROOT
@@ -204,6 +210,7 @@ class DataFileCollection:
         self.stamp = stamp
         self.write_failures = 0
         self._pending: dict[str, list[list[str]]] = {}
+        self._handles: dict[str, TextIO] = {}
         self._session_keys_written: list[str] = []
         folder.mkdir(parents=True, exist_ok=True)
 
@@ -269,7 +276,7 @@ class DataFileCollection:
         outstanding = {k: "" for k in self.session_keys if k not in self._session_keys_written}
         if outstanding:
             self.write_session(outstanding)
-        self.retry_pending()
+        self.release()
 
     def retry_pending(self) -> None:
         """Write whatever a failed write held, and nothing else: no closing keys, so a session
@@ -279,23 +286,55 @@ class DataFileCollection:
             for row in rows:
                 self._append(table_name, row)
 
+    def release(self) -> None:
+        """Retry anything held, then close every file. A later write reopens its file."""
+        self.retry_pending()
+        for table_name in list(self._handles):
+            self._drop(table_name)
+
+    def _handle(self, table_name: str) -> TextIO:
+        handle = self._handles.get(table_name)
+        # A file deleted while open still accepts writes on macOS, into a file no one can see,
+        # where reopening per row used to recreate it. Windows refuses the delete instead.
+        if handle is not None and os.fstat(handle.fileno()).st_nlink == 0:
+            self._drop(table_name)
+            handle = None
+        if handle is None:
+            path = self.path(table_name)
+            new_file = not path.exists()
+            handle = path.open("a", encoding="utf-8", newline="")
+            self._handles[table_name] = handle
+            if new_file:
+                csv.writer(handle, lineterminator="\n").writerow(
+                    self.tables[table_name].column_names
+                )
+        return handle
+
+    def _drop(self, table_name: str) -> None:
+        handle = self._handles.pop(table_name)
+        try:
+            handle.close()
+        except OSError:
+            # Part of the same catch as `_append`: every row was flushed or is held for a retry
+            # before any close, so a failing close has nothing left to lose.
+            pass
+
     def _append(self, table_name: str, row: list[str]) -> None:
-        path = self.path(table_name)
         held = self._pending.pop(table_name, [])
         try:
-            new_file = not path.exists()
-            with path.open("a", encoding="utf-8", newline="") as handle:
-                writer = csv.writer(handle, lineterminator="\n")
-                if new_file:
-                    writer.writerow(self.tables[table_name].column_names)
-                for earlier in held:
-                    writer.writerow(earlier)
-                writer.writerow(row)
-                handle.flush()
+            handle = self._handle(table_name)
+            writer = csv.writer(handle, lineterminator="\n")
+            for earlier in held:
+                writer.writerow(earlier)
+            writer.writerow(row)
+            handle.flush()
         except OSError:
             # The one permitted catch (CLAUDE.md): a trial already collected from a participant
             # must not be lost because the disk was busy or the folder briefly unavailable.
-            # Held rows are retried on the next write and again at close.
+            # Held rows are retried on the next write and again at close, through a fresh
+            # handle, so a folder that comes back is found again.
+            if table_name in self._handles:
+                self._drop(table_name)
             self._pending[table_name] = [*held, row]
             self.write_failures += 1
 
