@@ -614,7 +614,9 @@ participant-preferred condition's pattern cannot change mid-intervention. The ga
 zero and the step in progress is abandoned as a stop abandons it; the re-calibration runs;
 every condition's delivery is recomputed from it identically; the touch starts again with its
 cue, as at any touch start, before the abandoned step is repeated -- inside a block too, since
-the block's ratings and measures are made under the touch. The
+the block's ratings and measures are made under the touch (in the participant-preferred
+condition the session does not wait for the self-start press, as at any touch start, and a
+block that goes on first is flagged). The
 session clock is not paused: alerts sound, and a block that falls due waits, armed, for the
 re-calibration to end. A restart during the intervention includes the "just uncomfortable"
 bracket, on sensitised skin. `touch_calibration.recalibrations_max` limits them per session

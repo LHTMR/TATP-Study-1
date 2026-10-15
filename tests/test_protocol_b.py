@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import time
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtWidgets import QApplication
@@ -704,12 +705,16 @@ def test_a_calibration_run_again_for_the_intervention_keeps_its_preference(rig):
     assert fits == [("1", "false"), ("2", "false")], "a run that governed is not superseded"
 
 
-def test_run_numbers_go_on_from_a_resumed_sessions_files(rig):
-    """Code review of N7.F12a1: a calibration made after a crash-resume does not number its
-    runs from 1 again, which the earlier files already have."""
-    result = Virtual(rig, touchcal.TouchCalibration(rig, runs_before=2)).run()
+def test_numbering_goes_on_from_a_resumed_sessions_files(rig):
+    """Code review and spec-review of N7.F12a1: a calibration made after a crash-resume does
+    not number its runs, evenness questions or comparisons from 1 again, which the earlier
+    files already have."""
+    resumed = SimpleNamespace(touchcal_runs=2, evenness_checks=3, comparisons=7)
+    result = Virtual(rig, touchcal.TouchCalibration(rig, resumed)).run()
     assert result.run_index == 3
     assert {row["run_index"] for row in _rows(rig.session, "touchcal_fit")} == {"3"}
+    assert [row["check_index"] for row in _rows(rig.session, "touchcal_evenness")] == ["4"]
+    assert _rows(rig.session, "touchcal_compare")[0]["comparison_index"] == "8"
 
 
 # -- timing-only mode, SPEC.md 12.4 -----------------------------------------------------

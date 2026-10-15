@@ -1083,7 +1083,12 @@ def test_a_restart_in_a_touch_block_restarts_the_touch_before_the_rating_repeats
                      == "_QuietDeliveryStart")
     rated = next(i for i, (event, _) in enumerate(after) if event == "rating_cued")
     assert restarted < rated, "the touch's cue before the repeated rating"
-    if condition != "participant_preferred":
+    pending = [r for r in events[done_at:] if r["event"] == "self_start_pending_at_block"]
+    if condition == "participant_preferred":
+        # The session never waits for the press (N7.D17); the data says the block went on.
+        assert pending and pending[0]["severity"] == "warning"
+    else:
+        assert not pending
         assert names.index("garment_activated", done_at) < done_at + rated, (
             "and the touch on before it"
         )
@@ -1094,6 +1099,49 @@ def test_a_restart_in_a_touch_block_restarts_the_touch_before_the_rating_repeats
     assert fits == [("1", "false"), ("2", "false")], "the run that governed is not superseded"
     channels = _rows(session, "touchcal_channels")
     assert [r["run_index"] for r in channels if r["calibration_index"] == "2"] == ["2"] * 5
+    runner.cancel()
+    session.close()
+
+
+@pytest.mark.parametrize("condition", ["ct_targeted", "participant_preferred"])
+def test_next_step_while_the_touch_comes_back_launches_nothing(
+    app, loaded, tmp_path, condition
+):
+    """Spec-review of N7.F12a1: a block armed and waiting for its go when a re-calibration
+    took its place. A Next step press while the touch comes back afterwards starts nothing --
+    it is logged as ignored -- and the touch-back step cannot be left in force by one, in any
+    condition (SPEC.md 16): the block launches on the next press, after it."""
+    runner = make_runner(loaded, tmp_path, condition=condition)
+    session = runner.session
+    state = {}
+
+    def act() -> None:
+        innermost = runner._innermost()
+        if "chosen" not in state:
+            if (session.phase == "intervention" and isinstance(innermost, TouchBlock)
+                    and innermost.awaiting_go):
+                state["chosen"] = innermost.block_index
+                runner.experimenter.recalibration_requested.emit("rebalance", "other")
+        elif "pressed" not in state and runner._touch_restarting:
+            runner.experimenter.proceed_requested.emit()
+            state["pressed"] = len(_events(session))
+
+    driver = Driver(runner.rig, runner, stop_when=lambda: "pressed" in state and _logged(
+        runner, "stage_completed", f"block.{state['chosen']}"))
+    # Before the driver's own step, which presses Next step for an armed block at once.
+    step = driver.step
+    driver.step = lambda: (act(), step())
+    driver.run()
+    assert "pressed" in state
+    events = _events(session)
+    after = [r["event"] for r in events[state["pressed"] - 1:]]
+    assert after[0] == "proceed_ignored", after[:3]
+    launch = after.index("block_started")
+    assert "garment_activated" in after[:launch] or condition == "participant_preferred"
+    assert not runner._touch_restarting and runner._touch_back is None
+    ratings = [r for r in _rows(session, "touch_ratings")
+               if r["block_index"] == str(state["chosen"])]
+    assert len(ratings) == len(TouchBlock(runner.rig, 3, state["chosen"]).plan)
     runner.cancel()
     session.close()
 
@@ -1118,18 +1166,26 @@ def test_a_crash_after_an_intervention_recalibration_reloads_the_latest(app, loa
                 "step3_match"):
             nested.append(True)
             crashed.experimenter.recalibration_requested.emit("restart", "other")
+        # And a stop inside it counts as the intervention's (spec-review of N7.F12a1).
+        if (nested and len(nested) == 1 and calibration is not None
+                and calibration.step_name == "step2_estimation"
+                and crashed.rig.interruptions.active is None):
+            nested.append(True)
+            press(crashed.rig.participant, "period")
         return bool(done) and _logged(crashed, "garment_activated") and len(
             _details(crashed, "touch_calibration_done")) == 2
 
     Driver(crashed.rig, crashed, stop_when=recalibrated).run()
     crashed.cancel()
-    assert nested and crashed.session.intervention_recalibrations == 2
+    assert len(nested) == 2 and crashed.session.intervention_recalibrations == 2
+    assert crashed.session.intervention_emergency_stops == 1
     second = _details(crashed, "recalibration")[1]
     assert second.startswith("restart; controls; ") and second.endswith(
         "/step3_match; other; 2"), second
     runner = _resumed(loaded, tmp_path, crashed)
     assert runner.resume.calibrations_used == 2
     assert runner.resume.intervention_recalibrations == 2
+    assert runner.resume.intervention_emergency_stops == 1, "built the same way, by stage"
     assert runner.resume.touchcal_runs == 2
     assert runner.resume.deliveries == crashed.deliveries, "the latest calibration's"
     Driver(runner.rig, runner, stop_when=lambda: runner._touch_on).run()

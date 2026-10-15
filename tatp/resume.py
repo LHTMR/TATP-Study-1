@@ -167,8 +167,11 @@ class ResumeState:
     intervention_recalibrations: int = 0
     recalibrations: int = 0
     calibrations_used: int = 0
-    # The highest touch-calibration run number in the chain, which a new one goes on from.
+    # The highest touch-calibration run, evenness question and comparison numbers in the
+    # chain, which a new calibration goes on from.
     touchcal_runs: int = 0
+    evenness_checks: int = 0
+    comparisons: int = 0
 
     @property
     def after_t_zero(self) -> bool:
@@ -226,12 +229,7 @@ def load(open_session: OpenSession, config, per_channel_pressure: bool) -> Resum
         vas_trained=frozenset(
             row["detail"] for row in log if row["event"] == VAS_TRAINING_CONFIRMED
         ),
-        # A stop pressed again while stopped has a detail saying so, and is not another stop.
-        intervention_emergency_stops=sum(
-            row["event"] == EMERGENCY_STOP and not row["detail"]
-            and row["phase"] in CONDITION_PHASES
-            for row in log
-        ),
+        intervention_emergency_stops=_intervention_stops(log),
         intervention_recalibrations=sum(
             _recalibrated(row) and _recalibrated_in_intervention(row) for row in log
         ),
@@ -246,7 +244,30 @@ def load(open_session: OpenSession, config, per_channel_pressure: bool) -> Resum
              for row in _rows(chain, table)),
             default=0,
         ),
+        evenness_checks=max(
+            (int(row["check_index"]) for row in _rows(chain, "touchcal_evenness")), default=0
+        ),
+        comparisons=max(
+            (int(row["comparison_index"]) for row in _rows(chain, "touchcal_compare")),
+            default=0,
+        ),
     )
+
+
+def _intervention_stops(log: list[dict[str, str]]) -> int:
+    """The stops during the intervention, a re-calibration there included, whose phase is
+    `touch_calibration`: once the intervention has begun, that phase means one (the touch
+    calibration stage and its baseline come before it). A stop pressed again while stopped
+    has a detail saying so, and is not another stop."""
+    begun, count = False, 0
+    for row in log:
+        begun = begun or row["phase"] in CONDITION_PHASES
+        if row["event"] == EMERGENCY_STOP and not row["detail"] and (
+            row["phase"] in CONDITION_PHASES
+            or (begun and row["phase"] == TOUCH_CALIBRATION_STAGE)
+        ):
+            count += 1
+    return count
 
 
 def _recalibrated(row: dict[str, str]) -> bool:

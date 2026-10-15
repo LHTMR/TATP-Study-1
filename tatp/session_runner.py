@@ -364,18 +364,19 @@ class SessionRunner(Procedure):
         # the touch calibration's preference, which a re-calibration during the intervention
         # keeps; whether one runs there, the procedure it runs in place of, and the phase to go
         # back to; where a stop came while touch was calibrated or delivered, so that its plain
-        # resume is recorded as the choice it was; whether the touch is starting again in a
-        # step of its own after one; when a wait that will stop the touch falls due; and the
-        # run numbers a resumed session's files already have.
+        # resume is recorded as the choice it was; the touch-back step after one, with the
+        # procedure it is a step of (`_touch_restarting`); and when a wait that will stop the
+        # touch falls due.
         self._calibration: TouchCalibration | None = None
         self._preference: str | None = None if resume is None else resume.preferred_pattern
         self._recalibrating = False
         self._detoured: Procedure | None = None
         self._phase_before_recalibration = INTERVENTION
         self._stop_where: str | None = None
-        self._touch_restarting = False
+        self._touch_back: tuple[Procedure, Callable[[], None]] | None = None
         self._touch_off_due_s: float | None = None
-        self._runs_before = 0 if resume is None else resume.touchcal_runs
+        # Stops during a re-calibration in the intervention count as the intervention's.
+        rig.interruptions.in_intervention = self._in_intervention
         # Set when an error ended the program with the session open (`_leave_open`): nothing
         # afterwards may close it, or it could not be resumed.
         self.left_open = False
@@ -562,7 +563,7 @@ class SessionRunner(Procedure):
 
     def _new_calibration(self) -> TouchCalibration:
         """Kept: a re-calibration during the intervention runs it again."""
-        calibration = TouchCalibration(self.rig, self._runs_before)
+        calibration = TouchCalibration(self.rig, self.resume)
         self._preview(calibration)
         calibration.recalibration_changed.connect(self._offer_recalibration)
         self._calibration = calibration
@@ -1004,7 +1005,6 @@ class SessionRunner(Procedure):
         started the touch. A step of `procedure`, so a stop meanwhile repeats it."""
 
         def begin() -> None:
-            self._touch_restarting = True
             if self._delivery is None:
                 self._start_delivery()
             self._show_between()
@@ -1017,10 +1017,28 @@ class SessionRunner(Procedure):
                              lambda: self._once_delivery_settles(back))
 
         def back() -> None:
-            self._touch_restarting = False
+            self._touch_back = None
+            # As at a block's launch (N7.D17): the session never waits for the participant's
+            # press, so a block can go on before the touch is started, which the data says.
+            if self._delivery is not None and self.session.block_index is not None:
+                self.session.log(
+                    "self_start_pending_at_block", severity="warning",
+                    detail=f"block {self.session.block_index} goes on after a re-calibration "
+                    "before the touch was started",
+                )
             go_on()
 
+        self._touch_back = (procedure, begin)
         procedure.step(begin)
+
+    @property
+    def _touch_restarting(self) -> bool:
+        """The touch-back step is the step in force: so it cannot outlive its step, whatever
+        replaces or cancels that (spec-review of N7.F12a1)."""
+        if self._touch_back is None:
+            return False
+        procedure, begin = self._touch_back
+        return procedure.running and procedure._step is begin
 
     def _disconnect_garment(self) -> None:
         """The experimenter's Disconnect (SPEC.md 11). The session goes on; nothing is lost."""
@@ -1086,8 +1104,14 @@ class SessionRunner(Procedure):
         """
 
         def launched() -> None:
-            if self.rig.interruptions.active is not None or self._recalibrating:
+            if self.rig.interruptions.active is not None:
                 return  # the child ignores this press too; the next one counts
+            if self._recalibrating or self._touch_restarting:
+                # The block's go is withdrawn for these (`Procedure.detour`), so nothing would
+                # start; the press is recorded, and the next one after them counts.
+                self.session.log("proceed_ignored", origin="experimenter",
+                                 detail="a re-calibration, or the touch starting after it")
+                return
             self._disarm()
             self._clear_alarms()
             self._show_upcoming(self.stage_index + 1)

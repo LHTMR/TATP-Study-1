@@ -31,6 +31,8 @@ A stop during the intervention is counted for the session file, `intervention_em
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from tatp.session import CONDITION_PHASES, Session, SessionError
@@ -71,6 +73,12 @@ class Interruptions(QObject):
         # None when nothing is interrupted, otherwise the kind currently in force.
         self.active: str | None = None
         self.emergency_stops = 0
+        # Whether the session is in the intervention, for the count of its stops. By phase
+        # here; the session runner makes it count a re-calibration there too, whose phase is
+        # touch_calibration (docs/LOG.md N7.F12a1).
+        self.in_intervention: Callable[[], bool] = (
+            lambda: session.phase in CONDITION_PHASES
+        )
         self._snapshot: dict | None = None
 
         self._timer = QTimer(self)
@@ -96,7 +104,7 @@ class Interruptions(QObject):
         self.emergency_stops += 1
         # An intercurrent event for analysis (docs/research/R36), counted the same in every
         # condition and written only to the session file.
-        if first and self.session.phase in CONDITION_PHASES:
+        if first and self.in_intervention():
             self.session.intervention_emergency_stops += 1
         self.active = EMERGENCY_STOP
         self.session.log(

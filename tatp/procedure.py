@@ -270,6 +270,9 @@ class Procedure(QObject):
         its own."""
         step = self._step
         self.suspend_offers()
+        # A go the abandoned step waited for is its own again only when it repeats: a press
+        # before then -- during the detour, or a step `then` runs first -- starts nothing.
+        self.on_proceed(None)
 
         def go_on() -> None:
             self.restore_offers()

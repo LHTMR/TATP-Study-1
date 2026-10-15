@@ -43,7 +43,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from tatp import touchcal_maths as maths
 from tatp.procedure import Procedure
 from tatp.responder import Action
-from tatp.resume import RECALIBRATION_EVENT, RESUME_CHOICE
+from tatp.resume import RECALIBRATION_EVENT, RESUME_CHOICE, ResumeState
 from tatp.session import Session
 from tatp.touchcal_maths import REFERENCE_STRONGER, TEST_STRONGER, Delivery
 from tatp.trials import Choice, Cue, ExperimenterChoice, Ramp, Trial
@@ -1244,7 +1244,7 @@ class TouchCalibration(Procedure):
     # What it can offer for a re-calibration has changed (`recalibration_offers`).
     recalibration_changed = Signal()
 
-    def __init__(self, rig, runs_before: int = 0):
+    def __init__(self, rig, resumed: ResumeState | None = None) -> None:
         super().__init__(rig)
         config = self.session.config
         self.touch = config.study1["touch_calibration"]
@@ -1276,19 +1276,21 @@ class TouchCalibration(Procedure):
         )
         self.low_pct, self.high_pct, self.sham_pct = low_pct, high_pct, sham_pct
 
-        self.run_index = runs_before
+        # The session's numbering, which a resumed session continues from the files it
+        # resumes (`resumed`, SPEC.md 15), so the chain never has two runs, evenness questions
+        # or comparisons of one number (docs/LOG.md N7.F12a1).
+        self.run_index = 0 if resumed is None else resumed.touchcal_runs
         self.reruns = 0
         self._run_warning: str | None = None
         self.rebalances = 0
-        # Numbers `touchcal_evenness.check_index`: a stop's rebalance or restart asks again too.
-        self.evenness_checks = 0
-        self.comparisons = 0
+        # Numbers `touchcal_evenness.check_index`: a rebalance or a re-calibration asks again.
+        self.evenness_checks = 0 if resumed is None else resumed.evenness_checks
+        self.comparisons = 0 if resumed is None else resumed.comparisons
         # Re-calibration (docs/LOG.md N7.F12a1). `step_name` is where the calibration is, as
         # the runner logs it; `_entry`, the path and reason a re-calibration during the
         # intervention starts with, and `_kept_preference` the step 6 choice it keeps;
         # `_used_run_index`, the run whose result governed the touch, never superseded since
-        # it was used. Run numbers go on from `runs_before`, those of the files a resumed
-        # session continues (SPEC.md 15), so the chain never has two runs of one number.
+        # it was used.
         self.step_name = STEP_TRAINING
         self._entry: tuple[str, str] | None = None
         self._kept_preference: str | None = None

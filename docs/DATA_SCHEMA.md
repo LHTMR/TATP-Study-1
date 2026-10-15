@@ -104,7 +104,7 @@ written, with an empty value — an absent row and an empty value must not be co
 | `masking_attempts` | - | How many times the participant set the masking level, accumulated across an earplug restart: 1 normally, 2 when earplugs were fitted. Before 5 Oct 2026, how many times the level was raised and re-asked. Each report that the garment was still audible is a `masking_reported_audible` row in `log` (origin `experimenter`, the level at the time in `detail`) |
 | `earplugs_used` | - | `true` when earplugs were fitted under the headphones because the participant could still hear the garment (§10.7) |
 | `fit_preview_reruns` | - | Total re-runs the experimenter chose with the fit preview on, across the session (§11.1); `0` when none. Written at close, with the keys below it, because a re-run can come at any time point |
-| `intervention_emergency_stops` | - | How many times the participant's emergency stop interrupted the session during the intervention (phase `intervention` or `rekindle`), counted the same way in every condition: an intercurrent event for analysis (`docs/research/R36`). A press while already stopped is not counted again. Across a crash, the resumed session's file counts the earlier files' stops too. `0` when none. Never displayed. Written at close; files before 15 Oct 2026 lack it. A stop during a re-calibration is logged in phase `touch_calibration` and is not counted here |
+| `intervention_emergency_stops` | - | How many times the participant's emergency stop interrupted the session during the intervention (phase `intervention` or `rekindle`), counted the same way in every condition: an intercurrent event for analysis (`docs/research/R36`). A press while already stopped is not counted again. Across a crash, the resumed session's file counts the earlier files' stops too. `0` when none. Never displayed. Written at close; files before 15 Oct 2026 lack it. A stop during a re-calibration in the intervention is counted too, though logged in phase `touch_calibration`: as `intervention_recalibrations`, by whether the intervention had begun, not by phase |
 | `intervention_recalibrations` | - | How many re-calibrations (a rebalance or a restart, `log` event `recalibration`) were begun during the intervention, from the controls or after a stop: a change of the treatment delivered, so an intercurrent event (docs/LOG.md N7.F12a1). One chosen inside a re-calibration there counts too, though its phase is `touch_calibration`: counted by the stage in its `<where>`, not by phase. Carried across a crash. `0` when none. Never displayed. Written at close; files before 15 Oct 2026 lack it |
 | `sensitisation_start_iso` | - | Session t=0; empty until sensitisation begins |
 | `session_end_iso` | - | Written at close |
@@ -221,8 +221,10 @@ waits, armed, until it ends. Then every condition's delivery is recomputed from 
 `touchcal_channels` set is written. The condition's touch starts again before the abandoned
 step is repeated -- inside a block too, whose ratings and measures are made under it -- with
 its cue (`warning_cue`, then `garment_activated`; in the participant-preferred condition the
-self-start prompt), the experimenter shown the touch start for the same time in every
-condition; unless the step is a wait for the rekindle or the intervention's end that fell due
+self-start prompt, and since the session never waits for the participant's press, inside a
+block `self_start_pending_at_block`, severity `warning`, if the block goes on before it), the
+experimenter shown the touch start for the same time in every condition, a Next step meanwhile
+starting nothing (`proceed_ignored` where an armed block would have launched); unless the step is a wait for the rekindle or the intervention's end that fell due
 meanwhile, which stops the touch. A re-calibration chosen inside another during the
 intervention is counted as an intervention one too. A choice no longer offered when the
 dialog is confirmed is logged `recalibration_ignored` (severity `warning`) and does nothing.
@@ -577,7 +579,7 @@ is a different thing from a tie and should not be settled in advance (`docs/LOG.
 | t_session_s | float | s | no | Seconds from session t=0 |
 | channel | int | - | yes | Test channel |
 | reference_channel | int | - | yes | The reference, channel 3 (§9) |
-| comparison_index | int | - | yes | 1-based, across the whole session's comparisons |
+| comparison_index | int | - | yes | 1-based, across the whole session's comparisons; a resumed session goes on from the files it resumes (from 15 Oct 2026) |
 | pass_index | int | - | yes | 1 for the first check of a channel; 2 after a re-adjustment (`docs/research/R33`) |
 | pair_index | int | - | yes | Which pair within the pass. A pair is both orders; a second pair runs only when the first favoured one channel in both (R33) |
 | order | str | - | yes | `test_first` or `reference_first` — both orders are run (§9) |
@@ -636,7 +638,7 @@ calibrated level. A rebalance re-runs steps 3 and 4 and asks again, so there can
 |---|---|---|---|---|
 | timestamp_iso | iso8601 | - | yes | Wall clock at the answer |
 | t_session_s | float | s | no | Seconds from session t=0 |
-| check_index | int | - | yes | 1 for the first question, incremented each time it is asked again in the session: after a rebalance, or in a re-calibration (`log`, `recalibration`) |
+| check_index | int | - | yes | 1 for the first question, incremented each time it is asked again in the session: after a rebalance, or in a re-calibration (`log`, `recalibration`); a resumed session goes on from the files it resumes (from 15 Oct 2026) |
 | level_kpa | float | kPa | yes | Reference-scale level the pattern played at; every channel through its gain |
 | judgement | str | - | yes | `even` or `uneven` |
 | rebalance_offered | bool | - | yes | `true` when an `uneven` answer put the rebalance to the experimenter; `false` once `evenness_max_rebalances` is used up |
