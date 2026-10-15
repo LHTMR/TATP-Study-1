@@ -69,6 +69,11 @@ EMERGENCY_STOP_SCREEN = "emergency_stop"
 # The one screen that draws the stop button, because pointing at it is its purpose (SPEC.md
 # 10.9). A key in the participant text file, not wording.
 STOP_REHEARSAL_SCREEN = "stop_rehearsal"
+# The rest screen between parts (SPEC.md 10.5). A key in the participant text file.
+STANDBY_SCREEN = "standby"
+# The participant text key whose two option labels name the two touches of a pair: the
+# comparison's "The first" / "The second", reused on the channel match (docs/LOG.md N7.F11c5).
+PAIR_LABELS = "comparison"
 
 MESSAGE_POINT_SIZE = 26
 CUE_RADIUS_FRACTION = 0.09
@@ -101,6 +106,11 @@ ADJUST_CONFIRM_Y_FRACTION = 0.76
 # large buttons go, which that text would overlap.
 STOP_BUTTON_Y_FRACTION = 0.62
 STOP_BUTTON_CENTRE_FRACTION = 0.5
+# The channel match's pair labels sit in the gap between the two drawn buttons, one above the
+# other, at these fractions of the buttons' height: clear of both, so neither reads as a
+# button's own label.
+PAIR_ROW_FRACTIONS = (0.3, 0.7)
+PAIR_UNDERLINE_GAP_PX = 6
 
 
 class _MessageScreen(QWidget):
@@ -306,6 +316,12 @@ class _ControlScreen(QWidget):
     A held button is drawn pressed for exactly as long as it is held (UI_PRINCIPLES.md 5.10).
     On the adjustment that also shows the participant that a hold is registering while the
     pressure ramps, which a sentence cannot.
+
+    **The channel match names its two touches** (`pair`). Its reference and the touch being set
+    take turns, and the participant could not tell which one they were feeling. So "The first"
+    and "The second" stand between the buttons, and the one playing is set in bold and
+    underlined while it plays (`playing`), as the comparison emphasises its button
+    (UI_PRINCIPLES.md 5.11): weight, never brightness or colour.
     """
 
     def __init__(self, responder: Responder, parent: QWidget | None = None):
@@ -315,13 +331,23 @@ class _ControlScreen(QWidget):
         self.labels: dict[str, str] = {}
         self.confirm = ""
         self.held: set[str] = set()
+        self.pair: tuple[str, str] | None = None
+        self.playing: int | None = None
 
-    def present(self, opening: str, controls: dict) -> None:
-        """`opening` goes above the buttons; `controls` is one `participant_controls` entry."""
+    def present(self, opening: str, controls: dict, pair: tuple[str, str] | None = None) -> None:
+        """`opening` goes above the buttons; `controls` is one `participant_controls` entry;
+        `pair` names the two alternating touches, on the channel match only."""
         self.target = opening
         self.labels = {side: controls[side] for side in SIDES}
         self.confirm = controls["confirm"]
         self.held.clear()
+        self.pair = pair
+        self.playing = None
+        self.update()
+
+    def emphasise(self, index: int | None) -> None:
+        """Mark which of `pair` is playing now; None while neither is."""
+        self.playing = index
         self.update()
 
     def hold(self, side: str) -> None:
@@ -355,7 +381,29 @@ class _ControlScreen(QWidget):
         top = int(self.height() * ADJUST_CONFIRM_Y_FRACTION)
         box = self.rect().adjusted(margin, top, -margin, 0)
         draw_prose(painter, box, self.confirm, self.responder)
+        if self.pair is not None:
+            self._draw_pair(painter)
         painter.end()
+
+    def _draw_pair(self, painter: QPainter) -> None:
+        left, right = _button_rect(self, SIDES[0]), _button_rect(self, SIDES[1])
+        for index, (label, row) in enumerate(zip(self.pair, PAIR_ROW_FRACTIONS, strict=True)):
+            font = QFont(self.font())
+            font.setPointSize(BUTTON_LABEL_POINT_SIZE)
+            font.setBold(index == self.playing)
+            painter.setFont(font)
+            painter.setPen(FOREGROUND)
+            metrics = QFontMetrics(font)
+            centre_y = int(left.top() + left.height() * row)
+            box = QRect(left.right(), centre_y - metrics.height() // 2,
+                        right.left() - left.right(), metrics.height())
+            painter.drawText(box, Qt.AlignCenter, label)
+            if index == self.playing:
+                width = metrics.horizontalAdvance(label)
+                y = box.bottom() + PAIR_UNDERLINE_GAP_PX
+                painter.setPen(QPen(FOREGROUND, BUTTON_LINE_WIDTH_PX))
+                painter.drawLine(box.center().x() - width // 2, y,
+                                 box.center().x() + width // 2, y)
 
 
 def _draw_top_text(painter: QPainter, widget: QWidget, text: str) -> None:
@@ -620,16 +668,24 @@ class ParticipantWindow(QWidget):
         """What the participant is left looking at after a stop (SPEC.md 13)."""
         self.show_message(EMERGENCY_STOP_SCREEN)
 
-    def show_adjustment(self, target_key: str) -> None:
+    def show_adjustment(self, target_key: str, paired: bool = False) -> None:
         """The adjustment screen: what to set, above how the buttons work (SPEC.md 9, 10.3).
 
         `target_key` names an entry in `adjust_targets`, which is always one of the anchors the
         scale labels -- a participant is asked for a sensation the scale names, never for a
-        position on a line.
+        position on a line. `paired` is the channel match, whose two alternating touches are
+        named on screen; `emphasise_adjustment` marks the one playing.
         """
         target = self.text["adjust_targets"][target_key]
-        self.control.present(target, self.text["participant_controls"]["adjust"])
+        labels = self.text["choices"][PAIR_LABELS]
+        pair = (labels[SIDES[0]], labels[SIDES[1]]) if paired else None
+        self.control.present(target, self.text["participant_controls"]["adjust"], pair)
         self._show(self.control, adjusting=True)
+
+    def emphasise_adjustment(self, index: int | None) -> None:
+        """On a paired adjustment, which touch is playing: 0 the first, 1 the second, None
+        neither."""
+        self.control.emphasise(index)
 
     def show_preference(self) -> None:
         """The preference selection (SPEC.md 9 step 6): move between patterns, then choose.
@@ -674,15 +730,18 @@ class ParticipantWindow(QWidget):
     def show_vas_training(self, scale: str, accepting: bool) -> None:
         """The VAS training for `scale` (SPEC.md 10.6): the scale as it is rated.
 
-        While the experimenter explains the anchors and proportionality aloud, that is all, and
-        no button but the emergency stop does anything. Once they have (`accepting`), it is a
-        practice rating with `training.<scale>` below it, and ▶ with the marker shown emits
-        `vas_training_confirmed` with the practice response -- never `confirmed`.
+        While the experimenter explains the anchors and proportionality aloud, it is the scale
+        with `training_listen` below it, and no button but the emergency stop does anything.
+        Once they have (`accepting`), it is a practice rating with `training.<scale>` in the
+        same place, and ▶ with the marker shown emits `vas_training_confirmed` with the
+        practice response -- never `confirmed`.
         """
         if accepting:
             self.vas.show_practice(scale, self.text["vas"][scale], self.text["training"][scale])
         else:
-            self.vas.show_explanation(scale, self.text["vas"][scale])
+            self.vas.show_explanation(
+                scale, self.text["vas"][scale], self.text["training_listen"]
+            )
         self._show(self.vas)
 
     def _show(self, screen: QWidget, adjusting: bool = False, choosing: bool = False) -> None:

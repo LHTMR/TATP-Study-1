@@ -68,6 +68,10 @@ training:
   intensity: *practice
   pleasantness: *practice
 
+# DRAFT (LOG N7.F11c3): written by the build, not ethics-sourced
+# Under skalan, där övningsraden sedan står, medan försöksledaren förklarar skalan muntligt.
+training_listen: Lyssna på försöksledaren.
+
 screens:
   # Godkänd 23 aug 2026. Ordvalen följer Bilaga 3a, som beskriver hudmätningen som "tunna
   # plastfilament" och "en mjuk pensel" och aldrig som nålstick -- en deltagarskärm får inte
@@ -78,19 +82,27 @@ screens:
   # experimenter_{sv,en}.yaml. Deltagarskärmen visar `standby` under tiden.
   # Endast praktiskt. Deltagaren har redan läst forskningspersonsinformationen, så skärmen
   # förklarar inte studien -- den förklarar knapparna.
+  # DRAFT (LOG N7.F11c2): written by the build, not ethics-sourced. Raden om den vita cirkeln
+  # är ny: varningssignalen före varje stimulus förklarades aldrig. Den lovar ingen beröring,
+  # eftersom även de tomma försöken i skattningsserien föregås av cirkeln.
   welcome: |-
     Välkommen.
     De två stora knapparna flyttar markören längs linjen.
     ▶ bekräftar ditt svar.
+    En vit cirkel på skärmen markerar början på varje steg.
     Det finns inga rätta svar – markera det du känner. Försöksledaren ser inte dina svar.
 
     Tryck på ▶ för att börja.
   # The first screen of a session, up while the garment is fitted and before the welcome.
-  # DRAFT (LOG N7.F3): the build's translation of S's English wording, not ethics-sourced.
-  session_starting: Sessionen börjar snart.
+  # DRAFT (LOG N7.F11c11): written by the build, not ethics-sourced. "Sessionen" is not how
+  # the visit is spoken of to a participant.
+  session_starting: Vi börjar snart.
+  # DRAFT (LOG N7.F11c8): written by the build, not ethics-sourced. Visas under varje väntan,
+  # så den får inte lova att något börjar "snart" -- och inte heller att ingenting begärs:
+  # kartläggningen visar den medan deltagaren säger till när känslan ändras.
   standby: |-
-    Vila en stund.
-    Nästa del börjar snart.
+    Vila så länge.
+    Försöksledaren berättar vad som händer härnäst.
   session_end: |-
     Då är dagens besök slut.
     Tack.
@@ -121,6 +133,47 @@ screens:
     Den fungerar när som helst.
 
     Tryck på ▶ för att fortsätta.
+  # Introduktionerna till uppgifterna (LOG N7.F11c1) är byggets utkast från 15 okt 2026 och
+  # ingår inte i godkännandet 23 aug 2026 ovan; var och en är märkt DRAFT på sin egen nyckel.
+  # En före varje ny sorts uppgift i beröringskalibreringen och före baslinjeskattningarna.
+  # Samma i varje besök och betingelse. Ingenting om hur stark någon beröring blir: de tomma
+  # försöken i skattningsserien får inte förvarnas.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_bracket: |-
+    Nu ställer du själv in hur stark beröringen är, med de två stora knapparna.
+    Först tills den är precis märkbar, sedan tills den är precis obehaglig.
+
+    Tryck på ▶ för att börja.
+  # Inte "en serie beröringar": serien har tomma försök utan tryck, och de får inte utlovas som
+  # beröringar (se den engelska filen).
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_estimation: |-
+    Nu kommer en serie korta perioder, en i taget.
+    Skatta var och en på linjen.
+
+    Tryck på ▶ för att börja.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_match: |-
+    Nu turas två beröringar om på två ställen på armen.
+    Ställ in den andra så att den känns lika stark som den första.
+
+    Tryck på ▶ för att börja.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_compare: |-
+    Nu känner du två beröringar, den ena efter den andra, och väljer vilken som kändes starkast.
+
+    Tryck på ▶ för att börja.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_pleasant: |-
+    Nu rör sig beröringen längs armen.
+    Ställ in den så att den känns så behaglig som möjligt.
+
+    Tryck på ▶ för att börja.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  intro_baseline: |-
+    Nu följer några frågor om hur du känner dig just nu.
+
+    Tryck på ▶ för att börja.
 
 participant_controls:
   # Namnet syftar på deltagarens egna knappar: `controls:` i försöksledarfilerna är redan den
@@ -157,8 +210,10 @@ choices:
     # SPEC.md 9 steg 4. Godkänd 23 aug 2026 som textskärm; det som utgått sedan dess är bara de
     # två rader som de utritade knapparna ersätter -- "Vänster knapp: den första. Höger knapp:
     # den andra." och "Tryck på ▶ för att bekräfta." Frågan är oförändrad.
+    # DRAFT (LOG N7.F11c11): written by the build, not ethics-sourced. "En i taget" sa inte att
+    # de kommer i en ordning, vilket knapparna "Den första" och "Den andra" bygger på.
     question: |-
-      Två beröringar, en i taget.
+      Två beröringar, den ena efter den andra.
       Vilken kändes starkast?
     left: Den första
     right: Den andra
@@ -181,8 +236,10 @@ audio_setup:
   # DRAFT (LOG N7.F6a): written by the build, not ethics-sourced -- the Swedish of S's
   # 5 Oct 2026 change, "until you can hear it easily" in place of "until you can just hear it",
   # because "precis" made it a threshold task.
+  # DRAFT (LOG N7.F11c6): written by the build, not ethics-sourced. Bruset börjar under
+  # hörtröskeln, så den första raden får inte påstå att det hörs.
   find_level: |-
-    Det hörs ett svagt brus i hörlurarna.
+    Ett brus spelas i hörlurarna, men först för svagt för att höras.
     Vänster knapp: svagare. Höger knapp: starkare.
     Höj det tills du lätt kan höra det, och tryck sedan på ▶.
   # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. Frågan "Hör du fortfarande
@@ -190,8 +247,10 @@ audio_setup:
   # skärmens egen instruktion, och ▶ är svaret att bruset döljer ljudet. En deltagare som
   # fortfarande hör plagget säger det, och försöksledaren erbjuder öronproppar (SPEC.md 10.7).
   # Knappraden upprepas från `find_level` så att det framgår hur man sänker.
+  # DRAFT (LOG N7.F11c11): written by the build, not ethics-sourced. "Plagget arbetar nu" är
+  # inte naturlig svenska.
   mask_level: |-
-    Plagget arbetar nu, och du kanske kan höra det.
+    Plagget är igång nu, och du kanske kan höra det.
     Vänster knapp: svagare. Höger knapp: starkare.
     Höj bruset tills det döljer det ljudet, men sluta innan bruset i sig blir obehagligt.
     Om du fortfarande hör plagget, säg det till försöksledaren.

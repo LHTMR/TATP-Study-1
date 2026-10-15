@@ -282,9 +282,25 @@ instructions:
   # betingelser: plagget ger beröring i alla betingelser (SPEC.md 12). {hours} är
   # interventionsfönstrets längd (schedule.yaml), inuti `say.intervention`.
   intervention_start: 'Intervention. Säg till deltagaren: "{say[intervention]}" Tryck sedan på {controls[proceed]}.'
-  touch_block: 'Skattningsblock för beröring: deltagaren skattar beröringen.'
+  # DRAFT (LOG N7.F11c7): written by the build, not ethics-sourced
+  touch_block: 'Skattningsblock för beröring: deltagaren skattar beröringen. {answered}/{total} besvarade.'
   baseline_ratings: 'Utgångsläge: deltagaren skattar hur hen känner sig just nu.'
-  intervention_end: Interventionen är slut och plagget har stängts av.
+  # DRAFT (LOG N7.F11c10): written by the build, not ethics-sourced
+  intervention_end: >-
+    Interventionen är slut och plagget är avstängt. Säg till deltagaren: "{say[intervention_end]}"
+    Tryck sedan på {controls[proceed]}.
+  # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced
+  session_complete: >-
+    Sessionen är klar. Alla data är sparade. Ta av plagget och berätta för deltagaren att besöket
+    är slut. Tryck på {controls[proceed]} för att stänga programmet.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced. Medan deltagaren läser
+  # introduktionen till nästa sorts uppgift (`screens.intro_*`), numrerade som stegen.
+  touchcal_intro_bracket: 'Beröringskalibrering, steg 1 av 6: deltagaren läser om vad som kommer härnäst.'
+  touchcal_intro_estimation: 'Beröringskalibrering, steg 2 av 6: deltagaren läser om vad som kommer härnäst.'
+  touchcal_intro_match: 'Beröringskalibrering, steg 3 av 6: deltagaren läser om vad som kommer härnäst.'
+  touchcal_intro_readjust: 'Beröringskalibrering, steg 4 av 6: deltagaren läser om vad som kommer härnäst.'
+  touchcal_intro_compare: 'Beröringskalibrering, steg 4 av 6: deltagaren läser om vad som kommer härnäst.'
+  touchcal_intro_pleasant: 'Beröringskalibrering, steg 5 av 6: deltagaren läser om vad som kommer härnäst.'
   # SPEC.md 15: en session som återupptas under återuppvärmningen ber aldrig om värmen igen.
   # DRAFT (LOG N7.F11b18): written by the build, not ethics-sourced
   rekindle_resumed: >-
@@ -330,6 +346,8 @@ say:
   intervention: >-
     Nästa del tar ungefär {hours} timmar. Du kommer att känna beröring från plagget, och
     däremellan upprepar jag testerna på huden och du skattar beröringen. Följ bara skärmen.
+  # DRAFT (LOG N7.F11c10): written by the build, not ethics-sourced
+  intervention_end: Beröringen är slut. Nu gör vi om hudmätningarna från början av besöket.
   # DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. Vad försöksledaren säger om
   # proportionalitet i VAS-övningen (SPEC.md 10.6), visat i `instructions.vas_training` som
   # {explanation}. Det stod på deltagarens skärm fram till S:s lista efter labbkörningen (5 okt
@@ -515,7 +533,8 @@ dialogs:
   resume_since_sensitisation: 'Sensitiseringen började för {hours} h {minutes} min sedan.'
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   resume_not_sensitised: Sensitiseringen hade inte börjat.
-  distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem nu, eller avsluta sessionen med dem flaggade som saknade.
+  # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced
+  distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem med Kartläggningsavstånd…, eller tryck på Nästa steg för att avsluta med dem registrerade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
   error: Fel

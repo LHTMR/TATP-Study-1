@@ -24,6 +24,8 @@ that must be identical everywhere -- what an interruption does to a sequence:
   `proceed_requested`, the one way every procedure is launched (SPEC.md 7.4).
 - `train_then(scales, then)` gives the VAS proportionality training still due for those scales
   (SPEC.md 10.6), one step per screen, then runs `then`.
+- `blank_for(seconds, then)` is a `wait` on a blank screen; `introduce(screen, instruction,
+  then)` puts up a screen the participant confirms before a new kind of task.
 - `finish(result)` ends the procedure and emits `finished(result)`.
 
 On `Interruptions.interrupted` the innermost procedure cancels its trial and its timer. On
@@ -54,9 +56,9 @@ from tatp.config import instruction
 from tatp.interruption import Interruptions
 from tatp.remote_keys import key_source
 from tatp.session import Session
-from tatp.trials import VasTraining
+from tatp.trials import MessageConfirm, VasTraining
 from tatp.ui.experimenter import ExperimenterWindow
-from tatp.ui.participant import ParticipantWindow, RemoteKeyRouter
+from tatp.ui.participant import STANDBY_SCREEN, ParticipantWindow, RemoteKeyRouter
 from tatp.units import MS_PER_S
 
 # `log` event names (docs/DATA_SCHEMA.md) and an experimenter text key, not wording.
@@ -83,6 +85,11 @@ class Rig(QObject):
         self.session = session
         self.participant = participant
         self.experimenter = experimenter
+        # What the participant sees while a protocol waits for the experimenter's go before it
+        # starts: the rest screen, not a blank identical to the one under a stimulus (15 Oct
+        # 2026 pilot review, docs/LOG.md N7.F11c8). The session runner replaces it with its
+        # own, which leaves a self-start prompt still waiting for its press in place (N7.D17).
+        self.show_between: Callable[[], None] = lambda: participant.show_message(STANDBY_SCREEN)
         self.interruptions = Interruptions(session, participant, experimenter, self)
         session.attach_interruptions(lambda: self.interruptions.active)
         # The remote's presses reach the participant window whichever window is active. The
@@ -300,6 +307,38 @@ class Procedure(QObject):
     def wait(self, seconds: float, then: Callable[[], None]) -> None:
         """Session-paced time: scaled by the clock, and restarted if interrupted."""
         self.step(lambda: self._after(seconds, then))
+
+    def blank_for(self, seconds: float, then: Callable[[], None]) -> None:
+        """A `wait` on a blank screen, the break between two ratings (UI_PRINCIPLES.md 1.10).
+        The blank is part of the step, so a repeat after a resume takes the stop screen down."""
+
+        def begin() -> None:
+            self.participant.show_blank()
+            self._after(seconds, then)
+
+        self.step(begin)
+
+    def introduce(self, screen: str, instruction: str, then: Callable[[], None]) -> None:
+        """`screens.<screen>`, confirmed with ▶, before a new kind of task (docs/LOG.md
+        N7.F11c1), with `instruction` on the experimenter screen meanwhile. A step of its own,
+        so an interruption repeats it; called only between tasks, never between a stimulus and
+        its rating."""
+
+        def show() -> None:
+            self.participant.show_message(screen)
+            self.experimenter.set_instruction(instruction)
+            self.experimenter.refresh()
+
+        self.run_trial(
+            lambda: MessageConfirm(self.session, self.participant, self.experimenter, show,
+                                   screen),
+            lambda _: then(),
+        )
+
+    @property
+    def awaiting_go(self) -> bool:
+        """Whether this procedure is waiting for the experimenter's go (`await_proceed`)."""
+        return self._on_go is not None
 
     def await_proceed(
         self, then: Callable[[], None], prepare: Callable[[], None] | None = None

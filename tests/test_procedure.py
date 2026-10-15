@@ -226,6 +226,45 @@ def test_an_interrupted_trial_is_cancelled_and_rebuilt_on_resume(rig):
     assert events.index("step_abandoned") < events.index("step_repeated")
 
 
+class Gap(Procedure):
+    """A blank break, then waits for the experimenter's go."""
+
+    def begin(self) -> None:
+        self.blank_for(WAIT_S, lambda: self.await_proceed(lambda: self.finish(None)))
+
+
+def test_a_resume_in_a_blank_break_shows_the_blank_again(rig):
+    """The break's blank is part of its step, so the stop screen does not stay up through
+    the rest of it (LOG N7.F11c7)."""
+    procedure = Gap(rig)
+    procedure.start()
+    assert rig.participant.message.text == "" and not procedure.awaiting_go
+    rig.interruptions.pause()
+    rig.interruptions.resume()
+    assert rig.participant.message.text == ""
+    _spin(lambda: procedure.awaiting_go)
+
+
+class Introduced(Procedure):
+    def begin(self) -> None:
+        self.introduce("intro_baseline", "the line", lambda: self.finish("started"))
+
+
+def test_an_introduction_waits_for_the_play_button_and_is_repeated_after_a_resume(rig):
+    participant = rig.participant
+    procedure = Introduced(rig)
+    done = _collect(procedure)
+    procedure.start()
+    screen = participant.text["screens"]["intro_baseline"]
+    assert participant.message.text == screen
+    assert rig.experimenter.instruction.text() == "the line"
+    rig.interruptions.emergency_stop()
+    rig.interruptions.resume()
+    assert participant.message.text == screen
+    participant.message_confirmed.emit()
+    assert done == ["started"]
+
+
 def test_an_interrupted_wait_starts_over(rig):
     procedure = TwoTrials(rig)
     procedure.start()

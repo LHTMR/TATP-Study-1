@@ -319,16 +319,20 @@ def test_a_resume_in_the_interval_restores_the_blank_screen(rig):
     _drive(protocol, done)
 
 
-def test_a_resume_while_waiting_to_start_restores_the_blank_screen(rig):
+def test_a_resume_while_waiting_to_start_restores_the_standby_screen(rig):
+    """The wait for the go shows standby, not a blank identical to the one under a stimulus
+    (15 Oct 2026 pilot review, LOG N7.F11c8), and a resume puts it back."""
     participant, experimenter = rig.participant, rig.experimenter
     protocol = _long(rig)
     protocol.start()
+    standby = participant.text["screens"]["standby"]
+    assert participant.message.text == standby
     experimenter.pause_requested.emit()
     assert participant.message.text == participant.text["screens"]["paused"]
     experimenter.proceed_requested.emit()
     assert participant.stack.currentWidget() is not participant.cue, "no start while paused"
     experimenter.resume_requested.emit()
-    assert participant.message.text == ""
+    assert participant.message.text == standby
     protocol.cancel()
 
 

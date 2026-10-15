@@ -229,7 +229,7 @@ class ExperimenterWindow(QWidget):
 
         # What the running procedure is waiting for, beyond what the view says (SPEC.md 11).
         self._awaiting = {"rebalance": False, "fit_decision": False, "discard": False,
-                          "skip_calibration": False, "substitution": False}
+                          "skip_calibration": False, "substitution": False, "closed": False}
         self._interruption: str | None = None
         self._connected = False
         self._mapping_phases: list[str] = []
@@ -398,6 +398,8 @@ class ExperimenterWindow(QWidget):
         # move it (UI_PRINCIPLES.md 3.3).
         self.garment_button = button("")
         self.garment_button.clicked.connect(self._garment_clicked)
+        # Withdrawn once the session is closed (`set_actions_enabled(closed=...)`).
+        _reserve(self.garment_button)
         # Above the garment button, also below the stretch, so its appearing moves nothing
         # else. Hidden until offered.
         self.skip_button = button(self.text["controls"]["skip_calibration"])
@@ -624,6 +626,7 @@ class ExperimenterWindow(QWidget):
         discard: bool | None = None,
         skip_calibration: bool | None = None,
         substitution: bool | None = None,
+        closed: bool | None = None,
     ) -> None:
         """What the running procedure waits for (SPEC.md 9, 11, 11.1). None leaves it as is.
 
@@ -633,6 +636,9 @@ class ExperimenterWindow(QWidget):
         while a filament trial listens for it. Each is hidden, in a place kept for it, when not
         offered, because a control that does nothing when pressed is one the experimenter
         learns to distrust (UI_PRINCIPLES.md 5.1), and ten of them are a lot to look at.
+        `closed` is the session closed and its files written (docs/LOG.md N7.F11c9): Pause
+        and the garment button are withdrawn, since nothing is left to pause and the garment,
+        disconnected by the close, is not to be connected again with no stop wired to it.
 
         The substitution entry is withdrawn through `withdraw_substitution`, which hands back
         anything typed and not recorded, so it is never dropped unseen.
@@ -643,7 +649,7 @@ class ExperimenterWindow(QWidget):
         )
         for key, value in (("rebalance", rebalance), ("fit_decision", fit_decision),
                            ("discard", discard), ("skip_calibration", skip_calibration),
-                           ("substitution", substitution)):
+                           ("substitution", substitution), ("closed", closed)):
             if value is not None:
                 self._awaiting[key] = bool(value)
         self._apply_enabled()
@@ -1031,10 +1037,12 @@ class ExperimenterWindow(QWidget):
         skipping = self._awaiting["skip_calibration"]
         substituting = self._awaiting["substitution"]
         mapped = bool(self._mapping_phases)
+        open_ = not self._awaiting["closed"]
         # (widget, shown, pressable). Skip calibration stays in sight through an
         # interruption, as it was, but cannot be pressed then.
         offered = (
-            (self.pause_button, running, running),
+            (self.pause_button, running and open_, running and open_),
+            (self.garment_button, open_, open_),
             (self.resume_button, not running, not running),
             (self.discard_button, discarding, discarding),
             (self.rebalance_button, rebalancing, rebalancing),

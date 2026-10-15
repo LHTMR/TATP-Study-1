@@ -36,9 +36,9 @@ from tatp.procedure import Procedure, Rig
 from tatp.session import Session, SessionError
 from tatp.ui.experimenter import ExperimenterWindow
 
-# A key in config/text/participant_*.yaml, not wording. There is no participant mapping
-# screen; the participant is instructed and answers verbally (SPEC.md 8.4).
-STANDBY_SCREEN = "standby"
+# There is no participant mapping screen, only standby: the participant is instructed and
+# answers verbally (SPEC.md 8.4).
+from tatp.ui.participant import STANDBY_SCREEN
 
 # The formula takes opposite pairs, so it is defined for exactly four paths round the zone.
 N_PATHS_FOR_AREA = 4

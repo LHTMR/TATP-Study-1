@@ -89,6 +89,9 @@ screens:
     moved. (en)'
   experimenter_en_interrupted_pause: 'The experimenter''s pause: the same line in
     amber, the step dimmed, Resume offered. (en)'
+  experimenter_en_intervention_end: 'The intervention over and the garment off: what
+    to tell the participant before the measures begin again, then Next step (docs/LOG.md
+    N7.F11c10). The same in every condition. (en)'
   experimenter_en_intervention_fault: 'A garment fault during the intervention: shown
     in red, counted, and without the channel, which could say which pattern is running
     (SPEC.md 16). (en)'
@@ -157,6 +160,11 @@ screens:
     block, named by its phase, and the thermode to place. (en)'
   experimenter_en_rerun_dialog: The re-run reason, asked before a fit is discarded
     (SPEC.md 11.1). (en)
+  experimenter_en_session_complete: 'The last state: the session closed and every
+    file written, the garment to come off, and Next step to close the program (docs/LOG.md
+    N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
+    and Connect garment and Pause are disabled: nothing is left to pause or to connect
+    again. (en)'
   experimenter_en_status_warning: A warning in the status region, in amber, kept apart
     from the routine status so the next 'Waiting for...' does not replace it (15 Oct
     2026 pilot review). It goes under the routine line; this one is too long for both,
@@ -248,6 +256,9 @@ screens:
     moved. (sv)'
   experimenter_sv_interrupted_pause: 'The experimenter''s pause: the same line in
     amber, the step dimmed, Resume offered. (sv)'
+  experimenter_sv_intervention_end: 'The intervention over and the garment off: what
+    to tell the participant before the measures begin again, then Next step (docs/LOG.md
+    N7.F11c10). The same in every condition. (sv)'
   experimenter_sv_intervention_fault: 'A garment fault during the intervention: shown
     in red, counted, and without the channel, which could say which pattern is running
     (SPEC.md 16). (sv)'
@@ -316,6 +327,11 @@ screens:
     block, named by its phase, and the thermode to place. (sv)'
   experimenter_sv_rerun_dialog: The re-run reason, asked before a fit is discarded
     (SPEC.md 11.1). (sv)
+  experimenter_sv_session_complete: 'The last state: the session closed and every
+    file written, the garment to come off, and Next step to close the program (docs/LOG.md
+    N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
+    and Connect garment and Pause are disabled: nothing is left to pause or to connect
+    again. (sv)'
   experimenter_sv_status_warning: A warning in the status region, in amber, kept apart
     from the routine status so the next 'Waiting for...' does not replace it (15 Oct
     2026 pilot review). It goes under the routine line; this one is too long for both,
@@ -332,6 +348,10 @@ screens:
     en.'
   participant_en_adjust_match: 'The adjustment screen for `match`: the target, both
     large buttons drawn with their labels, and the confirm sentence, en.'
+  participant_en_adjust_match_first_playing: 'The channel match (SPEC.md 9 step 3)
+    while the first of its two alternating touches plays: ''the first'' and ''the
+    second'' between the buttons, the one playing in bold and underlined (docs/LOG.md
+    N7.F11c5), en.'
   participant_en_adjust_most_pleasant: 'The adjustment screen for `most_pleasant`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     en.'
@@ -368,6 +388,18 @@ screens:
   participant_en_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, en.'
   participant_en_screen_emergency_stop: The participant text `screens.emergency_stop`,
+    centred, en.
+  participant_en_screen_intro_baseline: The participant text `screens.intro_baseline`,
+    centred, en.
+  participant_en_screen_intro_bracket: The participant text `screens.intro_bracket`,
+    centred, en.
+  participant_en_screen_intro_compare: The participant text `screens.intro_compare`,
+    centred, en.
+  participant_en_screen_intro_estimation: The participant text `screens.intro_estimation`,
+    centred, en.
+  participant_en_screen_intro_match: The participant text `screens.intro_match`, centred,
+    en.
+  participant_en_screen_intro_pleasant: The participant text `screens.intro_pleasant`,
     centred, en.
   participant_en_screen_paused: The participant text `screens.paused`, centred, en.
   participant_en_screen_self_start: The participant text `screens.self_start`, centred,
@@ -428,6 +460,10 @@ screens:
     sv.'
   participant_sv_adjust_match: 'The adjustment screen for `match`: the target, both
     large buttons drawn with their labels, and the confirm sentence, sv.'
+  participant_sv_adjust_match_first_playing: 'The channel match (SPEC.md 9 step 3)
+    while the first of its two alternating touches plays: ''the first'' and ''the
+    second'' between the buttons, the one playing in bold and underlined (docs/LOG.md
+    N7.F11c5), sv.'
   participant_sv_adjust_most_pleasant: 'The adjustment screen for `most_pleasant`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     sv.'
@@ -464,6 +500,18 @@ screens:
   participant_sv_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, sv.'
   participant_sv_screen_emergency_stop: The participant text `screens.emergency_stop`,
+    centred, sv.
+  participant_sv_screen_intro_baseline: The participant text `screens.intro_baseline`,
+    centred, sv.
+  participant_sv_screen_intro_bracket: The participant text `screens.intro_bracket`,
+    centred, sv.
+  participant_sv_screen_intro_compare: The participant text `screens.intro_compare`,
+    centred, sv.
+  participant_sv_screen_intro_estimation: The participant text `screens.intro_estimation`,
+    centred, sv.
+  participant_sv_screen_intro_match: The participant text `screens.intro_match`, centred,
+    sv.
+  participant_sv_screen_intro_pleasant: The participant text `screens.intro_pleasant`,
     centred, sv.
   participant_sv_screen_paused: The participant text `screens.paused`, centred, sv.
   participant_sv_screen_self_start: The participant text `screens.self_start`, centred,

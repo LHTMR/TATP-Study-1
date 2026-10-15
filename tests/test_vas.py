@@ -595,7 +595,7 @@ def _show_training(widget, config, scale, accepting=True):
     if accepting:
         widget.show_practice(scale, text["vas"][scale], text["training"][scale])
     else:
-        widget.show_explanation(scale, text["vas"][scale])
+        widget.show_explanation(scale, text["vas"][scale], text["training_listen"])
 
 
 def test_every_trained_scale_has_its_sentence_in_both_languages(configs):
@@ -646,7 +646,9 @@ def test_nothing_but_the_stop_works_while_the_experimenter_explains(widget, load
     widget.confirmed.connect(responses.append)
     widget.emergency_stop.connect(lambda: stops.append(1))
     _show_training(widget, loaded, "pain", accepting=False)
-    assert widget.training == "", "nothing below the scale while the experimenter explains"
+    # Since the 15 Oct 2026 pilot review (LOG N7.F11c3) the one line below the scale says to
+    # listen, where it had said nothing.
+    assert widget.training == loaded.participant_text["training_listen"]
     for name in ("pagedown", "pageup", "f5"):
         _press(widget, name)
     assert not widget.state.visible, "a marker appeared while the experimenter explained"
@@ -655,11 +657,14 @@ def test_nothing_but_the_stop_works_while_the_experimenter_explains(widget, load
     assert stops == [1]
 
 
+@pytest.mark.parametrize("accepting", (True, False))
 @pytest.mark.parametrize("scale", TRAINED_SCALES)
 @pytest.mark.parametrize("language", ("sv", "en"))
-def test_the_training_text_clears_the_scale_and_the_screen_edge(by_language, scale, language):
+def test_the_training_text_clears_the_scale_and_the_screen_edge(by_language, scale, language,
+                                                                accepting):
+    """The practice line, and the line asking the participant to listen (LOG N7.F11c3)."""
     widget, config = by_language[language]
-    _show_training(widget, config, scale)
+    _show_training(widget, config, scale, accepting)
     below_labels, above_edge = widget.training_clearance()
     assert below_labels >= TEXT_TO_SCALE_GAP_PX, (
         f"{language} {scale}: {below_labels:.0f} px between the lowest anchor label and the "
@@ -1010,14 +1015,20 @@ def test_participant_text_is_laid_out_exactly_as_drawtext_would(app, loaded, lan
         assert prose == plain, case
 
 
-def _symbol_in_box(text: str, symbol: str, box: QRect, point_size: int) -> bool:
-    """Whether the symbol's line is laid out inside the box. The places are crossed with every
-    string, so a long message meets a box it is never drawn in, and its symbol is clipped."""
+def _symbol_in_box(text: str, symbol: str, box: QRect, point_size: int,
+                   partly: bool = False) -> bool:
+    """Whether the symbol's line is laid out inside the box -- or, `partly`, starts inside it.
+    The places are crossed with every string, so a long message meets a box it is never drawn
+    in, and its symbol is clipped: wholly, or in part when its line starts inside the box and
+    ends below it, which an intro screen's Swedish did (LOG N7.F11c1)."""
     line_end = text.find("\n", text.index(symbol))
     through_symbol = text if line_end < 0 else text[:line_end]
     font = QFont()
     font.setPointSize(point_size)
-    laid_out = QFontMetrics(font).boundingRect(box, vas_module.PROSE_FLAGS, through_symbol)
+    metrics = QFontMetrics(font)
+    laid_out = metrics.boundingRect(box, vas_module.PROSE_FLAGS, through_symbol)
+    if partly:
+        return laid_out.height() - metrics.height() < box.height()
     return laid_out.height() <= box.height()
 
 
@@ -1028,12 +1039,16 @@ def test_only_the_play_symbol_changes_colour(app, loaded, language):
     named = 0
     for case in _prose_cases(language):
         plain_image, prose_image = _drawtext_and_prose(responder, *case)
-        if symbol not in case[0] or not _symbol_in_box(case[0], symbol, case[1], case[2]):
+        if symbol not in case[0] or not _symbol_in_box(
+            case[0], symbol, case[1], case[2], partly=True
+        ):
             assert prose_image == plain_image, case
             continue
-        named += 1
         plain, prose = _pixels(plain_image), _pixels(prose_image)
         changed = (plain != prose).any(axis=2)
+        if not _symbol_in_box(case[0], symbol, case[1], case[2]) and not changed.any():
+            continue  # its line starts in the box, but the glyph itself is below the edge
+        named += 1
         assert changed.any(), case
         # The grey text has equal channels; only the blue glyph tints a pixel blue.
         blue, red = prose[..., 0], prose[..., 2]

@@ -451,11 +451,12 @@ class VasWidget(QWidget):
         self.state.cue()
         self.update()
 
-    def show_explanation(self, scale: str, text: dict) -> None:
+    def show_explanation(self, scale: str, text: dict, listen: str) -> None:
         """The training's first step (SPEC.md 10.6): the scale as `show_scale` draws it,
-        uncued and with nothing below it, while the experimenter explains it aloud. Uncued, so
-        no reaction time runs and no press can reveal the marker."""
-        self._set_scale(scale, text, "")
+        uncued, while the experimenter explains it aloud, with `listen` where the practice line
+        will be, so the participant knows nothing is asked of them yet. Uncued, so no reaction
+        time runs and no press can reveal the marker."""
+        self._set_scale(scale, text, listen)
         self.explaining = True
         self.state.reset()
         self.update()
