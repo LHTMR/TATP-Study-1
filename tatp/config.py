@@ -50,8 +50,12 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "vas.start_pct_after_left_press", NUMBER, 0, 100),
     ("study1.yaml", "vas.start_pct_after_right_press", NUMBER, 0, 100),
     ("study1.yaml", "vas.move_step_pct", NUMBER, 0, 100),
-    ("study1.yaml", "vas.hold_repeat_delay_s", NUMBER, 0, None),
-    ("study1.yaml", "vas.hold_repeat_interval_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_delay_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_rate_initial_pct_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_rate_final_pct_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_ramp_duration_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_tick_interval_s", NUMBER, 0, None),
+    ("study1.yaml", "vas.hold_regrip_max_s", NUMBER, 0, None),
     ("study1.yaml", "vas.no_response_warning_s", NUMBER, 0, None),
     ("study1.yaml", "choice.feedback_s", NUMBER, 0, None),
     ("study1.yaml", "choice.gap_s", NUMBER, 0, None),
@@ -454,6 +458,19 @@ def load(
         strays = sorted(set(text["training"]) - set(text["vas"]))
         if strays:
             raise ConfigError(f"{name}: training keys {strays} are not scales under `vas`")
+        # The experimenter explains proportionality for exactly the scales that are trained.
+        explained = TEXT_FILES[("experimenter", lang)]
+        if set(loaded[explained]["vas_training_explain"]) != set(text["training"]):
+            raise ConfigError(
+                f"{explained}: vas_training_explain keys "
+                f"{sorted(loaded[explained]['vas_training_explain'])} are not the trained "
+                f"scales {sorted(text['training'])}"
+            )
+
+    # A VAS hold is redrawn every tick; at zero the timer would spin the event loop flat out.
+    # The schema's minimums are inclusive, so this one is checked here.
+    if loaded["study1.yaml"]["vas"]["hold_tick_interval_s"] <= 0:
+        raise ConfigError("study1.yaml: 'vas.hold_tick_interval_s' must be above 0")
 
     config = Config(
         study1=loaded["study1.yaml"],

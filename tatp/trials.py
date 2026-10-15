@@ -23,6 +23,8 @@ from tatp.ui.participant import ParticipantWindow
 
 # An experimenter text key, not wording.
 VAS_TRAINING_WAIT_INSTRUCTION = "vas_training_wait"
+# A `log` event name (docs/DATA_SCHEMA.md), not wording.
+VAS_PRACTICE_RATING = "vas_practice_rating"
 
 
 class Trial(QObject):
@@ -222,13 +224,17 @@ class MessageConfirm(Trial):
 
 
 class VasTraining(Trial):
-    """The second half of one scale's proportionality training (SPEC.md 10.6): the anchors
-    have been explained, so the continue line is up and the play button dismisses it.
+    """The second half of one scale's VAS training (SPEC.md 10.6): the anchors and
+    proportionality have been explained, so the participant makes a practice rating.
 
-    The first half -- the screen without the continue line, while the experimenter explains
-    the anchors -- is `Procedure.train_then`'s wait for the experimenter.
-    `vas_training_confirmed` carries the scale in `detail` and is what a resume reads to know
-    the training was given (`tatp/resume.py`). Nothing here reads the condition (SPEC.md 16).
+    The first half -- the scale alone, while the experimenter explains it -- is
+    `Procedure.train_then`'s wait for the experimenter.
+
+    **The practice is never study data** (docs/research/R35). It arrives on
+    `vas_training_confirmed`, never on `confirmed`, and is written only to the `log`, as
+    `vas_practice_rating` -- no ratings table has a row for it. Then `vas_training_confirmed`,
+    with the scale alone in `detail`, which is what a resume reads to know the training was
+    given (`tatp/resume.py`). Nothing here reads the condition (SPEC.md 16).
     """
 
     def __init__(self, session, participant, experimenter, scale: str):
@@ -240,7 +246,16 @@ class VasTraining(Trial):
         self.participant.show_vas_training(self.scale, accepting=True)
         self.instruct(VAS_TRAINING_WAIT_INSTRUCTION)
 
-    def _confirmed(self) -> None:
+    def _confirmed(self, response) -> None:
+        self.session.log(
+            VAS_PRACTICE_RATING,
+            origin="participant",
+            detail=(
+                f"{self.scale}: rating_percent={response.rating_percent:.1f} "
+                f"rt_s={response.rt_s:.3f} first_press_side={response.first_press_side} "
+                f"direction_changes={response.direction_changes}"
+            ),
+        )
         self.session.vas_trained.add(self.scale)
         self.session.log(VAS_TRAINING_CONFIRMED, origin="participant", detail=self.scale)
         self.participant.show_blank()

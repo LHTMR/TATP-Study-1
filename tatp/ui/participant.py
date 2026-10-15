@@ -68,10 +68,6 @@ EMERGENCY_STOP_SCREEN = "emergency_stop"
 # The one screen that draws the stop button, because pointing at it is its purpose (SPEC.md
 # 10.9). A key in the participant text file, not wording.
 STOP_REHEARSAL_SCREEN = "stop_rehearsal"
-# The participant text key of the training screen's continue line, and the blank line that
-# sets it apart as the message screens set theirs.
-TRAINING_CONTINUE = "training_continue"
-TRAINING_PARAGRAPH_BREAK = "\n\n"
 
 MESSAGE_POINT_SIZE = 26
 CUE_RADIUS_FRACTION = 0.09
@@ -491,8 +487,9 @@ class ParticipantWindow(QWidget):
     # asks for the self-start press (SPEC.md 12.3). Emitted on any message screen; what it
     # means is up to whoever is listening, and nothing listens on a screen that asks nothing.
     message_confirmed = Signal()
-    # The play button on the VAS proportionality training (SPEC.md 10.6).
-    vas_training_confirmed = Signal()
+    # The play button on the VAS training's practice rating (SPEC.md 10.6), with the practice
+    # VasResponse. Separate from `confirmed` so a practice can never be recorded as a rating.
+    vas_training_confirmed = Signal(object)
     # A play-button press ignored as carried over from the screen before (docs/LOG.md N7.U15).
     confirm_carried_over = Signal()
     # The visual warning cue has just gone up (SPEC.md 10.5). The rig sounds the audible cue
@@ -673,17 +670,17 @@ class ParticipantWindow(QWidget):
         self._show(self.vas)
 
     def show_vas_training(self, scale: str, accepting: bool) -> None:
-        """The proportionality training for `scale` (SPEC.md 10.6): the scale as it is rated
-        with `training.<scale>` below it.
+        """The VAS training for `scale` (SPEC.md 10.6): the scale as it is rated.
 
-        While the experimenter explains the anchors, that is all, and ▶ does nothing. Once they
-        have (`accepting`), `training_continue` follows the sentence and ▶ emits
-        `vas_training_confirmed`.
+        While the experimenter explains the anchors and proportionality aloud, that is all, and
+        no button but the emergency stop does anything. Once they have (`accepting`), it is a
+        practice rating with `training.<scale>` below it, and ▶ with the marker shown emits
+        `vas_training_confirmed` with the practice response -- never `confirmed`.
         """
-        sentence = self.text["training"][scale]
         if accepting:
-            sentence = TRAINING_PARAGRAPH_BREAK.join((sentence, self.text[TRAINING_CONTINUE]))
-        self.vas.show_training(scale, self.text["vas"][scale], sentence, accepting)
+            self.vas.show_practice(scale, self.text["vas"][scale], self.text["training"][scale])
+        else:
+            self.vas.show_explanation(scale, self.text["vas"][scale])
         self._show(self.vas)
 
     def _show(self, screen: QWidget, adjusting: bool = False, choosing: bool = False) -> None:

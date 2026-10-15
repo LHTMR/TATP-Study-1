@@ -50,7 +50,7 @@ STATEMENT_GAP_PX = 26
 # applied: a text block that reaches into it needs shorter wording or a smaller size, and
 # `heading_clearance` is where that is caught.
 TEXT_TO_SCALE_GAP_PX = 24
-# The proportionality training (SPEC.md 10.6) puts its sentence below the scale it is about,
+# The VAS training's practice (SPEC.md 10.6) puts its line below the scale it is about,
 # top-aligned at this fraction, so the scale above it is drawn exactly as it is rated
 # (UI_PRINCIPLES.md 1.6). Set in the question size: it is the one thing on that screen to read.
 # `training_clearance` checks it clears the lowest anchor label and the bottom of the screen.
@@ -127,13 +127,35 @@ class VasResponse:
 
 
 class VasState:
-    """The VAS rules of SPEC.md 10.2, with no Qt and no drawing."""
+    """The VAS rules of SPEC.md 10.2, with no Qt and no drawing.
+
+    **A tap and a hold.** Every press is first a tap: it reveals the marker, or moves it one
+    step, the moment it goes down. If it is still down `hold_delay_s` later it has become a
+    hold, and `tick` moves the marker on continuously at a rate that ramps from
+    `hold_rate_initial_pct_s` to `hold_rate_final_pct_s` over `hold_ramp_duration_s` -- the
+    shape of the pressure adjustment's control (SPEC.md 10.3, `tatp.touchcal.AdjustmentState`).
+    The distance is the ramp's integral in closed form, so it depends on how long the button was
+    held and not on how often the timer fired.
+
+    Times are real seconds the caller supplies: the hold is the hand's, not the session's.
+    """
 
     def __init__(self, vas_config: dict, clock: Clock):
         self.start_left_pct = float(vas_config["start_pct_after_left_press"])
         self.start_right_pct = float(vas_config["start_pct_after_right_press"])
         self.step_pct = float(vas_config["move_step_pct"])
+        self.hold_delay_s = float(vas_config["hold_delay_s"])
+        self.rate_initial_pct_s = float(vas_config["hold_rate_initial_pct_s"])
+        self.rate_final_pct_s = float(vas_config["hold_rate_final_pct_s"])
+        self.ramp_duration_s = float(vas_config["hold_ramp_duration_s"])
+        self.regrip_max_s = float(vas_config["hold_regrip_max_s"])
         self.no_response_warning_s = float(vas_config["no_response_warning_s"])
+        # Stage boundary (CLAUDE.md): a ramp of zero length would divide by zero, and a hold
+        # that slowed down as it went on is not the accelerating control S asked for.
+        assert self.ramp_duration_s > 0, "vas.hold_ramp_duration_s must be positive"
+        assert self.rate_final_pct_s >= self.rate_initial_pct_s, (
+            "vas.hold_rate_final_pct_s is below vas.hold_rate_initial_pct_s"
+        )
         self.clock = clock
         self.reset()
 
@@ -145,6 +167,16 @@ class VasState:
         self.cue_iso = ""
         self._cue_s: float | None = None
         self._last_direction = 0
+        self._held: Action | None = None
+        self._pressed_s = 0.0
+        self._tap_percent = 0.0
+        # The last hold that let go, as (action, when): a press soon after it in the same
+        # direction is the device repeating, not a new tap.
+        self._last_hold: tuple[Action, float] | None = None
+
+    @property
+    def held(self) -> Action | None:
+        return self._held
 
     def cue(self) -> None:
         """The rating has been asked for. Starts the reaction-time clock (SPEC.md 10.2)."""
@@ -163,11 +195,91 @@ class VasState:
             return 0.0
         return self.clock.elapsed_s() - self._cue_s
 
-    def press(self, action: Action) -> None:
-        """One movement press. The first one reveals the marker rather than moving it."""
+    def press(self, action: Action, now_s: float, regrip: bool = False) -> None:
+        """A movement button went down at `now_s`. The first press reveals the marker rather
+        than moving it; every later one moves it one step, and may go on to become a hold.
+
+        `regrip` says the press carries the last hold on rather than tapping: the device
+        repeating a held button as fresh presses (`vas.hold_regrip_max_s`). The caller decides
+        it once, from the key events' own stamps (`regrips`), so it is never re-decided here on
+        a different clock.
+        """
         if self._cue_s is None:
             raise RuntimeError("the VAS was pressed before it was cued")
-        direction = -1 if action is Action.DECREASE else 1
+        if regrip:
+            assert self._last_hold is not None and self._last_hold[0] is action, (
+                "a regrip with no hold in that direction to carry on"
+            )
+            self._last_hold = None
+            self._held = action
+            return
+        self._last_hold = None
+        self._tap(-1 if action is Action.DECREASE else 1)
+        self._held = action
+        self._pressed_s = now_s
+        self._tap_percent = self.percent
+
+    def regrips(self, action: Action, now_s: float) -> bool:
+        """Whether a press of `action` at `now_s` would carry the last hold on."""
+        if self._last_hold is None:
+            return False
+        held, released_s = self._last_hold
+        return held is action and 0.0 <= now_s - released_s <= self.regrip_max_s
+
+    def release(self, action: Action, now_s: float) -> None:
+        """The button went up at `now_s`. The marker settles where the hold had taken it by
+        then -- the tap's one step if that was inside the hold delay -- whatever a late or
+        stalled tick had drawn (docs/LOG.md N2.9)."""
+        if action is not self._held:
+            return
+        self.percent = self._position(now_s)
+        self._held = None
+        if now_s - self._pressed_s >= self.hold_delay_s:
+            self._last_hold = (action, now_s)
+
+    def end_hold(self) -> None:
+        """A hold whose release will never arrive: it stops where it is, and is not carried
+        on."""
+        self._held = None
+        self._last_hold = None
+
+    def tick(self, now_s: float) -> bool:
+        """Put the marker where the hold has taken it by `now_s`. True if it moved."""
+        if self._held is None:
+            return False
+        before = self.percent
+        self.percent = self._position(now_s)
+        return self.percent != before
+
+    def _position(self, now_s: float) -> float:
+        """Where the held marker is at `now_s`, from the press alone, so it never depends on
+        when or how often a timer fired."""
+        direction = -1 if self._held is Action.DECREASE else 1
+        travelled = self._travel(now_s - self._pressed_s - self.hold_delay_s)
+        return min(max(self._tap_percent + direction * travelled, MIN_PCT), MAX_PCT)
+
+    def rate_pct_s(self, held_s: float) -> float:
+        """The hold's rate `held_s` seconds past the delay."""
+        if held_s <= 0:
+            return 0.0
+        fraction = min(held_s / self.ramp_duration_s, 1.0)
+        return self.rate_initial_pct_s + fraction * (
+            self.rate_final_pct_s - self.rate_initial_pct_s
+        )
+
+    def _travel(self, held_s: float) -> float:
+        """Distance in the first `held_s` seconds past the delay: `rate_pct_s` integrated."""
+        if held_s <= 0:
+            return 0.0
+        ramped = min(held_s, self.ramp_duration_s)
+        gained = self.rate_final_pct_s - self.rate_initial_pct_s
+        # The 2 is the area of a triangle, not a study parameter (SPEC.md 4.2).
+        distance = self.rate_initial_pct_s * ramped + gained * ramped * ramped / (
+            2 * self.ramp_duration_s
+        )
+        return distance + self.rate_final_pct_s * max(0.0, held_s - self.ramp_duration_s)
+
+    def _tap(self, direction: int) -> None:
         if not self.visible:
             self.visible = True
             self.percent = self.start_left_pct if direction < 0 else self.start_right_pct
@@ -182,9 +294,11 @@ class VasState:
         self.percent = min(max(self.percent + direction * self.step_pct, MIN_PCT), MAX_PCT)
 
     def confirm(self) -> VasResponse | None:
-        """The response, or None if the marker was never shown -- there is nothing to record."""
+        """The response, or None if the marker was never shown -- there is nothing to record.
+        A hold still in progress ends here: the marker is where it was confirmed."""
         if self._cue_s is None or not self.visible:
             return None
+        self.end_hold()
         return VasResponse(
             rating_percent=self.percent,
             rt_s=self.clock.elapsed_s() - self._cue_s,
@@ -200,18 +314,20 @@ class VasWidget(QWidget):
     `confirmed` carries a VasResponse. A confirm with no marker shown emits nothing, because
     there is no response to emit -- the session logs the press from `pressed_without_marker`.
 
-    **The training screen** (SPEC.md 10.6, `show_training`) is the same scale, drawn exactly as
-    it is rated, with the proportionality sentence below it. It is not a rating: the marker
-    stays hidden and the two large buttons do nothing. The play button does nothing either
-    until the protocol makes it the answer (`accepting`, once the experimenter has explained
-    the anchors), and then emits `training_confirmed`. The emergency stop works as on every
-    screen.
+    **The training screen** (SPEC.md 10.6, `show_explanation`, `show_practice`) is the same
+    scale, drawn exactly as it is rated, in two steps. While the experimenter explains the
+    anchors and proportionality aloud (`explaining`) it asks for nothing: no marker, and only
+    the emergency stop does anything. Then it is a practice rating (`practising`), with the
+    practice line below the scale: the marker, the buttons and the hold work exactly as on a
+    rating, and ▶ with the marker shown emits `training_confirmed` with the response. **A
+    practice never emits `confirmed`**, the signal every rating is recorded from, so it cannot
+    become study data whoever is listening. The emergency stop works as on every screen.
     """
 
     confirmed = Signal(object)
     emergency_stop = Signal()
     pressed_without_marker = Signal()
-    training_confirmed = Signal()
+    training_confirmed = Signal(object)
 
     def __init__(
         self,
@@ -234,19 +350,25 @@ class VasWidget(QWidget):
         self.question = ""
         self.statement = ""
         self.anchors: list[dict] = []
-        # The training sentence while the training screen is up; empty on a rating.
+        # The practice line below the scale while the training practises; empty otherwise.
         self.training = ""
-        # Whether ▶ dismisses the training screen yet.
-        self.training_accepting = False
+        # The training's two steps; both False on a rating.
+        self.explaining = False
+        self.practising = False
 
-        self._repeat_delay_ms = int(round(float(vas_config["hold_repeat_delay_s"]) * MS_PER_S))
-        self._repeat_interval_ms = int(
-            round(float(vas_config["hold_repeat_interval_s"]) * MS_PER_S)
-        )
-        self._held: Action | None = None
-        self._repeat = QTimer(self)
-        self._repeat.setSingleShot(True)
-        self._repeat.timeout.connect(self._on_repeat)
+        self.clock = clock
+        # The hold is drawn by this timer; how far it has gone is the state's, from the time.
+        # It first fires when the hold delay is up -- before that a held press is a tap and
+        # nothing moves -- and then every tick interval.
+        self._tick_ms = int(round(float(vas_config["hold_tick_interval_s"]) * MS_PER_S))
+        self._delay_ms = int(round(self.state.hold_delay_s * MS_PER_S))
+        assert self._tick_ms > 0, "vas.hold_tick_interval_s rounds to no time at all"
+        self._tick = QTimer(self)
+        self._tick.timeout.connect(self._on_tick)
+        # (event milliseconds, real seconds) of the press that started the current hold, so its
+        # release -- and a device's repeated press -- are placed by the key events' own stamps
+        # rather than by when a handler ran (`tatp.touchcal.PressTiming`).
+        self._press_stamp: tuple[int, float] | None = None
 
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAutoFillBackground(False)
@@ -257,27 +379,33 @@ class VasWidget(QWidget):
         self.state.cue()
         self.update()
 
-    def show_training(self, scale: str, text: dict, training: str, accepting: bool) -> None:
-        """The scale as `show_scale` draws it, uncued, with `training` below it (SPEC.md 10.6).
-
-        Uncued, so no reaction time runs and no press can reveal the marker. ▶ dismisses it
-        only when `accepting`; before that the screen asks for nothing at all.
-        """
-        self._set_scale(scale, text, training)
-        self.training_accepting = accepting
-        self._held = None
-        self._repeat.stop()
+    def show_explanation(self, scale: str, text: dict) -> None:
+        """The training's first step (SPEC.md 10.6): the scale as `show_scale` draws it,
+        uncued and with nothing below it, while the experimenter explains it aloud. Uncued, so
+        no reaction time runs and no press can reveal the marker."""
+        self._set_scale(scale, text, "")
+        self.explaining = True
         self.state.reset()
         self.update()
 
+    def show_practice(self, scale: str, text: dict, practice: str) -> None:
+        """The training's second step: the scale cued as for a rating, `practice` below it."""
+        self._set_scale(scale, text, practice)
+        self.practising = True
+        self.state.cue()
+        self.update()
+
     def _set_scale(self, scale: str, text: dict, training: str) -> None:
-        """One place that says what a scale is drawn from, so the training draws it as rated."""
+        """One place that says what a scale is drawn from, so the training draws it as rated.
+        Every screen starts with no hold, whatever the last one left."""
+        self._end_hold()
         self.scale = scale
         self.question = text["question"]
         self.statement = text.get("statement", "")
         self.anchors = list(text["anchors"])
         self.training = training
-        self.training_accepting = False
+        self.explaining = False
+        self.practising = False
 
     # -- input -------------------------------------------------------------------------
 
@@ -289,22 +417,23 @@ class VasWidget(QWidget):
             event.accept()
             return
         if event.isAutoRepeat():
+            # The operating system's repeat of a held key. The hold is timed here, from the
+            # press, so a repeat is never a second press (SPEC.md 10.1).
             event.accept()
             return
         action = self.responder.action_for(name)
         if action is Action.EMERGENCY_STOP:
             self.emergency_stop.emit()
-        elif self.training:
-            # Nothing but the play button means anything here, and only once the screen is
-            # accepting it; the marker stays hidden.
-            if action is Action.CONFIRM and self.training_accepting:
-                self.training_confirmed.emit()
+        elif self.explaining:
+            # Nothing but the emergency stop means anything while the experimenter explains.
+            pass
         elif action is Action.CONFIRM:
             self._confirm()
         elif action in (Action.DECREASE, Action.INCREASE):
-            self._held = action
-            self.state.press(action)
-            self._repeat.start(self._repeat_delay_ms)
+            now_s, regrip = self._placed_press(action, event.timestamp())
+            self.state.press(action, now_s, regrip)
+            # A regrip is already past the hold delay; a fresh press has the delay to wait out.
+            self._tick.start(self._tick_ms if regrip else self._delay_ms)
             self.update()
         event.accept()
 
@@ -313,26 +442,69 @@ class VasWidget(QWidget):
             event.accept()
             return
         name = self._names.get(Qt.Key(event.key()))
-        if name is not None and self.responder.action_for(name) is self._held:
-            self._held = None
-            self._repeat.stop()
+        action = None if name is None else self.responder.action_for(name)
+        if action is not None and action is self.state.held:
+            self.state.release(action, self._stamp_s(event.timestamp()))
+            self._tick.stop()
+            self.update()
         event.accept()
 
-    def _on_repeat(self) -> None:
-        if self._held is None:
+    # A hold whose release can never arrive here -- routed to a focused experimenter text field,
+    # or lost when an emergency stop's screen takes the focus -- must not run the marker to the
+    # end of the line. A screen that is not shown, or has lost the keyboard, holds nothing.
+    def focusOutEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        self._end_hold()
+        super().focusOutEvent(event)
+
+    def hideEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        self._end_hold()
+        super().hideEvent(event)
+
+    def _end_hold(self) -> None:
+        self.state.end_hold()
+        self._tick.stop()
+
+    def _placed_press(self, action: Action, stamp_ms: int) -> tuple[float, bool]:
+        """When a press went down, in real seconds, and whether it carries the last hold on.
+
+        Decided once, here, on the key events' own stamps: the press is placed by its stamp,
+        measured from the hold's own press, so the gap it is judged on is the device's and not
+        however long the handlers took. A press that is not a regrip is placed when its handler
+        runs, and its stamp becomes the reference for its release.
+        """
+        if self.state.held is None and self._press_stamp is not None:
+            placed = self._stamp_s(stamp_ms)
+            if self.state.regrips(action, placed):
+                return placed, True
+        now_s = self.clock.real_elapsed_s()
+        self._press_stamp = (stamp_ms, now_s)
+        return now_s, False
+
+    def _stamp_s(self, stamp_ms: int) -> float:
+        """A key event's stamp in real seconds, measured from the press that started the hold.
+        A counter that wrapped (Windows' does every 49.7 days) falls back to the handler's time
+        rather than raising, which would leave the marker moving with nobody holding it."""
+        stamp_ms_0, pressed_s = self._press_stamp
+        if stamp_ms < stamp_ms_0:
+            return self.clock.real_elapsed_s()
+        return pressed_s + (stamp_ms - stamp_ms_0) / MS_PER_S
+
+    def _on_tick(self) -> None:
+        if self.state.held is None:
+            self._tick.stop()
             return
-        self.state.press(self._held)
-        self.update()
-        self._repeat.start(self._repeat_interval_ms)
+        if self._tick.interval() != self._tick_ms:
+            self._tick.setInterval(self._tick_ms)
+        if self.state.tick(self.clock.real_elapsed_s()):
+            self.update()
 
     def _confirm(self) -> None:
         response = self.state.confirm()
         if response is None:
             self.pressed_without_marker.emit()
             return
-        self._held = None
-        self._repeat.stop()
-        self.confirmed.emit(response)
+        self._end_hold()
+        (self.training_confirmed if self.practising else self.confirmed).emit(response)
 
     # -- drawing -----------------------------------------------------------------------
 

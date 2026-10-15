@@ -203,19 +203,28 @@ def test_the_pain_training_comes_before_the_first_application(app, loaded, tmp_p
         done = _start(protocol)
         _spin(lambda: participant.stack.currentWidget() is participant.vas)
         vas = participant.vas
-        assert vas.training and vas.scale == "pain" and not vas.training_accepting
+        assert vas.explaining and vas.scale == "pain" and not vas.practising
         assert "warning_cue" not in _events(made.session), "no stimulus before the training"
+        _press(vas, "pagedown")
         _press(vas, "f5")
+        assert not vas.state.visible, "a button did something while the experimenter explained"
         assert "vas_training_confirmed" not in _events(made.session), (
             "▶ dismissed the training before the experimenter's go"
         )
         # The anchors explained aloud; the experimenter's go.
         made.experimenter.proceed_requested.emit()
-        assert vas.training_accepting
+        assert vas.practising
+        # The practice: the marker moved and confirmed, as on a rating.
+        _press(vas, "pagedown")
+        _press(vas, "pagedown")
         _press(vas, "f5")
         _drive(protocol, done)
         events = _events(made.session)
         assert events.count("vas_training_confirmed") == 1
+        assert events.count("vas_practice_rating") == 1
+        assert events.index("vas_practice_rating") < events.index("vas_training_confirmed")
+        # Never a ratings row: one pinprick row per application, each after its own cue.
+        assert len(_rows(made.session, "pinprick")) == events.count("warning_cue")
         assert events.index("vas_training_shown") < events.index("vas_training_explained")
         assert events.index("vas_training_explained") < events.index("vas_training_confirmed")
         assert events.index("vas_training_confirmed") < events.index("warning_cue")

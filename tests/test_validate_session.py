@@ -250,3 +250,42 @@ def test_the_seed_check_fails_when_one_seed_gives_two_orders(loaded):
     runs = _orders(loaded, "1", "2", "5")
     assert vs.needs_the_seed_to_matter(runs) is None
     assert vs.check_same_seed_same_trial_order(runs)
+
+
+# -- the VAS training's practice rating (docs/research/R35) -----------------------------------
+
+
+def _event(event, detail, second):
+    return {"event": event, "detail": detail, "phase": "pre_sensitisation",
+            "timestamp_iso": f"2026-10-15T10:00:{second:02d}.000000"}
+
+
+def _practice_run(loaded, practices=1, pinprick_second=None):
+    log = [_event("vas_training_explained", "pain", 1)]
+    log += [_event("vas_practice_rating", "pain: rating_percent=60.0", 2)] * practices
+    log += [_event("vas_training_confirmed", "pain", 3)]
+    rows = {"log": log}
+    if pinprick_second is not None:
+        rows["pinprick"] = [_pinprick(
+            timestamp_iso=f"2026-10-15T10:00:{pinprick_second:02d}.000000")]
+    return {vs.NORMAL: _run(loaded, rows=rows)}
+
+
+def test_a_training_with_one_practice_and_no_ratings_row_passes(loaded):
+    runs = _practice_run(loaded, pinprick_second=9)
+    assert vs.check_vas_practice_is_never_a_rating(runs) == []
+
+
+@pytest.mark.parametrize("practices", (0, 2))
+def test_a_training_without_exactly_one_practice_fails(loaded, practices):
+    assert vs.check_vas_practice_is_never_a_rating(_practice_run(loaded, practices))
+
+
+def test_a_ratings_row_written_during_the_practice_fails(loaded):
+    assert vs.check_vas_practice_is_never_a_rating(_practice_run(loaded, pinprick_second=2))
+
+
+def test_a_trial_cued_in_the_confirms_own_millisecond_is_not_the_practice(loaded):
+    # At the validator's speed the first pinprick is cued in the confirm's millisecond.
+    runs = _practice_run(loaded, pinprick_second=3)
+    assert vs.check_vas_practice_is_never_a_rating(runs) == []

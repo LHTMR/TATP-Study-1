@@ -33,9 +33,23 @@ vas:
   # was pressed, so the starting position cannot bias the response.
   start_pct_after_left_press: 25.0
   start_pct_after_right_press: 75.0
-  move_step_pct: 0.5                 # one tap
-  hold_repeat_delay_s: 0.30          # before hold-to-repeat engages
-  hold_repeat_interval_s: 0.04
+  move_step_pct: 0.5                 # one tap, on the press
+  # Holding a button moves the marker continuously, accelerating, as the pressure adjustment
+  # does (SPEC.md 10.2, 10.3; S's lab-run list, 5 Oct 2026). After the delay the marker moves at
+  # the initial rate, ramping linearly to the final rate over the ramp, then constant. The
+  # initial rate is the old fixed hold speed (one step per 0.04 s), so a short hold feels as it
+  # did; the whole line takes about 3 s of holding where it took 8. All pilot-tunable.
+  hold_delay_s: 0.30                 # before a press counts as a hold
+  hold_rate_initial_pct_s: 12.5
+  hold_rate_final_pct_s: 50.0
+  hold_ramp_duration_s: 1.5
+  hold_tick_interval_s: 0.02         # how often a hold redraws; the distance does not depend on it
+  # A held R400 button repeats (docs/LOG.md N7.F1). Repeats the operating system flags are
+  # ignored, but a device can also repeat as fresh down/up pairs. A press in the direction of a
+  # hold that let go this recently carries the hold on rather than starting a tap. Shorter than
+  # anyone can deliberately let go and press again, and it only ever follows a hold, so a tap
+  # after a tap is always a tap.
+  hold_regrip_max_s: 0.05
   no_response_warning_s: 60.0        # log a warning; never auto-advance (SPEC.md 8.3)
 
 choice:

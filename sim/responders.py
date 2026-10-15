@@ -77,6 +77,8 @@ MOST_PLEASANT_PCT = 55.0
 # The ratings the observer model does not cover: a level, plus the rating noise.
 BRUSH_PAIN_PCT = 8.0
 STATE_LEVELS_PCT = {"pleasantness": 62.0, "relaxation": 55.0, "alertness": 50.0}
+# Where the VAS training's practice rating is put: anywhere, so somewhere unremarkable.
+PRACTICE_PCT = 60.0
 # The smallest difference in felt intensity, in VAS points, this participant can tell apart.
 COMPARISON_JND_PCT = 5.0
 # Noise-level taps, from the start level: to "just audible", then further to cover the garment.
@@ -347,7 +349,9 @@ class VirtualParticipant(QObject):
         window = self.window
         if screen is window.vas:
             vas = window.vas
-            return (screen, vas.scale, vas.training, vas.training_accepting, vas.state.cue_iso)
+            return (
+                screen, vas.scale, vas.explaining, vas.practising, vas.state.cue_iso
+            )
         if screen is window.control:
             return (screen, window.control.target, id(window.control))
         if screen is window.choice:
@@ -418,15 +422,16 @@ class VirtualParticipant(QObject):
         if self._handled:
             return
         vas = self.window.vas
-        if vas.training:
-            # The proportionality training (SPEC.md 10.6): listen to the experimenter, and
-            # press ▶ once the continue line shows. Nothing is rated.
-            if vas.training_accepting:
-                self._handled = True
-                self.tap(Action.CONFIRM)
+        if vas.explaining:
+            # The VAS training (SPEC.md 10.6): listen to the experimenter.
             return
         self._handled = True
         scale = self.window.vas.scale
+        if vas.practising:
+            # The practice rating: anywhere, both ways, as the practice line asks. Nothing felt
+            # is rated, so no stimulus is used up.
+            self.answer_vas(scale, PRACTICE_PCT, record=False)
+            return
         self.answer_vas(scale, self.rating_for(scale))
 
     def on_control(self) -> None:
@@ -499,14 +504,17 @@ class VirtualParticipant(QObject):
             return self.model.level_pct(STATE_LEVELS_PCT[scale])
         raise KeyError(f"the virtual participant has no model for the {scale!r} scale")
 
-    def answer_vas(self, scale: str, pct: float) -> None:
-        """Reveal the marker on the nearer side, step it to `pct`, confirm (SPEC.md 10.2)."""
+    def answer_vas(self, scale: str, pct: float, record: bool = True) -> None:
+        """Reveal the marker on the nearer side, step it to `pct`, confirm (SPEC.md 10.2).
+        `record` False is the training's practice, which is not one of this participant's
+        ratings."""
         side = min(SIDES, key=lambda s: abs(self._vas_start[s] - pct))
         self.tap(Action.DECREASE if side == "left" else Action.INCREASE)
         steps = int(round((pct - self._vas_start[side]) / self._vas_step))
         for _ in range(abs(steps)):
             self.tap(Action.INCREASE if steps > 0 else Action.DECREASE)
-        self.ratings.append((scale, self.window.vas.state.percent))
+        if record:
+            self.ratings.append((scale, self.window.vas.state.percent))
         self.tap(Action.CONFIRM)
 
     def adjust(self, goal_pct: float) -> None:
@@ -622,8 +630,10 @@ class ConfirmsWithoutMarker(VirtualParticipant):
         self.empty_confirms = 0
 
     def on_vas(self) -> None:
-        # Not on the training screen, where a confirm is the answer rather than a mistake.
-        if not self._handled and not self.window.vas.training:
+        # Only on a rating: the training's practice is not one, and while the experimenter
+        # explains a confirm does nothing at all.
+        vas = self.window.vas
+        if not self._handled and not (vas.explaining or vas.practising):
             for _ in range(self.EMPTY_CONFIRMS):
                 self.tap(Action.CONFIRM)
                 self.empty_confirms += 1

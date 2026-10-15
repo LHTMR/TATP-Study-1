@@ -95,6 +95,7 @@ from tatp.datafiles import parse_schema  # noqa: E402
 from tatp.pinprick import PAIN_SCALE, prior_for  # noqa: E402
 from tatp.procedure import VAS_TRAINING_EXPLAINED  # noqa: E402
 from tatp.resume import VAS_TRAINING_CONFIRMED  # noqa: E402
+from tatp.trials import VAS_PRACTICE_RATING  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
 from tatp.units import MS_PER_S, S_PER_MIN  # noqa: E402
 
@@ -1653,6 +1654,43 @@ def check_vas_training_once_before_first_rating(runs):
     return failures
 
 
+def check_vas_practice_is_never_a_rating(runs):
+    """SPEC.md 10.6, docs/research/R35: every confirmed training has exactly one practice
+    rating, logged between the experimenter's go and the confirm, and no ratings table has a
+    row written in that span -- the practice is in the log and nowhere else."""
+    failures = []
+    for run in runs.values():
+        events = run.events()
+        rated = [(table, _iso(row["timestamp_iso"]))
+                 for table in RATED_TABLES for row in run.rows.get(table, [])]
+        explained_at: dict[str, datetime] = {}
+        practices: dict[str, int] = {}
+        for row in events:
+            event = row["event"]
+            if event == VAS_TRAINING_EXPLAINED:
+                explained_at[row["detail"]] = _iso(row["timestamp_iso"])
+                practices[row["detail"]] = 0
+            elif event == VAS_PRACTICE_RATING:
+                scale = row["detail"].split(":")[0]
+                practices[scale] = practices.get(scale, 0) + 1
+            elif event == VAS_TRAINING_CONFIRMED:
+                scale = row["detail"]
+                if practices.get(scale, 0) != 1:
+                    failures.append(f"{run.name}: {scale} confirmed after "
+                                    f"{practices.get(scale, 0)} practice ratings, not 1")
+                start = explained_at.get(scale)
+                end = _iso(row["timestamp_iso"])
+                # A rated row's timestamp is its cue, at millisecond resolution, so at the
+                # validator's speed the first real trial can be cued in the confirm's own
+                # millisecond. It was cued after the confirm, so the span ends before it.
+                for table, written in rated:
+                    if start is not None and start <= written < end:
+                        failures.append(f"{run.name}: a {table} row was written during the "
+                                        f"{scale} practice")
+                practices[scale] = 0
+    return failures
+
+
 def _session_path(run: Run) -> Path:
     """The run's own session file: the one holding its seed and start time."""
     for path in sorted(run.folder.glob(f"TATP1_*_P{PARTICIPANT}_S*_session.csv")):
@@ -1737,6 +1775,7 @@ CHECKS: list[Check] = [
           check_session_two_starts_from_session_ones_estimate),
     Check("vas_training_once_before_first_rating", _always,
           check_vas_training_once_before_first_rating),
+    Check("vas_practice_is_never_a_rating", _always, check_vas_practice_is_never_a_rating),
 ]
 
 
