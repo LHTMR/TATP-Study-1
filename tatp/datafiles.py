@@ -271,7 +271,8 @@ class DataFileCollection:
             self.write("session", key=key, value=_as_text(values[key]))
 
     def close(self) -> None:
-        """Write the session keys still outstanding, then retry anything a failed write held.
+        """Write the session keys still outstanding, retry anything a failed write held, and
+        close the files.
 
         An unknown value is still written, with an empty value: DATA_SCHEMA.md requires that an
         absent row and an empty value never be confusable.

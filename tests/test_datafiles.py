@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import os
+import sys
 
 import pytest
 
@@ -260,9 +261,12 @@ def test_a_write_failure_holds_the_row_and_retries_it(files):
         "log", timestamp_iso=ISO, phase="setup", event="first", origin="software",
         severity="info",
     )
-    # The file is held open between rows, so a failure has to come from the open handle: closing
-    # its descriptor underneath it makes the next flush raise, as a vanished disk would.
-    os.close(files._handles["log"].fileno())
+    # The file is held open between rows, so a failure has to come from the open handle: its
+    # descriptor is pointed at a read-only one, so the write itself raises, as a vanished disk
+    # would.
+    read_only = os.open(files.path("log"), os.O_RDONLY)
+    os.dup2(read_only, files._handles["log"].fileno())
+    os.close(read_only)
     files.write(
         "log", timestamp_iso=ISO, phase="setup", event="lost?", origin="software",
         severity="info",
@@ -292,6 +296,7 @@ def test_each_row_is_on_disk_before_write_returns(files):
     assert [r[4] for r in _read(files.path("log"))[1:]] == ["first", "second"]
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows refuses to delete an open file")
 def test_a_file_deleted_while_open_is_recreated_with_its_header(files):
     """Reopening per row recreated a deleted file; holding it open must not write into the
     deleted one instead, which macOS allows (docs/LOG.md N7.F13a)."""
