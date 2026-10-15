@@ -121,8 +121,11 @@ fix (adjustment presses timed from their key events) and the RNG question, decid
        counts as ▶;
      - whether the alerts are audible over the noise;
      - taps on the adjustment are never lost or misread (N2.9).
-3. **Review and merge `pilot/remote-raw-input`, then run the lab check N2.10** with the R400
-   and the laptop keyboard. If it fails, `responder.key_source: any_keyboard` restores the old
+3. **Run `make check` on `pilot/remote-raw-input` with no other session using the PC**, then
+   merge it and run the lab check N2.10 with the R400 and the laptop keyboard. It is reviewed
+   and its own tests pass, but on 14-15 Oct other sessions held the CPU at 99%, and under that
+   load `main`'s own code stalls at the same steps (`test_session_runner` at the masking
+   check's choice, the validator's `rates_randomly`), so the gate could not be judged. If it fails, `responder.key_source: any_keyboard` restores the old
    routing.
 4. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
 5. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
