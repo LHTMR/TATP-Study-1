@@ -100,7 +100,7 @@ written, with an empty value — an absent row and an empty value must not be co
 | `stop_rehearsal_press_detected` | - | `true` when the participant's stop press was detected during the rehearsal; `false` if the experimenter moved on without one |
 | `white_noise_level_dbfs` | dBFS | The level the participant set in the masking check (§10.7). Per session, not configured |
 | `masking_confirmed` | - | `true` when the participant confirmed the noise covers the garment; `false` when the experimenter reported it still audible with earplugs in. A confirm at `audio.white_noise_max_dbfs` is still `true`, and is flagged by a `masking_at_ceiling` row (severity `warning`) in `log` and a warning on the experimenter screen, since a noise the participant could not raise further may only just cover the garment |
-| `masking_attempts` | - | How many times the participant set the masking level, accumulated across an earplug restart: 1 normally, 2 when earplugs were fitted. Before 5 Oct 2026, how many times the level was raised and re-asked |
+| `masking_attempts` | - | How many times the participant set the masking level, accumulated across an earplug restart: 1 normally, 2 when earplugs were fitted. Before 5 Oct 2026, how many times the level was raised and re-asked. Each report that the garment was still audible is a `masking_reported_audible` row in `log` (origin `experimenter`, the level at the time in `detail`) |
 | `earplugs_used` | - | `true` when earplugs were fitted under the headphones because the participant could still hear the garment (§10.7) |
 | `fit_preview_reruns` | - | Total re-runs the experimenter chose with the fit preview on, across the session (§11.1); `0` when none. Written at close, with the keys below it, because a re-run can come at any time point |
 | `sensitisation_start_iso` | - | Session t=0; empty until sensitisation begins |
@@ -121,7 +121,10 @@ on, in the order `tatp/session_runner.py` plans them -- and a stage is completed
 its `stage_completed` row exists. `sensitisation_started` has the exact session t=0 in
 `detail`, because the session file receives `sensitisation_start_iso` only at close; a resumed
 session logs `sensitisation_resumed` with the same value instead, and `session_resumed` naming
-the file it resumed from.
+the file it resumed from. A resumed session skips any later stage its file already completed,
+logging `stage_skipped_completed` with the stage in `detail`: a file written before the stop
+rehearsal moved ahead of the masking check (October 2026) can have the masking check completed
+and the rehearsal not, and its session keys then keep that older order.
 
 The VAS training (§10.6) is four events, each with the scale in `detail` (`pain`,
 `intensity`, `pleasantness`): `vas_training_shown` when the screen goes up (again after an

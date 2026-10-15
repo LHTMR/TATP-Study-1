@@ -178,7 +178,7 @@ audio_setup:
   # behöver veta vad hen lyssnar efter, inte vad det heter. Ingenting här säger varför bruset
   # finns, eftersom skälet är att plagget inte ska gå att känna igen på ljudet (SPEC.md 16).
   #
-  # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced -- the Swedish of S's
+  # DRAFT (LOG N7.F6a): written by the build, not ethics-sourced -- the Swedish of S's
   # 5 Oct 2026 change, "until you can hear it easily" in place of "until you can just hear it",
   # because "precis" made it a threshold task.
   find_level: |-

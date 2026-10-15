@@ -352,7 +352,11 @@ on their own screen. You watch, and answer only when the software asks you to.
 
 1. The instruction names each step as it runs:
    - **Touch calibration, step 1: the participant sets the touch on the middle channel.**
-   - **Touch calibration, step 2: the participant rates a series of touches.**
+   - **Touch calibration, step 2: the participant rates a series of touches. 3/12 answered.**
+     The count goes up as the participant answers. With the mock garment or the prototype
+     sleeve only, a **Skip calibration** button appears after a few ratings: it ends
+     calibration early for a pilot or a test, and the data records it as skipped and not valid
+     for analysis. It never appears with the study garment.
    - **Touch calibration, step 3: the participant matches channel … to the middle channel.**
    - **Touch calibration, step 4: the participant compares channel … with the middle channel.**
    - **Touch calibration, step 5: the participant sets the most pleasant level.**
