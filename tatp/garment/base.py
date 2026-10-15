@@ -281,9 +281,16 @@ class GarmentController(ABC):
     def skip(self, seconds: float) -> None:
         """Session time moved on at once, by a demonstration's Skip the wait (tatp/demo.py).
         A playing pattern carries on from where it was, rather than delivering every cycle the
-        skip passed over in one tick -- thousands of commands, and a flooded serial link."""
+        skip passed over in one tick -- thousands of commands, and a flooded serial link.
+
+        The rate limit's interval moves on with it, so it stays measured in real time: the
+        skipped seconds never passed for the garment, and counted, they would let the next
+        rise after a skip jump by the rate limit times the skip -- a demonstration on a real
+        garment included (docs/LOG.md N7.F12f)."""
         if self._pattern_start_s is not None:
             self._pattern_start_s += seconds
+        for channel in self._last_command_s:
+            self._last_command_s[channel] += seconds
 
     def stop_pattern(self) -> None:
         """Stop the pattern and return every channel it left on to off."""

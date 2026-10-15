@@ -11,10 +11,17 @@ commands and data files -- with these things changed, and none of them able to r
   demonstration shows what a participant sees (SPEC.md 16). Each run writes its own copy of the
   allocation with the conditions shuffled across the session numbers, so a session number cannot
   be chosen to see a condition (open item L16).
-- **Nothing worn, and any keyboard.** Always the mock garment: a demonstration's speed and its
-  simulated experimenter, who resumes after an emergency stop on its own, belong nowhere near a
-  real garment (SPEC.md 13, 10.9). And every keyboard is the remote (`any_keyboard`), so it runs
-  on any computer, with or without the remote, and a simulated participant's presses arrive.
+- **Any garment, and any keyboard.** The mock garment unless another is chosen, as for any
+  session (docs/LOG.md N7.F12f). On a real garment -- anything but the mock -- two things a
+  demonstration could otherwise do belong nowhere near what is worn (SPEC.md 13, 10.9): it runs
+  at real time only (`check_speed`), since above it the rate limit is looser in real time; and
+  the simulated experimenter never resumes an interruption by itself, so a person presses
+  Resume. The ceiling, the rate limit and the stop are the session's own, unchanged. And every
+  keyboard is the remote (`any_keyboard`), so it runs on any computer, with or without the
+  remote, and a simulated participant's presses arrive.
+- **What the garment is doing**, channel by channel, in the Demo controls window
+  (`tatp/ui/garment_display.py`), in every phase: S's decision of 15 Oct 2026 for a
+  demonstration (open item L16). A real session's experimenter screen never has it.
 - **Who presses.** The participant and the experimenter are each, independently, a person, a
   simulation paced to be watched, or a simulation as fast as it can go (`OFF`, `WATCH`, `FAST`;
   `sim/responders.py`, `sim/experimenters.py`, the validator's own). Either can be changed at
@@ -48,7 +55,9 @@ from tatp.config import REPO_ROOT, Config
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source
 from tatp.session import with_session_choices
 from tatp.session_runner import SessionRunner
+from tatp.ui.garment_display import GarmentDisplay
 from tatp.ui.widgets import (
+    GROUP_GAP_PX,
     ITEM_GAP_PX,
     MARGIN_PX,
     SIZE_BODY,
@@ -64,7 +73,7 @@ OFF = "off"
 WATCH = "watch"
 FAST = "fast"
 MODES = (OFF, WATCH, FAST)
-# The only garment a demonstration drives: nothing is worn.
+# A demonstration's garment unless another is chosen, and the only one nothing is worn on.
 DEMO_GARMENT = "mock"
 # The slowest a demonstration runs: real time, as a participant meets every interval.
 REAL_TIME_SPEED = 1.0
@@ -132,23 +141,33 @@ class DemoError(ValueError):
     """A demonstration asked for something its settings do not allow."""
 
 
-def check_speed(demo: dict, speed: float) -> float:
-    """The speed, if a demonstration may run at it: real time to `demo.max_clock_speed`."""
+def real_garment(garment: str) -> bool:
+    """Whether a garment driver is one something could be worn on: any but the mock."""
+    return garment != DEMO_GARMENT
+
+
+def check_speed(demo: dict, speed: float, garment: str = DEMO_GARMENT) -> float:
+    """The speed, if a demonstration may run at it: real time to `demo.max_clock_speed`, and
+    real time only on a real garment, whose rate limit is in session time (SPEC.md 13)."""
     highest = float(demo["max_clock_speed"])
     if not REAL_TIME_SPEED <= speed <= highest:
         raise DemoError(f"a demonstration runs at {REAL_TIME_SPEED:g} to {highest:g} times "
                         f"real speed (study1.yaml demo.max_clock_speed), not {speed:g}")
+    if real_garment(garment) and speed != REAL_TIME_SPEED:
+        raise DemoError(f"a demonstration on the {garment} garment runs at real time "
+                        f"({REAL_TIME_SPEED:g}), not {speed:g}: faster, its rate limit would "
+                        f"be looser in real time (SPEC.md 13)")
     return speed
 
 
-def demo_config(loaded: Config, speed: float) -> Config:
-    """The configuration a demonstration is checked and run with: a folder of its own, the mock
-    garment, every keyboard the remote, real-time settings kept. Nothing is written yet: the
-    folder and its shuffled allocation are made when the demonstration starts (`begin_run`),
-    so a check that is refused or cancelled leaves nothing behind."""
+def demo_config(loaded: Config, speed: float, garment: str = DEMO_GARMENT) -> Config:
+    """The configuration a demonstration is checked and run with: a folder of its own, the
+    garment chosen, every keyboard the remote, real-time settings kept. Nothing is written yet:
+    the folder and its shuffled allocation are made when the demonstration starts
+    (`begin_run`), so a check that is refused or cancelled leaves nothing behind."""
     demo = loaded.study1["demo"]
-    check_speed(demo, speed)
-    config = with_session_choices(loaded, run_folder(demo), DEMO_GARMENT)
+    check_speed(demo, speed, garment)
+    config = with_session_choices(loaded, run_folder(demo), garment)
     hardware = with_key_source(config.hardware, ANY_KEYBOARD)
     # The study's own folder, whose instance lock a demonstration holds
     # (`tatp.preflight.lock_folder`), so one never runs beside a session from it, or beside
@@ -191,6 +210,16 @@ class Demo(QObject):
         # simulated participant beside a person at the experimenter screen can feel it.
         self.experimenter = VirtualExperimenter(rig, self.participant, parent=self)
         self.experimenter.rerun_reason = RERUN_REASON
+        garment = self.session.config.hardware["garment"]["driver"]
+        if real_garment(garment):
+            # Stage boundary (CLAUDE.md): what `check_speed` refused, checked again on the
+            # session actually built.
+            assert self.session.clock.speed == REAL_TIME_SPEED, (
+                f"a demonstration on the {garment} garment runs at real time, not "
+                f"{self.session.clock.speed}"
+            )
+            # SPEC.md 10.9: on something that may be worn, the resume is a person's.
+            self.experimenter.resumes_by_itself = False
         self.experimenter.start()
         # None until set, so the starting modes are logged too, a person's included.
         self.participant_mode: str | None = None
@@ -295,6 +324,11 @@ class DemoControls(QWidget):
         self.finish_button.clicked.connect(self.finish_stage)
         self.status = label(SIZE_SMALL, wrap=True)
         demo.runner.stage_started.connect(self._sync)
+        # First, so the status line's changing length never moves it.
+        self.garment_display = GarmentDisplay(
+            demo.session.garment, words, float(demo.settings["garment_display_refresh_s"]),
+            float(demo.settings["garment_highlight_s"]),
+        )
 
         grid = QGridLayout()
         for row, (key, modes) in enumerate((("participant", self.participant_mode),
@@ -306,6 +340,8 @@ class DemoControls(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(MARGIN_PX, MARGIN_PX, MARGIN_PX, MARGIN_PX)
         layout.setSpacing(ITEM_GAP_PX)
+        layout.addWidget(self.garment_display)
+        layout.addSpacing(GROUP_GAP_PX)
         layout.addLayout(grid)
         layout.addWidget(self.skip_button)
         layout.addWidget(self.finish_button)

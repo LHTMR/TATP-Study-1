@@ -20,15 +20,20 @@ from tatp import config as cfg
 from tatp import preflight as pre
 from tatp.demo import (
     ALLOCATION_NAME,
+    DEMO_GARMENT,
     FAST,
     OFF,
+    REAL_TIME_SPEED,
     WATCH,
+    DemoError,
     demo_config,
     shuffled_allocation,
 )
+from tatp.garment.mock import MockGarment
 from tatp.launcher import LauncherWindow
 from tatp.remote_keys import ANY_KEYBOARD
-from tatp.session import SessionError
+from tatp.session import DRIVERS, SessionError
+from tatp.ui.garment_display import GarmentDisplay
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 # Real seconds a whole demonstration may take with both simulations fast.
@@ -36,6 +41,8 @@ FULL_RUN_TIMEOUT_S = 300.0
 # Fast enough with Skip the wait, and slow enough that a mapping path or a cue outlasts the
 # simulations' look at the screen under the gate's load, as at 1000x it need not.
 FULL_RUN_SPEED = "100"
+# A garment that is worn: the prototype sleeve, its driver replaced by one with no port.
+WORN = "arduino_mosfet"
 
 
 @pytest.fixture(scope="module")
@@ -116,12 +123,63 @@ def test_the_simulations_are_for_a_demonstration_only():
                                 "SM", "--patterns", str(EXAMPLES), "--sim-participant", FAST])
 
 
-@pytest.mark.parametrize("extra", [
-    ("--garment", "arduino_mosfet"), ("--clock-speed", "50"), ("--redcap-form-completed",),
-])
+@pytest.mark.parametrize("extra", [("--clock-speed", "50"), ("--redcap-form-completed",)])
 def test_what_a_demonstration_decides_is_refused_not_overridden(extra):
+    """`--garment` is no longer among them: a demonstration may drive any garment, at real
+    time on any but the mock (S, 15 Oct 2026; N7.F12f)."""
     with pytest.raises(SystemExit):
         _args(*extra)
+
+
+def test_a_demonstration_on_a_real_garment_runs_at_real_time_only(loaded):
+    """Faster, the rate limit, in session time, would be looser in real time (SPEC.md 13)."""
+    with pytest.raises(SystemExit, match="real time"):
+        run_session.demo_session(loaded, _args("--garment", "arduino_mosfet",
+                                               "--demo-speed", "2"))
+    with pytest.raises(DemoError):
+        demo_config(loaded, 2.0, "arduino_mosfet")
+    args = _args("--garment", "arduino_mosfet")
+    config = run_session.demo_session(loaded, args)
+    assert config.hardware["garment"]["driver"] == "arduino_mosfet"
+    assert args.clock_speed == REAL_TIME_SPEED
+    # The mock may still run faster.
+    assert demo_config(loaded, 2.0).hardware["garment"]["driver"] == DEMO_GARMENT
+
+
+class _WornGarment(MockGarment):
+    """The prototype's driver name with no serial port behind it: `real_garment` goes by the
+    name, so the demonstration treats it as worn."""
+
+    per_channel_pressure = False
+
+
+@pytest.fixture
+def worn(monkeypatch):
+    monkeypatch.setitem(DRIVERS, WORN, _WornGarment)
+    return WORN
+
+
+@pytest.mark.parametrize("kind", ["emergency_stop", "pause"])
+def test_the_simulated_experimenter_never_resumes_a_real_garment(app, loaded, worn, kind):
+    """SPEC.md 10.9: on something that may be worn, a person presses Resume -- after an
+    emergency stop above all. On the mock it still resumes by itself."""
+    runner, demo = _demo(app, loaded, "--garment", worn, "--sim-experimenter", FAST)
+    try:
+        # Recorded as for any session.
+        assert _session_values(runner.session)["garment_driver"] == _WornGarment.__name__
+        interruptions = runner.rig.interruptions
+        (interruptions.emergency_stop if kind == "emergency_stop" else interruptions.pause)()
+        assert not demo.experimenter._resume_timer.isActive()
+        assert interruptions.active is not None
+    finally:
+        _finish(runner, demo)
+
+
+def test_the_simulated_experimenter_still_resumes_the_mock(app, loaded):
+    runner, demo = _demo(app, loaded, "--sim-experimenter", FAST)
+    runner.rig.interruptions.emergency_stop()
+    assert demo.experimenter._resume_timer.isActive()
+    _finish(runner, demo)
 
 
 def test_a_demonstration_speed_beyond_the_configured_range_is_refused(loaded):
@@ -187,10 +245,79 @@ def test_run_a_demo_in_the_launcher_asks_for_a_demonstration(app, loaded):
     assert (args.demo, args.participant, args.sim_participant, args.sim_experimenter) == (
         True, loaded.study1["demo"]["participant_code"], WATCH, OFF
     )
-    assert args.garment == "mock" and not dialog.garment.isEnabled()
+    # The mock unless another is chosen (N7.F12f): no longer fixed.
+    assert args.garment == DEMO_GARMENT and dialog.garment.isEnabled()
     assert not args.redcap_form_completed
     design = dialog.config(args).study1["design"]
     assert Path(design["allocation_file"]).name == ALLOCATION_NAME
+
+
+def test_run_a_demo_holds_a_real_garment_to_real_time(app, loaded):
+    launcher = LauncherWindow(loaded, preflight=lambda config, args: [],
+                              build=lambda config, args: None)
+    dialog = launcher.session_dialog(demo=True)
+    dialog.experimenter.setText("SM")
+    for combo, value in ((dialog.participant_language, "sv"),
+                         (dialog.experimenter_language, "en")):
+        combo.setCurrentIndex(combo.findData(value))
+    dialog.demo_speed.setValue(10.0)
+    dialog.garment.setCurrentIndex(dialog.garment.findData("arduino_mosfet"))
+    assert dialog.demo_speed.value() == REAL_TIME_SPEED
+    assert not dialog.demo_speed.isEnabled()
+    args = dialog.args()
+    assert (args.garment, args.clock_speed) == ("arduino_mosfet", REAL_TIME_SPEED)
+    assert dialog.config(args).hardware["garment"]["driver"] == "arduino_mosfet"
+    dialog.garment.setCurrentIndex(dialog.garment.findData(DEMO_GARMENT))
+    assert dialog.demo_speed.isEnabled()
+
+
+# -- what the garment is doing, a demonstration's only ----------------------------------------
+
+
+def test_the_garment_display_is_a_demonstrations_only(app, loaded, tmp_path):
+    """SPEC.md 16: a session's experimenter screen withholds channel detail in the
+    intervention and rekindle; the display shows it in every phase, so only a demonstration
+    may have it (S, 15 Oct 2026; open item L16)."""
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data")}}
+    config = cfg.Config(**{**loaded.__dict__, "hardware": hardware})
+    args = run_session.parse_args(["--participant", "01", "--session", "1", "--experimenter",
+                                   "SM", "--patterns", str(EXAMPLES)])
+    runner = run_session.build(config, args)
+    for window in (runner.rig.experimenter, runner.rig.participant):
+        assert window.findChildren(GarmentDisplay) == []
+    run_session.shut_down(runner)
+
+    runner, demo = _demo(app, loaded)
+    displays = runner.rig.experimenter.findChildren(GarmentDisplay)
+    assert [display.garment for display in displays] == [runner.session.garment]
+    _finish(runner, demo)
+
+
+def test_only_the_demo_controls_build_the_garment_display():
+    """The structural half: nothing a session draws makes one."""
+    builders = sorted(
+        path.relative_to(cfg.REPO_ROOT).as_posix()
+        for folder in ("tatp", "sim", "tools")
+        for path in (cfg.REPO_ROOT / folder).rglob("*.py")
+        if "GarmentDisplay(" in path.read_text(encoding="utf-8")
+        and path.name != "garment_display.py"
+    )
+    assert builders == ["tatp/demo.py"]
+    assert cfg.REPO_ROOT.joinpath("run_session.py").read_text(
+        encoding="utf-8").count("GarmentDisplay") == 0
+
+
+def test_the_demo_controls_show_the_sessions_garment_as_commanded(app, loaded):
+    runner, demo = _demo(app, loaded)
+    display = demo.controls.garment_display
+    garment = runner.session.garment
+    channel = garment.channels()[0]
+    garment.set_channel(channel, True)
+    display.poll(display._now_s + 0.01)
+    assert display.states[channel][0] is True
+    assert display.highlight(channel) > 0
+    _finish(runner, demo)
 
 
 def test_run_a_session_in_the_launcher_is_never_a_demonstration(app, loaded):

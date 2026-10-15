@@ -518,6 +518,19 @@ demo:
   skipped: 'Hoppade över {value} min väntan.'
   nothing_to_skip: Inget att hoppa över nu.
   finishing: Avslutar detta steg…
+  # Vad plagget styrs att göra, kanal för kanal (tatp/ui/garment_display.py, LOG N7.F12f).
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_title: Plagget, så som det styrs
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_channel: Kanal {channel}
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_on: på
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_off: av
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_pressure: '{state}, {value} kPa'
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_not_connected: 'Inte anslutet: inget styrs.'
 
 dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.

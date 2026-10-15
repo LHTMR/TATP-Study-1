@@ -18,8 +18,9 @@ demo:
   # A demonstration session, to show the software without a participant or the three hours
   # (run_session.py --demo; tatp/demo.py; docs/LOG.md N7.D23). Never study data: its own code
   # and allocation, a fresh folder under data_folder per run, and `demo` in the session file.
-  # Always the mock garment, and every keyboard the remote: nothing is worn, and it runs
-  # anywhere, with or without the remote. Each run shuffles which condition each session
+  # The mock garment unless another is chosen, and then at real time only, with a person to
+  # resume after a stop (N7.F12f); every keyboard the remote, so it runs anywhere, with or
+  # without the remote. Each run shuffles which condition each session
   # number has, so a session number cannot be chosen to see a condition (open item L16).
   participant_code: "999"            # above the pilot codes, and in no study allocation
   allocation_file: config/demo_allocation.csv
@@ -39,6 +40,11 @@ demo:
   participant_reaction_s: 1.0        # from a new screen to the first press on it
   participant_press_interval_s: 0.2  # between presses, so the marker is seen to move
   experimenter_reaction_s: 1.5       # from a new instruction to pressing Next step
+  # What the garment is commanded to do, channel by channel, in the Demo controls window
+  # (tatp/ui/garment_display.py; N7.F12f): read this often, and a channel that changes is lit
+  # up and fades back over garment_highlight_s, so a watcher's eye is drawn to it.
+  garment_display_refresh_s: 0.05    # a pattern's on/off steps are seen as they happen
+  garment_highlight_s: 1.0           # long enough to catch from across the room
 
 fit_preview:
   # SPEC.md 11.1. Shows the experimenter the fitted curve, its quality and the derived values

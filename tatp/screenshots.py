@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
@@ -49,6 +50,8 @@ from tatp import pattern_design as pd
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
 from tatp.demo import OFF, DemoControls
+from tatp.garment.base import Limits
+from tatp.garment.mock import MockGarment
 from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import InstrumentsDialog
 from tatp.launcher import WARN, LauncherWindow
@@ -140,6 +143,12 @@ SAMPLE_DATA_FOLDER = "data"
 SAMPLE_RESUME_COMPLETED = ("setup", "touch_calibration", "pre_sensitisation", "sensitisation")
 # The channel the hardware check is drawn with on (docs/LOG.md N7.F10b).
 SAMPLE_CHANNEL_ON = 2
+# The demonstration's garment display (docs/LOG.md N7.F12f): every channel set to this share
+# of the ceiling, these channels on, then this one turned on and drawn this long after.
+SAMPLE_DEMO_PRESSURE_FRACTION = 0.6
+SAMPLE_DEMO_CHANNELS_ON = (2, 3)
+SAMPLE_DEMO_CHANGED = 4
+SAMPLE_DEMO_CHANGED_AGO_S = 0.2
 SAMPLE_RESUME_BLOCKS = ("1", "2", "3", "4")
 SAMPLE_RESUME_AGO_MIN = 72
 SAMPLE_SESSION_NUMBER = 1
@@ -796,13 +805,23 @@ def _grab_dialog(dialog: QWidget) -> QPixmap:
 
 
 class _SampleDemo(QObject):
-    """What the Demo controls draw from, with nothing behind it: a person at both places."""
+    """What the Demo controls draw from, with no session behind it: a person at both places,
+    and a connected mock garment with every channel's pressure set and some channels on."""
 
     stage_started = Signal(str)
 
-    def __init__(self):
+    def __init__(self, config: cfg.Config):
         super().__init__()
         self.runner = self
+        self.session = self
+        self.settings = config.study1["demo"]
+        self.garment = MockGarment(Limits.from_config(config.hardware), Clock())
+        self.garment.connect()
+        kpa = self.garment.limits.pressure_ceiling_kpa * SAMPLE_DEMO_PRESSURE_FRACTION
+        for channel in self.garment.channels():
+            self.garment.set_pressure(channel, kpa)
+        for channel in SAMPLE_DEMO_CHANNELS_ON:
+            self.garment.set_channel(channel, True)
         self.participant_mode = OFF
         self.experimenter_mode = OFF
         self.finishing = False
@@ -863,16 +882,33 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"experimenter_{language}_launcher_demo",
         f"Run a demo (docs/LOG.md N7.D23): the session dialog with the demonstration's own "
         f"participant code shown and not editable, no data folder or REDCap form, the mock "
-        f"garment and the example patterns chosen, and the speed and who presses for the "
+        f"garment (changeable: another runs at real time only, N7.F12f) and the example "
+        f"patterns chosen, and the speed and who presses for the "
         f"participant and the experimenter ({language}).",
         _grab_dialog(demo),
     )
-    controls = DemoControls(_SampleDemo(), config.experimenter_text)
+    controls = DemoControls(_SampleDemo(config), config.experimenter_text)
+    display = controls.garment_display
+    # Drawn at the moments the shot names, not whenever its timer next fires.
+    display.timer.stop()
     yield Shot(
         f"experimenter_{language}_demo_controls",
-        f"The Demo controls window beside a demonstration (docs/LOG.md N7.D23): who presses "
-        f"for the participant and the experimenter, changeable at any time, Skip the wait, "
-        f"and Finish this stage ({language}).",
+        f"The Demo controls window beside a demonstration (docs/LOG.md N7.D23, N7.F12f): what "
+        f"the garment is commanded to do, steady -- every channel's pressure set, channels "
+        f"{', '.join(map(str, SAMPLE_DEMO_CHANNELS_ON))} on -- then who presses for the "
+        f"participant and the experimenter, changeable at any time, Skip the wait, and Finish "
+        f"this stage ({language}).",
+        _grab_dialog(controls),
+    )
+    controls.demo.garment.set_channel(SAMPLE_DEMO_CHANGED, True)
+    changed_s = time.monotonic()
+    display.poll(changed_s)
+    display.poll(changed_s + SAMPLE_DEMO_CHANGED_AGO_S)
+    yield Shot(
+        f"experimenter_{language}_demo_controls_garment_changed",
+        f"The Demo controls' garment display {SAMPLE_DEMO_CHANGED_AGO_S:g} s after channel "
+        f"{SAMPLE_DEMO_CHANGED} was turned on (docs/LOG.md N7.F12f): its row lit and its bar "
+        f"outlined, fading back over demo.garment_highlight_s ({language}).",
         _grab_dialog(controls),
     )
 
