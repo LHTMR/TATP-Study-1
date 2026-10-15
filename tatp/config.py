@@ -272,6 +272,9 @@ class Config:
     experimenter_text: dict
     participant_language: str
     experimenter_language: str
+    # `vas_training_explain` from the experimenter file in the PARTICIPANT's language: the
+    # experimenter says it aloud to the participant (SPEC.md 10.6).
+    vas_training_explain: dict
     open_items: tuple[OpenItem, ...]
     sha256: str
     config_dir: Path
@@ -495,6 +498,9 @@ def load(
         experimenter_text=loaded[TEXT_FILES[("experimenter", experimenter_language)]],
         participant_language=participant_language,
         experimenter_language=experimenter_language,
+        vas_training_explain=loaded[TEXT_FILES[("experimenter", participant_language)]][
+            "vas_training_explain"
+        ],
         open_items=_load_open_items(loaded, config_dir),
         sha256=hash_files(sorted(p for p in config_dir.rglob("*.yaml"))),
         config_dir=config_dir,

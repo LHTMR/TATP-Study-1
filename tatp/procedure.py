@@ -62,7 +62,8 @@ from tatp.units import MS_PER_S
 VAS_TRAINING_SHOWN = "vas_training_shown"
 VAS_TRAINING_EXPLAINED = "vas_training_explained"
 VAS_TRAINING_INSTRUCTION = "vas_training"
-VAS_TRAINING_EXPLAIN = "vas_training_explain"
+# Between the scale's labels where the experimenter is told to read them out.
+ANCHOR_SEPARATOR = " / "
 
 
 class Rig(QObject):
@@ -260,11 +261,16 @@ class Procedure(QObject):
         def show() -> None:
             self.participant.show_vas_training(scale, accepting=False)
             # The proportionality sentence is the experimenter's to say, not the participant's
-            # to read (S's lab-run list, 5 Oct 2026).
-            text = self.experimenter.text
+            # to read (S's lab-run list, 5 Oct 2026). The experimenter cannot see the
+            # participant's screen, so the labels to read out are given too. Both are said to
+            # the participant, so both are in the participant's language.
+            config = self.session.config
+            anchors = sorted(config.participant_text["vas"][scale]["anchors"],
+                             key=lambda anchor: anchor["pct"])
             self.experimenter.set_instruction(
-                text["instructions"][VAS_TRAINING_INSTRUCTION].format(
-                    explanation=text[VAS_TRAINING_EXPLAIN][scale]
+                self.experimenter.text["instructions"][VAS_TRAINING_INSTRUCTION].format(
+                    anchors=ANCHOR_SEPARATOR.join(anchor["label"] for anchor in anchors),
+                    explanation=config.vas_training_explain[scale],
                 )
             )
             self.experimenter.set_status("")
@@ -279,6 +285,15 @@ class Procedure(QObject):
             )
 
         self.await_proceed(explained, show)
+
+    def instruct_with_symbols(self, key: str) -> None:
+        """An instruction that names the remote's buttons by the symbols printed on them
+        (hardware.yaml `responder.button_symbols`): a relabelled remote is a config change."""
+        symbols = self.session.config.hardware["responder"]["button_symbols"]
+        self.experimenter.set_instruction(
+            self.experimenter.text["instructions"][key].format(**symbols)
+        )
+        self.experimenter.refresh()
 
     def wait(self, seconds: float, then: Callable[[], None]) -> None:
         """Session-paced time: scaled by the clock, and restarted if interrupted."""

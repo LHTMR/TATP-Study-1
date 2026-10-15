@@ -334,7 +334,8 @@ def test_the_experimenter_presses_start_when_the_software_waits(rig):
     presses = []
     rig.experimenter.proceed_requested.connect(lambda: presses.append(1))
     experimenter.start()
-    rig.experimenter.set_instruction(rig.experimenter.text["instructions"]["ready"])
+    # Any instruction that waits on Next step; "ready" became one per kind of series.
+    rig.experimenter.set_instruction(rig.experimenter.text["instructions"]["rekindle_remove"])
     _spin(lambda: presses)
     rig.experimenter.set_instruction(rig.experimenter.text["instructions"]["stop_rehearsal"])
     count = len(presses)

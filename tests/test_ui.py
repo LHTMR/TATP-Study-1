@@ -725,6 +725,108 @@ def test_the_interruption_line_fits_its_reserved_height(app, language):
         )
 
 
+class _Filled(dict):
+    """A value for every field an instruction has: two digits, where none is given."""
+
+    def __missing__(self, key):
+        return "00"
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_every_instruction_fits_its_region(app, language):
+    """Each instruction, filled with its longest values, fits the instruction region at some
+    size of the scale rather than running off its bottom (LOG N7.F11b)."""
+    config = cfg.load(language, language)
+    text = config.experimenter_text
+    terms = text["terms"]
+    window = ExperimenterWindow(text, lambda: _all_keys())
+    window.resize(1280, 800)
+    window.show()
+    longest_anchors = max(
+        (scale["anchors"] for scale in config.participant_text["vas"].values()), key=len
+    )
+    values = _Filled(
+        anchors=" / ".join(a["label"] for a in longest_anchors),
+        explanation=max(config.vas_training_explain.values(), key=len),
+        region=max(terms["regions"].values(), key=len),
+        path=max(terms["mapping_paths"].values(), key=len),
+        value=", ".join(terms["stage1"].values()),
+        filament="1.4",
+        ready=text["instructions"]["ready_short"],
+        **config.hardware["responder"]["button_symbols"],
+    )
+    instructions = dict(text["instructions"])
+    # Shown elsewhere, or only inside another: the technique under the instruction, and the
+    # script that precedes the first mapping path.
+    instructions.pop("monofilament")
+    script = instructions.pop("mapping_script")
+    instructions["mapping_ready"] = f"{script}\n\n{instructions['mapping_ready']}"
+    for key, template in instructions.items():
+        window.set_instruction(template.format_map(values))
+        label = window.instruction
+        assert label.heightForWidth(window._left_width()) <= label.height(), (
+            f"instructions.{key} runs past its region in {language}"
+        )
+
+
+def test_a_warning_outlives_the_routine_status_and_one_stage_start(drawn):
+    """15 Oct 2026 pilot review: a warning set as the status was replaced by the next
+    "Waiting for..." within seconds. Several are raised as a stage ends, so one survives the
+    next stage's start and goes at the one after."""
+    window, _ = drawn
+    text = window.text
+    warning = text["warnings"]["substitution_unknown"].format(filament="2")
+    window.set_warning(warning)
+    window.set_status(text["instructions"]["await_participant"])
+    shown = window.status.text()
+    assert warning in shown and text["instructions"]["await_participant"] in shown
+    window.set_status(text["instructions"]["response_received"])
+    assert warning in window.status.text()
+    window.new_stage()
+    assert warning in window.status.text()
+    window.new_stage()
+    assert warning not in window.status.text()
+    assert window.status.text() == text["instructions"]["response_received"]
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_every_warning_the_status_region_carries_fits_it(app, language):
+    """The routine line gives way if both do not fit; the warning itself always fits."""
+    config = cfg.load(language, language)
+    text = config.experimenter_text
+    warnings = text["warnings"]
+    window = ExperimenterWindow(text, lambda: _all_keys())
+    window.resize(1280, 800)
+    window.show()
+    values = _Filled()
+    shown = [warnings[key].format_map(values) for key in (
+        "catch_trials_felt", "masking_at_ceiling", "masking_failed",
+        "masking_failed_after_earplugs", "equalisation_mismatch", "application_cap",
+        "substitution_unknown", "substitution_not_lower", "distance_implausible",
+    )]
+    # The long protocol can raise its two together, as `LongProtocol._warn` joins them.
+    out_of_range = warnings["out_of_range"].format(
+        value=max(text["terms"]["out_of_range"].values(), key=len)
+    )
+    shown.append(f"{out_of_range} {warnings['application_cap'].format_map(values)}")
+    shown.append(text["dialogs"]["fit_rerun_exhausted"])
+    window.set_status(text["instructions"]["await_participant"])
+    for filled in shown:
+        window.set_warning(filled)
+        assert filled in window.status.text()
+        assert window.status.heightForWidth(window._left_width()) <= window.status.height(), (
+            f"{filled!r} runs past the status region in {language}"
+        )
+
+
+def test_a_cleared_warning_leaves_the_status(drawn):
+    window, _ = drawn
+    window.set_status("received")
+    window.set_warning("a warning")
+    window.clear_warning()
+    assert window.status.text() == "received"
+
+
 def test_the_window_fits_the_screenshot_size(drawn):
     """At 1280 x 800 nothing is squeezed below its minimum; the grab would grow otherwise."""
     window, _ = drawn
@@ -882,7 +984,10 @@ def test_the_countdown_states(drawn, event, key):
             phase=window.text["phases"]["rekindle"]
         )
     else:
-        assert window.countdown.text() == status[key].format(block=3)
+        # The block's type too, so the due line says what to get ready (LOG N7.F11b7).
+        assert window.countdown.text() == status[key].format(
+            block=3, type=window.text["terms"]["block_types"]["touch"]
+        )
 
 
 def test_the_countdown_is_redrawn_by_its_timer(app, loaded):

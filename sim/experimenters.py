@@ -52,12 +52,17 @@ NORMAL_DISTANCES_MM = (40.0, 35.0, 45.0, 30.0)
 SCENARIO_ENDED = "validator: the scenario's error path is over"
 # Instructions after which the software waits for Next step.
 PROCEED_INSTRUCTIONS = (
-    "fit_garment", "thermode_start", "capsaicin_apply", "capsaicin_remove",
-    "intervention_start", "thermode_rekindle", "ready", "touchcal_uneven", "earplugs",
+    "capsaicin_apply", "capsaicin_remove", "thermode_rekindle", "rekindle_remove",
+    "touchcal_uneven", "earplugs", "ready_long_first",
 )
-# Templated instructions after which the software waits for Next step. The VAS training: the
-# anchors and proportionality explained aloud, then the go (SPEC.md 10.6).
-PROCEED_TEMPLATES = ("touchcal_gain_undefined", "vas_training")
+# Templated instructions after which the software waits for Next step: the ready line of each
+# kind of series and block, and the VAS training -- the anchors and proportionality explained
+# aloud, then the go (SPEC.md 10.6).
+PROCEED_TEMPLATES = (
+    "fit_garment", "thermode_start", "intervention_start", "touchcal_gain_undefined",
+    "vas_training", "ready_long", "ready_short", "ready_brush", "ready_pinprick_block",
+    "ready_touch_block",
+)
 
 
 def template_pattern(template: str) -> re.Pattern:

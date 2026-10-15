@@ -191,6 +191,15 @@ def finished(app, loaded, tmp_path_factory):
     Only what it wrote: its windows are deleted when the first test using it ends
     (tests/conftest.py)."""
     runner = make_runner(loaded, tmp_path_factory.mktemp("full"))
+    # Every instruction the experimenter was shown, in order, for the tests of what they say.
+    runner.shown_instructions = []
+    real = runner.experimenter.set_instruction
+
+    def spy(text):
+        runner.shown_instructions.append(text)
+        real(text)
+
+    runner.experimenter.set_instruction = spy
     Driver(runner.rig, runner).run()
     return runner
 
@@ -328,7 +337,7 @@ def test_a_touch_block_refuses_to_run_a_scale_never_trained(app, loaded, tmp_pat
     runner = make_runner(loaded, tmp_path)
     try:
         with pytest.raises(AssertionError, match="never trained"):
-            TouchBlock(runner.rig, runner.reference_channel)
+            TouchBlock(runner.rig, runner.reference_channel, 1)
     finally:
         runner.session.close()
 
@@ -342,6 +351,76 @@ def test_the_garment_is_off_for_the_rekindle_and_on_again_after(finished):
     assert off < on
     assert events[off]["phase"] == "rekindle"
     assert names.count("garment_activated") == 2, "at the intervention start and the rekindle"
+
+
+def _shown(finished, key, **values) -> int:
+    """Where the instruction `key` was first shown, in the order the session showed them."""
+    text = finished.experimenter.text["instructions"][key].format(**values)
+    return finished.shown_instructions.index(text)
+
+
+def test_the_rekindle_tells_the_experimenter_each_step(finished):
+    """15 Oct 2026 pilot review: the heat counted down, then the thermode removed with the
+    experimenter's go before the garment's touch starts again (LOG N7.F11b10)."""
+    heat = _shown(finished, "thermode_rekindle")
+    heating = _shown(finished, "rekindle_heating")
+    remove = _shown(finished, "rekindle_remove")
+    restart = finished.shown_instructions.index(
+        finished.experimenter.text["instructions"]["touch_start"], remove
+    )
+    assert heat < heating < remove < restart
+    events = _events(finished.session)
+    presses = [r for r in events if r["event"] == "proceed" and r["phase"] == "rekindle"]
+    assert len(presses) == 2, "the heat started, and the thermode removed"
+    reactivated = next(r for r in events if r["event"] == "garment_reactivated")
+    assert float(presses[-1]["t_session_s"]) <= float(reactivated["t_session_s"])
+
+
+def test_the_heat_and_the_capsaicin_say_what_is_on(finished):
+    assert _shown(finished, "thermode_start", minutes="0.5") < _shown(finished, "heat_on")
+    assert _shown(finished, "capsaicin_apply") < _shown(finished, "capsaicin_on")
+    assert _shown(finished, "capsaicin_on") < _shown(finished, "capsaicin_remove")
+
+
+def test_the_capsaicin_removal_is_logged_by_its_own_name(finished):
+    """The countdown during the capsaicin names its removal, not the phase after it, and the
+    log's scheduled step carries the same name (LOG N7.F11b17)."""
+    started = [r["detail"].split(";")[0] for r in _events(finished.session)
+               if r["event"] == "scheduled_step_started"]
+    assert "capsaicin_removal" in started and "post_sensitisation" not in started
+
+
+def test_each_block_says_what_it_is_before_it_starts(finished):
+    text = finished.experimenter.text
+    region = text["terms"]["regions"]["secondary"]
+    filament = finished.chosen_filament_label_g["post_sensitisation"]
+    n = finished.session.config.study1["pinprick"]["short_protocol_n_trials"]
+    for block in finished.session.schedule.blocks:
+        if block.type == "pinprick":
+            ready = text["instructions"]["ready_short"].format(
+                n=n, filament=filament, region=region
+            )
+            _shown(finished, "ready_pinprick_block", block=block.index, ready=ready)
+        else:
+            _shown(finished, "ready_touch_block", block=block.index)
+
+
+def test_the_first_pain_measure_is_introduced_once(finished):
+    """Before the pain scale's training, what the participant is told (LOG N7.F11b14)."""
+    first = finished.experimenter.text["instructions"]["ready_long_first"]
+    assert finished.shown_instructions.count(first) >= 1
+    training = next(i for i, t in enumerate(finished.shown_instructions)
+                    if finished.experimenter.text["vas_training_explain"]["pain"] in t
+                    or finished.session.config.vas_training_explain["pain"] in t)
+    assert finished.shown_instructions.index(first) < training
+    later = finished.shown_instructions[training:]
+    assert first not in later, "the later long protocols have the ordinary ready line"
+
+
+def test_the_gap_after_a_rating_does_not_leave_the_last_application_up(finished):
+    """LOG N7.F11b8: during the interval the instruction says to wait."""
+    between = finished.experimenter.text["instructions"]["between_applications"]
+    assert between in finished.shown_instructions
 
 
 def test_the_noise_stops_for_each_mapping_and_resumes(finished):

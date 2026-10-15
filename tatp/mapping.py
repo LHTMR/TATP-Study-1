@@ -185,7 +185,7 @@ class MappingLedger(QObject):
             if path in point.starts:
                 self._write_path(phase, point, path)
         if warnings:
-            self.experimenter.set_status(" ".join(warnings))
+            self.experimenter.set_warning(" ".join(warnings))
             self.experimenter.refresh()
         if point.complete and (not point.area_written or corrected):
             self._write_area(phase, point)
@@ -315,12 +315,15 @@ class AreaMapping(Procedure):
 
     def _await_path(self) -> None:
         self.path += 1
+        text = self.experimenter.text["instructions"]
         if self.path > self.n_paths:
+            # The borders are on the skin; what is left is measuring them, whenever convenient.
+            self.experimenter.set_status(text["mapping_distances"])
+            self.experimenter.refresh()
             self.finish(MappingResult(self.session.phase, self.n_paths))
             return
-        text = self.experimenter.text["instructions"]
         ready = text["mapping_ready"].format(
-            path=self.ledger.path_name(self.path), value=self.n_paths
+            index=self.path, count=self.n_paths, path=self.ledger.path_name(self.path)
         )
         # Read aloud before the first path; there is no participant mapping screen.
         instruction = f"{text['mapping_script']}\n\n{ready}" if self.path == 1 else ready
@@ -340,7 +343,8 @@ class AreaMapping(Procedure):
         self.session.log("mapping_path_started", origin="experimenter", detail=self._detail())
         self.experimenter.set_instruction(
             self.experimenter.text["instructions"]["mapping_path"].format(
-                path=self.ledger.path_name(self.path)
+                path=self.ledger.path_name(self.path),
+                step=f"{float(self.mapping['step_size_mm']):g}",
             )
         )
         self.experimenter.refresh()

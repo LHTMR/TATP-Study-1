@@ -86,6 +86,14 @@ OFFSET_KEYS = {
 # The `fit_preview.procedures` entry that names this protocol (SPEC.md 11.1).
 FIT_PREVIEW_KEY = "f40"
 
+# Keys in the experimenter text's `instructions`, not wording.
+BETWEEN_APPLICATIONS = "between_applications"
+READY_LONG = "ready_long"
+READY_LONG_FIRST = "ready_long_first"
+READY_SHORT = "ready_short"
+READY_BRUSH = "ready_brush"
+READY_PINPRICK_BLOCK = "ready_pinprick_block"
+
 # The fit is in log10 force (SPEC.md 8.2), so undoing it is a power of ten. Not a parameter.
 LOG_BASE = 10.0
 
@@ -800,7 +808,9 @@ class PinprickTrial(_RatedTrial):
                 "substitution_unknown", origin="experimenter", severity="warning",
                 detail=f"{label_g} g",
             )
-            self.experimenter.set_status(warnings["substitution_unknown"].format(filament=label_g))
+            self.experimenter.set_warning(
+                warnings["substitution_unknown"].format(filament=label_g)
+            )
             self.experimenter.refresh()
             return
         self.applied_label_g = label_g
@@ -813,7 +823,7 @@ class PinprickTrial(_RatedTrial):
             detail=f"asked {self.application.filament_label_g} g, applied {label_g} g",
         )
         if not lower:
-            self.experimenter.set_status(
+            self.experimenter.set_warning(
                 warnings["substitution_not_lower"].format(filament=label_g)
             )
             self.experimenter.refresh()
@@ -971,10 +981,17 @@ class _Series(Procedure):
 
         def prepare() -> None:
             self.participant.show_blank()
-            self.experimenter.set_instruction(self.experimenter.text["instructions"]["ready"])
+            self.experimenter.set_instruction(self._ready_instruction())
             self.experimenter.refresh()
 
         self.await_proceed(lambda: self.train_then((self.rating_scale(),), then), prepare)
+
+    def _ready_instruction(self) -> str:
+        """What the experimenter is told before the start: what is about to be applied."""
+        raise NotImplementedError
+
+    def _region_name(self) -> str:
+        return self.experimenter.text["terms"]["regions"][self.region]
 
     # -- interruptions ------------------------------------------------------------------
 
@@ -1018,6 +1035,8 @@ class _Series(Procedure):
     def interval(self, table: str, trial: _RatedTrial) -> None:
         """The jittered wait after an application, during which it may be discarded."""
         self._set_discardable((table, trial.cue_onset_iso, trial.trial_index))
+        # The instruction says the response is in, so the status need not.
+        self.experimenter.set_status("")
         self._wait_then_next()
 
     def _wait_then_next(self) -> None:
@@ -1027,6 +1046,12 @@ class _Series(Procedure):
         def begin() -> None:
             # Also what a resume lands on, so the stop screen does not outlast the stop.
             self.participant.show_blank()
+            # The application just rated is done: its prompt and site come down, rather than
+            # reading as still to do through the gap (15 Oct 2026 pilot review).
+            self.experimenter.set_instruction(
+                self.experimenter.text["instructions"][BETWEEN_APPLICATIONS]
+            )
+            self.experimenter.refresh()
             self._after(seconds, self._advance)
 
         self.step(begin)
@@ -1191,6 +1216,16 @@ class LongProtocol(_Series):
         )
         self.wait_to_start(self._next)
 
+    def _ready_instruction(self) -> str:
+        instructions = self.experimenter.text["instructions"]
+        # The session's first pain measure: what is about to happen is said to the participant
+        # first, and the pain scale's training follows the go (SPEC.md 10.6).
+        if self.session.vas_training_due(PAIN_SCALE):
+            return instructions[READY_LONG_FIRST]
+        return instructions[READY_LONG].format(
+            region=self._region_name(), filament=self.prior.start_filament_label_g
+        )
+
     def _next(self) -> None:
         state = self.state
         ceiling = self.cap.ceiling(self.region, self.rotation.n_sites)
@@ -1332,8 +1367,9 @@ class LongProtocol(_Series):
                 "ordinal_consistency_low", severity="warning",
                 detail=f"rho {result.ordinal_rho}, threshold {rho_min}",
             )
-        self.experimenter.set_status(" ".join(warnings))
-        self.experimenter.refresh()
+        if warnings:
+            self.experimenter.set_warning(" ".join(warnings))
+            self.experimenter.refresh()
 
     def _record(self, result: LongResult, superseded: bool, rerun_reason: str) -> None:
         clock = self.session.clock
@@ -1390,7 +1426,9 @@ class LongProtocol(_Series):
                 "fit_rerun_refused", origin="experimenter", severity="warning",
                 detail=f"run {self.run_index}; limit {self.max_reruns}. {reason}",
             )
-            self.experimenter.set_status(self.experimenter.text["dialogs"]["fit_rerun_exhausted"])
+            self.experimenter.set_warning(
+                self.experimenter.text["dialogs"]["fit_rerun_exhausted"]
+            )
             self.experimenter.refresh()
             self._record(result, superseded=False, rerun_reason="")
             self.finish(result)
@@ -1505,7 +1543,11 @@ class ShortProtocol(_RatingSeries):
         region: str,
         filament_label_g: str,
         cap: IntolerableCap,
+        block_index: int | None = None,
     ):
+        """`block_index` names an intervention block in the experimenter's instruction. The
+        session's own `block_index` is not set until the block is launched, by the go this
+        protocol waits for."""
         assert isinstance(cap, IntolerableCap), "the time point's IntolerableCap is required"
         pinprick = rig.session.config.study1["pinprick"]
         super().__init__(
@@ -1519,8 +1561,18 @@ class ShortProtocol(_RatingSeries):
         self.index = ladder_index(self.filaments, filament_label_g)
         self.filament_label_g = filament_label_g
         self.cap = cap
+        self.block_index = block_index
         self.intolerable_vas_pct = float(pinprick["intolerable_vas_pct"])
         self._site = 0
+
+    def _ready_instruction(self) -> str:
+        instructions = self.experimenter.text["instructions"]
+        ready = instructions[READY_SHORT].format(
+            n=self.n_trials, filament=self.filament_label_g, region=self._region_name()
+        )
+        if self.block_index is None:
+            return ready
+        return instructions[READY_PINPRICK_BLOCK].format(block=self.block_index, ready=ready)
 
     def _stimulus(self) -> str:
         return self.filament_label_g
@@ -1581,6 +1633,11 @@ class BrushProtocol(_RatingSeries):
 
     def _stimulus(self) -> str:
         return BRUSH_TABLE
+
+    def _ready_instruction(self) -> str:
+        return self.experimenter.text["instructions"][READY_BRUSH].format(
+            n=self.n_trials, region=self._region_name()
+        )
 
     def rating_scale(self) -> str:
         return self.session.config.study1["brush"]["rating_scale"]

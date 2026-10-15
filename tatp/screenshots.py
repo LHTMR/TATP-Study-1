@@ -100,7 +100,12 @@ SAMPLE_CHANNEL = 2
 # Part-way through the estimation run: ten amplitudes and two catch trials (R32).
 SAMPLE_ANSWERED = 3
 SAMPLE_PRESENTATIONS = 12
+# The channel matched, which of the channels matched it is, and how many there are.
+SAMPLE_MATCH = {"channel": SAMPLE_CHANNEL, "index": 2, "count": 4}
 SAMPLE_PATH = "lateral"
+SAMPLE_STEP_MM = "5"
+SAMPLE_BUTTON_SYMBOLS = {"decrease": "‹", "increase": "›", "confirm": "▶",
+                         "emergency_stop": "!"}
 SAMPLE_DISTANCES = ("42", "37,5")
 SAMPLE_BLOCK = {"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch"}
 SAMPLE_DUE_IN_S = 245.0
@@ -431,8 +436,13 @@ def _experimenter_states(text: dict) -> dict:
         window.set_target("primary", SAMPLE_SITE, filament=True)
         window.set_status(instructions["await_participant"])
 
-    def ready(window):
-        window.set_instruction(instructions["ready"])
+    def instruct(key, **values):
+        return lambda window: window.set_instruction(instructions[key].format(**values))
+
+    # What is up while a block is waited for, and once it is due: the sample block is a touch
+    # block.
+    waiting = instruct("waiting")
+    ready = instruct("ready_touch_block", block=SAMPLE_BLOCK["block_index"])
 
     return {
         "plain": (
@@ -493,7 +503,9 @@ def _experimenter_states(text: dict) -> dict:
             "phase has been mapped.",
             {"phase": "post_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: (
-                window.set_instruction(instructions["mapping_path"].format(path=path)),
+                window.set_instruction(
+                    instructions["mapping_path"].format(path=path, step=SAMPLE_STEP_MM)
+                ),
                 window.set_target("secondary", filament=True),
                 window.set_mapping_phases(["post_sensitisation"]),
             ),
@@ -518,9 +530,10 @@ def _experimenter_states(text: dict) -> dict:
             lambda window: window.set_instruction(instructions["touch_start"]),
         ),
         "countdown": (
-            "Waiting for the next block: 'Next: block 3 (touch) in 04:05', grey.",
+            "Waiting for the next block: 'Next: block 3 (touch) in 04:05', grey, and nothing "
+            "to do meanwhile.",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S, "next_event": upcoming},
-            ready,
+            waiting,
         ),
         "block_due": (
             "The block is due: amber and bold in the same place as the countdown.",
@@ -535,12 +548,13 @@ def _experimenter_states(text: dict) -> dict:
             ready,
         ),
         "rekindle_due": (
-            "The rekindle is due: a timed event that is not a block, named by its phase.",
-            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
+            "The rekindle is due: a timed event that is not a block, named by its phase, and "
+            "the thermode to place.",
+            {"phase": "rekindle", "elapsed_s": SAMPLE_ELAPSED_S,
              "next_event": {"kind": "rekindle", "label_key": "rekindle", "block_index": None,
                             "block_type": None, "due_in_s": SAMPLE_DUE_NOW_S,
                             "overdue": False}},
-            ready,
+            instruct("thermode_rekindle"),
         ),
         "interrupted_emergency_stop": (
             "The participant pressed the stop: the red line under the phase, Resume and "
@@ -553,7 +567,32 @@ def _experimenter_states(text: dict) -> dict:
             "The experimenter's pause: the same line in amber, Resume enabled.",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "pause"},
-            ready,
+            instruct("ready_long", region=text["terms"]["regions"]["secondary"],
+                     filament=filament),
+        ),
+        "status_warning": (
+            "A warning in the status region, in amber, kept apart from the routine status so "
+            "the next 'Waiting for...' does not replace it (15 Oct 2026 pilot review). It goes "
+            "under the routine line; this one is too long for both, so it has the region.",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: (
+                pinprick(window),
+                window.set_warning(text["warnings"]["out_of_range"].format(
+                    value=text["terms"]["out_of_range"]["above"]
+                )),
+            ),
+        ),
+        "first_pain_measures": (
+            "Before the session's first pain measure: what to tell the participant, set down "
+            "the type scale to fit its region.",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
+            instruct("ready_long_first"),
+        ),
+        "fit_garment": (
+            "The first step of a session: the garment, the remote's buttons by their printed "
+            "symbols, the headphones and the cue, then Next step.",
+            {"phase": "setup"},
+            instruct("fit_garment", **SAMPLE_BUTTON_SYMBOLS),
         ),
         "hardware_pressures": (
             "Touch calibration: the hardware panel with every channel's pressure and one "
@@ -561,9 +600,7 @@ def _experimenter_states(text: dict) -> dict:
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA,
                           "faults": [SAMPLE_FAULT]}},
-            lambda window: window.set_instruction(
-                instructions["touchcal_match"].format(channel=SAMPLE_CHANNEL)
-            ),
+            instruct("touchcal_match", **SAMPLE_MATCH),
         ),
         "link_lost": (
             "The prototype sleeve's link lost mid-session (docs/LOG.md N7.U16): shown "
@@ -573,9 +610,7 @@ def _experimenter_states(text: dict) -> dict:
              "garment_connected": False,
              "hardware": {**SAMPLE_HARDWARE, "connected": False, "link_lost": True,
                           "faults": [SAMPLE_FAULT, SAMPLE_LINK_FAULT]}},
-            lambda window: window.set_instruction(
-                instructions["touchcal_match"].format(channel=SAMPLE_CHANNEL)
-            ),
+            instruct("touchcal_match", **SAMPLE_MATCH),
         ),
         "long_instruction": (
             "The longest instruction the session gives, set down the type scale so it fits "

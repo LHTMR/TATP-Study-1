@@ -124,6 +124,30 @@ def test_each_path_is_started_by_the_experimenter_and_every_cue_is_logged(rig, l
     assert rig.participant.message.text == rig.participant.text["screens"]["standby"]
 
 
+def test_the_experimenter_is_told_which_path_and_then_to_measure(rig, ledger, loaded):
+    """LOG N7.F11b11: "Path 2 of 4 (lateral)", where it said "Path lateral of 4", then the
+    distances to measure once the last path is done."""
+    text = rig.experimenter.text
+    mapping = AreaMapping(rig, ledger)
+    mapping.start()
+    ready = text["instructions"]["mapping_ready"].format(
+        index=1, count=4, path=text["terms"]["mapping_paths"]["proximal"]
+    )
+    assert rig.experimenter.instruction.text().endswith(ready)
+    rig.experimenter.proceed_requested.emit()
+    step = f"{loaded.study1['mapping']['step_size_mm']:g}"
+    assert rig.experimenter.instruction.text() == text["instructions"]["mapping_path"].format(
+        path=text["terms"]["mapping_paths"]["proximal"], step=step
+    )
+    rig.experimenter.proceed_requested.emit()
+    assert rig.experimenter.instruction.text() == text["instructions"]["mapping_ready"].format(
+        index=2, count=4, path=text["terms"]["mapping_paths"]["lateral"]
+    )
+    mapping.cancel()
+    _run_paths(rig, ledger)
+    assert rig.experimenter.status.text() == text["instructions"]["mapping_distances"]
+
+
 def test_the_cue_train_stops_itself_at_max_steps(rig, ledger, loaded):
     max_steps = loaded.study1["mapping"]["max_steps"]
     mapping = AreaMapping(rig, ledger)

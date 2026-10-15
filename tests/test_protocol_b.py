@@ -296,6 +296,14 @@ def test_felt_catch_trials_are_flagged(rig):
 def test_a_channel_winning_every_comparison_is_readjusted_then_accepted(rig):
     """docs/research/R33: an order-free winner in both pairs prompts one re-adjustment."""
     session = rig.session
+    shown = []
+    real = rig.experimenter.set_instruction
+
+    def spy(text):
+        shown.append(text)
+        real(text)
+
+    rig.experimenter.set_instruction = spy
 
     def choose(key, trial):
         if key != touchcal.COMPARISON_CHOICE:
@@ -320,6 +328,14 @@ def test_a_channel_winning_every_comparison_is_readjusted_then_accepted(rig):
     ]
     assert len(matches) == 4, "both start points again on re-adjustment"
     assert _events(session, "equalisation_mismatch")
+    # The re-adjustment is step 4's, and says so, rather than showing step 3 again
+    # (LOG N7.F11b6).
+    instructions = rig.experimenter.text["instructions"]
+    readjust = instructions["touchcal_readjust"].format(channel=1)
+    assert shown.count(readjust) == 1
+    assert shown.index(readjust) > shown.index(
+        instructions["touchcal_equalise"].format(channel=1, index=1, count=4)
+    )
 
 
 def test_a_mismatch_that_survives_readjustment_is_logged_and_the_session_goes_on(rig):

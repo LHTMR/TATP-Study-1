@@ -253,7 +253,12 @@ def test_the_run_waits_for_the_experimenter(rig):
     while time.monotonic() < deadline:
         QApplication.processEvents()
     assert rig.participant.stack.currentWidget() is not rig.participant.cue
-    assert rig.experimenter.instruction.text() == rig.experimenter.text["instructions"]["ready"]
+    # The ready line says what is about to be applied, not only "ready" (LOG N7.F11b7).
+    text = rig.experimenter.text
+    assert rig.experimenter.instruction.text() == text["instructions"]["ready_long"].format(
+        region=text["terms"]["regions"][protocol.region],
+        filament=protocol.prior.start_filament_label_g,
+    )
     protocol.cancel()
 
 
