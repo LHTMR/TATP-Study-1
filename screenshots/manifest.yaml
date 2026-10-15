@@ -96,6 +96,9 @@ screens:
     lands, the sound devices, the noise within the participant''s own range with the
     cue and the alert, and each garment channel on and off. Drawn with a sample device
     list and the mock garment (en).'
+  experimenter_en_launcher_hardware_check_channel_on: 'The hardware check with the
+    mock garment connected and channel 2 on: each channel button says on or off, and
+    one that is on is filled (LOG N7.F10b; en).'
   experimenter_en_launcher_instruments: 'Instruments and environment (SPEC.md 8.1),
     at the lab laptop''s size: all twenty filaments in view at once, in two halves,
     each with its label, size and nominal force, a field for the weighing in grams
@@ -232,6 +235,9 @@ screens:
     lands, the sound devices, the noise within the participant''s own range with the
     cue and the alert, and each garment channel on and off. Drawn with a sample device
     list and the mock garment (sv).'
+  experimenter_sv_launcher_hardware_check_channel_on: 'The hardware check with the
+    mock garment connected and channel 2 on: each channel button says on or off, and
+    one that is on is filled (LOG N7.F10b; sv).'
   experimenter_sv_launcher_instruments: 'Instruments and environment (SPEC.md 8.1),
     at the lab laptop''s size: all twenty filaments in view at once, in two halves,
     each with its label, size and nominal force, a field for the weighing in grams

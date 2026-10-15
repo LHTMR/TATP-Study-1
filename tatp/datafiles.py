@@ -269,6 +269,11 @@ class DataFileCollection:
         outstanding = {k: "" for k in self.session_keys if k not in self._session_keys_written}
         if outstanding:
             self.write_session(outstanding)
+        self.retry_pending()
+
+    def retry_pending(self) -> None:
+        """Write whatever a failed write held, and nothing else: no closing keys, so a session
+        left open stays open to a resume (SPEC.md 15)."""
         for table_name, rows in list(self._pending.items()):
             self._pending[table_name] = []
             for row in rows:

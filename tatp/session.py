@@ -369,15 +369,17 @@ class Session:
         origin: str = "software",
         severity: str = "info",
         detail: str = "",
-    ) -> None:
-        """One row in the `log` table. Every event carries its origin (SPEC.md 13)."""
+    ) -> str:
+        """One row in the `log` table. Every event carries its origin (SPEC.md 13). Returns
+        the row's `timestamp_iso`."""
         if origin not in ORIGINS:
             raise SessionError(f"origin {origin!r} is not one of {list(ORIGINS)}")
         if severity not in SEVERITIES:
             raise SessionError(f"severity {severity!r} is not one of {list(SEVERITIES)}")
+        stamp = self.clock.wall_iso()
         self.files.write(
             "log",
-            timestamp_iso=self.clock.wall_iso(),
+            timestamp_iso=stamp,
             t_session_s=self.clock.t_session_s(),
             phase=self.phase,
             block_index=self.block_index,
@@ -386,6 +388,7 @@ class Session:
             severity=severity,
             detail=detail,
         )
+        return stamp
 
     def vas_training_due(self, scale: str) -> bool:
         """Whether `scale`'s proportionality training is still to be given (SPEC.md 10.6)."""

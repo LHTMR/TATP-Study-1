@@ -76,6 +76,7 @@ from tatp.demo import (
 from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
 from tatp.session import DRIVERS, canonical_initials, with_session_choices
+from tatp.session_runner import stop_on_error
 from tatp.ui.application import application, scale_screens
 from tatp.ui.widgets import (
     DISCONNECTED_COLOUR,
@@ -621,6 +622,7 @@ class LauncherWindow(QWidget):
         self.filaments_path = filaments_path
         self.runner = None
         self.designer = None
+        self.error_dialog: MessageDialog | None = None
         # Handed from the instruments entry to the next session start (SPEC.md 8.1).
         self.environment = {"room_temperature_c": None, "relative_humidity_pct": None}
         words = self.text["launcher"]
@@ -736,6 +738,21 @@ class LauncherWindow(QWidget):
         dialog.open()
         return dialog
 
+    def show_error(self, summary: str) -> MessageDialog:
+        """An error nothing caught, with no session open: a Start that failed, say, which
+        otherwise left the launcher as it was with nothing to say why (15 Oct 2026). One at a
+        time: an error that repeats, a timer's, stays on the console rather than stacking
+        dialogs."""
+        if self.error_dialog is not None and self.error_dialog.isVisible():
+            return self.error_dialog
+        dialogs = self.text["dialogs"]
+        self.error_dialog = MessageDialog(
+            dialogs["error"], dialogs["launcher_error"].format(value=summary), dialogs["close"],
+            colour=DISCONNECTED_COLOUR, parent=self,
+        )
+        self.error_dialog.open()
+        return self.error_dialog
+
     def set_environment(self, temperature_c: float | None, humidity_pct: float | None) -> None:
         self.environment["room_temperature_c"] = temperature_c
         self.environment["relative_humidity_pct"] = humidity_pct
@@ -772,7 +789,9 @@ def finish(runner) -> int:
     if runner is None:
         return 0
     # Closing twice is safe, and covers a window shut by hand (run_session.main does the same).
-    runner.session.close()
+    # Not a session an error left open on purpose, to be resumed (`stop_for_error`).
+    if not runner.left_open:
+        runner.session.close()
     return 0 if runner.completed else 1
 
 
@@ -786,6 +805,7 @@ def run_launcher(argv: list[str] | None = None) -> int:
     scale_screens(config.hardware)
     app = QApplication.instance() or application(config.hardware)
     launcher = LauncherWindow(config)
+    stop_on_error(lambda: launcher.runner, launcher.show_error)
     launcher.show()
     app.exec()
     return finish(launcher.runner)

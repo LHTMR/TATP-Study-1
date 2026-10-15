@@ -165,6 +165,18 @@ keystrokes stop bringing their raw reports; from then on the session took every 
 remote (`any_keyboard`'s routing), so the experimenter's keyboard may have acted for the
 participant.
 
+An experimenter's note (§11) is `experimenter_note`, origin `experimenter`, the note in
+`detail`, at any point in the session, interruptions included. **Sessions before 15 October
+2026 have no notes:** the field was never connected to the log, so anything typed into it then
+was lost (docs/LOG.md N7.F10a).
+
+`software_error` (severity `error`, the exception in `detail`) is written when an error nothing
+in the software caught stops the session: the garment goes to zero, the experimenter is told
+(after setup without the exception's text, §16), and the program ends **with the session left
+open, as a crash leaves it**: no `session_end_iso`, no `abort_reason`, and no closing keys. The
+next start therefore offers the resume (§15; docs/LOG.md N7.F10c). `software_error` is the last
+row of such a file.
+
 The garment's own events are logged too, because no command wrote them (§14.2): every
 `garment` table `fault` row is also a `garment_fault` row here (severity `error`, the fault in
 `detail`), and a lost link is a `garment_disconnected` row with `detail` `link lost`, the same

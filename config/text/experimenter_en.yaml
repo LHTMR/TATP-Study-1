@@ -209,6 +209,9 @@ controls:
   skip_calibration: Skip calibration
   # The free-text entries (SPEC.md 8.2, 8.4, 11). None of them ever blocks the session.
   add_note: Add note
+  # DRAFT (LOG N7.F10a): written by the build, not ethics-sourced. Shown in the emptied note
+  # field once the note is written to the log.
+  note_saved: 'Note saved at {time}. Type another here.'
   substitution: Filament applied instead (g)
   record_substitution: Record filament
   distances: 'Mapping distances (mm), measured from the centre of the primary zone:'
@@ -340,6 +343,14 @@ dialogs:
   fit_rerun_exhausted: The re-run limit for this procedure has been reached. This estimate will be used.
   error: Error
   close: Close
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. An error nothing caught,
+  # during setup; on Close the program ends with the session open to a resume.
+  software_error: 'The software hit an error, so the session has been stopped and the garment turned off. Everything recorded so far is saved. The program closes now; start it again and choose Resume the session to carry on. The error: {value}'
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. The same from touch
+  # calibration on, where the error's own text could name a pattern (SPEC.md 16); the log has it.
+  software_error_withheld: 'The software hit an error, so the session has been stopped and the garment turned off. Everything recorded so far is saved. The program closes now; start it again and choose Resume the session to carry on. What the error was is in the session''s log.'
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced. The same, with no session open.
+  launcher_error: 'The software hit an error: {value}. If you were starting a session, check the details and start it again.'
   # Buttons of the resume question.
   resume_yes: Resume the session
   resume_no: Start a new session
@@ -365,6 +376,10 @@ preflight:
   remote_missing: The participant's remote is not plugged in (no keyboard matching {value}). Plug in its receiver, then start again.
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_needs_windows: This computer ({value}) cannot tell the remote from other keyboards. Set responder.key_source to any_keyboard in hardware.yaml, or run the session on the lab PC.
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
+  participant_audio_missing: 'The participant''s headphones cannot be used ({value}). Connect or switch them on, then close and reopen this program: it sees only the devices there were when it opened. Check the hardware lists the sound devices this computer has; audio.participant_device in hardware.yaml names the one used.'
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
+  experimenter_audio_missing: 'The experimenter''s speakers cannot be used ({value}). Connect them, then close and reopen this program: it sees only the devices there were when it opened. Check the hardware lists the sound devices this computer has; audio.experimenter_device in hardware.yaml names the one used.'
 
 zones:
   # Beside the zone diagram (SPEC.md 11): where the current stimulus goes.
@@ -701,7 +716,12 @@ hardware_check:
   connect: Connect
   disconnect: Disconnect
   connecting: 'Connecting to the {garment}…'
-  channel: 'Channel {value}'
+  # DRAFT (LOG N7.F10b): written by the build, not ethics-sourced
+  channels: 'Channels:'
+  # DRAFT (LOG N7.F10b): written by the build, not ethics-sourced
+  channel_on: '{value}: on'
+  # DRAFT (LOG N7.F10b): written by the build, not ethics-sourced
+  channel_off: '{value}: off'
   garment_connected: '{garment}: connected.'
   garment_disconnected: '{garment}: not connected.'
   garment_failed: 'Garment failed: {value}'

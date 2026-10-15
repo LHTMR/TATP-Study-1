@@ -207,6 +207,9 @@ controls:
   skip_calibration: Hoppa över kalibreringen
   # Fritextfälten (SPEC.md 8.2, 8.4, 11). Inget av dem avbryter någonsin sessionen.
   add_note: Lägg till anteckning
+  # DRAFT (LOG N7.F10a): written by the build, not ethics-sourced. Shown in the emptied note
+  # field once the note is written to the log.
+  note_saved: 'Anteckningen sparades {time}. Skriv en ny här.'
   substitution: Filament använt i stället (g)
   record_substitution: Registrera filament
   distances: 'Kartläggningsavstånd (mm), mätta från mitten av den primära zonen:'
@@ -342,6 +345,14 @@ dialogs:
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
   error: Fel
   close: Stäng
+  # DRAFT (LOG N7.F10c): skrivet av bygget, inte från etikansökan. Ett fel som inget fångade,
+  # under förberedelsen; när dialogen stängs avslutas programmet med sessionen öppen att återuppta.
+  software_error: 'Programmet stötte på ett fel, så sessionen har stoppats och plagget stängts av. Allt som registrerats hittills är sparat. Programmet stängs nu; starta det igen och välj Återuppta sessionen för att fortsätta. Felet: {value}'
+  # DRAFT (LOG N7.F10c): skrivet av bygget, inte från etikansökan. Detsamma från
+  # beröringskalibreringen och framåt, där felets egen text kan namnge ett mönster (SPEC.md 16).
+  software_error_withheld: 'Programmet stötte på ett fel, så sessionen har stoppats och plagget stängts av. Allt som registrerats hittills är sparat. Programmet stängs nu; starta det igen och välj Återuppta sessionen för att fortsätta. Vad felet var står i sessionens logg.'
+  # DRAFT (LOG N7.F10c): skrivet av bygget, inte från etikansökan. Detsamma, utan öppen session.
+  launcher_error: 'Programmet stötte på ett fel: {value}. Om du höll på att starta en session, kontrollera uppgifterna och starta den igen.'
   # Knapparna till frågan om att återuppta.
   resume_yes: Återuppta sessionen
   resume_no: Starta en ny session
@@ -367,6 +378,10 @@ preflight:
   remote_missing: Deltagarens fjärrkontroll är inte ansluten (inget tangentbord matchar {value}). Anslut mottagaren och starta igen.
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_needs_windows: Den här datorn ({value}) kan inte skilja fjärrkontrollen från andra tangentbord. Sätt responder.key_source till any_keyboard i hardware.yaml, eller kör sessionen på labbdatorn.
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
+  participant_audio_missing: 'Deltagarens hörlurar kan inte användas ({value}). Anslut eller slå på dem, och stäng sedan programmet och öppna det igen: det ser bara de enheter som fanns när det öppnades. Under Kontrollera utrustningen listas datorns ljudenheter; audio.participant_device i hardware.yaml anger vilken som används.'
+  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
+  experimenter_audio_missing: 'Försöksledarens högtalare kan inte användas ({value}). Anslut dem, och stäng sedan programmet och öppna det igen: det ser bara de enheter som fanns när det öppnades. Under Kontrollera utrustningen listas datorns ljudenheter; audio.experimenter_device i hardware.yaml anger vilken som används.'
 
 zones:
   # Bredvid zondiagrammet (SPEC.md 11): var den aktuella stimuleringen ska ges.
@@ -704,7 +719,12 @@ hardware_check:
   connect: Anslut
   disconnect: Koppla från
   connecting: 'Ansluter till {garment}…'
-  channel: 'Kanal {value}'
+  # DRAFT (LOG N7.F10b): written by the build, not ethics-sourced
+  channels: 'Kanaler:'
+  # DRAFT (LOG N7.F10b): written by the build, not ethics-sourced
+  channel_on: '{value}: på'
+  # DRAFT (LOG N7.F10b): written by the build, not ethics-sourced
+  channel_off: '{value}: av'
   garment_connected: '{garment}: ansluten.'
   garment_disconnected: '{garment}: inte ansluten.'
   garment_failed: 'Plagget misslyckades: {value}'

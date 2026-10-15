@@ -6,6 +6,7 @@ import pytest
 
 from tatp import config as cfg
 from tatp import preflight as pre
+from tatp.audio import SOUNDDEVICE
 from tatp.clock import Clock
 from tatp.remote_keys import RAW_INPUT, with_key_source
 from tatp.session import Session
@@ -161,13 +162,81 @@ def test_raw_input_off_windows_is_refused_before_anything_is_written(config, mon
     ]
 
 
+class _FakeSounddevice:
+    """sounddevice's device matching, with only the devices named here present, and any named
+    in `wrong_rate` present but unable to play at the configured settings."""
+
+    class PortAudioError(Exception):
+        pass
+
+    def __init__(self, *present, wrong_rate=()):
+        self.present = present
+        self.wrong_rate = wrong_rate
+
+    def query_devices(self, device, kind):
+        assert kind == "output"
+        if device not in self.present:
+            raise ValueError(f"No output device matching {device!r}")
+        return {"name": device}
+
+    def check_output_settings(self, device, channels, samplerate):
+        if device in self.wrong_rate:
+            raise self.PortAudioError(f"Invalid sample rate {samplerate} for {device!r}")
+
+
+def _played_through_sounddevice(config):
+    audio = {**config.hardware["audio"], "backend": SOUNDDEVICE,
+             "participant_device": "Bose QC Headphones WASAPI",
+             "experimenter_device": "Speakers Realtek WASAPI"}
+    return cfg.Config(**{**config.__dict__, "hardware": {**config.hardware, "audio": audio}})
+
+
+def test_a_sound_device_that_cannot_be_found_is_refused(config):
+    """The 15 Oct 2026 demo got as far as the masking check, whose noise could not open the
+    headphones; the session then stood still (docs/LOG.md N7.F10c)."""
+    config = _played_through_sounddevice(config)
+    folder = pre.data_folder_for(config)
+    speakers = _FakeSounddevice("Speakers Realtek WASAPI")
+    findings = pre.preflight(config, "01", 1, "SM", folder, sound=lambda: speakers)
+    assert [(f.severity, f.text_key) for f in findings] == [
+        (pre.REFUSE, "preflight.participant_audio_missing")
+    ]
+    assert "Bose QC Headphones" in findings[0].value
+    both = _FakeSounddevice("Bose QC Headphones WASAPI", "Speakers Realtek WASAPI")
+    assert pre.preflight(config, "01", 1, "SM", folder, sound=lambda: both) == []
+    headphones = _FakeSounddevice("Bose QC Headphones WASAPI")
+    assert _keys(pre.preflight(config, "01", 1, "SM", folder, sound=lambda: headphones)) == [
+        "preflight.experimenter_audio_missing"
+    ]
+
+
+def test_a_sound_device_that_cannot_play_the_configured_settings_is_refused(config):
+    """Found by name is not enough: the noise opens at the configured rate and channels, and a
+    device that refuses them fails in the masking check just the same (review of N7.F10c)."""
+    config = _played_through_sounddevice(config)
+    sd = _FakeSounddevice("Bose QC Headphones WASAPI", "Speakers Realtek WASAPI",
+                          wrong_rate=("Bose QC Headphones WASAPI",))
+    findings = pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config),
+                             sound=lambda: sd)
+    assert _keys(findings) == ["preflight.participant_audio_missing"]
+    assert "Invalid sample rate" in findings[0].value
+
+
+def test_the_recording_double_asks_for_no_device(config):
+    def never():
+        raise AssertionError("sounddevice was loaded for a session that plays nothing")
+
+    assert pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config), sound=never) == []
+
+
 def test_every_finding_has_its_text_in_both_languages(loaded):
     english = cfg.load("sv", "en").experimenter_text
     swedish = cfg.load("sv", "sv").experimenter_text
     for key in ("preflight.code_not_allocated", "preflight.session_completed",
                 "preflight.session_aborted_before", "preflight.previous_session_missing",
                 "preflight.another_instance", "preflight.remote_missing",
-                "preflight.remote_needs_windows", "warnings.experimenter_changed"):
+                "preflight.remote_needs_windows", "preflight.participant_audio_missing",
+                "preflight.experimenter_audio_missing", "warnings.experimenter_changed"):
         for text in (english, swedish):
             node = text
             for part in key.split("."):

@@ -45,8 +45,53 @@ from tatp.units import DB_PER_AMPLITUDE_DECADE, DECADE
 CUE_MAX_DBFS = -DB_PER_AMPLITUDE_DECADE * float(np.log10(np.sqrt(2)))
 
 
+SOUNDDEVICE = "sounddevice"
+# The two configured devices, `audio.<role>_device`.
+PARTICIPANT, EXPERIMENTER = DEVICE_ROLES = ("participant", "experimenter")
+# The experimenter alert is a one-dimensional array, which `sd.play` plays as one channel.
+ALERT_CHANNELS = 1
+
+
 class AudioError(Exception):
     """The configured audio output cannot do what was asked. Never worked around."""
+
+
+def query_sounddevice():
+    """PortAudio, loaded only when asked: the tests and the screenshot run never do.
+
+    PortAudio lists the devices once, when it starts, so a headset switched on after the
+    program opened is not seen until it is restarted. It is not re-initialised to see one:
+    that frees every stream PortAudio holds, and sounddevice closes its last `play()` stream
+    again on the next one, which would then touch freed memory (the review of N7.F10c).
+    """
+    import sounddevice
+
+    return sounddevice
+
+
+def resolve_device(sd, audio_config: dict, role: str) -> dict:
+    """The configured output device for `role`, as `SounddeviceOutput` will open it: found by
+    sounddevice's own matching, and able to play at the configured rate and channel count
+    (the noise's own; an alert is one channel). Raises ValueError, or sounddevice's
+    PortAudioError, saying why not."""
+    name = audio_config[f"{role}_device"]
+    found = sd.query_devices(name, "output")
+    channels = int(audio_config["output_channels"]) if role == PARTICIPANT else ALERT_CHANNELS
+    sd.check_output_settings(device=name, channels=channels,
+                             samplerate=int(audio_config["sample_rate_hz"]))
+    return found
+
+
+def unresolved_devices(audio_config: dict, sd) -> dict[str, str]:
+    """Each configured output device that cannot be opened (`resolve_device`), by role, with
+    why."""
+    unresolved = {}
+    for role in DEVICE_ROLES:
+        try:
+            resolve_device(sd, audio_config, role)
+        except (ValueError, sd.PortAudioError) as error:
+            unresolved[role] = str(error)
+    return unresolved
 
 
 def amplitude(level_dbfs: float) -> float:
@@ -190,7 +235,7 @@ class SounddeviceOutput(AudioOutput):
 
 
 BACKENDS: dict[str, type[AudioOutput]] = {
-    "sounddevice": SounddeviceOutput,
+    SOUNDDEVICE: SounddeviceOutput,
     "recording": RecordingOutput,
 }
 

@@ -633,6 +633,11 @@ class ExperimenterWindow(QWidget):
             self.note_entered.emit(note)
             self.note.clear()
 
+    def confirm_note(self, time_text: str) -> None:
+        """The note is in the log. Said in the emptied field, where the eye already is, so
+        nothing on the screen moves (S, 15 Oct 2026 pilot)."""
+        self.note.setPlaceholderText(self.text["controls"]["note_saved"].format(time=time_text))
+
     def _enter_substitution(self) -> None:
         filament = self.substitution.text().strip()
         if filament:

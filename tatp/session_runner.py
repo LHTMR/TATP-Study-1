@@ -42,6 +42,8 @@ screen in every condition. Nothing else here depends on the condition.
 from __future__ import annotations
 
 import random
+import sys
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -50,6 +52,8 @@ from PySide6.QtWidgets import QApplication
 
 from tatp import pinprick
 from tatp import resume as resumption
+from tatp.clock import time_of
+from tatp.interruption import PAUSED_SCREEN
 from tatp.mapping import AreaMapping, MappingLedger
 from tatp.pinprick import (
     BrushProtocol,
@@ -93,6 +97,10 @@ POST_I = "post_intervention"
 MAPPED = (POST_S, POST_I)
 # The one condition the participant starts themselves (SPEC.md 12.3).
 SELF_STARTED = "participant_preferred"
+# The `log` event an experimenter's note is written as (docs/DATA_SCHEMA.md).
+NOTE_EVENT = "experimenter_note"
+# The `log` event of an error nothing caught (`stop_on_error`).
+SOFTWARE_ERROR_EVENT = "software_error"
 # `Session.set_upcoming` kinds.
 BLOCK, PHASE = "block", "phase"
 FIRST_SESSION = 1
@@ -318,8 +326,14 @@ class SessionRunner(Procedure):
         self._touch_after_block = False
         # Set for a session resumed after its rekindle heat was launched (LOG N7.D14).
         self._resumed_heat_t_s: float | None = None
+        self._stopping_for_error = False
+        # Set when an error ended the program with the session open (`_leave_open`): nothing
+        # afterwards may close it, or it could not be resumed.
+        self.left_open = False
 
         self.experimenter.abort_requested.connect(self.abort)
+        # For the whole session, interruptions included (SPEC.md 11, 13).
+        self.experimenter.note_entered.connect(self._note)
         # Connected here, before `start` connects the procedure's own handlers, so a pending
         # delivery is cancelled and restarted before any step repeats.
         self.rig.interruptions.interrupted.connect(self._delivery_interrupted)
@@ -908,6 +922,65 @@ class SessionRunner(Procedure):
         self.finish(None)
         self._close("")
 
+    def _note(self, note: str) -> None:
+        """SPEC.md 11's timestamped note: written, then confirmed with the time it was written,
+        so a note the experimenter sees confirmed is one that is in the log."""
+        stamp = self.session.log(NOTE_EVENT, origin="experimenter", detail=note)
+        self.experimenter.confirm_note(time_of(stamp))
+
+    def stop_for_error(self, summary: str) -> None:
+        """An error nothing caught, in a session still open (`stop_on_error`).
+
+        Qt keeps its event loop running past an exception in a slot, so without this the
+        session stood still with nothing on either screen to say why (the masking check, 15
+        Oct 2026). Everything that could move the session on is cancelled first, so nothing
+        runs under the dialog's own event loop; then the error is logged, the garment goes to
+        zero and the experimenter is told. The session is then **left open, as a crash leaves
+        it** (`_leave_open`), not aborted: an abort writes `session_end_iso`, and a session with
+        one is never offered for resume, so the next start would have begun again from setup
+        with a new t=0 (spec-review of N7.F10c). That happens whatever goes wrong on the way, so
+        an error in here cannot leave the session standing.
+
+        From touch calibration on the experimenter is told that there was an error but not
+        what it was: an exception's text can name a pattern or a condition (SPEC.md 16). The
+        log has it.
+        """
+        # A timer the error left behind can still raise under the dialog. That one is on the
+        # console; the session is already being stopped.
+        if self._stopping_for_error:
+            return
+        self._stopping_for_error = True
+        try:
+            self.cancel()
+            self.rig.interruptions.cancel_resume()
+            self.session.log(SOFTWARE_ERROR_EVENT, severity="error", detail=summary)
+            if self.session.garment.connected:
+                self.session.garment.stop()
+            self.participant.show_message(PAUSED_SCREEN)
+            dialogs = self.experimenter.text["dialogs"]
+            if self.session.phase == SETUP:
+                message = dialogs["software_error"].format(value=summary)
+            else:
+                message = dialogs["software_error_withheld"]
+            self.experimenter.error_dialog(message).exec()
+        finally:
+            self._leave_open()
+
+    def _leave_open(self) -> None:
+        """End the program as a crash would, with the session still open to a resume (SPEC.md
+        15): every row already written stays, a row a failed write held is retried, and the
+        closing keys are not written. The garment and the sound are let go."""
+        self.left_open = True
+        self._clear_alarms()
+        self.session.files.retry_pending()
+        if self.session.garment.connected:
+            self.session.garment.stop()
+            self.session.garment.disconnect()
+        self.session.audio.close()
+        if self.lock is not None:
+            self.lock.release()
+        QApplication.instance().quit()
+
     def abort(self, reason: str) -> None:
         """The experimenter's abort (SPEC.md 11). Everything collected so far is kept."""
         self.cancel()
@@ -1102,3 +1175,26 @@ class SessionRunner(Procedure):
             self._deliver(lambda: self._run_stage(index))
         else:
             self._run_stage(index)
+
+
+def stop_on_error(runner_of: Callable[[], SessionRunner | None],
+                  elsewhere: Callable[[str], None]) -> None:
+    """Make an error nothing caught stop the session, visibly (`SessionRunner.stop_for_error`).
+
+    Installed by `run_session.main` and the launcher, never by the tests or the validator,
+    which have their own. The traceback still goes to the console first. `runner_of` gives the
+    session running now, if any; with none open, `elsewhere` is told the error instead -- the
+    launcher's own window, where a Start that failed would otherwise do nothing visible.
+    """
+    previous = sys.excepthook
+
+    def hook(kind, error, trace) -> None:
+        previous(kind, error, trace)
+        summary = "".join(traceback.format_exception_only(kind, error)).strip()
+        runner = runner_of()
+        if runner is not None and not runner.session.closed:
+            runner.stop_for_error(summary)
+        else:
+            elsewhere(summary)
+
+    sys.excepthook = hook

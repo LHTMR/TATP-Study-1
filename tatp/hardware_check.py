@@ -41,7 +41,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from tatp.audio import Audio, AudioError
+from tatp.audio import (
+    DEVICE_ROLES,
+    SOUNDDEVICE,
+    Audio,
+    AudioError,
+    query_sounddevice,
+    resolve_device,
+)
 from tatp.clock import Clock
 from tatp.garment.base import GarmentController, GarmentError, Limits
 from tatp.remote_keys import (
@@ -87,27 +94,19 @@ PARTICIPANT = "participant"
 EXPERIMENTER = "experimenter"
 
 
-def query_sounddevice():
-    """PortAudio, loaded only when the check asks: the tests and the screenshot run never do."""
-    import sounddevice
-
-    return sounddevice
-
-
 def device_lines(audio_config: dict, words: dict, sd) -> tuple[list[str], str]:
-    """Each configured output device resolved by name, or why not; and every output device.
+    """Each configured output device resolved, or why not; and every output device.
 
-    Resolved exactly as `SounddeviceOutput` will resolve it, by sounddevice's own matching, so
-    a name that works here works in the session.
+    Resolved as preflight resolves it (`tatp.audio.resolve_device`), so a device that works
+    here is one a session will start with.
     """
     hostapis = [api["name"] for api in sd.query_hostapis()]
     lines = []
-    for role in (PARTICIPANT, EXPERIMENTER):
-        name = audio_config[f"{role}_device"]
+    for role in DEVICE_ROLES:
         role_words = words[f"role_{role}_audio"]
         try:
-            found = sd.query_devices(name, "output")
-        except ValueError as error:
+            found = resolve_device(sd, audio_config, role)
+        except (ValueError, sd.PortAudioError) as error:
             lines.append(words["device_missing"].format(role=role_words, value=error))
             continue
         lines.append(words["device_found"].format(
@@ -313,7 +312,7 @@ class HardwareCheckDialog(QDialog):
             self.device_list.fontMetrics().lineSpacing() * (DEVICE_LIST_LINES + 1)
         )
         self.audio_errors = AUDIO_ERRORS
-        if self.audio.backend_name == "sounddevice":
+        if self.audio.backend_name == SOUNDDEVICE:
             sd = self._sound()
             self.audio_errors = (*AUDIO_ERRORS, sd.PortAudioError)
             lines, available = device_lines(self.hardware["audio"], self.words, sd)
@@ -361,9 +360,14 @@ class HardwareCheckDialog(QDialog):
         self.channel_buttons: dict[int, QPushButton] = {}
         channels = QHBoxLayout()
         channels.setSpacing(ITEM_GAP_PX)
+        # Named once here, so each button has room to say on or off and the dialog still fits
+        # the laptop's 1280 px (docs/LOG.md N7.U10).
+        named = label(SIZE_SMALL, colour=SECONDARY)
+        named.setText(self.words["channels"])
+        channels.addWidget(named)
         n_channels = max(driver.n_channels for driver in DRIVERS.values())
         for channel in range(1, n_channels + 1):
-            made = button(self.words["channel"].format(value=channel))
+            made = button("")
             made.setCheckable(True)
             made.setEnabled(False)
             made.toggled.connect(lambda on, channel=channel: self.set_channel(channel, on))
@@ -511,10 +515,14 @@ class HardwareCheckDialog(QDialog):
     def _show_garment(self, problem: str | None = None) -> None:
         connected = self.garment is not None and self.garment.connected
         channels = self.garment.channels() if connected else ()
+        channels_on = self.garment.status()["channels_on"] if connected else ()
         for channel, made in self.channel_buttons.items():
+            on = channel in channels_on
             made.blockSignals(True)
-            made.setChecked(connected and channel in self.garment.status()["channels_on"])
+            made.setChecked(on)
             made.blockSignals(False)
+            state = "channel_on" if on else "channel_off"
+            made.setText(self.words[state].format(value=channel))
             made.setEnabled(channel in channels)
         self.garment_choice.setEnabled(not connected)
         self.connect_button.setText(self.words["disconnect" if connected else "connect"])

@@ -4,7 +4,8 @@
 
 - **Refused:** a session that has already been completed; a participant code the allocation
   file does not have; a second instance while one is running from the same data folder; the
-  remote not plugged in, when the session tells it from other keyboards (`raw_input`).
+  remote not plugged in, when the session tells it from other keyboards (`raw_input`); a
+  configured sound device that cannot be found, when the session plays through sounddevice.
 - **Warned, and allowed:** session N when session N-1 has no data; initials that differ from
   the participant's earlier sessions (SPEC.md 11); a session that was started and aborted
   before. A warning is the experimenter's to read, and the deviation lands in the data.
@@ -25,6 +26,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from tatp import allocation as alloc
+from tatp.audio import SOUNDDEVICE, query_sounddevice, unresolved_devices
 from tatp.config import REPO_ROOT, Config
 from tatp.remote_keys import (
     KEY_SOURCES,
@@ -124,8 +126,10 @@ def preflight(
     session_number: int,
     initials: str,
     data_folder: Path,
+    sound=query_sounddevice,
 ) -> list[Finding]:
-    """Every reason not to start, or to start with a warning. Writes nothing."""
+    """Every reason not to start, or to start with a warning. Writes nothing. `sound` loads
+    sounddevice, asked only when the session will play through it."""
     findings: list[Finding] = []
     design = config.study1["design"]
     path = Path(design["allocation_file"])
@@ -187,6 +191,13 @@ def preflight(
             findings.append(
                 Finding(REFUSE, "preflight.remote_missing", responder["device_match"])
             )
+
+    # A device that cannot be opened is otherwise found only when the masking check starts the
+    # noise, and the session then stood still with nothing on either screen (15 Oct 2026).
+    audio = config.hardware["audio"]
+    if audio["backend"] == SOUNDDEVICE:
+        for role, why in unresolved_devices(audio, sound()).items():
+            findings.append(Finding(REFUSE, f"preflight.{role}_audio_missing", why))
     return findings
 
 
