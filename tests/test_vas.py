@@ -8,16 +8,25 @@ from __future__ import annotations
 
 import shutil
 
+import numpy as np
 import pytest
 import yaml
 from PySide6.QtCore import QEvent, QRect, Qt
-from PySide6.QtGui import QFont, QFontMetrics, QImage, QKeyEvent, QPainter
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QKeyEvent, QPainter
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
 from tatp.clock import Clock
 from tatp.responder import Action, Responder
 from tatp.ui import vas as vas_module
+from tatp.ui.participant import (
+    ADJUST_CONFIRM_Y_FRACTION,
+    BUTTON_LABEL_POINT_SIZE,
+    BUTTON_LABEL_WIDTH_FRACTION,
+    BUTTON_Y_FRACTION,
+    MESSAGE_POINT_SIZE,
+    _MessageScreen,
+)
 from tatp.ui.vas import (
     ANCHOR_POINT_SIZE,
     INTRODUCTION_POINT_SIZE,
@@ -28,10 +37,13 @@ from tatp.ui.vas import (
     MARKER_HEIGHT_PX,
     QT_KEYS,
     QUESTION_POINT_SIZE,
+    QUESTION_Y_FRACTION,
+    SIDE_MARGIN_FRACTION,
     STUDY_LAYOUT,
     TEXT_TO_SCALE_GAP_PX,
     TICK_RISE_PX,
     TICK_WIDTH_PX,
+    TRAINING_Y_FRACTION,
     VasState,
     VasWidget,
 )
@@ -579,21 +591,42 @@ def test_the_widget_renders_headless(widget):
 # -- the play symbol in participant text (S, lab run 5 Oct 2026) ----------------------------
 
 
-def _prose_image(text: str, symbol: str) -> QImage:
-    image = QImage(1280, 800, QImage.Format_ARGB32)
+# Each (point size, box width as a fraction of the screen's width, box top as a fraction of its
+# height) a participant screen draws text with: the message and question text, the adjustment's
+# confirm sentence, a drawn button's label, an RSQ introduction, the training sentence.
+PROSE_PLACES = (
+    (MESSAGE_POINT_SIZE, 1 - 2 * SIDE_MARGIN_FRACTION, QUESTION_Y_FRACTION),
+    (MESSAGE_POINT_SIZE, 1 - 2 * SIDE_MARGIN_FRACTION, ADJUST_CONFIRM_Y_FRACTION),
+    (BUTTON_LABEL_POINT_SIZE, BUTTON_LABEL_WIDTH_FRACTION, BUTTON_Y_FRACTION),
+    (INTRODUCTION_POINT_SIZE, 1 - 2 * SIDE_MARGIN_FRACTION, QUESTION_Y_FRACTION),
+    (QUESTION_POINT_SIZE, 1 - 2 * SIDE_MARGIN_FRACTION, TRAINING_Y_FRACTION),
+)
+# The lab window at 100 %, and the lab laptop's 1920 x 1080 panel at 150 %, whose fractional
+# metrics are where a layout that only approximates `drawText`'s rounding would show.
+PROSE_SCREENS = ((1280, 800, 1.0), (1920, 1080, 1.0), (1280, 720, 1.5))
+
+
+def _render(draw, box: QRect, point_size: int, ratio: float) -> QImage:
+    image = QImage(
+        round(box.width() * ratio), round(box.height() * ratio), QImage.Format_ARGB32
+    )
+    image.setDevicePixelRatio(ratio)
     image.fill(vas_module.BACKGROUND)
     painter = QPainter(image)
     font = QFont()
-    font.setPointSize(QUESTION_POINT_SIZE)
+    font.setPointSize(point_size)
     painter.setFont(font)
     painter.setPen(vas_module.FOREGROUND)
-    vas_module.draw_prose(painter, QRect(150, 240, 980, 560), text, symbol)
+    draw(painter)
     painter.end()
     return image
 
 
-def _colours(image: QImage) -> set[int]:
-    return {image.pixel(x, y) for y in range(image.height()) for x in range(image.width())}
+def _pixels(image: QImage) -> np.ndarray:
+    """BGRA as one array, copied out of the image in one go rather than read pixel by pixel."""
+    data = np.frombuffer(image.constBits(), dtype=np.uint8, count=image.sizeInBytes())
+    rows = data.reshape(image.height(), image.bytesPerLine() // 4, 4)
+    return rows[:, : image.width()].copy()
 
 
 def _participant_texts(node):
@@ -604,31 +637,87 @@ def _participant_texts(node):
             yield from _participant_texts(value)
 
 
-def test_the_play_symbol_is_drawn_in_its_colour_and_nothing_else_is(app, loaded):
-    symbol = Responder(loaded.hardware).symbol_for(Action.CONFIRM)
-    blue = vas_module.PLAY_SYMBOL_COLOUR.rgba()
-    assert blue in _colours(_prose_image(f"Press {symbol} to continue.", symbol))
-    assert blue not in _colours(_prose_image("Press the button to continue.", symbol))
+def _prose_cases(language: str):
+    path = cfg.CONFIG_DIR / "text" / f"participant_{language}.yaml"
+    texts = sorted(set(_participant_texts(yaml.safe_load(path.read_text(encoding="utf-8")))))
+    for width_px, height_px, ratio in PROSE_SCREENS:
+        for point_size, width_fraction, top_fraction in PROSE_PLACES:
+            top = int(height_px * top_fraction)
+            box = QRect(0, 0, int(width_px * width_fraction), height_px - top)
+            for text in texts:
+                yield text, box, point_size, ratio
+
+
+def _drawtext_and_prose(responder, text, box, point_size, ratio) -> tuple[QImage, QImage]:
+    plain = _render(lambda p: p.drawText(box, vas_module.PROSE_FLAGS, text),
+                    box, point_size, ratio)
+    prose = _render(lambda p: vas_module.draw_prose(p, box, text, responder),
+                    box, point_size, ratio)
+    return plain, prose
 
 
 @pytest.mark.parametrize("language", ["sv", "en"])
-def test_colouring_the_play_symbol_moves_no_text(app, loaded, monkeypatch, language):
-    """Every participant string naming ▶ lays out exactly as `drawText` would: the screens'
-    clearance checks measure with `boundingRect`, which knows only `drawText`'s layout."""
-    symbol = Responder(loaded.hardware).symbol_for(Action.CONFIRM)
-    path = cfg.CONFIG_DIR / "text" / f"participant_{language}.yaml"
-    texts = [t for t in _participant_texts(yaml.safe_load(path.read_text(encoding="utf-8")))
-             if symbol in t]
-    assert texts, f"no participant text names {symbol}"
-    monkeypatch.setattr(vas_module, "PLAY_SYMBOL_COLOUR", vas_module.FOREGROUND)
-    for text in texts:
-        plain = QImage(1280, 800, QImage.Format_ARGB32)
-        plain.fill(vas_module.BACKGROUND)
-        painter = QPainter(plain)
-        font = QFont()
-        font.setPointSize(QUESTION_POINT_SIZE)
-        painter.setFont(font)
-        painter.setPen(vas_module.FOREGROUND)
-        painter.drawText(QRect(150, 240, 980, 560), vas_module.PROSE_FLAGS, text)
-        painter.end()
-        assert _prose_image(text, symbol) == plain, text
+def test_participant_text_is_laid_out_exactly_as_drawtext_would(app, loaded, language):
+    """Every participant string, wherever a screen draws it: the screens' clearance checks
+    measure with `boundingRect`, which knows only `drawText`'s layout. With the symbol's colour
+    set to the text's, the two must be the same image."""
+    responder = Responder(loaded.hardware)
+    responder.confirm_colour = vas_module.FOREGROUND.name()
+    for case in _prose_cases(language):
+        plain, prose = _drawtext_and_prose(responder, *case)
+        assert prose == plain, case
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_only_the_play_symbol_changes_colour(app, loaded, language):
+    responder = Responder(loaded.hardware)
+    symbol = responder.symbol_for(Action.CONFIRM)
+    named = 0
+    for case in _prose_cases(language):
+        plain_image, prose_image = _drawtext_and_prose(responder, *case)
+        if symbol not in case[0]:
+            assert prose_image == plain_image, case
+            continue
+        named += 1
+        plain, prose = _pixels(plain_image), _pixels(prose_image)
+        changed = (plain != prose).any(axis=2)
+        assert changed.any(), case
+        # The grey text has equal channels; only the blue glyph tints a pixel blue.
+        blue, red = prose[..., 0], prose[..., 2]
+        assert (blue[changed] > red[changed]).all(), case
+    assert named, f"no participant text names {symbol}"
+
+
+def test_a_message_screen_colours_the_symbol_from_its_first_paint(app, loaded):
+    """No state in which the screen exists but does not yet know the symbol: Qt swallows an
+    exception raised in a paint handler and leaves the participant a blank screen."""
+    responder = Responder(loaded.hardware)
+    screen = _MessageScreen(responder)
+    screen.resize(1280, 800)
+    screen.text = f"Press {responder.symbol_for(Action.CONFIRM)} to continue."
+    pixels = _pixels(screen.grab().toImage().convertToFormat(QImage.Format_ARGB32))
+    blue = QColor(responder.confirm_colour)
+    assert ((pixels[..., 0] == blue.blue()) & (pixels[..., 1] == blue.green())
+            & (pixels[..., 2] == blue.red())).any()
+    screen.deleteLater()
+
+
+def test_prose_is_clipped_to_its_box_as_drawtext_is(app, loaded):
+    """Text that overflows its box must not paint over what is below it -- the VAS line, the
+    anchors. `drawText` clips at the box and stops laying lines out past it."""
+    responder = Responder(loaded.hardware)
+    responder.confirm_colour = vas_module.FOREGROUND.name()
+    symbol = responder.symbol_for(Action.CONFIRM)
+    text = "\n".join(f"Line {n}: press {symbol}." for n in range(8))
+    box = QRect(0, 0, 400, 120)
+    tall = QRect(0, 0, 400, 600)
+
+    def inside(draw):
+        return _render(draw, tall, QUESTION_POINT_SIZE, 1.0)
+
+    plain = inside(lambda p: p.drawText(box, vas_module.PROSE_FLAGS, text))
+    prose = inside(lambda p: vas_module.draw_prose(p, box, text, responder))
+    empty = inside(lambda p: None)
+    below = _pixels(prose)[box.bottom() + 1:]
+    assert (below == _pixels(empty)[box.bottom() + 1:]).all(), "drawn past the box"
+    assert prose == plain

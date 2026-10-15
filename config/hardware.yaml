@@ -95,9 +95,13 @@ responder:
     # outline triangle, which the wording's "▶" approximates (docs/LOG.md N5.11).
     emergency_stop: "!"
   # For a button whose printed symbol is coloured: the symbol's colour, and the filled disc it
-  # sits on. Only the stop is drawn with one. The yellow is matched by eye to the photo.
+  # sits on. Only the stop is drawn with a disc. The yellow is matched by eye to the photo.
   button_symbol_colours:
     emergency_stop: "#141414"
+    # The play button's "▶" wherever participant text names it, in the blue of its sticker's
+    # disc (S, lab run 5 Oct 2026), the same blue as the experimenter screen's TARGET_COLOUR.
+    # The participant's text only; the experimenter's buttons stay plain.
+    confirm: "#4fa3e0"
   button_symbol_discs:
     emergency_stop: "#f2b21b"
   emergency_stop_symbol_confirmed: 2026-09-25   # closes local item L12
