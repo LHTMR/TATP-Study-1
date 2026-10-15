@@ -86,12 +86,15 @@ screens:
   # not re-explain the study -- it explains the buttons.
   # DRAFT (LOG N7.F11c2): written by the build, not ethics-sourced. The line about the white
   # circle is new (15 Oct 2026 pilot review): the warning cue precedes every stimulus and was
-  # never explained. It describes the cue as drawn, a filled near-white disc on the dark screen.
+  # never explained. It describes the cue as drawn, a filled near-white disc on the dark screen,
+  # and says only that it marks a start: not that something will be felt after it, because the
+  # estimation run cues its zero-pressure catch trials too, and a promised touch would prime
+  # reports on exactly the trials that measure false reports.
   welcome: |-
     Welcome.
     The two large buttons move the marker along the line.
     ▶ confirms your answer.
-    A white circle on the screen means something is about to start.
+    A white circle on the screen marks the start of each step.
     There are no right answers — mark what you feel. The experimenter does not see your answers.
 
     Press ▶ to begin.
@@ -135,13 +138,15 @@ screens:
     It works at any time.
 
     Press ▶ to continue.
-  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  # The task introductions (LOG N7.F11c1), the build's drafts of 15 Oct 2026 and not part of
+  # the 23 Aug 2026 approval above; each is marked DRAFT on its own key.
   # One before each new kind of task in touch calibration and before the baseline ratings
   # (15 Oct 2026 pilot review: seven tasks ran back to back with nothing saying the task had
   # changed). The same in every session and condition. Nothing about how strong any touch will
   # be: the estimation run's catch trials must stay unannounced.
   # `intro_bracket` names the anchors in the order `touch_calibration.anchor_prompt_keys` asks
   # for them, which a test holds it to.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_bracket: |-
     Next you set how strong the touch is, with the two large buttons.
     First until it is just noticeable, then until it is just uncomfortable.
@@ -151,26 +156,31 @@ screens:
   # pressure (catch trials), and saying each is a touch to be felt would prime a report of one,
   # which is what `catch_felt_fraction` measures. The scale's own question and its "no sensation
   # at all" anchor then let an empty period be rated as it is felt.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_estimation: |-
     Next comes a series of short periods, one at a time.
     Rate each one on the line.
 
     Press ▶ to start.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_match: |-
     Next, two touches take turns in two places on your arm.
     Set the second so that it feels as strong as the first.
 
     Press ▶ to start.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_compare: |-
     Next you will feel two touches, one after the other, and choose which felt stronger.
 
     Press ▶ to start.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_pleasant: |-
     Next the touch moves along your arm.
     Set it so that it feels as pleasant as possible.
 
     Press ▶ to start.
   # No count: `touch_block.baseline_scales` says how many.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_baseline: |-
     Next, some questions about how you feel right now.
 

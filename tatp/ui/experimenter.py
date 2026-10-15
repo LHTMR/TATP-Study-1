@@ -197,7 +197,7 @@ class ExperimenterWindow(QWidget):
 
         # What the running procedure is waiting for, beyond what the view says (SPEC.md 11).
         self._awaiting = {"rebalance": False, "fit_decision": False, "discard": False,
-                          "skip_calibration": False}
+                          "skip_calibration": False, "closed": False}
         self._interruption: str | None = None
         self._connected = False
         self._mapping_phases: list[str] = []
@@ -511,6 +511,7 @@ class ExperimenterWindow(QWidget):
         fit_decision: bool | None = None,
         discard: bool | None = None,
         skip_calibration: bool | None = None,
+        closed: bool | None = None,
     ) -> None:
         """What the running procedure waits for (SPEC.md 9, 11, 11.1). None leaves it as is.
 
@@ -518,8 +519,12 @@ class ExperimenterWindow(QWidget):
         `discard` enables Discard and repeat. All are otherwise disabled, because a control that
         does nothing when pressed is one the experimenter learns to distrust (UI_PRINCIPLES.md
         5.1). `skip_calibration` shows Skip calibration, which exists only on a pilot rig, so
-        it is hidden rather than disabled when not offered.
+        it is hidden rather than disabled when not offered. `closed` is the session closed and
+        its files written (docs/LOG.md N7.F11c9): nothing is left to pause, and the garment,
+        disconnected by the close, is not to be connected again.
         """
+        if closed is not None:
+            self._awaiting["closed"] = bool(closed)
         if rebalance is not None:
             self._awaiting["rebalance"] = bool(rebalance)
         if fit_decision is not None:
@@ -855,7 +860,8 @@ class ExperimenterWindow(QWidget):
         """
         running = self._interruption is None
         self.proceed_button.setEnabled(running)
-        self.pause_button.setEnabled(running)
+        self.pause_button.setEnabled(running and not self._awaiting["closed"])
+        self.garment_button.setEnabled(not self._awaiting["closed"])
         self.resume_button.setEnabled(not running)
         self.discard_button.setEnabled(running and self._awaiting["discard"])
         self.rebalance_button.setEnabled(running and self._awaiting["rebalance"])

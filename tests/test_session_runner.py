@@ -1049,6 +1049,9 @@ def test_the_session_ends_on_the_experimenters_last_next_step(app, loaded, tmp_p
     assert runner.experimenter.instruction.text() == (
         runner.experimenter.text["instructions"]["session_complete"]
     )
+    window = runner.experimenter
+    assert not window.garment_button.isEnabled() and not window.pause_button.isEnabled()
+    assert window.proceed_button.isEnabled()
     rows = len(_events(session))
     # Nothing is running to stop, and the files take no more rows.
     participant.emergency_stop.emit()
@@ -1102,10 +1105,13 @@ def _pending_delivery_runner(loaded, tmp_path, condition):
 
 @pytest.mark.parametrize("condition", ["participant_preferred", "ct_targeted"])
 def test_a_resume_while_a_delivery_is_starting_never_leaves_the_paused_screen_up(
-        app, loaded, tmp_path, condition):
+        app, loaded, tmp_path, monkeypatch, condition):
     """A pause while a block waits for its go and the touch is still starting: the resume
     starts the delivery again, ramping, which shows nothing of its own -- so the block's wait
-    puts standby up rather than leave the paused screen (N7.F11c8)."""
+    puts standby up rather than leave the paused screen (N7.F11c8). Every delivery is held
+    before its cue, so the ramping state is the one tested, whatever the timers do."""
+    monkeypatch.setattr(session_runner._QuietDeliveryStart, "cue_then",
+                        lambda _delivery, _then: None)
     runner = _pending_delivery_runner(loaded, tmp_path, condition)
     session, window = runner.session, runner.rig.participant
     interruptions = runner.rig.interruptions
@@ -1120,10 +1126,9 @@ def test_a_resume_while_a_delivery_is_starting_never_leaves_the_paused_screen_up
         assert time.monotonic() < deadline, "the resume never finished"
         QApplication.processEvents()
         time.sleep(0.0005)
-    assert not (window.stack.currentWidget() is window.message
-                and window.message.text == paused)
-    if runner._delivery is not None and not runner._delivery.cueing:
-        assert window.message.text == loaded.participant_text["screens"]["standby"]
+    assert runner._delivery is not None and not runner._delivery.cueing
+    assert window.stack.currentWidget() is window.message
+    assert window.message.text == loaded.participant_text["screens"]["standby"]
     runner.cancel()
     session.close()
 

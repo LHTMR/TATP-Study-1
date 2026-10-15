@@ -83,12 +83,13 @@ screens:
   # Endast praktiskt. Deltagaren har redan läst forskningspersonsinformationen, så skärmen
   # förklarar inte studien -- den förklarar knapparna.
   # DRAFT (LOG N7.F11c2): written by the build, not ethics-sourced. Raden om den vita cirkeln
-  # är ny: varningssignalen före varje stimulus förklarades aldrig.
+  # är ny: varningssignalen före varje stimulus förklarades aldrig. Den lovar ingen beröring,
+  # eftersom även de tomma försöken i skattningsserien föregås av cirkeln.
   welcome: |-
     Välkommen.
     De två stora knapparna flyttar markören längs linjen.
     ▶ bekräftar ditt svar.
-    En vit cirkel på skärmen betyder att något strax börjar.
+    En vit cirkel på skärmen markerar början på varje steg.
     Det finns inga rätta svar – markera det du känner. Försöksledaren ser inte dina svar.
 
     Tryck på ▶ för att börja.
@@ -132,10 +133,12 @@ screens:
     Den fungerar när som helst.
 
     Tryck på ▶ för att fortsätta.
-  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
+  # Introduktionerna till uppgifterna (LOG N7.F11c1) är byggets utkast från 15 okt 2026 och
+  # ingår inte i godkännandet 23 aug 2026 ovan; var och en är märkt DRAFT på sin egen nyckel.
   # En före varje ny sorts uppgift i beröringskalibreringen och före baslinjeskattningarna.
   # Samma i varje besök och betingelse. Ingenting om hur stark någon beröring blir: de tomma
   # försöken i skattningsserien får inte förvarnas.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_bracket: |-
     Nu ställer du själv in hur stark beröringen är, med de två stora knapparna.
     Först tills den är precis märkbar, sedan tills den är precis obehaglig.
@@ -143,25 +146,30 @@ screens:
     Tryck på ▶ för att börja.
   # Inte "en serie beröringar": serien har tomma försök utan tryck, och de får inte utlovas som
   # beröringar (se den engelska filen).
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_estimation: |-
     Nu kommer en serie korta perioder, en i taget.
     Skatta var och en på linjen.
 
     Tryck på ▶ för att börja.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_match: |-
     Nu turas två beröringar om på två ställen på armen.
     Ställ in den andra så att den känns lika stark som den första.
 
     Tryck på ▶ för att börja.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_compare: |-
     Nu känner du två beröringar, den ena efter den andra, och väljer vilken som kändes starkast.
 
     Tryck på ▶ för att börja.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_pleasant: |-
     Nu rör sig beröringen längs armen.
     Ställ in den så att den känns så behaglig som möjligt.
 
     Tryck på ▶ för att börja.
+  # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced
   intro_baseline: |-
     Nu följer några frågor om hur du känner dig just nu.
 

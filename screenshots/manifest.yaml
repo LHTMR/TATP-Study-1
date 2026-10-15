@@ -146,7 +146,9 @@ screens:
     (SPEC.md 11.1). (en)
   experimenter_en_session_complete: 'The last state: the session closed and every
     file written, the garment to come off, and Next step to close the program (docs/LOG.md
-    N7.F11c9). (en)'
+    N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
+    and Connect garment and Pause are disabled: nothing is left to pause or to connect
+    again. (en)'
   experimenter_en_touchcal_estimation_skip: 'The estimation run with the mock or prototype
     garment: how many ratings are answered, and Skip calibration under the garment,
     shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).
@@ -291,7 +293,9 @@ screens:
     (SPEC.md 11.1). (sv)
   experimenter_sv_session_complete: 'The last state: the session closed and every
     file written, the garment to come off, and Next step to close the program (docs/LOG.md
-    N7.F11c9). (sv)'
+    N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
+    and Connect garment and Pause are disabled: nothing is left to pause or to connect
+    again. (sv)'
   experimenter_sv_touchcal_estimation_skip: 'The estimation run with the mock or prototype
     garment: how many ratings are answered, and Skip calibration under the garment,
     shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).

@@ -957,7 +957,9 @@ class SessionRunner(Procedure):
         an error then finds the session closed and reopens nothing (`stop_on_error`). From
         here the files take no more rows -- a note excepted, which is the experimenter's own
         record -- so the stop and the pause are let go: the garment is already off and
-        disconnected, and nothing is running for them to interrupt.
+        disconnected, and nothing is running for them to interrupt. A stop pressed from here is
+        therefore not logged, deliberately. Pause and Connect garment are disabled, so nothing
+        can connect the garment again with no stop wired to it.
         """
         self.session.log("stage_completed", detail=self.stages[self.stage_index].id)
         self.completed = True
@@ -968,6 +970,7 @@ class SessionRunner(Procedure):
         self.experimenter.pause_requested.disconnect(interruptions.pause)
         self.experimenter.distances_entered.disconnect(self.ledger.enter)
         self.experimenter.set_mapping_phases([])
+        self.experimenter.set_actions_enabled(closed=True)
         self.experimenter.set_instruction(
             self.experimenter.text["instructions"][SESSION_COMPLETE_INSTRUCTION]
         )
