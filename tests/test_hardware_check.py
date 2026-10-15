@@ -112,6 +112,20 @@ def test_each_garment_channel_turns_on_and_off(check):
     assert check.garment is None
 
 
+def test_each_channel_button_says_whether_its_channel_is_on(check):
+    """S, 15 Oct 2026: the buttons looked the same on and off."""
+    words = check.words
+    check.toggle_garment()
+    check.channel_buttons[2].setChecked(True)
+    assert check.channel_buttons[2].text() == words["channel_on"].format(value=2)
+    assert check.channel_buttons[1].text() == words["channel_off"].format(value=1)
+    check.channel_buttons[2].setChecked(False)
+    assert check.channel_buttons[2].text() == words["channel_off"].format(value=2)
+    check.toggle_garment()
+    assert all(made.text() == words["channel_off"].format(value=channel)
+               for channel, made in check.channel_buttons.items())
+
+
 def test_closing_lets_everything_go(check):
     check.toggle_noise()
     check.toggle_garment()

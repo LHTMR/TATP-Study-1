@@ -76,6 +76,7 @@ from tatp.demo import (
 from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
 from tatp.session import DRIVERS, canonical_initials, with_session_choices
+from tatp.session_runner import stop_on_error
 from tatp.ui.application import application, scale_screens
 from tatp.ui.widgets import (
     DISCONNECTED_COLOUR,
@@ -736,6 +737,17 @@ class LauncherWindow(QWidget):
         dialog.open()
         return dialog
 
+    def show_error(self, summary: str) -> MessageDialog:
+        """An error nothing caught, with no session open: a Start that failed, say, which
+        otherwise left the launcher as it was with nothing to say why (15 Oct 2026)."""
+        dialogs = self.text["dialogs"]
+        dialog = MessageDialog(
+            dialogs["error"], dialogs["launcher_error"].format(value=summary), dialogs["close"],
+            colour=DISCONNECTED_COLOUR, parent=self,
+        )
+        dialog.open()
+        return dialog
+
     def set_environment(self, temperature_c: float | None, humidity_pct: float | None) -> None:
         self.environment["room_temperature_c"] = temperature_c
         self.environment["relative_humidity_pct"] = humidity_pct
@@ -786,6 +798,7 @@ def run_launcher(argv: list[str] | None = None) -> int:
     scale_screens(config.hardware)
     app = QApplication.instance() or application(config.hardware)
     launcher = LauncherWindow(config)
+    stop_on_error(lambda: launcher.runner, launcher.show_error)
     launcher.show()
     app.exec()
     return finish(launcher.runner)

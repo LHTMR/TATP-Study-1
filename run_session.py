@@ -53,7 +53,7 @@ from tatp.session import (
     canonical_initials,
     with_session_choices,
 )
-from tatp.session_runner import SessionRunner, stage_layout, summary_phase
+from tatp.session_runner import SessionRunner, stage_layout, stop_on_error, summary_phase
 from tatp.ui.application import application, scale_screens
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -352,6 +352,8 @@ def main(argv: list[str] | None = None) -> int:
     app = application(config.hardware)
     runner = build(config, args)
     demo = attach_demo(runner, args) if args.demo else None
+    # With no session open the error is on the console already, and there is nowhere else.
+    stop_on_error(lambda: runner, lambda _summary: None)
     runner.start()
     app.exec()
     # Nothing above catches an exception, so reaching here means the loop ended.

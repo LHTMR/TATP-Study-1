@@ -12,6 +12,7 @@ from __future__ import annotations
 import copy
 import csv
 import math
+import sys
 import time
 
 import pytest
@@ -20,12 +21,13 @@ from virtual_participant import EXAMPLES, Virtual, make_config, press
 
 from tatp import config as cfg
 from tatp import resume as resumption
+from tatp.audio import AudioError
 from tatp.clock import Clock
 from tatp.pinprick import BrushTrial, F40Fit, LongProtocol, PinprickTrial, ladder, prior_for
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import Session
-from tatp.session_runner import SessionRunner, TouchBlock, Upcoming
+from tatp.session_runner import SessionRunner, TouchBlock, Upcoming, stop_on_error
 from tatp.touchcal_maths import Delivery
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -688,6 +690,83 @@ def test_abort_marks_the_open_block_and_flags_missing_distances(app, loaded, tmp
     assert [r["aborted"] for r in _rows(session, "blocks")] == ["true"]
     areas = _rows(session, "sh_area")
     assert [r["area_missing"] for r in areas] == ["true"]
+
+
+def test_a_note_is_logged_and_confirmed_with_its_time(app, loaded, tmp_path):
+    """SPEC.md 11's timestamped note, during a stop as well. Before 15 Oct 2026 the field was
+    connected to nothing, so every note was lost (docs/LOG.md N7.F10a)."""
+    runner = make_runner(loaded, tmp_path)
+    try:
+        runner.start()
+        window = runner.experimenter
+        before = window.note.placeholderText()
+        window.note.setText("  participant sneezed ")
+        window.note_button.click()
+        runner.rig.participant.emergency_stop.emit()
+        window.note.setText("during the stop")
+        window.note.returnPressed.emit()
+        notes = [(r["origin"], r["detail"]) for r in _events(runner.session)
+                 if r["event"] == "experimenter_note"]
+        assert notes == [("experimenter", "participant sneezed"),
+                         ("experimenter", "during the stop")]
+        assert window.note.text() == ""
+        saved = window.text["controls"]["note_saved"].split("{time}")[0]
+        assert window.note.placeholderText() != before
+        assert window.note.placeholderText().startswith(saved)
+    finally:
+        runner.session.close()
+
+
+class _ShownError:
+    """The error dialog, answered at once: `exec` would wait for a person."""
+
+    def __init__(self, shown: list, message: str):
+        shown.append(message)
+
+    def exec(self) -> int:
+        return 0
+
+
+def test_an_uncaught_error_stops_the_session_and_says_so(app, loaded, tmp_path, monkeypatch):
+    """The 15 Oct 2026 demo stood still in the masking check: the sound device raised inside a
+    Qt slot, the event loop carried on, and neither screen said anything (N7.F10c)."""
+    runner = make_runner(loaded, tmp_path)
+    shown: list[str] = []
+    monkeypatch.setattr(runner.experimenter, "error_dialog",
+                        lambda message: _ShownError(shown, message))
+    # The hook stop_on_error passes the traceback on to: silent, since pytest-qt's own would
+    # fail the test for the error raised on purpose.
+    monkeypatch.setattr(sys, "excepthook", lambda *_: None)
+    stop_on_error(lambda: runner, lambda summary: pytest.fail(f"not the session's: {summary}"))
+    runner.start()
+    try:
+        raise AudioError("No output device matching 'Bose QC Headphones'")
+    except AudioError:
+        sys.excepthook(*sys.exc_info())
+
+    session = runner.session
+    assert session.closed and not runner.completed
+    errors = [r for r in _events(session) if r["event"] == "software_error"]
+    assert len(errors) == 1 and "Bose QC Headphones" in errors[0]["detail"]
+    assert errors[0]["severity"] == "error"
+    assert len(shown) == 1 and "Bose QC Headphones" in shown[0]
+    participant = runner.rig.participant
+    assert participant.message.text == participant.text["screens"]["paused"]
+    values = resumption.read_session_values(session.files.path("session"))
+    assert values["abort_reason"].startswith("software error: ")
+
+
+def test_with_no_session_open_an_uncaught_error_goes_elsewhere(monkeypatch):
+    """A Start that failed in the launcher, before any session existed (N7.F10c)."""
+    told: list[str] = []
+    monkeypatch.setattr(sys, "excepthook", lambda *_: None)
+    stop_on_error(lambda: None, told.append)
+    try:
+        raise IndexError("screens.participant_screen_index is 1, but this machine has 1 screen")
+    except IndexError:
+        sys.excepthook(*sys.exc_info())
+    assert told == ["IndexError: screens.participant_screen_index is 1, but this machine has "
+                    "1 screen"]
 
 
 # -- the fit preview (SPEC.md 11.1) ------------------------------------------------------------

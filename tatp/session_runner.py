@@ -42,6 +42,8 @@ screen in every condition. Nothing else here depends on the condition.
 from __future__ import annotations
 
 import random
+import sys
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -93,6 +95,12 @@ POST_I = "post_intervention"
 MAPPED = (POST_S, POST_I)
 # The one condition the participant starts themselves (SPEC.md 12.3).
 SELF_STARTED = "participant_preferred"
+# The `log` event an experimenter's note is written as (docs/DATA_SCHEMA.md).
+NOTE_EVENT = "experimenter_note"
+# An error nothing caught (`stop_on_error`): its `log` event, and the session's abort reason.
+SOFTWARE_ERROR_EVENT = "software_error"
+SOFTWARE_ERROR_REASON = "software error"
+PAUSED_SCREEN = "paused"
 # `Session.set_upcoming` kinds.
 BLOCK, PHASE = "block", "phase"
 FIRST_SESSION = 1
@@ -318,8 +326,11 @@ class SessionRunner(Procedure):
         self._touch_after_block = False
         # Set for a session resumed after its rekindle heat was launched (LOG N7.D14).
         self._resumed_heat_t_s: float | None = None
+        self._stopping_for_error = False
 
         self.experimenter.abort_requested.connect(self.abort)
+        # For the whole session, interruptions included (SPEC.md 11, 13).
+        self.experimenter.note_entered.connect(self._note)
         # Connected here, before `start` connects the procedure's own handlers, so a pending
         # delivery is cancelled and restarted before any step repeats.
         self.rig.interruptions.interrupted.connect(self._delivery_interrupted)
@@ -908,6 +919,34 @@ class SessionRunner(Procedure):
         self.finish(None)
         self._close("")
 
+    def _note(self, note: str) -> None:
+        """SPEC.md 11's timestamped note: written, then confirmed with the time it was written,
+        so a note the experimenter sees confirmed is one that is in the log."""
+        self.session.log(NOTE_EVENT, origin="experimenter", detail=note)
+        self.experimenter.confirm_note(self.session.clock.wall_time_text())
+
+    def stop_for_error(self, summary: str) -> None:
+        """An error nothing caught, in a session still open (`stop_on_error`).
+
+        Qt keeps its event loop running past an exception in a slot, so without this the
+        session stood still with nothing on either screen to say why (the masking check, 15
+        Oct 2026). The garment goes to zero first, then the error is logged and told to the
+        experimenter, then the session is aborted -- which keeps everything collected, and
+        leaves it open to a resume (SPEC.md 15).
+        """
+        # The dialog runs its own event loop, so a timer the error left behind can raise again
+        # under it. That one is on the console; the session is already being stopped.
+        if self._stopping_for_error:
+            return
+        self._stopping_for_error = True
+        if self.session.garment.connected:
+            self.session.garment.stop()
+        self.session.log(SOFTWARE_ERROR_EVENT, severity="error", detail=summary)
+        self.participant.show_message(PAUSED_SCREEN)
+        text = self.experimenter.text["dialogs"]["software_error"]
+        self.experimenter.error_dialog(text.format(value=summary)).exec()
+        self.abort(f"{SOFTWARE_ERROR_REASON}: {summary}")
+
     def abort(self, reason: str) -> None:
         """The experimenter's abort (SPEC.md 11). Everything collected so far is kept."""
         self.cancel()
@@ -1102,3 +1141,26 @@ class SessionRunner(Procedure):
             self._deliver(lambda: self._run_stage(index))
         else:
             self._run_stage(index)
+
+
+def stop_on_error(runner_of: Callable[[], SessionRunner | None],
+                  elsewhere: Callable[[str], None]) -> None:
+    """Make an error nothing caught stop the session, visibly (`SessionRunner.stop_for_error`).
+
+    Installed by `run_session.main` and the launcher, never by the tests or the validator,
+    which have their own. The traceback still goes to the console first. `runner_of` gives the
+    session running now, if any; with none open, `elsewhere` is told the error instead -- the
+    launcher's own window, where a Start that failed would otherwise do nothing visible.
+    """
+    previous = sys.excepthook
+
+    def hook(kind, error, trace) -> None:
+        previous(kind, error, trace)
+        summary = "".join(traceback.format_exception_only(kind, error)).strip()
+        runner = runner_of()
+        if runner is not None and not runner.session.closed:
+            runner.stop_for_error(summary)
+        else:
+            elsewhere(summary)
+
+    sys.excepthook = hook

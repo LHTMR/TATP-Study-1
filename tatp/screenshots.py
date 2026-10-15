@@ -134,6 +134,8 @@ SAMPLE_DATA_FOLDER = "data"
 # The resume offer's completed phases and blocks, and how long ago sensitisation began,
 # worded by the same `resume.offer_wording` the real offer is.
 SAMPLE_RESUME_COMPLETED = ("setup", "touch_calibration", "pre_sensitisation", "sensitisation")
+# The channel the hardware check is drawn with on (docs/LOG.md N7.F10b).
+SAMPLE_CHANNEL_ON = 2
 SAMPLE_RESUME_BLOCKS = ("1", "2", "3", "4")
 SAMPLE_RESUME_AGO_MIN = 72
 SAMPLE_SESSION_NUMBER = 1
@@ -869,6 +871,15 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"each remote button, where each screen lands, the sound devices, the noise within the "
         f"participant's own range with the cue and the alert, and each garment channel on and "
         f"off. Drawn with a sample device list and the mock garment ({language}).",
+        check.grab(),
+    )
+    check.toggle_garment()
+    check.channel_buttons[SAMPLE_CHANNEL_ON].setChecked(True)
+    yield Shot(
+        f"experimenter_{language}_launcher_hardware_check_channel_on",
+        f"The hardware check with the mock garment connected and channel {SAMPLE_CHANNEL_ON} "
+        f"on: each channel button says on or off, and one that is on is filled (LOG N7.F10b; "
+        f"{language}).",
         check.grab(),
     )
     check.release()

@@ -20,6 +20,7 @@ from tatp.units import MS_PER_S
 
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%f"
 FILENAME_FORMAT = "%Y-%m-%d_%H-%M-%S"
+TIME_FORMAT = "%H:%M:%S"
 
 
 class Clock:
@@ -90,6 +91,10 @@ class Clock:
     def wall_iso(self) -> str:
         """Wall clock, ISO 8601 local with milliseconds. Recorded, never differenced."""
         return datetime.now().strftime(ISO_FORMAT)[:-3]
+
+    def wall_time_text(self) -> str:
+        """Wall clock to the second, as the experimenter reads it off the log's timestamp."""
+        return datetime.now().strftime(TIME_FORMAT)
 
     def filename_stamp(self) -> str:
         return datetime.now().strftime(FILENAME_FORMAT)

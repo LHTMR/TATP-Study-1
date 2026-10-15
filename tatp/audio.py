@@ -45,8 +45,40 @@ from tatp.units import DB_PER_AMPLITUDE_DECADE, DECADE
 CUE_MAX_DBFS = -DB_PER_AMPLITUDE_DECADE * float(np.log10(np.sqrt(2)))
 
 
+SOUNDDEVICE = "sounddevice"
+# The two configured devices, `audio.<role>_device`.
+DEVICE_ROLES = ("participant", "experimenter")
+
+
 class AudioError(Exception):
     """The configured audio output cannot do what was asked. Never worked around."""
+
+
+def query_sounddevice():
+    """PortAudio, loaded only when asked: the tests and the screenshot run never do.
+
+    Re-initialised on every call, because PortAudio lists the devices once, when it starts: a
+    Bluetooth headset switched on after the launcher opened would otherwise stay missing until
+    the program was restarted. Called only with no stream open (preflight, the hardware check
+    as it opens), since re-initialising closes any that are.
+    """
+    import sounddevice
+
+    sounddevice._terminate()
+    sounddevice._initialize()
+    return sounddevice
+
+
+def unresolved_devices(audio_config: dict, sd) -> dict[str, str]:
+    """Each configured output device that sounddevice cannot resolve, by role, with why.
+    Resolved exactly as `SounddeviceOutput` will resolve it, by sounddevice's own matching."""
+    unresolved = {}
+    for role in DEVICE_ROLES:
+        try:
+            sd.query_devices(audio_config[f"{role}_device"], "output")
+        except ValueError as error:
+            unresolved[role] = str(error)
+    return unresolved
 
 
 def amplitude(level_dbfs: float) -> float:
@@ -190,7 +222,7 @@ class SounddeviceOutput(AudioOutput):
 
 
 BACKENDS: dict[str, type[AudioOutput]] = {
-    "sounddevice": SounddeviceOutput,
+    SOUNDDEVICE: SounddeviceOutput,
     "recording": RecordingOutput,
 }
 
