@@ -104,6 +104,15 @@ def _unlock(handle) -> None:
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def lock_folder(config: Config, data_folder: Path) -> Path:
+    """The folder whose instance lock a session holds: its own; for a demonstration the
+    study's, so that a demonstration never runs beside a session from the configured folder,
+    or beside another demonstration (tatp/demo.py). A session started from a folder other than
+    hardware.yaml's is not seen by it (docs/LOG.md N7.D23)."""
+    study_folder = config.hardware["data"].get("study_folder")
+    return data_folder if study_folder is None else Path(study_folder)
+
+
 def data_folder_for(config: Config) -> Path:
     folder = Path(config.hardware["data"]["folder"])
     return folder if folder.is_absolute() else REPO_ROOT / folder
@@ -155,7 +164,7 @@ def preflight(
     if earlier and initials not in earlier:
         findings.append(Finding(WARN, "warnings.experimenter_changed", initials))
 
-    probe = InstanceLock(data_folder)
+    probe = InstanceLock(lock_folder(config, data_folder))
     if probe.acquire():
         probe.release()
     else:

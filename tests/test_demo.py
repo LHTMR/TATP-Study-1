@@ -336,14 +336,23 @@ def test_every_change_of_who_presses_is_logged(app, loaded):
     _finish(runner, demo)
 
 
-def test_a_mode_chosen_while_finishing_is_kept(app, loaded):
-    """The person who takes the remote mid-finish keeps it at the next stage."""
+def test_a_mode_chosen_while_finishing_is_kept_and_the_other_handed_back(app, loaded):
+    """The person who takes the remote mid-finish keeps it; the experimenter still goes back."""
     runner, demo = _demo(app, loaded, "--sim-participant", WATCH)
     demo.finish_stage()
     demo.choose("participant", OFF)
     runner.stage_started.emit("the next stage")
-    assert demo.participant_mode == OFF
+    assert (demo.participant_mode, demo.experimenter_mode) == (OFF, OFF)
     _finish(runner, demo)
+
+
+def test_checking_a_demonstration_writes_nothing(loaded, tmp_path):
+    """Its folder and allocation are made when it starts, so a refused or cancelled check
+    leaves no empty folder behind."""
+    args = _args()
+    config = run_session.demo_session(loaded, args)
+    run_session.preflight(config, args)
+    assert not (tmp_path / "demo").exists()
 
 
 def test_a_watchable_participant_presses_one_at_a_time(app, loaded):

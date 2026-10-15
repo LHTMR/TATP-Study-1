@@ -236,6 +236,7 @@ class VirtualParticipant(QObject):
         self.press_interval_s = 0.0
         self._queue: deque = deque()
         self._watching = False
+        self._started = 0
         self.window = window
         self.garment = garment
         self.model = model or ObserverModel(seed)
@@ -298,6 +299,7 @@ class VirtualParticipant(QObject):
         if not self._watching:
             self._watch()
         self._token = None  # whatever is up is a new screen to this participant
+        self._started += 1  # a press deferred before a stop is not this start's
         self._timer.start()
 
     def stop(self) -> None:
@@ -622,7 +624,10 @@ class VirtualParticipant(QObject):
         # session would wait for a second press that a person gives and this never would.
         if action is Action.CONFIRM and self.window.confirm_would_carry_over():
             wait_ms = self.window.clock.scaled_ms(self.window.confirm_lockout_remaining_s())
-            QTimer.singleShot(wait_ms + LOCKOUT_MARGIN_MS, self, self._deferred_confirm)
+            started = self._started
+            QTimer.singleShot(
+                wait_ms + LOCKOUT_MARGIN_MS, self, lambda: self._deferred_confirm(started)
+            )
             return
         # One stamp for both edges: a tap is instant, and stamping the release when it is sent
         # would put however long the press handler took into the thumb's hold -- the very
@@ -631,10 +636,10 @@ class VirtualParticipant(QObject):
         self._send(action, QEvent.KeyPress, stamp_ms)
         self._send(action, QEvent.KeyRelease, stamp_ms)
 
-    def _deferred_confirm(self) -> None:
-        # Not if this participant has stopped meanwhile: a demonstration may have handed the
-        # remote to a person, whose screen this press is not.
-        if self._timer.isActive():
+    def _deferred_confirm(self, started: int) -> None:
+        # Not if this participant has stopped meanwhile, even if since started again: a
+        # demonstration may have handed the remote to a person, whose screen this is not.
+        if self._timer.isActive() and started == self._started:
             self.tap(Action.CONFIRM)
 
     def hold(self, action: Action) -> None:

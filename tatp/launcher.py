@@ -64,7 +64,15 @@ from PySide6.QtWidgets import (
 
 from tatp import config as cfg
 from tatp import schedule as sched
-from tatp.demo import DEMO_GARMENT, MODES, OFF, REAL_TIME_SPEED, demo_config, resolved
+from tatp.demo import (
+    DEMO_GARMENT,
+    MODES,
+    OFF,
+    REAL_TIME_SPEED,
+    check_speed,
+    demo_config,
+    resolved,
+)
 from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
 from tatp.session import DRIVERS, canonical_initials, with_session_choices
@@ -344,7 +352,9 @@ class SessionDialog(QDialog):
         self.garment.setEnabled(False)
         self.demo_speed = sized(QDoubleSpinBox(), SIZE_BODY)
         self.demo_speed.setRange(REAL_TIME_SPEED, float(demo["max_clock_speed"]))
-        self.demo_speed.setValue(float(demo["clock_speed"]))
+        # Checked, not clamped: a configured default out of range is refused at once, as the
+        # command line refuses it (tatp.demo.check_speed).
+        self.demo_speed.setValue(check_speed(demo, float(demo["clock_speed"])))
         modes = [(self.text["demo"]["modes"][mode], mode) for mode in MODES]
         self.sim_participant = self._options(modes)
         self.sim_experimenter = self._options(modes)

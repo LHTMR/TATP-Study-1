@@ -121,38 +121,54 @@ def shuffled_allocation(template: Path, folder: Path) -> Path:
     folder.mkdir(parents=True)
     path = folder / ALLOCATION_NAME
     with path.open("w", encoding="utf-8", newline="") as handle:
-        handle.write("\n".join(comments) + "\n")
+        handle.writelines(f"{line}\n" for line in comments)
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
     return path
 
 
+class DemoError(ValueError):
+    """A demonstration asked for something its settings do not allow."""
+
+
+def check_speed(demo: dict, speed: float) -> float:
+    """The speed, if a demonstration may run at it: real time to `demo.max_clock_speed`."""
+    highest = float(demo["max_clock_speed"])
+    if not REAL_TIME_SPEED <= speed <= highest:
+        raise DemoError(f"a demonstration runs at {REAL_TIME_SPEED:g} to {highest:g} times "
+                        f"real speed (study1.yaml demo.max_clock_speed), not {speed:g}")
+    return speed
+
+
 def demo_config(loaded: Config, speed: float) -> Config:
-    """The configuration a demonstration runs with: a fresh folder with its own shuffled
-    allocation, the mock garment, every keyboard the remote, real-time settings kept."""
+    """The configuration a demonstration is checked and run with: a folder of its own, the mock
+    garment, every keyboard the remote, real-time settings kept. Nothing is written yet: the
+    folder and its shuffled allocation are made when the demonstration starts (`begin_run`),
+    so a check that is refused or cancelled leaves nothing behind."""
     demo = loaded.study1["demo"]
-    assert REAL_TIME_SPEED <= speed <= float(demo["max_clock_speed"]), (
-        f"a demonstration runs at 1 to demo.max_clock_speed, not {speed}"
-    )
-    folder = run_folder(demo)
-    allocation = shuffled_allocation(resolved(demo["allocation_file"]), folder)
-    config = with_session_choices(loaded, folder, DEMO_GARMENT)
+    check_speed(demo, speed)
+    config = with_session_choices(loaded, run_folder(demo), DEMO_GARMENT)
     hardware = with_key_source(config.hardware, ANY_KEYBOARD)
-    # The study's own folder, whose instance lock a demonstration holds (`lock_folder`), so
-    # one never runs beside a session, or beside another demonstration.
+    # The study's own folder, whose instance lock a demonstration holds
+    # (`tatp.preflight.lock_folder`), so one never runs beside a session from it, or beside
+    # another demonstration.
     study_folder = str(resolved(loaded.hardware["data"]["folder"]))
     hardware = {**hardware, "data": {**hardware["data"], "study_folder": study_folder}}
-    design = {**config.study1["design"], "allocation_file": str(allocation)}
-    study1 = {**real_time_settings(config.study1, speed), "design": design}
+    study1 = real_time_settings(config.study1, speed)
+    # The template until the run begins: it has the code and every session number to check.
+    design = {**study1["design"], "allocation_file": str(resolved(demo["allocation_file"]))}
+    study1 = {**study1, "design": design}
     return Config(**{**config.__dict__, "hardware": hardware, "study1": study1})
 
 
-def lock_folder(config: Config, data_folder: Path) -> Path:
-    """The folder whose instance lock a session holds: its own, or for a demonstration the
-    study's, so the two never run at once (`demo_config`)."""
-    study_folder = config.hardware["data"].get("study_folder")
-    return data_folder if study_folder is None else Path(study_folder)
+def begin_run(config: Config) -> Config:
+    """The demonstration starting: its folder made, with its own shuffled allocation in it."""
+    folder = Path(config.hardware["data"]["folder"])
+    template = Path(config.study1["design"]["allocation_file"])
+    design = {**config.study1["design"],
+              "allocation_file": str(shuffled_allocation(template, folder))}
+    return Config(**{**config.__dict__, "study1": {**config.study1, "design": design}})
 
 
 class Demo(QObject):
@@ -179,7 +195,8 @@ class Demo(QObject):
         # None until set, so the starting modes are logged too, a person's included.
         self.participant_mode: str | None = None
         self.experimenter_mode: str | None = None
-        self._before_finish: tuple[str, str] | None = None
+        # The modes Finish this stage hands back at the next stage, by who; empty when idle.
+        self._before_finish: dict[str, str] = {}
         # Its window, kept here so it lives as long as the demonstration (run_session.py).
         self.controls: DemoControls | None = None
         runner.stage_started.connect(self._stage_started)
@@ -211,8 +228,12 @@ class Demo(QObject):
         self.experimenter_mode = mode
 
     def choose(self, who: str, mode: str) -> None:
-        """A mode chosen in the Demo controls: kept, even past Finish this stage."""
-        self._before_finish = None
+        """A mode chosen in the Demo controls: kept, even past Finish this stage, which still
+        hands the other back."""
+        self._before_finish.pop(who, None)
+        self._set(who, mode)
+
+    def _set(self, who: str, mode: str) -> None:
         (self.set_participant if who == "participant" else self.set_experimenter)(mode)
 
     def _log_mode(self, who: str, before: str | None, after: str) -> None:
@@ -229,8 +250,9 @@ class Demo(QObject):
     def finish_stage(self) -> None:
         """Both simulations, fast, until the next stage starts; then as they were. A timed
         wait the stage is in is skipped too, since being fast does not shorten it."""
-        if self._before_finish is None:
-            self._before_finish = (self.participant_mode, self.experimenter_mode)
+        if not self._before_finish:
+            self._before_finish = {"participant": self.participant_mode,
+                                   "experimenter": self.experimenter_mode}
         self.set_participant(FAST)
         self.set_experimenter(FAST)
         self.skip_wait()
@@ -238,14 +260,12 @@ class Demo(QObject):
     @property
     def finishing(self) -> bool:
         """Whether Finish this stage is running the stage now under way."""
-        return self._before_finish is not None
+        return bool(self._before_finish)
 
     def _stage_started(self, _stage_id: str) -> None:
-        if self._before_finish is not None:
-            participant_mode, experimenter_mode = self._before_finish
-            self._before_finish = None
-            self.set_participant(participant_mode)
-            self.set_experimenter(experimenter_mode)
+        before, self._before_finish = self._before_finish, {}
+        for who, mode in before.items():
+            self._set(who, mode)
 
     def stop(self) -> None:
         self.participant.stop()

@@ -38,8 +38,10 @@ from tatp.demo import (
     WATCH,
     Demo,
     DemoControls,
+    DemoError,
+    begin_run,
+    check_speed,
     demo_config,
-    lock_folder,
     resolved,
 )
 from tatp.procedure import Rig
@@ -176,14 +178,6 @@ def preflight(config: cfg.Config, args: argparse.Namespace) -> list[pre.Finding]
     findings = pre.preflight(
         config, args.participant, args.session, args.experimenter, data_folder
     )
-    locked = lock_folder(config, data_folder)
-    if locked != data_folder:
-        # A demonstration: refused here, as build would, while a session runs.
-        probe = pre.InstanceLock(locked)
-        if probe.acquire():
-            probe.release()
-        else:
-            findings.append(pre.Finding(pre.REFUSE, "preflight.another_instance", str(locked)))
     open_session = resumption.find_open_session(data_folder, args.participant, args.session)
     if open_session is not None:
         summary = resume_summary(config, open_session)
@@ -231,11 +225,14 @@ def build(
     they are.
     """
     data_folder = pre.data_folder_for(config)
-    lock = pre.InstanceLock(lock_folder(config, data_folder))
+    lock = pre.InstanceLock(pre.lock_folder(config, data_folder))
     if not lock.acquire():
-        raise SessionError(f"another session is running from {data_folder} ({lock.path})")
+        raise SessionError(f"another session is running ({lock.path})")
     handed_over = False
     try:
+        if getattr(args, "demo", False):
+            # The demonstration's folder and allocation, made now it holds the lock.
+            config = begin_run(config)
         runner = _build_holding(config, args, resume_decision, data_folder)
         runner.lock = lock
         handed_over = True
@@ -370,10 +367,10 @@ def demo_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:
     args.clock_speed = (
         float(settings["clock_speed"]) if args.demo_speed is None else args.demo_speed
     )
-    highest = float(settings["max_clock_speed"])
-    if not REAL_TIME_SPEED <= args.clock_speed <= highest:
-        raise SystemExit(f"--demo-speed must be {REAL_TIME_SPEED:g} to {highest:g} "
-                         f"(study1.yaml demo.max_clock_speed), not {args.clock_speed:g}")
+    try:
+        check_speed(settings, args.clock_speed)
+    except DemoError as error:
+        raise SystemExit(str(error)) from error
     args.participant = settings["participant_code"]
     if args.patterns is None:
         args.patterns = resolved(settings["pattern_folder"])
