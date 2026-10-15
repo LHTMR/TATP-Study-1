@@ -149,6 +149,12 @@ screen before it accepts one; and `confirm_carried_over`, a play-button press wi
 `responder.repeat_confirm_lockout_s` of the last one the software accepted, which is ignored
 as a double tap or a bounce rather than taken as the new screen's (docs/LOG.md N7.U15).
 
+A demonstration (`demo` true in the session file, docs/LOG.md N7.D23) logs who presses:
+`demo_simulation`, `detail` `participant: <mode>` or `experimenter: <mode>` (`off` a person,
+`watch` or `fast` a simulation), at the start and at every change, so each response's origin
+can be read back; and each Skip the wait, `demo_wait_skipped`, `detail` the session seconds
+skipped -- `t_session_s` jumps by that much there.
+
 `remote_disconnected` (severity `error`) is written when the participant's remote is unplugged
 or its receiver drops out during a session, and `remote_reconnected` (`warning`) when it comes
 back (`responder.key_source: raw_input`, docs/LOG.md N7.D22). Between the two, nothing the

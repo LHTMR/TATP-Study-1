@@ -311,7 +311,7 @@ demo:
   participant: 'Participant:'
   experimenter: 'Experimenter:'
   modes:
-    "off": You
+    "off": A person
     watch: Simulated, watchable
     fast: Simulated, fast
   skip_wait: Skip the wait
@@ -414,6 +414,10 @@ launcher:
   title: TATP Study 1
   run_session: Run a session
   run_session_detail: The experiment. Needs the participant code, session number and pattern folder.
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  run_demo: Run a demo
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  run_demo_detail: Show the software without a participant. Nothing it records is study data.
   instruments: Instruments and environment
   instruments_detail: Enter weighed filament forces, and today's room temperature and humidity.
   design_pattern: Design a pattern
@@ -427,6 +431,14 @@ launcher:
   environment_entered: 'Room {temperature} °C, {humidity} % RH, handed to the next session.'
   # The session dialog. It collects only what SPEC.md 6 lists; everything else is config.
   session_title: Run a session
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  demo_title: Run a demo
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  demo_speed: Speed (1 is real time)
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  demo_participant: Participant
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  demo_experimenter: Experimenter
   participant_code: Participant code
   session_number: Session number
   experimenter_initials: Experimenter initials

@@ -1,6 +1,6 @@
 """The launcher. SPEC.md 4.1, 6, 8.1, 15.
 
-Five entries, so the auxiliary tools are reachable without the command line:
+Six entries, so the auxiliary tools are reachable without the command line:
 
 1. **Run a session.** A dialog collecting exactly what SPEC.md 6 lists -- participant code,
    session number, experimenter initials, both languages, the data folder and the pattern
@@ -8,6 +8,9 @@ Five entries, so the auxiliary tools are reachable without the command line:
    shows what it found, refusals apart from warnings; *Start* is offered only once nothing
    refuses. An unfinished session found by the preflight is put to the experimenter as a
    question (SPEC.md 15).
+1a. **Run a demo.** The same dialog for a demonstration (`tatp/demo.py`, docs/LOG.md N7.D23):
+   its own code and folder, and the speed and who presses -- a person or a simulation, for the
+   participant and the experimenter apart.
 2. **Instruments and environment** (`tatp/instruments.py`).
 3. **Design a pattern.** `tools/design_pattern.py`, in its own window. For S only: it shows
    pattern names and shapes, which a blinded experimenter must not see (SPEC.md 16), and its
@@ -46,6 +49,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -60,6 +64,7 @@ from PySide6.QtWidgets import (
 
 from tatp import config as cfg
 from tatp import schedule as sched
+from tatp.demo import DEMO_GARMENT, MODES, OFF, demo_config, resolved
 from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import FILAMENTS_PATH, InstrumentsDialog
 from tatp.session import DRIVERS, canonical_initials, with_session_choices
@@ -103,6 +108,9 @@ RESUME_ANSWERS = {QDialog.DialogCode.Accepted.value: True, NEW_SESSION: False}
 # Where every pattern folder is kept, and where Browse opens for an empty pattern folder field.
 PATTERNS_DIR = cfg.CONFIG_DIR / "patterns"
 
+# The slowest a demonstration runs: real time, as a participant meets every interval.
+REAL_TIME_SPEED = 1.0
+
 LAUNCHER_WIDTH_PX = 720
 PREVIEW_WIDTH_PX = 900
 PREVIEW_HEIGHT_PX = 640
@@ -123,10 +131,14 @@ def preflight(config: cfg.Config, args: argparse.Namespace) -> list[Finding]:
 
 
 def build(config: cfg.Config, args: argparse.Namespace):
-    """`run_session.build`: the session and both windows, returned unstarted."""
+    """`run_session.build`: the session and both windows, returned unstarted; for a
+    demonstration, with its simulations and Demo controls beside it (tatp/demo.py)."""
     import run_session
 
-    return run_session.build(config, args)
+    runner = run_session.build(config, args)
+    if args.demo:
+        run_session.attach_demo(runner, args)
+    return runner
 
 
 def formatted(template: str, value: object) -> str:
@@ -167,11 +179,14 @@ class _Unfolded(QScrollArea):
 
     def sizeHint(self) -> QSize:  # noqa: N802 -- Qt's name
         # The wrapped hint and report are taller at a given width than their plain hint says,
-        # so the height is the content's at the narrowest the viewport can be.
+        # so the height is the content's at the narrowest the viewport can be. With no wrapped
+        # text showing (Run a demo fills the pattern folder, so its hint is hidden) the content
+        # has no height-for-width, Qt answers -1, and its plain hint is the height.
         narrowest = self._narrowest()
+        height = self.widget().heightForWidth(narrowest)
         return QSize(
             narrowest + self.verticalScrollBar().sizeHint().width(),
-            self.widget().heightForWidth(narrowest),
+            height if height >= 0 else self.widget().sizeHint().height(),
         )
 
 
@@ -187,6 +202,7 @@ class SessionDialog(QDialog):
         preflight: Callable[[cfg.Config, argparse.Namespace], list[Finding]],
         start: Callable[[cfg.Config, argparse.Namespace], None],
         load: Callable[[str, str], cfg.Config] = cfg.load,
+        demo: dict | None = None,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -195,9 +211,12 @@ class SessionDialog(QDialog):
         self._preflight = preflight
         self._start = start
         self._load = load
+        # A demonstration's settings (study1.yaml demo) when this is Run a demo, else None.
+        self.demo = demo
         self.findings: list[Finding] = []
         words = text["launcher"]
-        self.setWindowTitle(words["session_title"])
+        self.title_text = words["demo_title" if demo is not None else "session_title"]
+        self.setWindowTitle(self.title_text)
         self.setStyleSheet(stylesheet())
 
         # The session number and both languages start unchosen (SPEC.md 6): a default would be
@@ -251,6 +270,8 @@ class SessionDialog(QDialog):
             form.addRow(caption, widget)
         form.addRow("", self.pattern_folder_hint)
         form.addRow("", self.redcap_form)
+        if demo is not None:
+            self._demo_fields(demo)
 
         self.report = label(SIZE_BODY, wrap=True)
         self.check_button = button(words["check"], SIZE_BODY)
@@ -284,7 +305,7 @@ class SessionDialog(QDialog):
         buttons.addWidget(self.start_button)
 
         title = label(SIZE_LARGE)
-        title.setText(words["session_title"])
+        title.setText(self.title_text)
         content = QWidget()
         fields = QVBoxLayout(content)
         fields.setContentsMargins(0, 0, 0, 0)
@@ -308,6 +329,42 @@ class SessionDialog(QDialog):
         layout.addLayout(buttons)
         hint = self.sizeHint()
         fit_to_screen(self, hint.width(), hint.height())
+
+    def _demo_fields(self, demo: dict) -> None:
+        """Run a demo (tatp/demo.py): the demonstration's own code and folder, shown and not
+        editable; no REDCap form; and the speed and who presses."""
+        words = self.text["launcher"]
+        self.participant.setText(demo["participant_code"])
+        self.participant.setReadOnly(True)
+        self.data_folder.setText(str(resolved(demo["data_folder"])))
+        self.data_folder.setReadOnly(True)
+        self.pattern_folder.setText(str(resolved(demo["pattern_folder"])))
+        self.form.setRowVisible(self.data_folder.parentWidget(), False)
+        self.form.setRowVisible(self.redcap_form, False)
+        # Nothing is worn at a demonstration unless chosen otherwise.
+        self.garment.setCurrentIndex(self.garment.findData(DEMO_GARMENT))
+        self.demo_speed = sized(QDoubleSpinBox(), SIZE_BODY)
+        self.demo_speed.setRange(REAL_TIME_SPEED, float(demo["max_clock_speed"]))
+        self.demo_speed.setValue(float(demo["clock_speed"]))
+        modes = [(self.text["demo"]["modes"][mode], mode) for mode in MODES]
+        self.sim_participant = self._options(modes)
+        self.sim_experimenter = self._options(modes)
+        for key, widget in (("demo_speed", self.demo_speed),
+                            ("demo_participant", self.sim_participant),
+                            ("demo_experimenter", self.sim_experimenter)):
+            caption = label(SIZE_SMALL, colour=SECONDARY)
+            caption.setText(words[key])
+            self.form.addRow(caption, widget)
+        self.demo_speed.valueChanged.connect(self._stale)
+        self.sim_participant.currentIndexChanged.connect(self._stale)
+        self.sim_experimenter.currentIndexChanged.connect(self._stale)
+
+    def _options(self, options: list[tuple[str, object]]) -> QComboBox:
+        """A choice with no placeholder: each option is a fair default."""
+        combo = sized(QComboBox(), SIZE_BODY)
+        for shown, value in options:
+            combo.addItem(shown, value)
+        return combo
 
     def _choice(self, options: list[tuple[str, object]]) -> QComboBox:
         """A choice that starts on a placeholder carrying no value, so nothing is assumed."""
@@ -380,6 +437,7 @@ class SessionDialog(QDialog):
 
     def args(self) -> argparse.Namespace:
         """As `run_session.parse_args` returns them, plus the room and the resume answer."""
+        demo = self.demo is not None
         return argparse.Namespace(
             participant=self.participant.text().strip(),
             session=self.session_number.currentData(),
@@ -389,17 +447,23 @@ class SessionDialog(QDialog):
             experimenter_language=self.experimenter_language.currentData(),
             garment=self.garment.currentData(),
             data_folder=Path(self.data_folder.text().strip()),
-            clock_speed=1.0,
+            clock_speed=self.demo_speed.value() if demo else 1.0,
             seed=None,
             room_temperature_c=self.environment["room_temperature_c"],
             relative_humidity_pct=self.environment["relative_humidity_pct"],
-            redcap_form_completed=self.redcap_form.isChecked(),
+            redcap_form_completed=self.redcap_form.isChecked() and not demo,
             resume=None,
+            demo=demo,
+            sim_participant=self.sim_participant.currentData() if demo else OFF,
+            sim_experimenter=self.sim_experimenter.currentData() if demo else OFF,
         )
 
     def config(self, args: argparse.Namespace) -> cfg.Config:
-        """The configuration for these languages, with the data folder and garment chosen."""
+        """The configuration for these languages, with the data folder and garment chosen; a
+        demonstration's own (tatp/demo.py), with a fresh folder each time."""
         loaded = self._load(args.participant_language, args.experimenter_language)
+        if args.demo:
+            return demo_config(loaded, args.clock_speed, args.garment)
         return with_session_choices(loaded, args.data_folder, args.garment)
 
     # -- check, then start ------------------------------------------------------------
@@ -454,7 +518,7 @@ class SessionDialog(QDialog):
         assert isinstance(value, dict), f"the resume offer carries a dict, not {value!r}"
         dialogs = self.text["dialogs"]
         dialog = MessageDialog(
-            self.text["launcher"]["session_title"],
+            self.title_text,
             dialogs["resume_found"].format(**value),
             dialogs["resume_yes"],
             dialogs["resume_no"],
@@ -561,6 +625,7 @@ class LauncherWindow(QWidget):
         self.entries: dict[str, QPushButton] = {}
         for key, action in (
             ("run_session", self.open_session_dialog),
+            ("run_demo", self.open_demo_dialog),
             ("instruments", self.open_instruments),
             ("design_pattern", self.open_designer),
             ("preview_schedule", self.open_preview),
@@ -580,7 +645,7 @@ class LauncherWindow(QWidget):
 
     # -- the entries --------------------------------------------------------------------
 
-    def session_dialog(self) -> SessionDialog:
+    def session_dialog(self, demo: bool = False) -> SessionDialog:
         return SessionDialog(
             self.text,
             self.config.hardware,
@@ -588,8 +653,15 @@ class LauncherWindow(QWidget):
             self.environment,
             self._preflight,
             self._start_session,
+            demo=self.config.study1["demo"] if demo else None,
             parent=self,
         )
+
+    def open_demo_dialog(self) -> SessionDialog:
+        """Run a demo (tatp/demo.py): the session dialog, for a demonstration."""
+        dialog = self.session_dialog(demo=True)
+        dialog.open()
+        return dialog
 
     def instruments_dialog(self) -> InstrumentsDialog:
         # Read afresh, not from the loaded config: a save since startup has changed the file.

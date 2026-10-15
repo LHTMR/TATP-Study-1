@@ -198,14 +198,24 @@ TATP-Study-1/
 
 ### 4.1 Launcher
 
-`run_session.py` opens a launcher offering five entries, so the auxiliary tools are reachable
+`run_session.py` opens a launcher offering six entries, so the auxiliary tools are reachable
 without the command line:
 
 1. **Run a session** — the experiment.
-2. **Instruments and environment** — filament weighing, temperature, humidity (§8.1).
-3. **Design a pattern** — the garment pattern designer (§12.2).
-4. **Preview schedule** — the timeline and its warnings (§7.2).
-5. **Check the hardware** — before the participant arrives: each remote button, where each
+2. **Run a demo** — the software shown without a participant (`tatp/demo.py`, docs/LOG.md
+   N7.D23). The real session, quarantined: its own participant code and allocation, a fresh
+   folder under `data/demo/`, `demo` true in the session file and a DEMONSTRATION banner on the
+   experimenter screen; the participant screen is unchanged (§16). The participant and the
+   experimenter are each a person or the validator's simulation (§17.5), paced to be watched or
+   as fast as it goes, changeable mid-session from a Demo controls window, which also offers
+   *Skip the wait* (session time moved on to just before the next due step) and *Finish this
+   stage* (both simulations fast until the next stage; a stage is finished, never skipped, so
+   nothing a later stage needs is invented). Every change of who presses, and every skip, is
+   logged. Also `run_session.py --demo`.
+3. **Instruments and environment** — filament weighing, temperature, humidity (§8.1).
+4. **Design a pattern** — the garment pattern designer (§12.2).
+5. **Preview schedule** — the timeline and its warnings (§7.2).
+6. **Check the hardware** — before the participant arrives: each remote button, where each
    screen lands, the sound devices, and each garment channel, through the session's own code.
    Nothing is recorded, and it adds no sound level or pressure (docs/LOG.md N7.F4).
 

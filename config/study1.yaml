@@ -21,9 +21,13 @@ demo:
   participant_code: "999"            # above the pilot codes, and in no study allocation
   allocation_file: config/demo_allocation.csv
   data_folder: data/demo
+  pattern_folder: config/patterns/examples   # the provisional mockups: a demonstration may
+                                     # use them, since nothing it records is data (N6.14)
   clock_speed: 1.0                   # the default; --demo-speed overrides it. 1 keeps every
                                      # interval as a participant meets it; Skip the wait cuts
                                      # the long ones
+  max_clock_speed: 100.0             # the most Run a demo offers: past this a cue and its
+                                     # rating flash by too fast to follow
   skip_lead_s: 15.0                  # a skipped wait stops this long before its step is due,
                                      # so the countdown and the due alert are still seen
   # How a watchable simulated participant and experimenter pace themselves, in real seconds:

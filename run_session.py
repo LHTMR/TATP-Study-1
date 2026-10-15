@@ -30,7 +30,7 @@ from tatp import preflight as pre
 from tatp import resume as resumption
 from tatp import schedule
 from tatp.clock import ISO_FORMAT, Clock
-from tatp.demo import FAST, MODES, OFF, WATCH, Demo, DemoControls, demo_config
+from tatp.demo import FAST, MODES, OFF, WATCH, Demo, DemoControls, demo_config, resolved
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import (
@@ -78,10 +78,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--patterns",
         type=Path,
-        required=True,
-        help="garment pattern folder; there is no default, because defaulting to the "
-        "provisional mockups in config/patterns/examples/ would substitute them silently "
-        "(open item 5)",
+        help="garment pattern folder; there is no default for a session, because defaulting "
+        "to the provisional mockups in config/patterns/examples/ would substitute them "
+        "silently (open item 5). A demonstration uses study1.yaml demo.pattern_folder",
     )
     parser.add_argument(
         "--redcap-form-completed", action="store_true",
@@ -137,8 +136,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         if args.participant is not None:
             parser.error("a demonstration has its own participant code; omit --participant")
     else:
-        if args.participant is None:
-            parser.error("--participant is required, except for a demonstration (--demo)")
+        if args.participant is None or args.patterns is None:
+            parser.error("--participant and --patterns are required, except for a "
+                         "demonstration (--demo)")
         if (args.demo_speed, args.sim_participant, args.sim_experimenter) != (None, OFF, OFF):
             parser.error("--demo-speed and --sim-* are for a demonstration only (--demo)")
     return args
@@ -345,6 +345,8 @@ def demo_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:
         float(settings["clock_speed"]) if args.demo_speed is None else args.demo_speed
     )
     args.participant = settings["participant_code"]
+    if args.patterns is None:
+        args.patterns = resolved(settings["pattern_folder"])
     return demo_config(loaded, args.clock_speed, args.garment)
 
 

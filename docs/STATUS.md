@@ -3,7 +3,9 @@
 **Last updated:** 15 October 2026.
 **Milestone:** 6 (pilotable), in progress, in lab piloting. Everything to date is in `main`.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
-back (`CLAUDE.md`, Committing). No branch open. The remote is now read by Windows Raw Input,
+back (`CLAUDE.md`, Committing). Open: `pilot/demo-mode`, the demonstration mode (LOG N7.D23):
+launcher *Run a demo* or `run_session.py --demo`, with a simulated or human participant and
+experimenter, Skip the wait and Finish this stage. The remote is now read by Windows Raw Input,
 apart from the experimenter's keyboard (LOG N7.D22, merged 15 Oct 2026), waiting on its lab
 check N2.10. `make check` needs the PC to itself: other sessions' test runs at 99% CPU stall
 the session runner and the validator even on `main`.

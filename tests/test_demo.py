@@ -18,6 +18,7 @@ import run_session
 from sim.responders import Action
 from tatp import config as cfg
 from tatp.demo import FAST, OFF, WATCH
+from tatp.launcher import LauncherWindow
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 # Real seconds a whole demonstration may take with both simulations fast.
@@ -83,10 +84,51 @@ def test_a_demonstration_brings_its_own_participant_code():
         _args("--participant", "01")
 
 
+def test_a_demonstration_may_use_the_example_patterns(loaded):
+    """No pattern folder is defaulted for a session (N6.14); a demonstration records no data."""
+    args = run_session.parse_args(["--demo", "--session", "1", "--experimenter", "SM"])
+    run_session.demo_session(loaded, args)
+    assert args.patterns == cfg.REPO_ROOT / loaded.study1["demo"]["pattern_folder"]
+    with pytest.raises(SystemExit):
+        run_session.parse_args(["--participant", "01", "--session", "1", "--experimenter",
+                                "SM"])
+
+
 def test_the_simulations_are_for_a_demonstration_only():
     with pytest.raises(SystemExit):
         run_session.parse_args(["--participant", "01", "--session", "1", "--experimenter",
                                 "SM", "--patterns", str(EXAMPLES), "--sim-participant", FAST])
+
+
+def test_run_a_demo_in_the_launcher_asks_for_a_demonstration(app, loaded):
+    seen = []
+    launcher = LauncherWindow(loaded, preflight=lambda config, args: [],
+                              build=lambda config, args: seen.append((config, args)))
+    dialog = launcher.session_dialog(demo=True)
+    assert dialog.participant.isReadOnly()
+    dialog.experimenter.setText("SM")
+    for combo, value in ((dialog.session_number, 1), (dialog.participant_language, "sv"),
+                         (dialog.experimenter_language, "en")):
+        combo.setCurrentIndex(combo.findData(value))
+    dialog.sim_participant.setCurrentIndex(dialog.sim_participant.findData(WATCH))
+    args = dialog.args()
+    assert (args.demo, args.participant, args.sim_participant, args.sim_experimenter) == (
+        True, loaded.study1["demo"]["participant_code"], WATCH, OFF
+    )
+    assert args.garment == "mock" and not args.redcap_form_completed
+    design = dialog.config(args).study1["design"]
+    assert design["allocation_file"] == loaded.study1["demo"]["allocation_file"]
+
+
+def test_run_a_session_in_the_launcher_is_never_a_demonstration(app, loaded):
+    launcher = LauncherWindow(loaded, preflight=lambda config, args: [],
+                              build=lambda config, args: None)
+    dialog = launcher.session_dialog()
+    dialog.experimenter.setText("SM")
+    args = dialog.args()
+    assert (args.demo, args.sim_participant, args.sim_experimenter, args.clock_speed) == (
+        False, OFF, OFF, 1.0
+    )
 
 
 # -- quarantined, and a whole session run by the two simulations -------------------------------

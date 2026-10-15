@@ -37,7 +37,16 @@ from tatp.clock import Clock
 from tatp.config import REPO_ROOT, Config
 from tatp.session import with_session_choices
 from tatp.session_runner import SessionRunner
-from tatp.ui.widgets import SIZE_BODY, SIZE_SMALL, button, label, stylesheet
+from tatp.ui.widgets import (
+    ITEM_GAP_PX,
+    MARGIN_PX,
+    SIZE_BODY,
+    SIZE_SMALL,
+    button,
+    label,
+    sized,
+    stylesheet,
+)
 from tatp.units import S_PER_MIN
 
 OFF = "off"
@@ -63,13 +72,15 @@ def real_time_settings(study1: dict, speed: float, scale_timeout: bool = True) -
     return {**study1, "choice": choice, "touch_calibration": touch}
 
 
+def resolved(path: str) -> Path:
+    """A configured path, relative to the repository unless absolute."""
+    return Path(path) if Path(path).is_absolute() else REPO_ROOT / path
+
+
 def demo_config(loaded: Config, speed: float, garment: str | None) -> Config:
     """The configuration a demonstration runs with: its own allocation, a fresh folder."""
     demo = loaded.study1["demo"]
-    folder = Path(demo["data_folder"])
-    if not folder.is_absolute():
-        folder = REPO_ROOT / folder
-    folder = folder / Clock().filename_stamp()
+    folder = resolved(demo["data_folder"]) / Clock().filename_stamp()
     config = with_session_choices(loaded, folder, garment or DEMO_GARMENT)
     design = {**config.study1["design"], "allocation_file": demo["allocation_file"]}
     study1 = {**real_time_settings(config.study1, speed), "design": design}
@@ -189,13 +200,15 @@ class DemoControls(QWidget):
             grid.addWidget(who, row, 0)
             grid.addWidget(modes, row, 1)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(MARGIN_PX, MARGIN_PX, MARGIN_PX, MARGIN_PX)
+        layout.setSpacing(ITEM_GAP_PX)
         layout.addLayout(grid)
         layout.addWidget(self.skip_button)
         layout.addWidget(self.finish_button)
         layout.addWidget(self.status)
 
     def _modes(self, current: str, choose) -> QComboBox:
-        modes = QComboBox()
+        modes = sized(QComboBox(), SIZE_BODY)
         for mode in MODES:
             modes.addItem(self.words["modes"][mode], mode)
         modes.setCurrentIndex(MODES.index(current))

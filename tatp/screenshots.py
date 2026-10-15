@@ -40,7 +40,7 @@ from fnmatch import fnmatch
 
 import numpy as np
 import yaml
-from PySide6.QtCore import QEvent
+from PySide6.QtCore import QEvent, QObject, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -48,6 +48,7 @@ from tatp import config as cfg
 from tatp import pattern_design as pd
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
+from tatp.demo import OFF, DemoControls
 from tatp.hardware_check import HardwareCheckDialog
 from tatp.instruments import InstrumentsDialog
 from tatp.launcher import WARN, LauncherWindow
@@ -448,6 +449,11 @@ def _experimenter_states(text: dict) -> dict:
             "launcher does (SPEC.md 12.4).",
             {"reduced_capability_device": True, "garment_driver": SAMPLE_GARMENT}, None,
         ),
+        "demo_banner": (
+            "The demonstration banner (docs/LOG.md N7.D23), amber like the others that say "
+            "the session runs but what it records is not data.",
+            {"demo": True}, None,
+        ),
         "all_banners": (
             "All three banners at once, in the space they need, which is fixed from the "
             "session's start: no banner comes or goes during a session, so nothing below "
@@ -702,6 +708,25 @@ def _grab_dialog(dialog: QWidget) -> QPixmap:
     return dialog.grab()
 
 
+class _SampleDemo(QObject):
+    """What the Demo controls draw from, with nothing behind it: a person at both places."""
+
+    stage_started = Signal(str)
+
+    def __init__(self):
+        super().__init__()
+        self.runner = self
+        self.participant_mode = OFF
+        self.experimenter_mode = OFF
+        self.finishing = False
+
+    def set_participant(self, mode: str) -> None:
+        self.participant_mode = mode
+
+    def set_experimenter(self, mode: str) -> None:
+        self.experimenter_mode = mode
+
+
 class _SampleSounddevice:
     """The hardware check's device list, fixed for the picture: the lab laptop's outputs on
     30 Sep 2026 as far as the screenshot needs them."""
@@ -742,6 +767,26 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"The launcher's four entries (SPEC.md 4.1), all enabled. Design a pattern says it is "
         f"for S only, because it shows pattern names and shapes ({language}).",
         _grab_dialog(launcher),
+    )
+
+    demo = launcher.session_dialog(demo=True)
+    # The configured folder resolves to an absolute path that differs between machines.
+    demo.pattern_folder.setText(SAMPLE_PATTERN_FOLDER)
+    yield Shot(
+        f"experimenter_{language}_launcher_demo",
+        f"Run a demo (docs/LOG.md N7.D23): the session dialog with the demonstration's own "
+        f"participant code shown and not editable, no data folder or REDCap form, the mock "
+        f"garment and the example patterns chosen, and the speed and who presses for the "
+        f"participant and the experimenter ({language}).",
+        _grab_dialog(demo),
+    )
+    controls = DemoControls(_SampleDemo(), config.experimenter_text)
+    yield Shot(
+        f"experimenter_{language}_demo_controls",
+        f"The Demo controls window beside a demonstration (docs/LOG.md N7.D23): who presses "
+        f"for the participant and the experimenter, changeable at any time, Skip the wait, "
+        f"and Finish this stage ({language}).",
+        _grab_dialog(controls),
     )
 
     dialog = launcher.session_dialog()
