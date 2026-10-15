@@ -92,6 +92,7 @@ from tatp import preflight as pre  # noqa: E402
 from tatp.clock import ISO_FORMAT  # noqa: E402
 from tatp.config import CONFIG_DIR, REPO_ROOT, hash_files  # noqa: E402
 from tatp.datafiles import parse_schema  # noqa: E402
+from tatp.demo import real_time_settings  # noqa: E402
 from tatp.pinprick import PAIN_SCALE, prior_for  # noqa: E402
 from tatp.procedure import VAS_TRAINING_EXPLAINED  # noqa: E402
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source  # noqa: E402
@@ -311,14 +312,12 @@ def run_config(loaded: cfg.Config, folder: Path, scenario: Scenario) -> cfg.Conf
         "audio": {**loaded.hardware["audio"], "backend": "recording"},
         "screens": {**loaded.hardware["screens"], **HEADLESS_SCREENS},
     }
-    speed = scenario.clock_speed
-    choice = {key: float(value) / speed for key, value in loaded.study1["choice"].items()}
-    touch = dict(loaded.study1["touch_calibration"])
-    if not scenario.configured_timeout:
-        touch["adjustment_timeout_s"] = float(touch["adjustment_timeout_s"]) * speed
-    for key, value in scenario.study_overrides.get("touch_calibration", {}).items():
-        touch[key] = value
-    study1 = {**loaded.study1, "choice": choice, "touch_calibration": touch}
+    study1 = real_time_settings(
+        loaded.study1, scenario.clock_speed, scale_timeout=not scenario.configured_timeout
+    )
+    touch = {**study1["touch_calibration"],
+             **scenario.study_overrides.get("touch_calibration", {})}
+    study1 = {**study1, "touch_calibration": touch}
     return cfg.Config(**{**loaded.__dict__, "hardware": hardware, "study1": study1})
 
 

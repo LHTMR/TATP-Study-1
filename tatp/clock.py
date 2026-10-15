@@ -28,12 +28,19 @@ class Clock:
             raise ValueError(f"clock speed must be positive, got {speed}")
         self.speed = speed
         self._origin = time.perf_counter()
+        self._skipped_s = 0.0
         self._zero: float | None = None
         self.sensitisation_start_iso: str | None = None
 
     def elapsed_s(self) -> float:
-        """Seconds since the clock was created, scaled by `speed`."""
-        return (time.perf_counter() - self._origin) * self.speed
+        """Seconds since the clock was created, scaled by `speed`, plus any skipped."""
+        return (time.perf_counter() - self._origin) * self.speed + self._skipped_s
+
+    def skip(self, seconds: float) -> None:
+        """Move session time on by `seconds` at once: a demonstration's Skip the wait
+        (tatp/demo.py). Real time, and so the participant's hand, is untouched."""
+        assert seconds > 0, f"a skip must move time on, not by {seconds}"
+        self._skipped_s += seconds
 
     def remaining_s(self, anchor_s: float, offset_s: float) -> float:
         """How long until `offset_s` after `anchor_s`, an `elapsed_s()` reading taken earlier.

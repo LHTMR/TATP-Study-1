@@ -95,6 +95,7 @@ written, with an empty value — an absent row and an empty value must not be co
 | `unresolved_open_items` | - | Semicolon-separated §20 item numbers still on placeholders |
 | `resumed_from_session_file` | - | Filename resumed from, else empty (§15) |
 | `clock_speed` | - | `Clock.speed`. `1.0` in every real session; anything else is a development run with every session-paced interval accelerated (§17.3), and must never be analysed as data |
+| `demo` | - | `true` for a demonstration session (`run_session.py --demo`, docs/LOG.md N7.D23): its own code, a folder under `data_demo/` with its own shuffled allocation, the mock garment, perhaps a simulated participant or experimenter, and session time perhaps skipped. Never study data. `false` otherwise |
 | `session_start_iso` | - | Process start, wall clock |
 | `stop_rehearsal_ran` | - | `true` once the emergency-stop rehearsal has run (§10.9); empty if it never did. This key and the next five are written when their setup procedure ends, not at session start, so they follow the start keys, in the order the procedures run (the rehearsal first since 5 Oct 2026); each value is also in `log` from the moment it is measured |
 | `stop_rehearsal_press_detected` | - | `true` when the participant's stop press was detected during the rehearsal; `false` if the experimenter moved on without one |
@@ -147,6 +148,12 @@ confirm on the VAS before the marker is shown; `choice_pressed_early`, a press o
 screen before it accepts one; and `confirm_carried_over`, a play-button press within
 `responder.repeat_confirm_lockout_s` of the last one the software accepted, which is ignored
 as a double tap or a bounce rather than taken as the new screen's (docs/LOG.md N7.U15).
+
+A demonstration (`demo` true in the session file, docs/LOG.md N7.D23) logs who presses:
+`demo_simulation`, `detail` `participant: <mode>` or `experimenter: <mode>` (`off` a person,
+`watch` or `fast` a simulation), at the start and at every change, so each response's origin
+can be read back; and each Skip the wait, `demo_wait_skipped`, `detail` the session seconds
+skipped -- `t_session_s` jumps by that much there.
 
 `remote_disconnected` (severity `error`) is written when the participant's remote is unplugged
 or its receiver drops out during a session, and `remote_reconnected` (`warning`) when it comes

@@ -28,6 +28,11 @@ screens:
     ellipse outlined. (en)'
   experimenter_en_countdown: 'Waiting for the next block: ''Next: block 3 (touch)
     in 04:05'', grey. (en)'
+  experimenter_en_demo_banner: The demonstration banner (docs/LOG.md N7.D23), amber
+    like the others that say the session runs but what it records is not data. (en)
+  experimenter_en_demo_controls: 'The Demo controls window beside a demonstration
+    (docs/LOG.md N7.D23): who presses for the participant and the experimenter, changeable
+    at any time, Skip the wait, and Finish this stage (en).'
   experimenter_en_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column
@@ -82,6 +87,10 @@ screens:
   experimenter_en_launcher: The launcher's four entries (SPEC.md 4.1), all enabled.
     Design a pattern says it is for S only, because it shows pattern names and shapes
     (en).
+  experimenter_en_launcher_demo: 'Run a demo (docs/LOG.md N7.D23): the session dialog
+    with the demonstration''s own participant code shown and not editable, no data
+    folder or REDCap form, the mock garment and the example patterns chosen, and the
+    speed and who presses for the participant and the experimenter (en).'
   experimenter_en_launcher_hardware_check: 'The hardware check (LOG N7.F4), at the
     lab laptop''s size, as it opens: a count for each remote button, where each screen
     lands, the sound devices, the noise within the participant''s own range with the
@@ -155,6 +164,11 @@ screens:
     ellipse outlined. (sv)'
   experimenter_sv_countdown: 'Waiting for the next block: ''Next: block 3 (touch)
     in 04:05'', grey. (sv)'
+  experimenter_sv_demo_banner: The demonstration banner (docs/LOG.md N7.D23), amber
+    like the others that say the session runs but what it records is not data. (sv)
+  experimenter_sv_demo_controls: 'The Demo controls window beside a demonstration
+    (docs/LOG.md N7.D23): who presses for the participant and the experimenter, changeable
+    at any time, Skip the wait, and Finish this stage (sv).'
   experimenter_sv_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column
@@ -209,6 +223,10 @@ screens:
   experimenter_sv_launcher: The launcher's four entries (SPEC.md 4.1), all enabled.
     Design a pattern says it is for S only, because it shows pattern names and shapes
     (sv).
+  experimenter_sv_launcher_demo: 'Run a demo (docs/LOG.md N7.D23): the session dialog
+    with the demonstration''s own participant code shown and not editable, no data
+    folder or REDCap form, the mock garment and the example patterns chosen, and the
+    speed and who presses for the participant and the experimenter (sv).'
   experimenter_sv_launcher_hardware_check: 'The hardware check (LOG N7.F4), at the
     lab laptop''s size, as it opens: a count for each remote button, where each screen
     lands, the sound devices, the noise within the participant''s own range with the

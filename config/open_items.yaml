@@ -249,3 +249,16 @@ items:
          experimenter's full stop is only typed. Closes when the lab check N2.10 passes on the
          lab laptop: then add `text_field_stop_decided: <date>` under responder:."
     blocks_use: true
+
+  - item: "L16"
+    summary: Whether a demonstration may show which condition it runs
+    resolved_when: {file: study1.yaml, path: "demo.condition_shuffle_decided"}
+    fix: "S, before a blinded experimenter is shown the software. A demonstration (docs/LOG.md
+         N7.D23) runs a real condition. To keep it from being a way to see one -- choosing a
+         session number to watch the CT-targeted touch, then recognising it in real sessions
+         (SPEC.md 16) -- each demonstration shuffles which condition each session number has,
+         drawn afresh and shown on neither screen. Its files still record the condition, as a
+         session's do. A blinding choice, so S's: keep the shuffle, or let a demonstration name
+         its condition (for training S, say). Record the choice in study1.yaml demo, then add
+         `condition_shuffle_decided: <date>`."
+    blocks_use: false

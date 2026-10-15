@@ -303,6 +303,25 @@ banners:
     FÖRHANDSGRANSKNING AV ANPASSNINGEN ÄR PÅ. Du ser deltagarens skattningar, vilket Bilaga 1
     3.3 och forskningspersonsinformationen säger att du inte gör. Sessionen registreras som
     oblindad i det avseendet.
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  demo: >-
+    DEMONSTRATION. Inget som registreras här är studiedata.
+
+demo:
+  # Fönstret Demostyrning (tatp/demo.py, LOG N7.D23), bredvid försöksledarens skärm.
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  title: Demostyrning
+  participant: 'Deltagare:'
+  experimenter: 'Försöksledare:'
+  modes:
+    "off": En person
+    watch: Simulerad, i lugn takt
+    fast: Simulerad, snabb
+  skip_wait: Hoppa över väntan
+  finish_stage: Avsluta detta steg
+  skipped: 'Hoppade över {value} min väntan.'
+  nothing_to_skip: Inget att hoppa över nu.
+  finishing: Avslutar detta steg…
 
 dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.
@@ -397,6 +416,10 @@ launcher:
   title: TATP Studie 1
   run_session: Kör en session
   run_session_detail: Själva experimentet. Kräver deltagarkod, sessionsnummer och mönstermapp.
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  run_demo: Kör en demo
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  run_demo_detail: Visa programmet utan deltagare. Inget som registreras är studiedata.
   instruments: Instrument och miljö
   instruments_detail: Skriv in vägda filamentkrafter och dagens rumstemperatur och luftfuktighet.
   design_pattern: Skapa ett mönster
@@ -410,6 +433,14 @@ launcher:
   environment_entered: 'Rummet {temperature} °C, {humidity} % RF, lämnas till nästa session.'
   # Sessionsdialogen. Den frågar bara efter det SPEC.md 6 räknar upp; allt annat är konfiguration.
   session_title: Kör en session
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  demo_title: Kör en demo
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  demo_speed: Hastighet (1 är realtid)
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  demo_participant: Deltagare
+  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
+  demo_experimenter: Försöksledare
   participant_code: Deltagarkod
   session_number: Sessionsnummer
   experimenter_initials: Försöksledarens initialer

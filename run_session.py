@@ -30,6 +30,20 @@ from tatp import preflight as pre
 from tatp import resume as resumption
 from tatp import schedule
 from tatp.clock import ISO_FORMAT, Clock
+from tatp.demo import (
+    FAST,
+    MODES,
+    OFF,
+    REAL_TIME_SPEED,
+    WATCH,
+    Demo,
+    DemoControls,
+    DemoError,
+    begin_run,
+    check_speed,
+    demo_config,
+    resolved,
+)
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import (
@@ -55,8 +69,9 @@ RESUME_OFFER = "dialogs.resume_found"
 BLOCK_STAGE = "block"
 INTERVENTION_PHASE = "intervention"
 # Exit codes, for a script that runs sessions.
-# Its presence on the command line means a session is named there rather than in the launcher.
+# Their presence on the command line means a session is named there rather than in the launcher.
 LAUNCH_SESSION_FLAG = "--participant"
+DEMO_FLAG = "--demo"
 EXIT_REFUSED = 2
 EXIT_OPEN_SESSION = 3
 
@@ -65,7 +80,9 @@ ResumeDecision = Callable[[resumption.OpenSession], bool]
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a TATP Study 1 session.")
-    parser.add_argument("--participant", required=True, help="participant code, e.g. 01")
+    parser.add_argument(
+        "--participant", help="participant code, e.g. 01; a demonstration has its own"
+    )
     parser.add_argument("--session", type=int, required=True, help="session number")
     parser.add_argument(
         "--experimenter", required=True, type=canonical_initials,
@@ -74,10 +91,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--patterns",
         type=Path,
-        required=True,
-        help="garment pattern folder; there is no default, because defaulting to the "
-        "provisional mockups in config/patterns/examples/ would substitute them silently "
-        "(open item 5)",
+        help="garment pattern folder; there is no default for a session, because defaulting "
+        "to the provisional mockups in config/patterns/examples/ would substitute them "
+        "silently (open item 5). A demonstration uses study1.yaml demo.pattern_folder",
     )
     parser.add_argument(
         "--redcap-form-completed", action="store_true",
@@ -112,7 +128,40 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--new", dest="resume", action="store_const", const=False,
         help="if this session was interrupted by a crash, start it again from the beginning",
     )
-    return parser.parse_args(argv)
+    demo = parser.add_argument_group(
+        "demonstration", "show the software without a participant (tatp/demo.py): its own "
+        "code, allocation and data folder, recorded as a demonstration, never study data"
+    )
+    demo.add_argument(DEMO_FLAG, action="store_true", help="run a demonstration session")
+    demo.add_argument(
+        "--demo-speed", type=float, default=None,
+        help="accelerate every session-paced interval; study1.yaml demo.clock_speed when not "
+        "given",
+    )
+    for who in ("participant", "experimenter"):
+        demo.add_argument(
+            f"--sim-{who}", choices=MODES, default=OFF,
+            help=f"who is the {who}: a person ({OFF}), or a simulation paced to be watched "
+            f"({WATCH}) or as fast as it goes ({FAST}); changeable in the Demo controls",
+        )
+    args = parser.parse_args(argv)
+    if args.demo:
+        # What a demonstration decides itself, refused rather than quietly overridden.
+        if args.participant is not None:
+            parser.error("a demonstration has its own participant code; omit --participant")
+        if args.garment is not None:
+            parser.error("a demonstration always runs on the mock garment; omit --garment")
+        if args.clock_speed != REAL_TIME_SPEED:
+            parser.error("a demonstration's speed is --demo-speed, not --clock-speed")
+        if args.redcap_form_completed:
+            parser.error("a demonstration has no REDCap form; omit --redcap-form-completed")
+    else:
+        if args.participant is None or args.patterns is None:
+            parser.error("--participant and --patterns are required, except for a "
+                         "demonstration (--demo)")
+        if (args.demo_speed, args.sim_participant, args.sim_experimenter) != (None, OFF, OFF):
+            parser.error("--demo-speed and --sim-* are for a demonstration only (--demo)")
+    return args
 
 
 def warnings_for(config: cfg.Config) -> list[str]:
@@ -176,11 +225,14 @@ def build(
     they are.
     """
     data_folder = pre.data_folder_for(config)
-    lock = pre.InstanceLock(data_folder)
+    lock = pre.InstanceLock(pre.lock_folder(config, data_folder))
     if not lock.acquire():
-        raise SessionError(f"another session is running from {data_folder} ({lock.path})")
+        raise SessionError(f"another session is running ({lock.path})")
     handed_over = False
     try:
+        if getattr(args, "demo", False):
+            # The demonstration's folder and allocation, made now it holds the lock.
+            config = begin_run(config)
         runner = _build_holding(config, args, resume_decision, data_folder)
         runner.lock = lock
         handed_over = True
@@ -223,6 +275,7 @@ def _build_holding(config, args, resume_decision, data_folder) -> SessionRunner:
         clock=Clock(speed=args.clock_speed),
         rng_seed=args.seed if state is None else state.rng_seed,
         resumed_from="" if state is None else open_session.session_file.name,
+        demo=getattr(args, "demo", False),
     )
     session.start(
         room_temperature_c=getattr(args, "room_temperature_c", None),
@@ -272,14 +325,16 @@ def main(argv: list[str] | None = None) -> int:
     # SPEC.md 4.1: run with no session named, this opens the launcher, so an experimenter never
     # needs the command line. Naming one on the command line is the scripted route, and the
     # validator's.
-    if LAUNCH_SESSION_FLAG not in argv:
+    if LAUNCH_SESSION_FLAG not in argv and DEMO_FLAG not in argv:
         from tatp.launcher import run_launcher  # the launcher imports this module
 
         return run_launcher(argv)
     args = parse_args(argv)
-    config = with_session_choices(
-        cfg.load(args.participant_language, args.experimenter_language), garment=args.garment
-    )
+    loaded = cfg.load(args.participant_language, args.experimenter_language)
+    if args.demo:
+        config = demo_session(loaded, args)
+    else:
+        config = with_session_choices(loaded, garment=args.garment)
     for line in warnings_for(config):
         print(f"WARNING: {line}", file=sys.stderr)
     findings = preflight(config, args)
@@ -296,11 +351,40 @@ def main(argv: list[str] | None = None) -> int:
     scale_screens(config.hardware)
     app = application(config.hardware)
     runner = build(config, args)
+    demo = attach_demo(runner, args) if args.demo else None
     runner.start()
     app.exec()
     # Nothing above catches an exception, so reaching here means the loop ended.
+    if demo is not None:
+        demo.stop()
     shut_down(runner)
     return 0 if runner.completed else 1
+
+
+def demo_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:
+    """A demonstration's configuration, and its code and speed set in `args`."""
+    settings = loaded.study1["demo"]
+    args.clock_speed = (
+        float(settings["clock_speed"]) if args.demo_speed is None else args.demo_speed
+    )
+    try:
+        check_speed(settings, args.clock_speed)
+    except DemoError as error:
+        raise SystemExit(str(error)) from error
+    args.participant = settings["participant_code"]
+    if args.patterns is None:
+        args.patterns = resolved(settings["pattern_folder"])
+    return demo_config(loaded, args.clock_speed)
+
+
+def attach_demo(runner: SessionRunner, args: argparse.Namespace) -> Demo:
+    """The simulations and the Demo controls, beside a built demonstration session."""
+    demo = Demo(runner, args.sim_participant, args.sim_experimenter, runner.session.rng_seed)
+    demo.controls = DemoControls(
+        demo, runner.session.config.experimenter_text, parent=runner.rig.experimenter
+    )
+    demo.controls.show()
+    return demo
 
 
 if __name__ == "__main__":

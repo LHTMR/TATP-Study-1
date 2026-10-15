@@ -141,9 +141,12 @@ class Session:
         clock: Clock | None = None,
         rng_seed: int | None = None,
         resumed_from: str = "",
+        demo: bool = False,
     ):
         self.config = config
         self.clock = clock or Clock()
+        # A demonstration (tatp/demo.py), recorded so its files can never pass for a session.
+        self.demo = demo
         self.participant_code = participant_code
         self.session_number = session_number
         self.experimenter_initials = canonical_initials(experimenter_initials)
@@ -301,6 +304,7 @@ class Session:
             "placeholder_text": self.config.has_placeholder_text(),
             "reduced_capability_device": not self.garment.per_channel_pressure,
             "fit_preview_enabled": self.fit_preview_enabled,
+            "demo": self.demo,
             "next_event": self._next_event(),
             "interruption": self._read_interruption(),
             "hardware": {
@@ -686,5 +690,6 @@ class Session:
             # `run_session.py --clock-speed` promises this is recorded: an accelerated run's
             # files look like a session's, and this is what tells them apart.
             "clock_speed": self.clock.speed,
+            "demo": self.demo,
             "session_start_iso": self.session_start_iso,
         }

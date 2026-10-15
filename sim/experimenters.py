@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import re
 import string
+import time
 from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QTimer
@@ -115,6 +116,13 @@ class VirtualExperimenter(QObject):
         self.seen_text: set[str] = set()
         self.distances_entered: dict[str, tuple] = {}
         self._mapping: tuple[str, int] | None = None  # (phase, path) being walked
+        # As fast as it can (the validator) until `set_pace` slows it or stops it acting.
+        self.acts = True
+        self.reaction_s = 0.0
+        # The reason recorded when it re-runs an estimate that cannot be used.
+        self.rerun_reason = SCENARIO_ENDED
+        self._instruction = ""
+        self._instruction_at_s = 0.0
 
         rig.interruptions.interrupted.connect(self._on_interrupted)
         rig.participant.warning_cue_shown.connect(self._on_cue)
@@ -137,6 +145,17 @@ class VirtualExperimenter(QObject):
         self._timer.stop()
         self._resume_timer.stop()
         self._cue_timer.stop()
+
+    def set_pace(self, acts: bool, reaction_s: float) -> None:
+        """Whether it presses anything, and how long an instruction is up before it does, in
+        real seconds. Not acting, it still reads each cue's instruction, so a simulated
+        participant beside a person at the experimenter screen knows what was applied."""
+        self.acts = acts
+        self.reaction_s = reaction_s
+        # Whatever is up now is read afresh, so its reading time is not already spent.
+        self._instruction = ""
+        if not acts:
+            self._resume_timer.stop()
 
     # -- the cue ------------------------------------------------------------------------
 
@@ -173,7 +192,7 @@ class VirtualExperimenter(QObject):
             if label.text():
                 self.seen_text.add(label.text())
 
-        if self.aborted:
+        if self.aborted or not self.acts:
             return
         if self.abort_when is not None and self.abort_when():
             self.aborted = True
@@ -182,6 +201,10 @@ class VirtualExperimenter(QObject):
         if self.rig.interruptions.active is not None:
             return
         instruction = window.instruction.text()
+        if instruction != self._instruction:
+            self._instruction, self._instruction_at_s = instruction, time.monotonic()
+        if time.monotonic() - self._instruction_at_s < self.reaction_s:
+            return  # still reading it
         phase = self._phases.get(window.phase.text())
         self._track_mapping(instruction, phase)
         if instruction in self._proceed or any(
@@ -195,7 +218,11 @@ class VirtualExperimenter(QObject):
         elif any(p.fullmatch(instruction) for p in self._accept_patterns):
             window.fit_accepted.emit()
         elif self._rerun.fullmatch(instruction):
-            window.fit_rerun_requested.emit(SCENARIO_ENDED)
+            window.fit_rerun_requested.emit(self.rerun_reason)
+        else:
+            return
+        # Pressed: the same instruction up again is a new step, read again before the next.
+        self._instruction_at_s = time.monotonic()
 
     def _track_mapping(self, instruction: str, phase: str | None) -> None:
         """Enter the distances when a time point's last path has ended."""
@@ -221,6 +248,8 @@ class VirtualExperimenter(QObject):
     # -- interruptions --------------------------------------------------------------------
 
     def _on_interrupted(self, kind: str) -> None:
+        if not self.acts:
+            return  # a person at the experimenter screen resumes
         # A child timer rather than `QTimer.singleShot`, so it dies with this object and a
         # resume can never reach a later run.
         self._resume_timer.start(self.rig.session.clock.scaled_ms(self.resume_after_s))

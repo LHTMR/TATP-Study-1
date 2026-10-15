@@ -47,6 +47,16 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "design.conditions", list, None, None),
     ("study1.yaml", "design.limbs", list, None, None),
     ("study1.yaml", "design.allocation_file", str, None, None),
+    ("study1.yaml", "demo.participant_code", str, None, None),
+    ("study1.yaml", "demo.allocation_file", str, None, None),
+    ("study1.yaml", "demo.data_folder", str, None, None),
+    ("study1.yaml", "demo.pattern_folder", str, None, None),
+    ("study1.yaml", "demo.clock_speed", NUMBER, 1, None),
+    ("study1.yaml", "demo.max_clock_speed", NUMBER, 1, None),
+    ("study1.yaml", "demo.skip_lead_s", NUMBER, 0, None),
+    ("study1.yaml", "demo.participant_reaction_s", NUMBER, 0, None),
+    ("study1.yaml", "demo.participant_press_interval_s", NUMBER, 0, None),
+    ("study1.yaml", "demo.experimenter_reaction_s", NUMBER, 0, None),
     ("study1.yaml", "vas.start_pct_after_left_press", NUMBER, 0, 100),
     ("study1.yaml", "vas.start_pct_after_right_press", NUMBER, 0, 100),
     ("study1.yaml", "vas.move_step_pct", NUMBER, 0, 100),
@@ -223,6 +233,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
 # Files whose existence is asserted because another config value names them.
 REFERENCED_FILES = (
     ("study1.yaml", "design.allocation_file"),
+    ("study1.yaml", "demo.allocation_file"),
     ("hardware.yaml", "screens.font_files[*]"),
 )
 

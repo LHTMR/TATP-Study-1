@@ -1,0 +1,8 @@
+# TATP Study 1 demonstration sessions (study1.yaml demo; docs/LOG.md N7.D23). Not study data.
+# One code, one session per condition. The template only: each demonstration writes its own
+# copy into its folder with the conditions shuffled across the sessions (tatp/demo.py), so
+# a session number cannot be chosen to see a condition (open item L16).
+participant_code,session_number,condition,limb
+999,1,sham,left
+999,2,ct_targeted,right
+999,3,participant_preferred,left

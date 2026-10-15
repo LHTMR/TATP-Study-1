@@ -257,15 +257,20 @@ class ExperimenterWindow(QWidget):
         self.fit_preview_banner = label(SIZE_BODY, wrap=True)
         self.fit_preview_banner.setStyleSheet(banner_style(REDUCED_CAPABILITY_COLOUR))
         self.fit_preview_banner.setText(self.text["banners"]["fit_preview"])
+        # A demonstration (tatp/demo.py): the session runs, and nothing it records is data.
+        self.demo_banner = label(SIZE_BODY, wrap=True)
+        self.demo_banner.setStyleSheet(banner_style(REDUCED_CAPABILITY_COLOUR))
+        self.demo_banner.setText(self.text["banners"]["demo"])
 
         self.banner_area = QWidget()
         banners = QVBoxLayout(self.banner_area)
         banners.setContentsMargins(0, 0, 0, 0)
+        banners.addWidget(self.demo_banner)
         banners.addWidget(self.placeholder_banner)
         banners.addWidget(self.reduced_capability_banner)
         banners.addWidget(self.fit_preview_banner)
         # Which banners are up, from the first refresh on (see the note at the top).
-        self._banners_shown: tuple[bool, bool, bool] | None = None
+        self._banners_shown: tuple[bool, ...] | None = None
 
     def _build_header(self) -> None:
         # Who and where, in the smallest size on the screen: it is looked up once at the start
@@ -642,8 +647,8 @@ class ExperimenterWindow(QWidget):
         text = self.text
 
         # SPEC.md 12.4: persistent and unmissable while they apply, absent when they do not.
-        shown = (bool(view["placeholder_text"]), bool(view["reduced_capability_device"]),
-                 bool(view["fit_preview_enabled"]))
+        shown = (bool(view["demo"]), bool(view["placeholder_text"]),
+                 bool(view["reduced_capability_device"]), bool(view["fit_preview_enabled"]))
         if self._banners_shown is None:
             self._banners_shown = shown
         # Stage boundary (CLAUDE.md): a banner arriving mid-session would move everything
@@ -656,8 +661,9 @@ class ExperimenterWindow(QWidget):
                 value=text["terms"]["garments"][view["garment_driver"]]
             )
         )
-        for banner, visible in zip((self.placeholder_banner, self.reduced_capability_banner,
-                                    self.fit_preview_banner), shown, strict=True):
+        for banner, visible in zip((self.demo_banner, self.placeholder_banner,
+                                    self.reduced_capability_banner, self.fit_preview_banner),
+                                   shown, strict=True):
             banner.setVisible(visible)
         self.banner_area.setVisible(any(shown))
 

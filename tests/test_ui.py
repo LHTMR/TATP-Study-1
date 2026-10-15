@@ -589,7 +589,7 @@ def test_no_banner_leaves_no_empty_band(app, session):
     """A laptop screen has no quarter to spare for banners that are not there (S's lab
     review, 24 Sep 2026)."""
     view = {**session.experimenter_view(), "placeholder_text": False,
-            "reduced_capability_device": False, "fit_preview_enabled": False}
+            "reduced_capability_device": False, "fit_preview_enabled": False, "demo": False}
     window = ExperimenterWindow(session.config.experimenter_text, lambda: view)
     assert not window.banner_area.isVisibleTo(window)
 

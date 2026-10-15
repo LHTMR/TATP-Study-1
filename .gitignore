@@ -1,5 +1,8 @@
 # Participant data never enters version control.
 data/
+# Demonstration sessions (tatp/demo.py): kept apart from data/, so the upload check of data/
+# (SOP.md 14.2) never meets them, and never committed either.
+data_demo/
 *.csv
 !config/**/*.csv
 !tests/fixtures/**/*.csv

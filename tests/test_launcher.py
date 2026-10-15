@@ -6,6 +6,7 @@ what is tested here is what the launcher collects and how it answers what they s
 
 from __future__ import annotations
 
+import argparse
 from datetime import datetime
 from pathlib import Path
 
@@ -98,11 +99,12 @@ def test_the_chosen_garment_is_the_session_driver(app, loaded, tmp_path):
 RESUME ={"completed": "blocks 1-4", "since_sensitisation": "1 h 12 min"}
 
 
-def test_the_five_entries_are_all_enabled(app, loaded):
-    """SPEC.md 4.1, and the hardware check (docs/LOG.md N7.F4)."""
+def test_the_six_entries_are_all_enabled(app, loaded):
+    """SPEC.md 4.1, the hardware check (docs/LOG.md N7.F4) and Run a demo (N7.D23)."""
     window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
     assert list(window.entries) == [
-        "run_session", "instruments", "design_pattern", "preview_schedule", "hardware_check",
+        "run_session", "run_demo", "instruments", "design_pattern", "preview_schedule",
+        "hardware_check",
     ]
     for entry in window.entries.values():
         assert entry.isEnabled()
@@ -439,7 +441,7 @@ def test_the_entry_points_are_stream_ds(monkeypatch):
     monkeypatch.setattr(run_session, "preflight", lambda config, args: ["found"], raising=False)
     monkeypatch.setattr(run_session, "build", lambda config, args: "built")
     assert launcher.preflight(None, None) == ["found"]
-    assert launcher.build(None, None) == "built"
+    assert launcher.build(None, argparse.Namespace(demo=False)) == "built"
 
 
 def test_lookup_reads_a_dotted_key(loaded):
