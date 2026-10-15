@@ -404,6 +404,10 @@ def run_one(scenario: Scenario, folder: Path, loaded: cfg.Config) -> Run:
             # The process dies: everything stops where it is and nothing more is written.
             runner.cancel()
             runner.lock.release()
+            # ...and the operating system closes its files, as a dead process's are. Left open,
+            # Windows refuses to delete them. Nothing is written: a run with a held row has
+            # already failed on its write failures.
+            session.files.release()
         elif errors:
             runner.cancel()
             session.close(VALIDATOR_ABORT)
