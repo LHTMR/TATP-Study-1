@@ -971,7 +971,8 @@ def test_nothing_moves_when_a_control_or_entry_is_offered(drawn):
 
     before = places()
     window.set_actions_enabled(rebalance=True, fit_decision=True, discard=True,
-                               substitution=True, skip_calibration=True)
+                               substitution=True, skip_calibration=True,
+                               recalibrate_rebalance=True, recalibrate_restart=True)
     window.set_mapping_phases(["post_sensitisation"])
     window.set_target("primary", 3, filament=True)
     assert places() == before
@@ -1146,6 +1147,78 @@ def test_rebalance_and_the_fit_choice_wait_to_be_asked_for(drawn):
     window.set_actions_enabled(rebalance=False, fit_decision=False)
     assert not window.rebalance_button.isVisibleTo(window)
     assert not window.fit_accept_button.isVisibleTo(window)
+
+
+def test_the_recalibrations_are_offered_running_or_stopped_never_paused(drawn):
+    """docs/LOG.md N7.F12a1: while running and beside Resume after a stop, not during the
+    experimenter's own pause; in the places of their kin, which win them when offered."""
+    window, held = drawn
+    pair = (window.recalibrate_rebalance_button, window.recalibrate_restart_button)
+    window.set_actions_enabled(recalibrate_rebalance=True, recalibrate_restart=True)
+    for kind in (None, "emergency_stop"):
+        held["view"] = _all_keys(interruption=kind)
+        window.refresh()
+        assert all(_offered(window, widget) for widget in pair), kind
+    held["view"] = _all_keys(interruption="pause")
+    window.refresh()
+    assert not any(widget.isVisibleTo(window) for widget in pair)
+    held["view"] = _all_keys()
+    window.refresh()
+    for kin, widget in ((window.rebalance_button, pair[0]),
+                        (window.fit_rerun_button, pair[1])):
+        assert (window.controls.getItemPosition(window.controls.indexOf(kin))
+                == window.controls.getItemPosition(window.controls.indexOf(widget)))
+    window.set_actions_enabled(rebalance=True, fit_decision=True)
+    assert not any(widget.isVisibleTo(window) for widget in pair), "the kin win the place"
+    assert _offered(window, window.rebalance_button)
+    assert _offered(window, window.fit_rerun_button)
+    window.set_actions_enabled(rebalance=False, fit_decision=False, closed=True)
+    assert not any(widget.isVisibleTo(window) for widget in pair), "none once closed"
+
+
+def test_the_used_up_line_shows_only_while_stopped(drawn):
+    window, held = drawn
+    window.set_actions_enabled(recalibration_used=True)
+    assert not window.recalibration_used.isVisibleTo(window), "running: nothing to explain"
+    held["view"] = _all_keys(interruption="emergency_stop")
+    window.refresh()
+    assert window.recalibration_used.isVisibleTo(window)
+    assert window.recalibration_used.text() == window.text["status"][
+        "recalibration_used"].format(controls=window.text["controls"])
+
+
+def test_a_recalibration_asks_why_from_a_fixed_list(drawn):
+    window, held = drawn
+    reasons = window.text["dialogs"]["recalibration_reasons"]
+    seen = _emitted(window.recalibration_requested)
+    for choice, button in (("rebalance", window.recalibrate_rebalance_button),
+                           ("restart", window.recalibrate_restart_button)):
+        dialog = window.open_recalibration_dialog(choice)
+        assert list(dialog.options) == list(reasons)
+        assert not dialog.confirm.isEnabled(), "not without a reason"
+        dialog.options["too_strong"].click()
+        dialog.options["channel_uneven"].click()
+        assert [key for key, option in dialog.options.items() if option.isChecked()] == [
+            "channel_uneven"], "one reason at a time"
+        dialog.confirm.click()
+        assert seen[-1] == (choice, "channel_uneven")
+        assert dialog.windowTitle() == button.text()
+    dialog = window.open_recalibration_dialog("restart")
+    dialog.options["other"].click()
+    dialog.cancel.click()
+    assert len(seen) == 2, "cancelling chooses nothing"
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_the_recalibration_used_line_is_one_line_at_the_laptop_width(app, language):
+    text = cfg.load(language, language).experimenter_text
+    window = ExperimenterWindow(text, lambda: _all_keys(interruption="emergency_stop"))
+    window.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+    window.set_actions_enabled(recalibration_used=True)
+    window.show()
+    QApplication.processEvents()
+    line = window.recalibration_used
+    assert line.fontMetrics().horizontalAdvance(line.text()) <= line.width(), language
 
 
 def test_an_experimenter_choice_enables_the_controls_it_waits_on(app, session, participant):

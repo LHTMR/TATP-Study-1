@@ -493,6 +493,21 @@ def load(
     if loaded["study1.yaml"]["vas"]["hold_tick_interval_s"] <= 0:
         raise ConfigError("study1.yaml: 'vas.hold_tick_interval_s' must be above 0")
 
+    # Null is a value here, no limit (docs/LOG.md N7.F12a1), which the schema refuses as a
+    # placeholder, so it is checked here.
+    touch = loaded["study1.yaml"]["touch_calibration"]
+    if "recalibrations_max" not in touch:
+        raise ConfigError(
+            "study1.yaml: required key 'touch_calibration.recalibrations_max' is missing"
+        )
+    limit = touch["recalibrations_max"]
+    if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int)
+                              or limit < 0):
+        raise ConfigError(
+            f"study1.yaml: 'touch_calibration.recalibrations_max' is {limit!r}; it must be "
+            "null, for no limit, or a whole number from 0"
+        )
+
     config = Config(
         study1=loaded["study1.yaml"],
         hardware=loaded["hardware.yaml"],

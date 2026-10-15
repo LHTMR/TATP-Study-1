@@ -239,6 +239,11 @@ touch_calibration:
                                      # is offered after this many estimation ratings ("a few",
                                      # S, 5 Oct 2026; docs/LOG.md N7.F8b). Never offered, and
                                      # asserted impossible, on the study garment.
+  recalibrations_max: null           # S, 15 Oct 2026 (LOG N7.F12a1): how many times a session
+                                     # the experimenter may rebalance the channels or restart
+                                     # the calibration, during touch calibration or the
+                                     # intervention, from the controls or after a stop. null is
+                                     # no limit; 0 offers none
 
 patterns:
   # Which pattern each condition uses, by pattern name within the selected pattern folder.

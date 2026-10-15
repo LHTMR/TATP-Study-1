@@ -1243,6 +1243,12 @@ def check_emergency_stop_mid_block_resumes(runs):
     if len(stops) != 1:
         return [*failures, f"{len(stops)} emergency_stop events logged in the intervention"]
     stop = events[stops[0]]
+    # Intercurrent events, counted in the session file (docs/LOG.md N7.F12a1): the stop, and
+    # no re-calibration, since the simulated experimenter resumes.
+    if run.session.get("intervention_emergency_stops") != "1":
+        failures.append("the session file does not count the one stop in the intervention")
+    if run.session.get("intervention_recalibrations") != "0":
+        failures.append("the session file counts a re-calibration nobody chose")
     if not stop["block_index"]:
         failures.append("the stop was not logged inside an intervention block")
     if stop["origin"] != "participant":

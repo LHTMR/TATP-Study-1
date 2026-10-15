@@ -70,6 +70,7 @@ from tatp.ui.widgets import (
     SIZE_LARGE,
     SIZE_SMALL,
     WARNING_COLOUR,
+    ChoiceDialog,
     FitPlot,
     MessageDialog,
     ReasonDialog,
@@ -130,6 +131,10 @@ ITEM_NUMBER = re.compile(r"^\[([^\]]+)\]")
 EMERGENCY_STOP = "emergency_stop"
 PAUSE = "pause"
 INTERRUPTIONS = (EMERGENCY_STOP, PAUSE)
+# What `recalibration_requested` carries first, and the `recalibration` log vocabulary
+# (docs/DATA_SCHEMA.md).
+RECALIBRATE_REBALANCE = "rebalance"
+RECALIBRATE_RESTART = "restart"
 BLOCK = "block"
 # The phases during which per-channel pressure would differ by condition (SPEC.md 16). The view
 # already withholds it then; the window holds the same line, so a view that leaked it would not
@@ -207,6 +212,10 @@ class ExperimenterWindow(QWidget):
     fit_accepted = Signal()
     fit_rerun_requested = Signal(str)
     rebalance_requested = Signal()
+    # Re-calibration, while touch is calibrated or delivered, or in place of Resume after a
+    # stop then (docs/LOG.md N7.F12a1): `rebalance` or `restart`, then the reason's key from
+    # `dialogs.recalibration_reasons`.
+    recalibration_requested = Signal(str, str)
     # End touch calibration early, on a pilot rig only (docs/LOG.md N7.F8b). Not a skip-trial
     # control: shown only while the procedure offers it, and recorded as a skipped calibration.
     skip_calibration_requested = Signal()
@@ -229,7 +238,9 @@ class ExperimenterWindow(QWidget):
 
         # What the running procedure is waiting for, beyond what the view says (SPEC.md 11).
         self._awaiting = {"rebalance": False, "fit_decision": False, "discard": False,
-                          "skip_calibration": False, "substitution": False, "closed": False}
+                          "skip_calibration": False, "substitution": False, "closed": False,
+                          "recalibrate_rebalance": False, "recalibrate_restart": False,
+                          "recalibration_used": False}
         self._interruption: str | None = None
         self._connected = False
         self._mapping_phases: list[str] = []
@@ -446,6 +457,17 @@ class ExperimenterWindow(QWidget):
         self.rebalance_button = button(controls["rebalance"])
         self.fit_accept_button = button(controls["fit_accept"])
         self.fit_rerun_button = button(controls["fit_rerun"])
+        # Re-calibration, while touch is calibrated or delivered and beside Resume after a stop
+        # then, while the limit allows (docs/LOG.md N7.F12a1); each asks for a reason first.
+        self.recalibrate_rebalance_button = button(controls["recalibrate_rebalance"])
+        self.recalibrate_restart_button = button(controls["recalibrate_restart"])
+        # In their place after a stop once the limit is reached, saying why only Resume is
+        # offered.
+        self.recalibration_used = label(SIZE_SMALL, colour=SECONDARY)
+        self.recalibration_used.setText(self.text["status"]["recalibration_used"].format(
+            controls=controls
+        ))
+        self.recalibration_used.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         # Next step is the way forward in every step, so it always looks like it. Its look
         # must not follow whether a step is awaited: at a touch start that could differ by
         # condition (SPEC.md 16). While the session is interrupted Resume is the way forward,
@@ -463,6 +485,12 @@ class ExperimenterWindow(QWidget):
         self.rebalance_button.clicked.connect(self.rebalance_requested.emit)
         self.fit_accept_button.clicked.connect(self.fit_accepted.emit)
         self.fit_rerun_button.clicked.connect(self.open_rerun_dialog)
+        self.recalibrate_rebalance_button.clicked.connect(
+            lambda: self.open_recalibration_dialog(RECALIBRATE_REBALANCE)
+        )
+        self.recalibrate_restart_button.clicked.connect(
+            lambda: self.open_recalibration_dialog(RECALIBRATE_RESTART)
+        )
         self.abort_button.clicked.connect(self.open_abort_dialog)
 
         self.controls = QGridLayout()
@@ -486,6 +514,21 @@ class ExperimenterWindow(QWidget):
             row, column = divmod(index, CONTROL_COLUMNS)
             self.controls.addWidget(widget, row, column)
             _reserve(widget)
+        # The re-calibrations share the slots of their kin rather than add a row the laptop has
+        # no room for: Rebalance channels… over Rebalance channels, Restart calibration… over
+        # Re-run the procedure (UI_PRINCIPLES.md 5.5). When the procedure offers the kin, which
+        # does the same from where it stands, the kin has the slot. The line saying they are
+        # used up, shown only while stopped, spans the row, where nothing else is offered then.
+        for kin, widget in ((self.rebalance_button, self.recalibrate_rebalance_button),
+                            (self.fit_rerun_button, self.recalibrate_restart_button)):
+            row, column, _, _ = self.controls.getItemPosition(self.controls.indexOf(kin))
+            self.controls.addWidget(widget, row, column)
+            _reserve(widget)
+        situational_row = self.controls.getItemPosition(
+            self.controls.indexOf(self.rebalance_button)
+        )[0]
+        self.controls.addWidget(self.recalibration_used, situational_row, 0, 1, CONTROL_COLUMNS)
+        _reserve(self.recalibration_used)
 
     def _build_entries(self) -> None:
         controls = self.text["controls"]
@@ -627,6 +670,9 @@ class ExperimenterWindow(QWidget):
         skip_calibration: bool | None = None,
         substitution: bool | None = None,
         closed: bool | None = None,
+        recalibrate_rebalance: bool | None = None,
+        recalibrate_restart: bool | None = None,
+        recalibration_used: bool | None = None,
     ) -> None:
         """What the running procedure waits for (SPEC.md 9, 11, 11.1). None leaves it as is.
 
@@ -639,6 +685,10 @@ class ExperimenterWindow(QWidget):
         `closed` is the session closed and its files written (docs/LOG.md N7.F11c9): Pause
         and the garment button are withdrawn, since nothing is left to pause and the garment,
         disconnected by the close, is not to be connected again with no stop wired to it.
+        `recalibrate_rebalance` and `recalibrate_restart` offer the two re-calibrations
+        (docs/LOG.md N7.F12a1), shown while running or stopped but not paused, and not while
+        the procedure offers their kin; `recalibration_used` says, while stopped, that the
+        limit is reached.
 
         The substitution entry is withdrawn through `withdraw_substitution`, which hands back
         anything typed and not recorded, so it is never dropped unseen.
@@ -649,7 +699,10 @@ class ExperimenterWindow(QWidget):
         )
         for key, value in (("rebalance", rebalance), ("fit_decision", fit_decision),
                            ("discard", discard), ("skip_calibration", skip_calibration),
-                           ("substitution", substitution), ("closed", closed)):
+                           ("substitution", substitution), ("closed", closed),
+                           ("recalibrate_rebalance", recalibrate_rebalance),
+                           ("recalibrate_restart", recalibrate_restart),
+                           ("recalibration_used", recalibration_used)):
             if value is not None:
                 self._awaiting[key] = bool(value)
         self._apply_enabled()
@@ -729,6 +782,22 @@ class ExperimenterWindow(QWidget):
             parent=self,
         )
 
+    def recalibration_dialog(self, choice: str) -> ChoiceDialog:
+        """What the re-calibration does, and why it is chosen, from a fixed list (docs/LOG.md
+        N7.F12a1). The same in every condition, wherever it is offered."""
+        controls, dialogs = self.text["controls"], self.text["dialogs"]
+        action = {RECALIBRATE_REBALANCE: "rebalance",
+                  RECALIBRATE_RESTART: "restart_calibration"}
+        return ChoiceDialog(
+            controls[f"recalibrate_{choice}"],
+            dialogs[f"recalibrate_{choice}"],
+            dialogs["recalibration_reason"],
+            dialogs["recalibration_reasons"],
+            controls[action[choice]],
+            controls["cancel"],
+            parent=self,
+        )
+
     def error_dialog(self, message: str) -> MessageDialog:
         dialogs = self.text["dialogs"]
         return MessageDialog(
@@ -744,6 +813,14 @@ class ExperimenterWindow(QWidget):
     def open_rerun_dialog(self) -> ReasonDialog:
         dialog = self.rerun_dialog()
         dialog.accepted.connect(lambda: self.fit_rerun_requested.emit(dialog.reason_text()))
+        dialog.open()
+        return dialog
+
+    def open_recalibration_dialog(self, choice: str) -> ChoiceDialog:
+        dialog = self.recalibration_dialog(choice)
+        dialog.accepted.connect(
+            lambda: self.recalibration_requested.emit(choice, dialog.choice())
+        )
         dialog.open()
         return dialog
 
@@ -1025,9 +1102,11 @@ class ExperimenterWindow(QWidget):
         """Which controls are offered now. Read from the view where it says, else pushed in.
 
         While the session is interrupted, Resume and Abort are the only ways forward, so they
-        are the only controls offered besides the entries (SPEC.md 13). Next step stays in
-        sight, greyed, because it is the way forward again after the resume (LOG N7.U10a).
-        A control not offered is hidden, and disabled too, so no key press reaches it.
+        are the only controls offered besides the entries (SPEC.md 13), with the two
+        re-calibrations after a stop where touch is calibrated or delivered (docs/LOG.md
+        N7.F12a1). Next step stays in sight, greyed, because it is the way forward again after
+        the resume (LOG N7.U10a). A control not offered is hidden, and disabled too, so no key
+        press reaches it.
         """
         running = self._interruption is None
         self.proceed_button.setEnabled(running)
@@ -1036,8 +1115,15 @@ class ExperimenterWindow(QWidget):
         rebalancing = running and self._awaiting["rebalance"]
         skipping = self._awaiting["skip_calibration"]
         substituting = self._awaiting["substitution"]
+        stopped = self._interruption == EMERGENCY_STOP
         mapped = bool(self._mapping_phases)
         open_ = not self._awaiting["closed"]
+        # Not while paused: the pause is the experimenter's own, and Resume ends it.
+        recalibrating = (running or stopped) and open_
+        rebalancing_after = (recalibrating and self._awaiting["recalibrate_rebalance"]
+                             and not rebalancing)
+        restarting_after = (recalibrating and self._awaiting["recalibrate_restart"]
+                            and not deciding)
         # (widget, shown, pressable). Skip calibration stays in sight through an
         # interruption, as it was, but cannot be pressed then.
         offered = (
@@ -1048,6 +1134,8 @@ class ExperimenterWindow(QWidget):
             (self.rebalance_button, rebalancing, rebalancing),
             (self.fit_accept_button, deciding, deciding),
             (self.fit_rerun_button, deciding, deciding),
+            (self.recalibrate_rebalance_button, rebalancing_after, rebalancing_after),
+            (self.recalibrate_restart_button, restarting_after, restarting_after),
             (self.skip_button, skipping, running and skipping),
             (self.substitution, substituting, substituting),
             (self.substitution_button, substituting, substituting),
@@ -1062,6 +1150,7 @@ class ExperimenterWindow(QWidget):
                 self.setFocus()
             widget.setVisible(shown)
             widget.setEnabled(pressable)
+        self.recalibration_used.setVisible(stopped and self._awaiting["recalibration_used"])
         self.fit_preview.accept_button.setEnabled(deciding)
         self.fit_preview.rerun_button.setEnabled(deciding)
         # Quiet while connected, the expected state; the way forward when it reads Connect.

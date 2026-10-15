@@ -117,6 +117,27 @@ def test_a_pilot_skip_before_any_rating_is_refused_at_load(tmp_path):
         cfg.load("sv", "en", config_dir=config_dir)
 
 
+def test_no_limit_on_recalibrations_is_null_by_default():
+    """S, 15 Oct 2026 (docs/LOG.md N7.F12a1): null is a value here, no limit."""
+    assert cfg.load("sv", "en").study1["touch_calibration"]["recalibrations_max"] is None
+
+
+@pytest.mark.parametrize("value, accepted", [("0", True), ("2", True), ("-1", False),
+                                             ("true", False), ("1.5", False)])
+def test_the_recalibration_limit_is_null_or_a_whole_number(tmp_path, value, accepted):
+    config_dir = _config_copy(tmp_path)
+    path = config_dir / "study1.yaml"
+    text = path.read_text(encoding="utf-8")
+    assert "recalibrations_max: null" in text
+    path.write_text(text.replace("recalibrations_max: null", f"recalibrations_max: {value}"),
+                    encoding="utf-8")
+    if accepted:
+        cfg.load("sv", "en", config_dir=config_dir)
+        return
+    with pytest.raises(cfg.ConfigError, match=r"recalibrations_max.*null"):
+        cfg.load("sv", "en", config_dir=config_dir)
+
+
 def test_a_missing_font_file_is_fatal_at_load(tmp_path):
     config_dir = _config_copy(tmp_path)
     path = config_dir / "hardware.yaml"

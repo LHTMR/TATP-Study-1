@@ -105,6 +105,10 @@ screens:
   experimenter_en_intervention_fault: 'A garment fault during the intervention: shown
     in red, counted, and without the channel, which could say which pattern is running
     (SPEC.md 16). (en)'
+  experimenter_en_intervention_recalibrate: 'The intervention, waiting for the next
+    block with the condition''s touch on: Rebalance channels… and Restart calibration…
+    offered at any time, as during touch calibration (S, 15 Oct 2026; docs/LOG.md
+    N7.F12a1). The same in every condition, and no pressures (SPEC.md 16). (en)'
   experimenter_en_launcher: The launcher's four entries (SPEC.md 4.1), all enabled.
     Design a pattern says it is for S only, because it shows pattern names and shapes
     (en).
@@ -165,6 +169,12 @@ screens:
     the filament entry, Mapping distances) hidden in places kept for them; no zone
     diagram, since there is no target; the garment connected, its button quiet at
     the foot of the side column. (en)
+  experimenter_en_recalibrate_rebalance_dialog: 'Rebalance channels…: what it does,
+    wherever it is offered, and why, from a fixed list; Rebalance channels disabled
+    until a reason is chosen (docs/LOG.md N7.F12a1). (en)'
+  experimenter_en_recalibrate_restart_dialog: Restart calibration…, with a reason
+    chosen, shown pressed, so Restart calibration is enabled (docs/LOG.md N7.F12a1).
+    (en)
   experimenter_en_reduced_capability_banner: The reduced-capability banner naming
     the garment in use in words, as the launcher does (SPEC.md 12.4). (en)
   experimenter_en_rekindle_due: 'The rekindle is due: a timed event that is not a
@@ -184,6 +194,15 @@ screens:
     garment: how many ratings are answered, and Skip calibration under the garment,
     shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).
     Nothing else has moved. (en)'
+  experimenter_en_touchcal_stopped_recalibrate: 'The participant pressed the stop
+    during touch calibration''s step 4, with step 2''s fit accepted: beside Resume,
+    Rebalance channels… and Restart calibration… are offered, each in the place of
+    its kin in the situational row, and each asks why (docs/LOG.md N7.F12a1). The
+    same in every condition; nothing else moved. (en)'
+  experimenter_en_touchcal_stopped_recalibration_used: 'A stop during touch calibration
+    once the re-calibrations a limit allows (recalibrations_max, none by default)
+    are used: Resume only, and one grey line where the two offers were saying why.
+    (en)'
   experimenter_sv_abort_dialog: 'The abort confirmation: what happens to the data,
     a reason field, and Abort disabled until a reason is typed. (sv)'
   experimenter_sv_all_banners: 'All three banners at once, one line each with the
@@ -283,6 +302,10 @@ screens:
   experimenter_sv_intervention_fault: 'A garment fault during the intervention: shown
     in red, counted, and without the channel, which could say which pattern is running
     (SPEC.md 16). (sv)'
+  experimenter_sv_intervention_recalibrate: 'The intervention, waiting for the next
+    block with the condition''s touch on: Rebalance channels… and Restart calibration…
+    offered at any time, as during touch calibration (S, 15 Oct 2026; docs/LOG.md
+    N7.F12a1). The same in every condition, and no pressures (SPEC.md 16). (sv)'
   experimenter_sv_launcher: The launcher's four entries (SPEC.md 4.1), all enabled.
     Design a pattern says it is for S only, because it shows pattern names and shapes
     (sv).
@@ -343,6 +366,12 @@ screens:
     the filament entry, Mapping distances) hidden in places kept for them; no zone
     diagram, since there is no target; the garment connected, its button quiet at
     the foot of the side column. (sv)
+  experimenter_sv_recalibrate_rebalance_dialog: 'Rebalance channels…: what it does,
+    wherever it is offered, and why, from a fixed list; Rebalance channels disabled
+    until a reason is chosen (docs/LOG.md N7.F12a1). (sv)'
+  experimenter_sv_recalibrate_restart_dialog: Restart calibration…, with a reason
+    chosen, shown pressed, so Restart calibration is enabled (docs/LOG.md N7.F12a1).
+    (sv)
   experimenter_sv_reduced_capability_banner: The reduced-capability banner naming
     the garment in use in words, as the launcher does (SPEC.md 12.4). (sv)
   experimenter_sv_rekindle_due: 'The rekindle is due: a timed event that is not a
@@ -362,6 +391,15 @@ screens:
     garment: how many ratings are answered, and Skip calibration under the garment,
     shown only on a pilot rig once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c).
     Nothing else has moved. (sv)'
+  experimenter_sv_touchcal_stopped_recalibrate: 'The participant pressed the stop
+    during touch calibration''s step 4, with step 2''s fit accepted: beside Resume,
+    Rebalance channels… and Restart calibration… are offered, each in the place of
+    its kin in the situational row, and each asks why (docs/LOG.md N7.F12a1). The
+    same in every condition; nothing else moved. (sv)'
+  experimenter_sv_touchcal_stopped_recalibration_used: 'A stop during touch calibration
+    once the re-calibrations a limit allows (recalibrations_max, none by default)
+    are used: Resume only, and one grey line where the two offers were saying why.
+    (sv)'
   participant_en_adjust_just_noticeable: 'The adjustment screen for `just_noticeable`:
     the target, both large buttons drawn with their labels, and the confirm sentence,
     en.'

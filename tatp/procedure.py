@@ -26,6 +26,8 @@ that must be identical everywhere -- what an interruption does to a sequence:
   (SPEC.md 10.6), one step per screen, then runs `then`.
 - `blank_for(seconds, then)` is a `wait` on a blank screen; `introduce(screen, instruction,
   then)` puts up a screen the participant confirms before a new kind of task.
+- `detour(make_child, then)` runs a nested procedure in place of a step an interruption has
+  abandoned, then repeats that step: a re-calibration in the middle of the intervention.
 - `finish(result)` ends the procedure and emits `finished(result)`.
 
 On `Interruptions.interrupted` the innermost procedure cancels its trial and its timer. On
@@ -245,8 +247,47 @@ class Procedure(QObject):
         self._step = None
         child = make_child()
         self._child = child
-        child.finished.connect(lambda result: self._child_done(child, result, on_done))
+
+        # Once only: a procedure can be run again -- touch calibration is, to re-calibrate
+        # (`detour`) -- and its finishing then is not this run's.
+        def done(result: object) -> None:
+            child.finished.disconnect(done)
+            self._child_done(child, result, on_done)
+
+        child.finished.connect(done)
         child.start()
+
+    def detour(
+        self,
+        make_child: Callable[[], Procedure],
+        then: Callable[[object, Callable[[], None]], None],
+    ) -> None:
+        """Run a procedure in place of the step an interruption has just abandoned: the
+        re-calibration during the intervention (docs/LOG.md N7.F12a1), in whichever procedure
+        is innermost. What this one offers the experimenter is withdrawn meanwhile
+        (`suspend_offers`). Then `then(result, go_on)`, where `go_on()` gives the offers back
+        and runs the abandoned step again, as a resume would have, now or after a step of
+        its own."""
+        step = self._step
+        self.suspend_offers()
+        # A go the abandoned step waited for is its own again only when it repeats: a press
+        # before then -- during the detour, or a step `then` runs first -- starts nothing.
+        self.on_proceed(None)
+
+        def go_on() -> None:
+            self.restore_offers()
+            self._step = step
+            if step is not None:
+                step()
+
+        self.run_child(make_child, lambda result: then(result, go_on))
+
+    def suspend_offers(self) -> None:
+        """Withdraw what this procedure offers the experimenter while another runs in its
+        place (`detour`). Nothing, unless a procedure offers something of its own."""
+
+    def restore_offers(self) -> None:
+        """Undo `suspend_offers`, as the abandoned step comes back."""
 
     def train_then(self, scales, then: Callable[[], None]) -> None:
         """The proportionality training for each of `scales` still due, then `then` (10.6).

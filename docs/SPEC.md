@@ -601,6 +601,30 @@ inflation rates differ between channels, and nothing later corrects relative imb
 Whether it matters is for piloting; the software must support the check so it can be answered
 without a code change.
 
+**Re-calibration — at any time while touch is calibrated or delivered** (S, 15 Oct 2026;
+`docs/LOG.md` N7.F12a1, which supersedes R36's narrower recommendation, N7.F10d). The touch is
+not supposed to be uncomfortable, so if it becomes so it is adjusted to salvage the rest of the
+session. During touch calibration and during the intervention while the condition's touch is
+on (touch blocks and pinprick blocks included), the experimenter can **rebalance the channels**
+(steps 3–4 and the evenness check again; only once a fit exists) or **restart the
+calibration** (a new run from step 1, without the VAS training), from the controls or in place
+of Resume after an emergency stop, with a reason from a fixed list. During the intervention
+step 6 is not asked again: the touch calibration's preference stands, so the
+participant-preferred condition's pattern cannot change mid-intervention. The garment goes to
+zero and the step in progress is abandoned as a stop abandons it; the re-calibration runs;
+every condition's delivery is recomputed from it identically; the touch starts again with its
+cue, as at any touch start, before the abandoned step is repeated -- inside a block too, since
+the block's ratings and measures are made under the touch (in the participant-preferred
+condition the session does not wait for the self-start press, as at any touch start, and a
+block that goes on first is flagged). The
+session clock is not paused: alerts sound, and a block that falls due waits, armed, for the
+re-calibration to end. A restart during the intervention includes the "just uncomfortable"
+bracket, on sensitised skin. `touch_calibration.recalibrations_max` limits them per session
+(null, the default, is no limit). Each is logged, each calibration that governed the touch is
+its own `touchcal_channels` set (`calibration_index`), earlier attempts are kept, and the
+session file counts re-calibrations and stops during the intervention as intercurrent events.
+Identical in every condition (§16).
+
 ---
 
 ## 10. Participant interface
@@ -992,7 +1016,8 @@ unaffected — both estimation runs are identical across conditions.
 - Whether it stays on for real data collection is S's call (`docs/LOG.md` N2.4).
 
 Controls: start block, pause, **discard and repeat the last trial**, abort session, timestamped
-free-text note. All logged.
+free-text note, and, while touch is calibrated or delivered, **rebalance channels / restart
+calibration** (§9, re-calibration). All logged.
 
 Discard-and-repeat exists for the case where the filament was delivered badly but the
 participant still responded: the trial is marked discarded, retained in the data with its flag,
@@ -1148,7 +1173,9 @@ the control is never shown and the skip is asserted impossible.
   path that makes them work.
 - **Software emergency stop** on `period` (the blank-screen button): immediately commands all channels to zero, logs the
   press, pauses, and offers resume. Bilaga 1 §3.10 says participants are told pressing it will
-  not disturb the experiment, so resumption must be genuinely clean.
+  not disturb the experiment, so resumption must be genuinely clean. While touch is calibrated
+  or delivered, a re-calibration is offered beside Resume (§9); it ends the stop with the
+  garment left at zero until the re-calibration's own cue.
 - **The participant rehearses that stop once per session, with the garment running** (§10.9).
   The promise in Bilaga 1 §3.10 is only credible to someone who has seen it kept, and the moment
   a participant needs the button is the moment they are least willing to find out what it does.

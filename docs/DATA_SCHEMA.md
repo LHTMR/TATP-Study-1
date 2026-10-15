@@ -104,6 +104,8 @@ written, with an empty value — an absent row and an empty value must not be co
 | `masking_attempts` | - | How many times the participant set the masking level, accumulated across an earplug restart: 1 normally, 2 when earplugs were fitted. Before 5 Oct 2026, how many times the level was raised and re-asked. Each report that the garment was still audible is a `masking_reported_audible` row in `log` (origin `experimenter`, the level at the time in `detail`) |
 | `earplugs_used` | - | `true` when earplugs were fitted under the headphones because the participant could still hear the garment (§10.7) |
 | `fit_preview_reruns` | - | Total re-runs the experimenter chose with the fit preview on, across the session (§11.1); `0` when none. Written at close, with the keys below it, because a re-run can come at any time point |
+| `intervention_emergency_stops` | - | How many times the participant's emergency stop interrupted the session during the intervention (phase `intervention` or `rekindle`), counted the same way in every condition: an intercurrent event for analysis (`docs/research/R36`). A press while already stopped is not counted again. Across a crash, the resumed session's file counts the earlier files' stops too. `0` when none. Never displayed. Written at close; files before 15 Oct 2026 lack it. A stop during a re-calibration in the intervention is counted too, though logged in phase `touch_calibration`: as `intervention_recalibrations`, by whether the intervention had begun, not by phase |
+| `intervention_recalibrations` | - | How many re-calibrations (a rebalance or a restart, `log` event `recalibration`) were begun during the intervention, from the controls or after a stop: a change of the treatment delivered, so an intercurrent event (docs/LOG.md N7.F12a1). One chosen inside a re-calibration there counts too, though its phase is `touch_calibration`: counted by the stage in its `<where>`, not by phase. Carried across a crash. `0` when none. Never displayed. Written at close; files before 15 Oct 2026 lack it |
 | `sensitisation_start_iso` | - | Session t=0; empty until sensitisation begins |
 | `session_end_iso` | - | Written at close |
 | `abort_reason` | - | Empty unless the session was aborted |
@@ -183,6 +185,49 @@ An experimenter's note (§11) is `experimenter_note`, origin `experimenter`, the
 `detail`, at any point in the session, interruptions included. **Sessions before 15 October
 2026 have no notes:** the field was never connected to the log, so anything typed into it then
 was lost (docs/LOG.md N7.F10a).
+
+**Re-calibration** (from 15 Oct 2026, docs/LOG.md N7.F12a1). While touch is being calibrated
+or delivered -- touch calibration, and the intervention while the condition's touch is on,
+blocks included -- the experimenter can rebalance the channels or restart the calibration,
+from the controls or in place of Resume after a stop. Each is a `recalibration` row (origin
+`experimenter`), and so is every plain Resume after a stop there. `detail` is
+`<choice>; <trigger>; <where>; <reason>; <count>`:
+
+- `<choice>`: `resume` (the abandoned step repeated, as after any stop), `rebalance` (steps 3
+  and 4 for every test channel, then the evenness check, then on; new `touchcal_adjust` rows
+  with the next `pass_index`) or `restart` (a new run from step 1 with the next `run_index`,
+  everything after it included; see `touchcal_fit`). During the intervention neither asks the
+  preference selection (step 6) again: the touch calibration's choice is kept, logged
+  `preference_kept`, so the participant-preferred condition's pattern cannot change there.
+- `<trigger>`: `emergency_stop`, or `controls` for one chosen with the session running.
+- `<where>`: the stage's id, as `stage_started` has it, and while a touch calibration runs,
+  `/` and its step, each step with its introduction screen: `training`, `step1_bracket`,
+  `step2_estimation`, `fit_decision`, `step3_match`, `step4_compare` (a channel matched again
+  inside step 4 included), `step5_pleasantness`, `evenness` or `step6_preference`. So
+  `touch_calibration/step3_match` in the stage, `block.2` in the intervention, and
+  `block.2/step1_bracket` for one chosen inside a re-calibration there.
+- `<reason>`: empty for `resume`; otherwise the key of the reason chosen: `channel_uneven` ("a
+  channel felt wrong or uneven"), `too_strong` ("the touch was too strong overall") or `other`.
+- `<count>`: empty for `resume`; otherwise this re-calibration's number in the session, a crash
+  included, against `touch_calibration.recalibrations_max` (null: no limit).
+
+After a stop, a re-calibration ends it with `resumed` whose `detail` reads `emergency_stop;
+garment not restored: <choice>`; from the controls, `interrupted_for_recalibration` (origin
+`experimenter`, the choice in `detail`) zeroes the garment and is followed by `step_abandoned`.
+Either way no `garment_restored` follows: the garment stays at zero until the re-calibration's
+own cue. During the intervention the re-calibration runs in phase `touch_calibration` (log rows,
+`phase_changed`), with the session clock running: alerts sound, and a block that falls due
+waits, armed, until it ends. Then every condition's delivery is recomputed from it and a new
+`touchcal_channels` set is written. The condition's touch starts again before the abandoned
+step is repeated -- inside a block too, whose ratings and measures are made under it -- with
+its cue (`warning_cue`, then `garment_activated`; in the participant-preferred condition the
+self-start prompt, and since the session never waits for the participant's press, inside a
+block `self_start_pending_at_block`, severity `warning`, if the block goes on before it), the
+experimenter shown the touch start for the same time in every condition, a Next step meanwhile
+starting nothing (`proceed_ignored` where an armed block would have launched); unless the step is a wait for the rekindle or the intervention's end that fell due
+meanwhile, which stops the touch. A re-calibration chosen inside another during the
+intervention is counted as an intervention one too. A choice no longer offered when the
+dialog is confirmed is logged `recalibration_ignored` (severity `warning`) and does nothing.
 
 `substitution_not_recorded` (origin `experimenter`, severity `warning`, `detail`
 `trial <n>: <what was typed>`) is written when a filament trial ends with something typed in
@@ -431,7 +476,7 @@ One row per adjustment — Protocol B steps 1, 3 and 5 (§9).
 | t_session_s | float | s | no | Seconds from session t=0 |
 | stage | str | - | yes | `anchor`, `channel_match` or `pleasantness` |
 | run_index | int | - | yes | The run of steps 1 and 2 this belongs to; joins to `touchcal_fit`. A stage-1 re-run starts a new one |
-| pass_index | int | - | yes | For `channel_match`, which pass for this channel: 1, then one more for each step 4 re-adjustment, zero-setting repeat or rebalance. 1 for the other stages |
+| pass_index | int | - | yes | For `channel_match`, which pass for this channel within the run: 1, then one more for each step 4 re-adjustment, zero-setting repeat or rebalance, a rebalance in a re-calibration included. 1 for the other stages |
 | channel | int | - | yes | Channel adjusted |
 | reference_channel | int | - | no | Empty for `anchor` |
 | anchor_percent | float | % | no | Target VAS point: 10 or 90, the two labelled anchors. Empty for `pleasantness`, which has no target |
@@ -485,9 +530,9 @@ One row per estimation run — the fitted rating function and the targets read o
 | timestamp_iso | iso8601 | - | yes | Wall clock at the fit |
 | t_session_s | float | s | no | Seconds from session t=0 |
 | channel | int | - | yes | Reference channel |
-| run_index | int | - | yes | 1 for the first run; incremented for each re-run (§11.1) |
-| superseded | bool | - | yes | `true` if the experimenter re-ran after seeing this fit, or skipped the calibration while it awaited their decision (`touchcal_channels.skipped`), so it was never accepted. The row is retained regardless — a procedure repeatable until it looks right is a forking path unless every attempt is kept |
-| rerun_reason | str | - | no | Free text the experimenter gave when re-running |
+| run_index | int | - | yes | 1 for the first run; incremented for each re-run (§11.1), and for each restart in a re-calibration (`log`, `recalibration`), in the intervention too. A resumed session goes on from the highest number in the files it continues, so the chain never has two runs of one number (from 15 Oct 2026) |
+| superseded | bool | - | yes | `true` if the experimenter re-ran after seeing this fit, or skipped the calibration while it awaited their decision (`touchcal_channels.skipped`), so it was never accepted, or restarted the calibration in a re-calibration before this run's calibration was ever used. The row is retained regardless — a procedure repeatable until it looks right is a forking path unless every attempt is kept. **A run restarted after its fit had been accepted, but before it was used, has two rows**: the accepted one, `false`, and a later copy, `true`, with the `rerun_reason`; the later row supersedes it. A run restarted before its fit has no row. A run whose calibration governed the touch is never superseded, though a later one may replace it: `touchcal_channels` says which governed when |
+| rerun_reason | str | - | no | Free text the experimenter gave when re-running; for a restart in a re-calibration, `recalibration: <reason>` with the reason's key (`log`, `recalibration`) |
 | fit_form | str | - | yes | `log_pressure` or `linear_pressure` (§9 step 2) |
 | intercept | float | - | no | `a` in `rating ~ a + b·log(pressure)`. This and the six columns after it are empty when the run had no fit, because the step 1 bracket left nothing to sample (`stage1_failures` says `bracket_unusable`) |
 | slope | float | - | no | `b` |
@@ -534,7 +579,7 @@ is a different thing from a tie and should not be settled in advance (`docs/LOG.
 | t_session_s | float | s | no | Seconds from session t=0 |
 | channel | int | - | yes | Test channel |
 | reference_channel | int | - | yes | The reference, channel 3 (§9) |
-| comparison_index | int | - | yes | 1-based, across the whole session's comparisons |
+| comparison_index | int | - | yes | 1-based, across the whole session's comparisons; a resumed session goes on from the files it resumes (from 15 Oct 2026) |
 | pass_index | int | - | yes | 1 for the first check of a channel; 2 after a re-adjustment (`docs/research/R33`) |
 | pair_index | int | - | yes | Which pair within the pass. A pair is both orders; a second pair runs only when the first favoured one channel in both (R33) |
 | order | str | - | yes | `test_first` or `reference_first` — both orders are run (§9) |
@@ -552,14 +597,16 @@ is a different thing from a tie and should not be settled in advance (`docs/LOG.
 ### touchcal_channels
 
 One row per channel per accepted touch calibration (§9) — what the intervention delivers, and
-what a resumed session reads back instead of recalibrating (§15). **Recorded, never displayed:**
+what a resumed session reads back instead of recalibrating (§15): the latest set, by
+`calibration_index`, since a re-calibration during the intervention adds a set of its own. **Recorded, never displayed:**
 the per-condition pressures and the preferred pattern would name the condition on a screen (§16).
 Every value is on this channel, through its gain, and held inside [0, ceiling].
 
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|
 | timestamp_iso | iso8601 | - | yes | Wall clock when the calibration finished |
-| t_session_s | float | s | no | Seconds from session t=0 |
+| t_session_s | float | s | no | Seconds from session t=0 when the calibration finished; empty before t=0. The set governs the condition's touch from then (from the intervention's start for the one before t=0) until the next set's `t_session_s`; the touch it governs starts at the next `garment_activated` in `log` |
+| calibration_index | int | - | yes | Which set of rows this is: 1 for the touch calibration, one more for each re-calibration during the intervention (docs/LOG.md N7.F12a1), continuing across a crash. A re-calibration during the touch calibration itself writes no set until the calibration ends. Files before 15 Oct 2026 lack the column: read it as 1 |
 | run_index | int | - | yes | The accepted run; joins to `touchcal_fit` |
 | channel | int | - | yes | Channel |
 | reference_channel | int | - | yes | The reference, channel 3 (§9) |
@@ -591,7 +638,7 @@ calibrated level. A rebalance re-runs steps 3 and 4 and asks again, so there can
 |---|---|---|---|---|
 | timestamp_iso | iso8601 | - | yes | Wall clock at the answer |
 | t_session_s | float | s | no | Seconds from session t=0 |
-| check_index | int | - | yes | 1 for the first question, incremented after each rebalance |
+| check_index | int | - | yes | 1 for the first question, incremented each time it is asked again in the session: after a rebalance, or in a re-calibration (`log`, `recalibration`); a resumed session goes on from the files it resumes (from 15 Oct 2026) |
 | level_kpa | float | kPa | yes | Reference-scale level the pattern played at; every channel through its gain |
 | judgement | str | - | yes | `even` or `uneven` |
 | rebalance_offered | bool | - | yes | `true` when an `uneven` answer put the rebalance to the experimenter; `false` once `evenness_max_rebalances` is used up |
@@ -603,7 +650,10 @@ calibrated level. A rebalance re-runs steps 3 and 4 and asks again, so there can
 
 One row per preference selection (§9 step 6) — every session, in every condition, so its presence
 is not a tell (§16). **Recorded, never displayed:** in the participant-preferred condition the
-chosen pattern is the condition's pattern.
+chosen pattern is the condition's pattern. A re-calibration during touch calibration
+(`log`, `recalibration`) that reaches step 6 again asks again, so a session can have more than
+one; the calibration's choice is the last. One during the intervention never asks: it keeps
+the touch calibration's (`preference_kept`).
 
 | Column | Type | Unit | Required | Description |
 |---|---|---|---|---|

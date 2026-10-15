@@ -976,6 +976,8 @@ class _Series(Procedure):
         self.applications = 0
         # (table, the row's timestamp_iso, its trial_index) while a discard is accepted.
         self._discardable: tuple[str, str, int] | None = None
+        # What was discardable when a re-calibration took this protocol's place.
+        self._held_discardable: tuple[str, str, int] | None = None
 
     def connect_actions(self) -> None:
         self.experimenter.discard_requested.connect(self._on_discard)
@@ -983,6 +985,17 @@ class _Series(Procedure):
     def disconnect_actions(self) -> None:
         self.experimenter.discard_requested.disconnect(self._on_discard)
         self._set_discardable(None)
+
+    def suspend_offers(self) -> None:
+        """A re-calibration runs in this protocol's place (docs/LOG.md N7.F12a1): Discard is
+        withdrawn, so neither it nor the interval its press would start runs under the
+        calibration, and offered again on the way back."""
+        self._held_discardable = self._discardable
+        self._set_discardable(None)
+
+    def restore_offers(self) -> None:
+        self._set_discardable(self._held_discardable)
+        self._held_discardable = None
 
     def _set_discardable(self, discardable: tuple[str, str, int] | None) -> None:
         # The button is enabled only while there is something to discard (docs/LOG.md N7.U10).
