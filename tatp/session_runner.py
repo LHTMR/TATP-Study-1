@@ -45,7 +45,7 @@ import random
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import QApplication
 
 from tatp import pinprick
@@ -258,6 +258,9 @@ class TouchBlock(Procedure):
 class SessionRunner(Procedure):
     """SPEC.md 2 from the garment fitting to the closing screen. See the module docstring."""
 
+    # The id of each stage as it starts: a demonstration's Finish this stage (tatp/demo.py).
+    stage_started = Signal(str)
+
     def __init__(self, rig: Rig, resume: resumption.ResumeState | None = None):
         super().__init__(rig)
         config = self.session.config
@@ -283,6 +286,8 @@ class SessionRunner(Procedure):
         # Stages a resumed session found completed (`_resume`); empty for a fresh session.
         self._completed: frozenset[str] = frozenset()
         self._launch: Callable[[], None] | None = None
+        # The session time the timed wait now running ends at (`_wait_until`), for skip_wait.
+        self.waiting_until_s: float | None = None
         self._alarms: list[tuple[float, str]] = []
         self._alarm_timer = QTimer(self)
         self._alarm_timer.setSingleShot(True)
@@ -389,6 +394,7 @@ class SessionRunner(Procedure):
     def _run_stage(self, index: int) -> None:
         self.stage_index = index
         stage = self.stages[index]
+        self.stage_started.emit(stage.id)
         if self.session.phase != stage.phase:
             self.session.set_phase(stage.phase)
         self.session.log("stage_started", detail=stage.id)
@@ -934,8 +940,10 @@ class SessionRunner(Procedure):
             # armed early could be launched before it is due, so the clock has the last word.
             remaining_s = t_session_s - self.session.clock.t_session_s()
             if remaining_s <= 0:
+                self.waiting_until_s = None
                 then()
             else:
+                self.waiting_until_s = t_session_s
                 self._after(remaining_s, check)
 
         def begin() -> None:
@@ -943,6 +951,23 @@ class SessionRunner(Procedure):
             check()
 
         self.step(begin)
+
+    def skip_wait(self, lead_s: float) -> float | None:
+        """End the timed wait now running, `lead_s` before what it waits for: a
+        demonstration's Skip the wait (tatp/demo.py). Returns the session seconds skipped, or
+        None when there is no wait to skip -- a protocol running, or the experimenter's go
+        awaited -- or less than `lead_s` of one is left."""
+        if self.waiting_until_s is None or self._pending is None:
+            return None
+        skipped_s = self.waiting_until_s - lead_s - self.session.clock.t_session_s()
+        if skipped_s <= 0:
+            return None
+        self.session.clock.skip(skipped_s)
+        # The wait's own check and the alerts were timed for the old clock: run them now.
+        self._timer.stop()
+        self._fire()
+        self._schedule_alarm()
+        return skipped_s
 
     def _arm(self, at: Upcoming, instruction: str, then: Callable[[], None]) -> None:
         """Wait until due, then wait for the experimenter's go, alerting either side of due."""

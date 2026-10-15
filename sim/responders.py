@@ -42,6 +42,7 @@ import ast
 import functools
 import time
 import weakref
+from collections import deque
 from pathlib import Path
 from types import CodeType
 
@@ -230,6 +231,11 @@ class VirtualParticipant(QObject):
         # window. Parentless, it outlived its test and ticked into a deleted window in a later
         # one (docs/LOG.md N7.U9).
         super().__init__(parent if parent is not None else window)
+        # As fast as it can (the validator) until `set_pace` slows it down to be watched.
+        self.reaction_s = 0.0
+        self.press_interval_s = 0.0
+        self._queue: deque = deque()
+        self._watching = False
         self.window = window
         self.garment = garment
         self.model = model or ObserverModel(seed)
@@ -280,25 +286,6 @@ class VirtualParticipant(QObject):
         self._adjust_goal: float | None = None
         self._unchanged_taps = 0
         self._choice_felt = dict.fromkeys(SIDES, MIN_PCT)
-        # A person watches the comparison continuously. A timer's look at the screen can fall
-        # between two short stimuli at the validator's speed, so the emphasis is observed as it
-        # changes rather than sampled.
-        # Weak references both ways, so the watcher left on the window makes no reference
-        # cycle: a cycle keeps a closed window alive until the collector runs, at an arbitrary
-        # moment in whatever runs next.
-        me, seen = weakref.ref(self), weakref.ref(window)
-
-        def watched(side: str | None) -> None:
-            type(seen()).emphasise_choice(seen(), side)
-            participant = me()
-            if participant is not None:
-                participant._watch_emphasis(side)
-
-        window.emphasise_choice = watched
-        # The same goes for the warning cue, which is what separates two adjustments with the
-        # same prompt: seen as it goes up, so the next screen is always a new one.
-        window.warning_cue_shown.connect(self._saw_cue)
-
         self._timer = QTimer(self)
         self._timer.setInterval(int(round(TICK_S * MS_PER_S)))
         self._timer.timeout.connect(self._tick)
@@ -306,12 +293,49 @@ class VirtualParticipant(QObject):
     # -- lifecycle ---------------------------------------------------------------------
 
     def start(self) -> None:
+        """Watch and answer the screen. Can follow `stop`: a demonstration hands the remote
+        between this participant and a person."""
+        if not self._watching:
+            self._watch()
+        self._token = None  # whatever is up is a new screen to this participant
         self._timer.start()
 
     def stop(self) -> None:
         self._timer.stop()
-        del self.window.emphasise_choice  # the class's own method again
-        self.window.warning_cue_shown.disconnect(self._saw_cue)
+        self._queue.clear()
+        self._let_go()
+        if self._watching:
+            self._watching = False
+            del self.window.emphasise_choice  # the class's own method again
+            self.window.warning_cue_shown.disconnect(self._saw_cue)
+
+    def _watch(self) -> None:
+        # A person watches the comparison continuously. A timer's look at the screen can fall
+        # between two short stimuli at the validator's speed, so the emphasis is observed as it
+        # changes rather than sampled.
+        # Weak references both ways, so the watcher left on the window makes no reference
+        # cycle: a cycle keeps a closed window alive until the collector runs, at an arbitrary
+        # moment in whatever runs next.
+        me, seen = weakref.ref(self), weakref.ref(self.window)
+
+        def watched(side: str | None) -> None:
+            type(seen()).emphasise_choice(seen(), side)
+            participant = me()
+            if participant is not None:
+                participant._watch_emphasis(side)
+
+        self.window.emphasise_choice = watched
+        # The same goes for the warning cue, which is what separates two adjustments with the
+        # same prompt: seen as it goes up, so the next screen is always a new one.
+        self.window.warning_cue_shown.connect(self._saw_cue)
+        self._watching = True
+
+    def set_pace(self, reaction_s: float, press_interval_s: float) -> None:
+        """How long it looks at a new screen before pressing, and how long between presses,
+        in real seconds. Both zero: as fast as it can, as the validator runs it."""
+        self.reaction_s = reaction_s
+        self.press_interval_s = press_interval_s
+        self._timer.setInterval(int(round(max(press_interval_s, TICK_S) * MS_PER_S)))
 
     def feel_filament(self, force_mn: float) -> None:
         """The experimenter has applied a filament of this force. Called by the experimenter."""
@@ -333,7 +357,14 @@ class VirtualParticipant(QObject):
         token = self._token_for(screen)
         if token != self._token:
             self._token = token
+            self._queue.clear()  # presses meant for the screen before
             self._new_screen(screen)
+        if self._queue:
+            # Watched: one press per look, so the marker is seen to move.
+            self._do(self._queue.popleft())
+            return
+        if time.monotonic() - self._shown_at_s < self.reaction_s:
+            return  # still reading the screen
         if screen is window.vas:
             self.on_vas()
         elif screen is window.control:
@@ -441,8 +472,7 @@ class VirtualParticipant(QObject):
         if control.target == self._preference_intro:
             # One step on from where the selection starts, then choose it.
             self._handled = True
-            self.tap(Action.INCREASE)
-            self.tap(Action.CONFIRM)
+            self._presses([Action.INCREASE, Action.CONFIRM])
         elif control.target == self._match_prompt:
             self.match()
         elif self._adjust_goal is not None:
@@ -473,9 +503,9 @@ class VirtualParticipant(QObject):
             self.on_stop_rehearsal()
         elif message.text in self._level_screens:
             self._handled = True
-            for _ in range(self._level_screens[message.text]):
-                self.tap(Action.INCREASE)
-            self.tap(Action.CONFIRM)
+            self._presses(
+                [Action.INCREASE] * self._level_screens[message.text] + [Action.CONFIRM]
+            )
         elif self._confirm_symbol in message.text:
             self._handled = True
             self.tap(Action.CONFIRM)
@@ -509,13 +539,30 @@ class VirtualParticipant(QObject):
         `record` False is the training's practice, which is not one of this participant's
         ratings."""
         side = min(SIDES, key=lambda s: abs(self._vas_start[s] - pct))
-        self.tap(Action.DECREASE if side == "left" else Action.INCREASE)
         steps = int(round((pct - self._vas_start[side]) / self._vas_step))
-        for _ in range(abs(steps)):
-            self.tap(Action.INCREASE if steps > 0 else Action.DECREASE)
+        presses = [Action.DECREASE if side == "left" else Action.INCREASE]
+        presses += [Action.INCREASE if steps > 0 else Action.DECREASE] * abs(steps)
         if record:
-            self.ratings.append((scale, self.window.vas.state.percent))
-        self.tap(Action.CONFIRM)
+            # Where the marker is when confirmed, which is what the software records.
+            presses.append(
+                lambda: self.ratings.append((scale, self.window.vas.state.percent))
+            )
+        self._presses([*presses, Action.CONFIRM])
+
+    def _presses(self, presses: list) -> None:
+        """A run of presses (an Action, or a step to take between them): at once, or one per
+        look when watched (`set_pace`)."""
+        if self.press_interval_s > 0:
+            self._queue.extend(presses)
+        else:
+            for press in presses:
+                self._do(press)
+
+    def _do(self, press) -> None:
+        if callable(press):
+            press()
+        else:
+            self.tap(press)
 
     def adjust(self, goal_pct: float) -> None:
         """Tap towards the goal, feeling the touch after each tap; confirm once crossed."""
@@ -541,7 +588,8 @@ class VirtualParticipant(QObject):
             self.confirm_adjustment()
             return
         action = Action.INCREASE if start < 0 else Action.DECREASE
-        for _ in range(TAPS_PER_TICK):
+        # Watched, one tap per look, so the pressure is seen to climb.
+        for _ in range(1 if self.press_interval_s > 0 else TAPS_PER_TICK):
             # The pressure, not the felt difference, says whether a tap moved anything: well
             # below threshold every pressure is felt as nothing.
             before = dict(self.garment.pressure_kpa)

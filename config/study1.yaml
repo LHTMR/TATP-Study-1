@@ -14,6 +14,24 @@ design:
   limbs: [left, right]               # target limb alternates between visits (SPEC.md 2)
   allocation_file: config/allocation.csv
 
+demo:
+  # A demonstration session, to show the software without a participant or the three hours
+  # (run_session.py --demo; tatp/demo.py; docs/LOG.md N7.D23). Never study data: its own code
+  # and allocation, a fresh folder under data_folder per run, and `demo` in the session file.
+  participant_code: "999"            # above the pilot codes, and in no study allocation
+  allocation_file: config/demo_allocation.csv
+  data_folder: data/demo
+  clock_speed: 1.0                   # the default; --demo-speed overrides it. 1 keeps every
+                                     # interval as a participant meets it; Skip the wait cuts
+                                     # the long ones
+  skip_lead_s: 15.0                  # a skipped wait stops this long before its step is due,
+                                     # so the countdown and the due alert are still seen
+  # How a watchable simulated participant and experimenter pace themselves, in real seconds:
+  # slow enough to follow, quick enough that a stage does not drag.
+  participant_reaction_s: 1.0        # from a new screen to the first press on it
+  participant_press_interval_s: 0.2  # between presses, so the marker is seen to move
+  experimenter_reaction_s: 1.5       # from a new instruction to pressing Next step
+
 fit_preview:
   # SPEC.md 11.1. Shows the experimenter the fitted curve, its quality and the derived values
   # at the end of the F40 estimation and the touch-calibration estimation run, with an option

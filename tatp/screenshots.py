@@ -197,6 +197,7 @@ def _experimenter_view(**overrides) -> dict:
         "reduced_capability_device": False,
         "unresolved_open_items": [],
         "fit_preview_enabled": False,
+        "demo": False,
         "next_event": None,
         "interruption": None,
         "hardware": {"connected": True, "link_lost": False, "faults": [],

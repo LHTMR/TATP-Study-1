@@ -1,0 +1,6 @@
+# TATP Study 1 demonstration sessions (study1.yaml demo; docs/LOG.md N7.D23). Not study data.
+# One code, one session per condition: the session number chosen at a demo picks the condition.
+participant_code,session_number,condition,limb
+999,1,sham,left
+999,2,ct_targeted,right
+999,3,participant_preferred,left
