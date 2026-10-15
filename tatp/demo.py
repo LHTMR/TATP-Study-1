@@ -11,10 +11,23 @@ commands and data files -- with these things changed, and none of them able to r
   demonstration shows what a participant sees (SPEC.md 16). Each run writes its own copy of the
   allocation with the conditions shuffled across the session numbers, so a session number cannot
   be chosen to see a condition (open item L16).
-- **Nothing worn, and any keyboard.** Always the mock garment: a demonstration's speed and its
-  simulated experimenter, who resumes after an emergency stop on its own, belong nowhere near a
-  real garment (SPEC.md 13, 10.9). And every keyboard is the remote (`any_keyboard`), so it runs
-  on any computer, with or without the remote, and a simulated participant's presses arrive.
+- **Any garment, and any keyboard.** The mock garment unless another is chosen, as for any
+  session (docs/LOG.md N7.F12f). On a worn garment -- a driver declaring `worn`, which is all
+  but the mock -- a demonstration is fully manual, a conservative default for S to revisit
+  (SPEC.md 13, 10.9): it runs at real time only (`check_speed`), since above it the rate limit
+  is looser in real time; the participant and the experimenter are both people, never
+  simulations (`check_person`) -- a simulated participant would raise pressure on someone
+  else's arm, and a simulated experimenter would press Next step into garment output with
+  nobody at the experimenter screen; so Finish this stage, which makes both fast, is not
+  offered. What is left is the garment display and Skip the wait. As a second guard, the
+  simulated experimenter never resumes an interruption by itself there either. The ceiling,
+  the rate limit and the stop are the session's own, unchanged. And every keyboard is the remote
+  (`any_keyboard`), so it runs on any computer, with or without the remote, and a simulated
+  participant's presses arrive.
+- **What the garment is doing**, channel by channel, in the Demo controls window
+  (`tatp/ui/garment_display.py`), in every phase -- which lets a watcher infer the condition
+  during the intervention. S asked for it, 15 Oct 2026 (open item L16); a real session's
+  experimenter screen never has it.
 - **Who presses.** The participant and the experimenter are each, independently, a person, a
   simulation paced to be watched, or a simulation as fast as it can go (`OFF`, `WATCH`, `FAST`;
   `sim/responders.py`, `sim/experimenters.py`, the validator's own). Either can be changed at
@@ -46,13 +59,16 @@ from PySide6.QtWidgets import QComboBox, QGridLayout, QVBoxLayout, QWidget
 from tatp.clock import Clock
 from tatp.config import REPO_ROOT, Config
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source
-from tatp.session import with_session_choices
+from tatp.session import DRIVERS, with_session_choices
 from tatp.session_runner import SessionRunner
+from tatp.ui.garment_display import GarmentDisplay
 from tatp.ui.widgets import (
+    GROUP_GAP_PX,
     ITEM_GAP_PX,
     MARGIN_PX,
     SIZE_BODY,
     SIZE_SMALL,
+    WARNING_COLOUR,
     button,
     label,
     sized,
@@ -64,7 +80,7 @@ OFF = "off"
 WATCH = "watch"
 FAST = "fast"
 MODES = (OFF, WATCH, FAST)
-# The only garment a demonstration drives: nothing is worn.
+# A demonstration's garment unless another is chosen, and the only one nothing is worn on.
 DEMO_GARMENT = "mock"
 # The slowest a demonstration runs: real time, as a participant meets every interval.
 REAL_TIME_SPEED = 1.0
@@ -132,23 +148,49 @@ class DemoError(ValueError):
     """A demonstration asked for something its settings do not allow."""
 
 
-def check_speed(demo: dict, speed: float) -> float:
-    """The speed, if a demonstration may run at it: real time to `demo.max_clock_speed`."""
+def worn_garment(garment: str) -> bool:
+    """Whether someone can be wearing what the named driver commands, as the driver declares
+    (`GarmentController.worn`): all but the mock."""
+    if garment not in DRIVERS:
+        raise DemoError(f"garment {garment!r} is not one of {sorted(DRIVERS)}")
+    return DRIVERS[garment].worn
+
+
+def check_speed(demo: dict, speed: float, garment: str) -> float:
+    """The speed, if a demonstration may run at it: real time to `demo.max_clock_speed`, and
+    real time only on a worn garment, whose rate limit is in session time (SPEC.md 13)."""
     highest = float(demo["max_clock_speed"])
     if not REAL_TIME_SPEED <= speed <= highest:
         raise DemoError(f"a demonstration runs at {REAL_TIME_SPEED:g} to {highest:g} times "
                         f"real speed (study1.yaml demo.max_clock_speed), not {speed:g}")
+    if worn_garment(garment) and speed != REAL_TIME_SPEED:
+        raise DemoError(f"a demonstration on the {garment} garment runs at real time "
+                        f"({REAL_TIME_SPEED:g}), not {speed:g}: faster, its rate limit would "
+                        f"be looser in real time (SPEC.md 13)")
     return speed
 
 
-def demo_config(loaded: Config, speed: float) -> Config:
-    """The configuration a demonstration is checked and run with: a folder of its own, the mock
-    garment, every keyboard the remote, real-time settings kept. Nothing is written yet: the
-    folder and its shuffled allocation are made when the demonstration starts (`begin_run`),
-    so a check that is refused or cancelled leaves nothing behind."""
+def check_person(garment: str, who: str, mode: str) -> str:
+    """`who`'s mode -- the participant's or the experimenter's -- if a demonstration may run
+    with it: on a worn garment, a person only. A simulated participant raises pressure in
+    every adjustment, up to the ceiling, on whoever is wearing it; a simulated experimenter
+    presses Next step into garment output with nobody at the experimenter screen. The
+    conservative default until S decides (SPEC.md 13; docs/LOG.md N7.F12f)."""
+    assert mode in MODES, f"no {who} mode {mode!r}; one of {MODES}"
+    if worn_garment(garment) and mode != OFF:
+        raise DemoError(f"a demonstration on the {garment} garment has a person as the "
+                        f"{who}, not a simulation ({mode}): someone may be wearing it")
+    return mode
+
+
+def demo_config(loaded: Config, speed: float, garment: str) -> Config:
+    """The configuration a demonstration is checked and run with: a folder of its own, the
+    garment chosen, every keyboard the remote, real-time settings kept. Nothing is written yet:
+    the folder and its shuffled allocation are made when the demonstration starts
+    (`begin_run`), so a check that is refused or cancelled leaves nothing behind."""
     demo = loaded.study1["demo"]
-    check_speed(demo, speed)
-    config = with_session_choices(loaded, run_folder(demo), DEMO_GARMENT)
+    check_speed(demo, speed, garment)
+    config = with_session_choices(loaded, run_folder(demo), garment)
     hardware = with_key_source(config.hardware, ANY_KEYBOARD)
     # The study's own folder, whose instance lock a demonstration holds
     # (`tatp.preflight.lock_folder`), so one never runs beside a session from it, or beside
@@ -184,6 +226,13 @@ class Demo(QObject):
         rig = runner.rig
         self.session = rig.session
         self.settings = self.session.config.study1["demo"]
+        self.garment_name = self.session.config.hardware["garment"]["driver"]
+        # Whether someone may be wearing it: then people are the participant and the
+        # experimenter, and Finish this stage is not offered (`check_person`). Checked before
+        # either simulation starts, so a refusal leaves nothing running.
+        self.worn = worn_garment(self.garment_name)
+        check_person(self.garment_name, "participant", participant_mode)
+        check_person(self.garment_name, "experimenter", experimenter_mode)
         self.participant = VirtualParticipant(
             rig.participant, self.session.garment, self.session.config, seed
         )
@@ -191,6 +240,16 @@ class Demo(QObject):
         # simulated participant beside a person at the experimenter screen can feel it.
         self.experimenter = VirtualExperimenter(rig, self.participant, parent=self)
         self.experimenter.rerun_reason = RERUN_REASON
+        if self.worn:
+            # Stage boundary (CLAUDE.md): what `check_speed` refused, checked again on the
+            # session actually built.
+            assert self.session.clock.speed == REAL_TIME_SPEED, (
+                f"a demonstration on the {self.garment_name} garment runs at real time, not "
+                f"{self.session.clock.speed}"
+            )
+            # SPEC.md 10.9: on something that may be worn, the resume is a person's. A second
+            # guard: the simulated experimenter never acts there anyway.
+            self.experimenter.resumes_by_itself = False
         self.experimenter.start()
         # None until set, so the starting modes are logged too, a person's included.
         self.participant_mode: str | None = None
@@ -204,7 +263,7 @@ class Demo(QObject):
         self.set_experimenter(experimenter_mode)
 
     def set_participant(self, mode: str) -> None:
-        assert mode in MODES, f"no participant mode {mode!r}; one of {MODES}"
+        check_person(self.garment_name, "participant", mode)
         if mode == OFF:
             self.participant.stop()
         else:
@@ -221,7 +280,7 @@ class Demo(QObject):
         self.participant_mode = mode
 
     def set_experimenter(self, mode: str) -> None:
-        assert mode in MODES, f"no experimenter mode {mode!r}; one of {MODES}"
+        check_person(self.garment_name, "experimenter", mode)
         reaction_s = float(self.settings["experimenter_reaction_s"]) if mode == WATCH else 0.0
         self.experimenter.set_pace(mode != OFF, reaction_s)
         self._log_mode("experimenter", self.experimenter_mode, mode)
@@ -249,7 +308,11 @@ class Demo(QObject):
 
     def finish_stage(self) -> None:
         """Both simulations, fast, until the next stage starts; then as they were. A timed
-        wait the stage is in is skipped too, since being fast does not shorten it."""
+        wait the stage is in is skipped too, since being fast does not shorten it. Not on a
+        worn garment, where both are people (`check_person`)."""
+        if self.worn:
+            raise DemoError(f"Finish this stage is not offered on the {self.garment_name} "
+                            f"garment: the participant and the experimenter are people")
         if not self._before_finish:
             self._before_finish = {"participant": self.participant_mode,
                                    "experimenter": self.experimenter_mode}
@@ -270,6 +333,8 @@ class Demo(QObject):
     def stop(self) -> None:
         self.participant.stop()
         self.experimenter.stop()
+        if self.controls is not None:
+            self.controls.garment_display.timer.stop()
 
 
 class DemoControls(QWidget):
@@ -295,6 +360,20 @@ class DemoControls(QWidget):
         self.finish_button.clicked.connect(self.finish_stage)
         self.status = label(SIZE_SMALL, wrap=True)
         demo.runner.stage_started.connect(self._sync)
+        # First, so the status line's changing length never moves it.
+        self.garment_display = GarmentDisplay(
+            demo.session.garment, words, float(demo.settings["garment_display_refresh_s"]),
+            float(demo.settings["garment_highlight_s"]),
+        )
+        # On a worn garment the participant and the experimenter are people, and so Finish
+        # this stage, which makes both simulations fast, is not offered (`check_person`).
+        # Fixed for the demonstration, so the note below is there from the start or never.
+        self.participant_mode.setEnabled(not demo.worn)
+        self.experimenter_mode.setEnabled(not demo.worn)
+        self.finish_button.setEnabled(not demo.worn)
+        self.worn_note = label(SIZE_SMALL, wrap=True, colour=WARNING_COLOUR)
+        self.worn_note.setText(words["worn_note"])
+        self.worn_note.setVisible(demo.worn)
 
         grid = QGridLayout()
         for row, (key, modes) in enumerate((("participant", self.participant_mode),
@@ -306,9 +385,12 @@ class DemoControls(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(MARGIN_PX, MARGIN_PX, MARGIN_PX, MARGIN_PX)
         layout.setSpacing(ITEM_GAP_PX)
+        layout.addWidget(self.garment_display)
+        layout.addSpacing(GROUP_GAP_PX)
         layout.addLayout(grid)
         layout.addWidget(self.skip_button)
         layout.addWidget(self.finish_button)
+        layout.addWidget(self.worn_note)
         layout.addWidget(self.status)
 
     def _modes(self, who: str, current: str) -> QComboBox:

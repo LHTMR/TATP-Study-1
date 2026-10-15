@@ -18,8 +18,9 @@ The normal experimenter runs a whole session from the experimenter screen, and o
 - **It enters the four mapping distances** once a time point's four paths have run.
 - **It resumes after an interruption**, through `resume_requested`, after `resume_after_s` of
   session time. The resume is the experimenter's and never a timer's (SPEC.md 10.9); this is
-  the experimenter. It never re-calibrates (docs/LOG.md N7.F12a1), from the controls or in
-  place of Resume, so the validator's runs keep their shape.
+  the experimenter. Not with `resumes_by_itself` false, as a demonstration on a real garment
+  sets it: a person resumes then. It never re-calibrates (docs/LOG.md N7.F12a1), from the
+  controls or in place of Resume, so the validator's runs keep their shape.
 - It accepts a touch-calibration estimate that is put to it, re-runs one that cannot be used,
   and proceeds past an uneven or zero-gain question, so a session never waits on it.
 
@@ -137,6 +138,9 @@ class VirtualExperimenter(QObject):
         self.reaction_s = 0.0
         # The reason recorded when it re-runs an estimate that cannot be used.
         self.rerun_reason = SCENARIO_ENDED
+        # False for a demonstration on a real garment (tatp/demo.py): it then leaves every
+        # interruption, an emergency stop above all, for a person to resume (SPEC.md 10.9).
+        self.resumes_by_itself = True
         self._instruction = ""
         self._instruction_at_s = 0.0
 
@@ -265,7 +269,7 @@ class VirtualExperimenter(QObject):
 
     def _on_interrupted(self, kind: str) -> None:
         # A person at the experimenter screen resumes; a re-calibration is never resumed.
-        if not self.acts or kind == RECALIBRATION:
+        if not self.acts or not self.resumes_by_itself or kind == RECALIBRATION:
             return
         # A child timer rather than `QTimer.singleShot`, so it dies with this object and a
         # resume can never reach a later run.

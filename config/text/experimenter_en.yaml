@@ -519,6 +519,24 @@ demo:
   skipped: 'Skipped {value} min of waiting.'
   nothing_to_skip: Nothing to skip now.
   finishing: Finishing this stage…
+  # What the garment is commanded to do, channel by channel (tatp/ui/garment_display.py,
+  # LOG N7.F12f).
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_title: The garment, as commanded
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_channel: Channel {channel}
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_on: "on"
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_off: "off"
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_pressure: '{state}, {value} kPa'
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_not_connected: 'Not connected: nothing is commanded.'
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  garment_link_lost: 'Link lost: the outputs may still hold their last state.'
+  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
+  worn_note: 'Someone may be wearing this garment: the participant and the experimenter are people, not simulations, and Finish this stage is off.'
 
 dialogs:
   abort_confirm: Abort this session? All data collected so far is kept.

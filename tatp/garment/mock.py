@@ -21,6 +21,7 @@ class MockGarment(GarmentController):
     per_channel_pressure = True
     # It touches nobody, so it is never the study garment (`GarmentController.pilot_rig`).
     pilot_rig = True
+    worn = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
