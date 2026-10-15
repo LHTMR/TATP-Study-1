@@ -1,101 +1,88 @@
 # STATUS
 
-**Last updated:** 15 October 2026 (evening).
+**Last updated:** 15 October 2026 (night).
 **Milestone:** 6 (pilotable), in progress, in lab piloting.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
-back (`CLAUDE.md`, Committing). **Open:** `pilot/recalibration-after-stop`, the last item of
-S's 15 Oct pilot list (below), being implemented. `pilot/swedish-docs` belongs to another
-session. `make check` needs the PC to itself: parallel test runs stall the whole-demo test
-and the validator.
+back (`CLAUDE.md`, Committing). No branch of this session is open. `pilot/swedish-docs`
+belongs to another session. `make check` needs the PC to itself: parallel test runs stall the
+whole-demo test and the validator (an investigation of that stall is under way, below).
+`main` is ahead of `origin` and not pushed.
 
 ---
 
 ## Where things stand
 
-**The build runs a whole session**, against the mock garment or the prototype sleeve, and a
-demonstration mode (launcher *Run a demo*, LOG N7.D23). `run_session.py` with no arguments
-opens the launcher (§4.1).
+**The build runs a whole session** against the mock garment or the prototype sleeve, and a
+demonstration on either. `run_session.py` with no arguments opens **the hardware page**
+(N7.F12e), then the launcher.
 
-**S's pilot list of 15 Oct 2026 is done in `main`, except re-calibration after a stop**
-(in progress). Every branch below had `/code-review high` and spec-review, and `make check`
-passed on the merged tree (1215 tests, 36 validator checks, 202 screens):
-- **Notes were never saved** (N7.F10a): the field was connected to nothing since Milestone 5.
-  Now logged (`experimenter_note`) and confirmed in the field. Sessions before 15 Oct have none.
-- **Check the hardware's channel buttons say on/off** (N7.F10b).
-- **The demo stuck in Förberedelse** (N7.F10c): the masking check's noise could not open the
-  sound device (inferred from the log, likely the Bose headset not connected). Preflight now
-  refuses a sound device that cannot be opened; an uncaught error now stops the session
-  visibly and leaves it open to a resume.
-- **The screen review** ("mycket för ögonen"; "not always clear what was going on"), three
-  streams, rows N7.F11a/b/c:
-  - experimenter layout: two tiers of controls, idle ones hidden; one-line banners; the
-    instruction fixed in place and dimmed during a stop; the substitution field only during
-    a filament trial (it used to lose what was typed);
-  - experimenter instructions: what to do and say at each step, read-aloud sentences in the
-    participant's language (`say:`), per-stage ready lines, heat/capsaicin/rekindle steps
-    including a thermode-removal Next step, warnings that persist;
-  - participant flow: an intro before each touch-calibration task, the cue explained,
-    standby during waits and decisions, a break between ratings, a session end that stays up
-    and an intervention end that waits.
-- **Re-calibration after a stop** (N7.F10d, [R36](research/R36-recalibration-after-emergency-stop.md)):
-  offered in touch calibration only (Rebalance channels / Restart calibration, once per
-  session); Resume only elsewhere, including the intervention.
+**Everything S raised on 15 Oct 2026 is in `main`**, every branch reviewed (`/code-review
+high`, spec-review) with `make check` passing on the merged tree:
+- **The pilot list** (N7.F10a–c, N7.F11a/b/c): notes saved and confirmed (they were never
+  saved before); channel on/off in Check the hardware; a missing sound device refused, and
+  any uncaught error stopping the session visibly and leaving it resumable; the experimenter
+  screen calmer (two tiers of controls, one-line banners, the instruction fixed in place); each
+  step saying what to do and what to say aloud, in the participant's language; introductions
+  before each touch-calibration task; standby during waits; the session end and the
+  intervention end announced.
+- **The evening requests:**
+  - the hardware page before the launcher, with live detection, alternatives to the remote
+    for pilots and demos, and MacBook support (N7.F12e);
+  - the warning cue is the text "Get ready" / "Gör dig redo" (N7.F12g);
+  - a demonstration on a worn garment (fully manual) and a live garment display in the Demo
+    controls (N7.F12f);
+  - re-calibration at any time while touch is calibrated or delivered, with S's decision
+    superseding R36's narrower recommendation (N7.F12a, N7.F10d).
 
-**For S, before the pilot.** Everything is in `docs/LOG.md` §7:
-- **Changed S-approved participant wording** (DRAFT): `screens.standby`,
-  `audio_setup.find_level`, sv `choices.comparison.question` (N7.F11c6, c8, c11). The
-  welcome is back to S's wording: the circle cue is now the text "Get ready" / "Gör dig redo"
-  (N7.F12g1, S's choice).
+**For S** (all in `docs/LOG.md` §7):
 - **Decisions to confirm:**
-  - the rekindle's touch restarts on the thermode-removal press, not automatically (N7.F11b10);
-  - the shortened interruption lines (N7.F11b12) and the capsaicin-removal log label (b17);
-  - no re-calibration during the intervention; lowering a channel or continuing with the
-    touch off is S's (N7.F10d);
-  - the intro screens add about a minute to touch calibration (N7.F11c1).
-- **Screens to review:** about 90 experimenter and 40 participant screens changed or added
-  today (N7.F10b, N7.F11a9, b21, c1–c11), plus the earlier list (N7.F3–F9, U-rows).
-- **Drafted wording:** every N7.F10 and N7.F11 row; earlier N7.F3, F4, F6–F8, T1, T2, U-rows.
-- **Open items still S's:** L11 rehearsal pressure, L13 noise ceiling and cue, L3 alert
-  metering, L14 a lost sleeve link, L15 (fixed, closes with lab check N2.10), L16 demo
-  conditions.
+  - the rekindle's touch restarts on the thermode-removal press (N7.F11b10);
+  - re-calibration in the intervention: the For-S list in N7.F12a1 (sensitised skin, a
+    Restart's "just uncomfortable", non-condition touch during the re-run, uneven across
+    conditions, the self-start case, a crash mid-re-calibration);
+  - a worn-garment demo is fully manual (N7.F12f1);
+  - the mouse input draws the stop "!" on every screen, pilots and demos only (N7.F12e4);
+  - the shortened interruption lines and the capsaicin-removal log label (N7.F11b12, b17).
+- **Changed S-approved participant wording** (DRAFT): `screens.standby`,
+  `audio_setup.find_level`, sv `choices.comparison.question` (N7.F11c6, c8, c11); the new
+  `warning_cue` (N7.F12g1).
+- **Screens to review:** about 150 changed or added on 15 Oct (rows N7.F10b–N7.F12), plus the
+  earlier list.
+- **Open items still S's:** L11, L13, L3, L14, L15 (closes with lab check N2.10), L16 (now:
+  whether a demo may name its condition, and whether a blinded experimenter may watch a demo's
+  intervention with the garment display).
 
 ---
 
 ## Next steps
 
-1. **Finish `pilot/recalibration-after-stop`**: review (code-review high, spec-review),
-   `make check`, merge.
-2. **Re-run the lab session with the new screens**, starting with Check the hardware:
-   - the sound device: `audio.participant_device` is the Bose Bluetooth headset; preflight
-     now refuses a session without it. Use the device the study will use, and restart the
-     program after switching headphones on;
-   - type a note and check the confirmation; check the log has it;
-   - walk a session as both people: do the intros, the read-aloud lines and the session end
-     read right; is the calmer experimenter screen easier the first time;
-   - the 5 Oct checks still open: the R400 hold acceleration (N7.F7b), the touch-calibration
-     pause (R32), Skip calibration, the participant screen on the HP at 1.5, the remote
-     routing (N7.I1), alerts audible over the noise, taps never lost (N2.9).
-3. **L15: the lab check N2.10** with the R400 and the laptop keyboard (seven steps in LOG).
-4. **Watch a demonstration on a display** and decide L16.
+1. **On S's MacBook** (once `main` is pushed and pulled; nothing here is verified on a Mac):
+   `conda env create -f environment.yml` (first time), `conda activate tatp-study-1`,
+   `python run_session.py`. The page should show a window on this screen, the system default
+   sound, the keyboard input (← → Return, full stop stops). Continue → Run a demo. From a
+   terminal: `python run_session.py --demo --sim-participant watch`. Report anything that
+   fails: always-on-top and Spaces, CoreAudio at 48 kHz, the `tatp.devices` child process,
+   fonts, key events.
+2. **The whole-demo test stall under load** (always at block.1, the first filament): an
+   investigation was running at the end of 15 Oct; act on its finding.
+3. **Re-run the lab session with the new screens**, starting at the hardware page: the sound
+   device, a note and its confirmation, walk a session as both people (intros, read-aloud
+   lines, the session end), try a re-calibration in calibration and in the intervention; and
+   the 5 Oct checks still open (R400 hold acceleration N7.F7b, the touch-calibration pause R32,
+   Skip calibration, the HP at 1.5, remote routing N7.I1, alerts over the noise, N2.9).
+4. **L15: the lab check N2.10** (seven steps in LOG).
 5. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
-6. **Run the adversarial review** (spec-review, §17.6) over the whole build before declaring
-   Milestone 6 done.
-7. **Left open, not blocking:**
-   - a demonstration's simulated experimenter can resume the mock garment under the error
-     dialog (N7.F10c);
-   - the 640 px laptop-height target is exceeded by the pilot case (banner plus open items,
-     about 657 px); fine at 1280×800 (N7.F11a);
-   - the mock's injected faults never lose the link (N7.U8 (2)); the emergency stop does not
-     stop the white noise;
-   - the hold-acceleration integral is duplicated (N7.F7b);
-   - the screenshot tolerance (0.2 %) hides glyph-sized changes;
-   - `--approve-matching` keeps only the last pattern given.
+6. **The adversarial review** (spec-review, §17.6) over the whole build before Milestone 6.
+7. **Left open, not blocking:** preflight's sound check can freeze the launcher up to 8 s
+   (N7.F12e2); the 640 px laptop-height target is exceeded in the pilot case (fine at
+   1280×800); the emergency stop does not stop the white noise; the hold-acceleration integral
+   is duplicated (N7.F7b); the screenshot tolerance hides glyph-sized changes;
+   `--approve-matching` keeps only the last pattern.
 
 ---
 
 ## Later
 
-- **Hardware bring-up for the valve garment (§18.2):**
-  - `arduino_valves.py` (open item 14);
-  - the rate limit (L2) and the inflation rates (item 3);
-  - `HARDWARE_BRINGUP.md`, starting from `tools/garment_bits.py` and N7.H2.
+- **Hardware bring-up for the valve garment (§18.2):** `arduino_valves.py` (open item 14);
+  the rate limit (L2) and the inflation rates (item 3); `HARDWARE_BRINGUP.md`, starting from
+  `tools/garment_bits.py` and N7.H2.
