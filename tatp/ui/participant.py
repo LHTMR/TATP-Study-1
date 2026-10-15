@@ -76,7 +76,8 @@ STANDBY_SCREEN = "standby"
 PAIR_LABELS = "comparison"
 
 MESSAGE_POINT_SIZE = 26
-CUE_RADIUS_FRACTION = 0.09
+# Larger than any message (MESSAGE_POINT_SIZE), so the cue reads at a glance as a signal.
+CUE_POINT_SIZE = 48
 
 # The drawn response buttons (UI_PRINCIPLES.md 5.8-5.11). Sized and placed to match the remote
 # in the participant's hand: two buttons side by side, the left one on the left.
@@ -164,20 +165,26 @@ class _MessageScreen(QWidget):
 
 
 class _CueScreen(QWidget):
-    """The visual warning cue: a filled disc, centred, on an otherwise empty screen.
+    """The visual warning cue: the short `warning_cue` text, large and centred, alone.
 
-    Deliberately wordless. A cue that has to be read is not a cue, and any wording here would be
-    participant-facing text outside `config/text/` (SPEC.md 10.4).
+    Words rather than the filled disc it replaces (S, 15 Oct 2026 pilot): a disc needed the
+    welcome screen to explain it, and words explain themselves. Centred like the disc was,
+    because it is a signal to glance at, not a line to read where the questions are.
     """
+
+    def __init__(self, text: str, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.text = text
 
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.fillRect(self.rect(), BACKGROUND)
-        painter.setBrush(FOREGROUND)
-        painter.setPen(Qt.NoPen)
-        radius = min(self.width(), self.height()) * CUE_RADIUS_FRACTION
-        painter.drawEllipse(self.rect().center(), int(radius), int(radius))
+        painter.setPen(FOREGROUND)
+        font = QFont(self.font())
+        font.setPointSize(CUE_POINT_SIZE)
+        painter.setFont(font)
+        painter.drawText(self.rect(), Qt.AlignCenter, self.text)
         painter.end()
 
 
@@ -576,7 +583,7 @@ class ParticipantWindow(QWidget):
         self.message.stop_disc = QColor(
             responder_config["button_symbol_discs"]["emergency_stop"]
         )
-        self.cue = _CueScreen()
+        self.cue = _CueScreen(self.text["warning_cue"])
         self.vas = VasWidget(config.study1["vas"], responder, clock)
         self.vas.confirmed.connect(self.confirmed)
         self.vas.emergency_stop.connect(self.emergency_stop)

@@ -72,6 +72,14 @@ training:
 # Under skalan, där övningsraden sedan står, medan försöksledaren förklarar skalan muntligt.
 training_listen: Lyssna på försöksledaren.
 
+# DRAFT (LOG N7.F12g1): written by the build, not ethics-sourced
+# Den visuella varningssignalen före varje stimulus (SPEC.md 10.5), stor och centrerad, ensam på
+# skärmen, med tonen över bruset. Ersätter cirkeln (S, 15 okt 2026). Den lovar ingen beröring:
+# skattningsseriens försök utan tryck föregås också av den, och en utlovad beröring skulle
+# locka fram rapporter just i de försök som mäter falska rapporter. Inget om lindring, och samma
+# i alla betingelser.
+warning_cue: Gör dig redo
+
 screens:
   # Godkänd 23 aug 2026. Ordvalen följer Bilaga 3a, som beskriver hudmätningen som "tunna
   # plastfilament" och "en mjuk pensel" och aldrig som nålstick -- en deltagarskärm får inte
@@ -81,15 +89,13 @@ screens:
   # markerar muntligt (SPEC.md 8.4); försöksledarens manus är `instructions.mapping_script` i
   # experimenter_{sv,en}.yaml. Deltagarskärmen visar `standby` under tiden.
   # Endast praktiskt. Deltagaren har redan läst forskningspersonsinformationen, så skärmen
-  # förklarar inte studien -- den förklarar knapparna.
-  # DRAFT (LOG N7.F11c2): written by the build, not ethics-sourced. Raden om den vita cirkeln
-  # är ny: varningssignalen före varje stimulus förklarades aldrig. Den lovar ingen beröring,
-  # eftersom även de tomma försöken i skattningsserien föregås av cirkeln.
+  # förklarar inte studien -- den förklarar knapparna. Raden om cirkeln (LOG N7.F11c2) är
+  # borttagen igen (N7.F12g1): varningssignalen är nu text, `warning_cue`, som förklarar sig
+  # själv. Skärmen är åter S:s godkända lydelse.
   welcome: |-
     Välkommen.
     De två stora knapparna flyttar markören längs linjen.
     ▶ bekräftar ditt svar.
-    En vit cirkel på skärmen markerar början på varje steg.
     Det finns inga rätta svar – markera det du känner. Försöksledaren ser inte dina svar.
 
     Tryck på ▶ för att börja.

@@ -74,6 +74,14 @@ training:
 # way to tell that nothing was asked of them yet.
 training_listen: Listen to the experimenter.
 
+# DRAFT (LOG N7.F12g1): written by the build, not ethics-sourced
+# The visual warning cue before every stimulus (SPEC.md 10.5), large and centred, alone on the
+# screen, with the tone over the noise. Replaces the filled circle (S, 15 Oct 2026). It promises
+# no touch: the estimation run's zero-pressure catch trials are cued too, and a promised touch
+# would prime reports on exactly the trials that measure false reports. Nothing about relief,
+# and the same in every condition.
+warning_cue: Get ready
+
 screens:
   # Approved 23 Aug 2026. Vocabulary follows Bilaga 3a, which describes the skin testing as
   # "tunna plastfilament" and "en mjuk pensel" and never as pinpricks -- a participant screen
@@ -83,18 +91,13 @@ screens:
   # signals verbally (SPEC.md 8.4); the experimenter's script is `instructions.mapping_script`
   # in experimenter_{sv,en}.yaml. The participant screen shows `standby` throughout.
   # Practical only. The participant has already read the information sheet, so the screen does
-  # not re-explain the study -- it explains the buttons.
-  # DRAFT (LOG N7.F11c2): written by the build, not ethics-sourced. The line about the white
-  # circle is new (15 Oct 2026 pilot review): the warning cue precedes every stimulus and was
-  # never explained. It describes the cue as drawn, a filled near-white disc on the dark screen,
-  # and says only that it marks a start: not that something will be felt after it, because the
-  # estimation run cues its zero-pressure catch trials too, and a promised touch would prime
-  # reports on exactly the trials that measure false reports.
+  # not re-explain the study -- it explains the buttons. The line about the circle (LOG
+  # N7.F11c2) is removed again (N7.F12g1): the warning cue is now text, `warning_cue`, which
+  # explains itself. The screen is back to S's approved wording.
   welcome: |-
     Welcome.
     The two large buttons move the marker along the line.
     ▶ confirms your answer.
-    A white circle on the screen marks the start of each step.
     There are no right answers — mark what you feel. The experimenter does not see your answers.
 
     Press ▶ to begin.

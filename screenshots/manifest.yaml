@@ -163,8 +163,8 @@ screens:
   experimenter_en_session_complete: 'The last state: the session closed and every
     file written, the garment to come off, and Next step to close the program (docs/LOG.md
     N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
-    and Connect garment and Pause are disabled: nothing is left to pause or to connect
-    again. (en)'
+    and Pause and the garment button are withdrawn: nothing is left to pause or to
+    connect again. (en)'
   experimenter_en_status_warning: A warning in the status region, in amber, kept apart
     from the routine status so the next 'Waiting for...' does not replace it (15 Oct
     2026 pilot review). It goes under the routine line; this one is too long for both,
@@ -330,8 +330,8 @@ screens:
   experimenter_sv_session_complete: 'The last state: the session closed and every
     file written, the garment to come off, and Next step to close the program (docs/LOG.md
     N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
-    and Connect garment and Pause are disabled: nothing is left to pause or to connect
-    again. (sv)'
+    and Pause and the garment button are withdrawn: nothing is left to pause or to
+    connect again. (sv)'
   experimenter_sv_status_warning: A warning in the status region, in amber, kept apart
     from the routine status so the next 'Waiting for...' does not replace it (15 Oct
     2026 pilot review). It goes under the routine line; this one is too long for both,
@@ -384,7 +384,8 @@ screens:
     the press starts a timer that would blank the screen before it could be grabbed.
   participant_en_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
     and neither emphasised -- the state before the first stimulus, en.'
-  participant_en_cue: 'The visual warning cue: one filled disc, centred, no wording.'
+  participant_en_cue: 'The visual warning cue: the `warning_cue` text, large and centred,
+    alone, en.'
   participant_en_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, en.'
   participant_en_screen_emergency_stop: The participant text `screens.emergency_stop`,
@@ -496,7 +497,8 @@ screens:
     the press starts a timer that would blank the screen before it could be grabbed.
   participant_sv_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
     and neither emphasised -- the state before the first stimulus, sv.'
-  participant_sv_cue: 'The visual warning cue: one filled disc, centred, no wording.'
+  participant_sv_cue: 'The visual warning cue: the `warning_cue` text, large and centred,
+    alone, sv.'
   participant_sv_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, sv.'
   participant_sv_screen_emergency_stop: The participant text `screens.emergency_stop`,

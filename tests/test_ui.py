@@ -502,6 +502,14 @@ def test_the_warning_cue_announces_itself_for_the_audible_cue(participant):
     assert seen == [True]
 
 
+def test_the_warning_cue_is_its_text_key_and_nothing_else(participant):
+    """SPEC.md 10.5 (S, 15 Oct 2026): words that explain themselves, from the text file, rather
+    than a circle the welcome had to explain."""
+    participant.show_warning_cue()
+    assert participant.cue.text == participant.text["warning_cue"]
+    assert participant.cue.text.strip()
+
+
 def test_the_level_adjustment_reads_the_buttons_on_a_text_screen(participant, session):
     pressed = []
     participant.adjust_pressed.connect(lambda value, _event_ms: pressed.append(value))
