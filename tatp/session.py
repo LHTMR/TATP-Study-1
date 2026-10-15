@@ -11,6 +11,7 @@ experimenter may see is decided, and a test asserts the condition is not in it.
 
 from __future__ import annotations
 
+import argparse
 import dataclasses
 import random
 import time
@@ -99,8 +100,12 @@ def canonical_initials(initials: str) -> str:
 
     Applied wherever initials are compared or stored, and to what earlier files recorded, so
     a session typed in lower case still matches, and resumes beside, one typed in upper case.
+    Also `run_session.py`'s `--experimenter` type, so blank initials are refused there.
     """
-    return initials.strip().upper()
+    canonical = initials.strip().upper()
+    if not canonical:
+        raise argparse.ArgumentTypeError("experimenter initials are empty")
+    return canonical
 
 
 def earlier_experimenters(

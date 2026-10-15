@@ -126,6 +126,12 @@ def test_preflight_offers_the_resume_of_an_open_session(app, config):
     run_session.shut_down(resumed)
 
 
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_blank_initials_are_refused_on_the_command_line(blank):
+    with pytest.raises(SystemExit):
+        run_session.parse_args([blank if a == "SM" else a for a in ARGV])
+
+
 def test_a_session_started_in_lower_case_resumes_in_upper_case(app, config):
     """S, lab run 5 Oct: "sm" and "SM" are one experimenter, so no change is warned."""
     lower = run_session.parse_args(["sm" if a == "SM" else a for a in ARGV])
