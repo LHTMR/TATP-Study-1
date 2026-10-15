@@ -26,7 +26,7 @@ from tatp.demo import (
     REAL_TIME_SPEED,
     WATCH,
     DemoError,
-    check_participant,
+    check_person,
     demo_config,
     shuffled_allocation,
     worn_garment,
@@ -154,18 +154,20 @@ def test_worn_is_declared_by_the_driver():
     assert all(driver.worn for name, driver in DRIVERS.items() if name != DEMO_GARMENT)
 
 
+@pytest.mark.parametrize("who", ["participant", "experimenter"])
 @pytest.mark.parametrize("mode", [WATCH, FAST])
-def test_a_demonstration_on_a_real_garment_has_a_person_as_the_participant(loaded, mode):
-    """A simulated participant raises pressure on whoever wears it (N7.F12f; S's to revisit)."""
+def test_a_demonstration_on_a_real_garment_is_pressed_by_people(loaded, who, mode):
+    """A simulated participant raises pressure on whoever wears it, and a simulated
+    experimenter presses Next step into garment output with nobody at the screen (N7.F12f;
+    S's to revisit)."""
     with pytest.raises(SystemExit, match="person"):
         run_session.demo_session(loaded, _args("--garment", "arduino_mosfet",
-                                               "--sim-participant", mode))
+                                               f"--sim-{who}", mode))
     with pytest.raises(DemoError):
-        check_participant("arduino_mosfet", mode)
-    assert check_participant(DEMO_GARMENT, mode) == mode
-    # The experimenter may still be simulated.
-    run_session.demo_session(loaded, _args("--garment", "arduino_mosfet",
-                                           "--sim-experimenter", mode))
+        check_person("arduino_mosfet", who, mode)
+    assert check_person(DEMO_GARMENT, who, mode) == mode
+    # Fully manual is allowed.
+    run_session.demo_session(loaded, _args("--garment", "arduino_mosfet"))
 
 
 class _WornGarment(MockGarment):
@@ -181,35 +183,53 @@ def worn(monkeypatch):
     return WORN
 
 
-def test_on_a_real_garment_the_participant_and_finish_this_stage_are_a_persons(app, loaded,
-                                                                               worn):
-    runner, demo = _demo(app, loaded, "--garment", worn, "--sim-experimenter", WATCH)
+def test_on_a_real_garment_a_demonstration_is_fully_manual(app, loaded, worn):
+    runner, demo = _demo(app, loaded, "--garment", worn)
     try:
         controls = demo.controls
         assert not controls.participant_mode.isEnabled()
+        assert not controls.experimenter_mode.isEnabled()
         assert not controls.finish_button.isEnabled()
         assert controls.skip_button.isEnabled()
-        assert controls.experimenter_mode.isEnabled()
         assert not controls.worn_note.isHidden()
         with pytest.raises(DemoError):
             demo.finish_stage()
-        with pytest.raises(DemoError):
-            demo.set_participant(FAST)
+        for who in ("participant", "experimenter"):
+            with pytest.raises(DemoError):
+                demo.choose(who, FAST)
+        assert (demo.participant_mode, demo.experimenter_mode) == (OFF, OFF)
     finally:
         _finish(runner, demo)
     runner, demo = _demo(app, loaded)
     assert demo.controls.finish_button.isEnabled() and demo.controls.worn_note.isHidden()
+    assert demo.controls.experimenter_mode.isEnabled()
     _finish(runner, demo)
+
+
+def test_a_real_garment_demonstration_is_refused_when_built_with_a_simulation(app, loaded,
+                                                                             worn):
+    """Stage boundary: past the command line and the launcher, the Demo itself refuses."""
+    args = _args("--garment", worn)
+    config = run_session.demo_session(loaded, args)
+    runner = run_session.build(config, args)
+    args.sim_experimenter = WATCH
+    try:
+        with pytest.raises(DemoError):
+            run_session.attach_demo(runner, args)
+    finally:
+        run_session.shut_down(runner)
 
 
 @pytest.mark.parametrize("kind", ["emergency_stop", "pause"])
 def test_the_simulated_experimenter_never_resumes_a_real_garment(app, loaded, worn, kind):
     """SPEC.md 10.9: on something that may be worn, a person presses Resume -- after an
-    emergency stop above all. On the mock it still resumes by itself."""
-    runner, demo = _demo(app, loaded, "--garment", worn, "--sim-experimenter", FAST)
+    emergency stop above all. The second guard: the simulated experimenter never acts there,
+    but made to, it still does not resume. On the mock it resumes by itself."""
+    runner, demo = _demo(app, loaded, "--garment", worn)
     try:
         # Recorded as for any session.
         assert _session_values(runner.session)["garment_driver"] == _WornGarment.__name__
+        demo.experimenter.set_pace(True, 0.0)  # past the Demo, which refuses it
         interruptions = runner.rig.interruptions
         (interruptions.emergency_stop if kind == "emergency_stop" else interruptions.pause)()
         assert not demo.experimenter._resume_timer.isActive()
@@ -295,7 +315,7 @@ def test_run_a_demo_in_the_launcher_asks_for_a_demonstration(app, loaded):
     assert Path(design["allocation_file"]).name == ALLOCATION_NAME
 
 
-def test_run_a_demo_holds_a_real_garment_to_real_time_and_a_person(app, loaded):
+def test_run_a_demo_holds_a_real_garment_to_real_time_and_people(app, loaded):
     """Where the command line refuses, the dialog sets and holds; the mock's speed comes back
     when the mock is chosen again."""
     launcher = LauncherWindow(loaded, preflight=lambda config, args: [],
@@ -307,17 +327,19 @@ def test_run_a_demo_holds_a_real_garment_to_real_time_and_a_person(app, loaded):
         combo.setCurrentIndex(combo.findData(value))
     dialog.demo_speed.setValue(10.0)
     dialog.sim_participant.setCurrentIndex(dialog.sim_participant.findData(FAST))
+    dialog.sim_experimenter.setCurrentIndex(dialog.sim_experimenter.findData(WATCH))
     dialog.garment.setCurrentIndex(dialog.garment.findData("arduino_mosfet"))
     assert dialog.demo_speed.value() == REAL_TIME_SPEED
     assert not dialog.demo_speed.isEnabled()
     assert not dialog.sim_participant.isEnabled()
-    assert dialog.sim_experimenter.isEnabled()
+    assert not dialog.sim_experimenter.isEnabled()
     args = dialog.args()
-    assert (args.garment, args.clock_speed, args.sim_participant) == (
-        "arduino_mosfet", REAL_TIME_SPEED, OFF)
+    assert (args.garment, args.clock_speed, args.sim_participant, args.sim_experimenter) == (
+        "arduino_mosfet", REAL_TIME_SPEED, OFF, OFF)
     assert dialog.config(args).hardware["garment"]["driver"] == "arduino_mosfet"
     dialog.garment.setCurrentIndex(dialog.garment.findData(DEMO_GARMENT))
     assert dialog.demo_speed.isEnabled() and dialog.sim_participant.isEnabled()
+    assert dialog.sim_experimenter.isEnabled()
     assert dialog.demo_speed.value() == 10.0
 
 

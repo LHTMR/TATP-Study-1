@@ -18,8 +18,8 @@ demo:
   # A demonstration session, to show the software without a participant or the three hours
   # (run_session.py --demo; tatp/demo.py; docs/LOG.md N7.D23). Never study data: its own code
   # and allocation, a fresh folder under data_folder per run, and `demo` in the session file.
-  # The mock garment unless another is chosen, and then at real time only, with a person as
-  # the participant and to resume after a stop (N7.F12f); every keyboard the remote, so it
+  # The mock garment unless another is chosen, and then at real time only, with people as
+  # the participant and the experimenter (N7.F12f); every keyboard the remote, so it
   # runs anywhere, with or without the remote. Each run shuffles which condition each session
   # number has, so a session number cannot be chosen to see a condition (open item L16).
   participant_code: "999"            # above the pilot codes, and in no study allocation

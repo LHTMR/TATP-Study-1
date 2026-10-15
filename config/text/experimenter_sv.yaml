@@ -534,7 +534,7 @@ demo:
   # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
   garment_link_lost: 'Förbindelsen bröts: utgångarna kan fortfarande ha sitt senaste läge.'
   # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  worn_note: 'Någon kan ha plagget på sig: deltagaren är en person, Avsluta detta steg är avstängt och bara en person återupptar efter ett stopp.'
+  worn_note: 'Någon kan ha plagget på sig: deltagaren och försöksledaren är personer, inte simuleringar, och Avsluta detta steg är avstängt.'
 
 dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.

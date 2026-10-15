@@ -10,7 +10,7 @@ Six entries, so the auxiliary tools are reachable without the command line:
    question (SPEC.md 15).
 1a. **Run a demo.** The same dialog for a demonstration (`tatp/demo.py`, docs/LOG.md N7.D23):
    its own code and folder, the garment -- the mock unless another is chosen, and then real
-   time only, with a person as the participant -- and the speed and who presses -- a person
+   time only, with people pressing -- and the speed and who presses -- a person
    or a simulation, for the participant and the experimenter apart.
 2. **Instruments and environment** (`tatp/instruments.py`).
 3. **Design a pattern.** `tools/design_pattern.py`, in its own window. For S only: it shows
@@ -374,19 +374,20 @@ class SessionDialog(QDialog):
         self.garment.currentIndexChanged.connect(self._demo_garment_changed)
 
     def _demo_garment_changed(self, *_) -> None:
-        """A worn garment runs a demonstration at real time with a person as the participant
-        (tatp.demo.check_speed, check_participant). Where the command line refuses the
-        other choices, here they are set and held, and the speed set for the mock is given
-        back when it is chosen again."""
+        """A worn garment runs a demonstration at real time with people as the participant
+        and the experimenter (tatp.demo.check_speed, check_person). Where the command line
+        refuses the other choices, here they are set and held, and the speed set for the mock
+        is given back when it is chosen again."""
         garment = self.garment.currentData()
         worn = garment is not None and worn_garment(garment)
         if worn and self.demo_speed.isEnabled():
             self._mock_speed = self.demo_speed.value()
         self.demo_speed.setValue(REAL_TIME_SPEED if worn else self._mock_speed)
         self.demo_speed.setEnabled(not worn)
-        if worn:
-            self.sim_participant.setCurrentIndex(self.sim_participant.findData(OFF))
-        self.sim_participant.setEnabled(not worn)
+        for simulation in (self.sim_participant, self.sim_experimenter):
+            if worn:
+                simulation.setCurrentIndex(simulation.findData(OFF))
+            simulation.setEnabled(not worn)
 
     def _options(self, options: list[tuple[str, object]]) -> QComboBox:
         """A choice with no placeholder: each option is a fair default."""

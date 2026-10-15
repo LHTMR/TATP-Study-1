@@ -527,7 +527,7 @@ demo:
   # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
   garment_link_lost: 'Link lost: the outputs may still hold their last state.'
   # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  worn_note: 'Someone may be wearing this garment: the participant is a person, Finish this stage is off, and only a person resumes after a stop.'
+  worn_note: 'Someone may be wearing this garment: the participant and the experimenter are people, not simulations, and Finish this stage is off.'
 
 dialogs:
   abort_confirm: Abort this session? All data collected so far is kept.
