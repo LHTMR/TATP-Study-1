@@ -73,11 +73,11 @@ training:
 training_listen: Lyssna på försöksledaren.
 
 # DRAFT (LOG N7.F12g1): written by the build, not ethics-sourced
-# Den visuella varningssignalen före varje stimulus (SPEC.md 10.5), stor och centrerad, ensam på
-# skärmen, med tonen över bruset. Ersätter cirkeln (S, 15 okt 2026). Den lovar ingen beröring:
-# skattningsseriens försök utan tryck föregås också av den, och en utlovad beröring skulle
-# locka fram rapporter just i de försök som mäter falska rapporter. Inget om lindring, och samma
-# i alla betingelser.
+# Den visuella varningssignalen före varje stimulus (SPEC.md 10.5), ensam på skärmen där
+# meddelanden står, med tonen över bruset. Ersätter cirkeln (S, 15 okt 2026), som signalerade
+# samma start. Skattningsseriens försök utan tryck signaleras med avsikt precis som de verkliga
+# (SPEC.md 9; Berquin m.fl. 2010): det som håller dem giltiga är att signaleringen är identisk,
+# inte vad signalen säger. Inget om lindring, och samma i alla betingelser.
 warning_cue: Gör dig redo
 
 screens:

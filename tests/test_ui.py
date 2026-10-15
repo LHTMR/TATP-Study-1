@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import time
 
+import numpy as np
 import pytest
 from PySide6.QtCore import QEvent, QPoint, Qt
-from PySide6.QtGui import QFontInfo, QFontMetrics, QKeyEvent
+from PySide6.QtGui import QFont, QFontInfo, QFontMetrics, QImage, QKeyEvent
 from PySide6.QtWidgets import QApplication, QLabel
 
 from tatp import config as cfg
@@ -21,10 +22,11 @@ from tatp.clock import Clock
 from tatp.responder import Action, Responder, ResponderError
 from tatp.session import Session
 from tatp.ui import experimenter as experimenter_ui
+from tatp.ui import participant as participant_ui
 from tatp.ui import widgets
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
-from tatp.ui.vas import QT_KEYS
+from tatp.ui.vas import BACKGROUND, QT_KEYS, QUESTION_Y_FRACTION, SIDE_MARGIN_FRACTION
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 SPIN_TIMEOUT_S = 5.0
@@ -33,6 +35,9 @@ LAPTOP_HEIGHT_PX = screenshots.LAPTOP_HEIGHT_PX
 # The share of a banner's width a headline may take, leaving room for a machine that renders
 # the same font a little wider.
 BANNER_WIDTH_MARGIN = 0.95
+# How far a centred line's ink may sit from the screen's centre: glyph side bearings make the
+# ink a few pixels asymmetric even when the line is centred exactly.
+CENTRE_TOLERANCE_PX = 6
 
 
 @pytest.fixture(scope="module")
@@ -504,10 +509,28 @@ def test_the_warning_cue_announces_itself_for_the_audible_cue(participant):
 
 def test_the_warning_cue_is_its_text_key_and_nothing_else(participant):
     """SPEC.md 10.5 (S, 15 Oct 2026): words that explain themselves, from the text file, rather
-    than a circle the welcome had to explain."""
+    than a circle the welcome had to explain. Checked on the drawn pixels: the text is laid out
+    where every participant message is (UI_PRINCIPLES.md 5.5) -- inside the shared side
+    margins, starting on the first line below the message top, centred across -- and nothing
+    else is on the screen."""
     participant.show_warning_cue()
     assert participant.cue.text == participant.text["warning_cue"]
-    assert participant.cue.text.strip()
+    image = participant.cue.grab().toImage().convertToFormat(QImage.Format_ARGB32)
+    data = np.frombuffer(image.constBits(), dtype=np.uint8, count=image.sizeInBytes())
+    pixels = data.reshape(image.height(), image.bytesPerLine() // 4, 4)[:, : image.width()]
+    ink_rows, ink_columns = np.nonzero(np.any(pixels[:, :, :3] != BACKGROUND.red(), axis=2))
+    assert ink_rows.size, "nothing was drawn"
+    width, height = image.width(), image.height()
+    margin = int(width * SIDE_MARGIN_FRACTION)
+    top = int(height * QUESTION_Y_FRACTION)
+    font = QFont(participant.cue.font())
+    font.setPointSize(participant_ui.BUTTON_SYMBOL_POINT_SIZE)
+    line_px = QFontMetrics(font).height()
+    assert ink_columns.min() >= margin and ink_columns.max() < width - margin
+    assert top <= ink_rows.min() < top + line_px, "not at the message position"
+    assert ink_rows.max() < top + line_px, "one short line, nothing else on the screen"
+    centre_px = (ink_columns.min() + ink_columns.max()) / 2
+    assert abs(centre_px - width / 2) <= CENTRE_TOLERANCE_PX
 
 
 def test_the_level_adjustment_reads_the_buttons_on_a_text_screen(participant, session):

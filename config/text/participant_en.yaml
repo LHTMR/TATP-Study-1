@@ -75,11 +75,12 @@ training:
 training_listen: Listen to the experimenter.
 
 # DRAFT (LOG N7.F12g1): written by the build, not ethics-sourced
-# The visual warning cue before every stimulus (SPEC.md 10.5), large and centred, alone on the
-# screen, with the tone over the noise. Replaces the filled circle (S, 15 Oct 2026). It promises
-# no touch: the estimation run's zero-pressure catch trials are cued too, and a promised touch
-# would prime reports on exactly the trials that measure false reports. Nothing about relief,
-# and the same in every condition.
+# The visual warning cue before every stimulus (SPEC.md 10.5), alone on the screen at the
+# message position, with the tone over the noise. Replaces the filled circle (S, 15 Oct 2026),
+# which signalled the same start. The estimation run's zero-pressure catch trials are cued
+# exactly as real trials are, by design (SPEC.md 9; Berquin et al. 2010): what keeps them valid
+# is that the cueing is identical, not what the cue says. Nothing about relief, and the same in
+# every condition.
 warning_cue: Get ready
 
 screens:

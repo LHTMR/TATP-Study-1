@@ -76,8 +76,6 @@ STANDBY_SCREEN = "standby"
 PAIR_LABELS = "comparison"
 
 MESSAGE_POINT_SIZE = 26
-# Larger than any message (MESSAGE_POINT_SIZE), so the cue reads at a glance as a signal.
-CUE_POINT_SIZE = 48
 
 # The drawn response buttons (UI_PRINCIPLES.md 5.8-5.11). Sized and placed to match the remote
 # in the participant's hand: two buttons side by side, the left one on the left.
@@ -165,26 +163,31 @@ class _MessageScreen(QWidget):
 
 
 class _CueScreen(QWidget):
-    """The visual warning cue: the short `warning_cue` text, large and centred, alone.
+    """The visual warning cue: the short `warning_cue` text, alone on the screen.
 
     Words rather than the filled disc it replaces (S, 15 Oct 2026 pilot): a disc needed the
-    welcome screen to explain it, and words explain themselves. Centred like the disc was,
-    because it is a signal to glance at, not a line to read where the questions are.
+    welcome screen to explain it, and words explain themselves. Laid out exactly as a message
+    -- same margins, wrapping and top position (UI_PRINCIPLES.md 5.5) -- but at the drawn
+    button symbols' size, the largest in the participant set (4.3), because it is a signal to
+    take in at a glance rather than a sentence to read.
     """
 
-    def __init__(self, text: str, parent: QWidget | None = None):
+    def __init__(self, text: str, responder: Responder, parent: QWidget | None = None):
         super().__init__(parent)
         self.text = text
+        self.responder = responder
 
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
         painter.fillRect(self.rect(), BACKGROUND)
         painter.setPen(FOREGROUND)
         font = QFont(self.font())
-        font.setPointSize(CUE_POINT_SIZE)
+        font.setPointSize(BUTTON_SYMBOL_POINT_SIZE)
         painter.setFont(font)
-        painter.drawText(self.rect(), Qt.AlignCenter, self.text)
+        margin = int(self.width() * SIDE_MARGIN_FRACTION)
+        top = int(self.height() * QUESTION_Y_FRACTION)
+        box = self.rect().adjusted(margin, top, -margin, 0)
+        draw_prose(painter, box, self.text, self.responder)
         painter.end()
 
 
@@ -583,7 +586,7 @@ class ParticipantWindow(QWidget):
         self.message.stop_disc = QColor(
             responder_config["button_symbol_discs"]["emergency_stop"]
         )
-        self.cue = _CueScreen(self.text["warning_cue"])
+        self.cue = _CueScreen(self.text["warning_cue"], responder)
         self.vas = VasWidget(config.study1["vas"], responder, clock)
         self.vas.confirmed.connect(self.confirmed)
         self.vas.emergency_stop.connect(self.emergency_stop)
