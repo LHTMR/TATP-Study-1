@@ -285,14 +285,33 @@ def _build_holding(config, args, resume_decision, data_folder) -> SessionRunner:
         resumed_from="" if state is None else open_session.session_file.name,
         demo=getattr(args, "demo", False),
     )
-    session.start(
-        room_temperature_c=getattr(args, "room_temperature_c", None),
-        relative_humidity_pct=getattr(args, "relative_humidity_pct", None),
-        redcap_session_form_completed=args.redcap_form_completed,
-    )
     handed_over = False
     try:
-        runner = _with_windows(config, session, open_session, state)
+        session.start(
+            room_temperature_c=getattr(args, "room_temperature_c", None),
+            relative_humidity_pct=getattr(args, "relative_humidity_pct", None),
+            redcap_session_form_completed=args.redcap_form_completed,
+        )
+        if open_session is not None and state is None:
+            session.log(
+                "open_session_declined", origin="experimenter", severity="warning",
+                detail=f"{open_session.session_file.name} left as it was; starting again",
+            )
+
+        participant = ParticipantWindow(config, Responder(config.hardware), session.clock)
+        experimenter = ExperimenterWindow(
+            config.experimenter_text,
+            session.experimenter_view,
+            refresh_interval_s=config.hardware["screens"]["experimenter_refresh_interval_s"],
+        )
+        screens = config.hardware["screens"]
+        participant.place(screens)
+        if screens["participant_screen_index"] is None:
+            share_screen(participant, screens)
+        participant.show()
+        experimenter.place(screens)
+        experimenter.show()
+        runner = SessionRunner(Rig(session, participant, experimenter), resume=state)
         handed_over = True
         return runner
     finally:
@@ -300,29 +319,6 @@ def _build_holding(config, args, resume_decision, data_folder) -> SessionRunner:
         # the launcher's process would otherwise hold open until the launcher closed.
         if not handed_over:
             session.files.release()
-
-
-def _with_windows(config, session, open_session, state) -> SessionRunner:
-    if open_session is not None and state is None:
-        session.log(
-            "open_session_declined", origin="experimenter", severity="warning",
-            detail=f"{open_session.session_file.name} left as it was; starting again",
-        )
-
-    participant = ParticipantWindow(config, Responder(config.hardware), session.clock)
-    experimenter = ExperimenterWindow(
-        config.experimenter_text,
-        session.experimenter_view,
-        refresh_interval_s=config.hardware["screens"]["experimenter_refresh_interval_s"],
-    )
-    screens = config.hardware["screens"]
-    participant.place(screens)
-    if screens["participant_screen_index"] is None:
-        share_screen(participant, screens)
-    participant.show()
-    experimenter.place(screens)
-    experimenter.show()
-    return SessionRunner(Rig(session, participant, experimenter), resume=state)
 
 
 def share_screen(participant: ParticipantWindow, screens: dict) -> None:

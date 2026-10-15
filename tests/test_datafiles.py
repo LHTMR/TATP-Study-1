@@ -303,6 +303,16 @@ def test_a_file_deleted_while_open_is_recreated_with_its_header(files):
     assert [r[4] for r in rows[1:]] == ["after"]
 
 
+def test_a_file_left_empty_by_a_failed_first_write_still_gets_its_header(files):
+    """Opening creates the file before anything is written, so a first write that fails can
+    leave it empty; the header follows the file's contents, not whether it existed."""
+    files.path("log").touch()
+    _log(files, "first")
+    rows = _read(files.path("log"))
+    assert rows[0] == list(files.tables["log"].column_names)
+    assert [r[4] for r in rows[1:]] == ["first"]
+
+
 def test_release_closes_the_files_and_a_later_write_reopens_them(files):
     """A session left open for a resume lets its files go (SPEC.md 15) without closing keys."""
     _log(files, "before")
