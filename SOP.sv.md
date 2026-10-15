@@ -123,10 +123,11 @@ Att spara ändrar `config/filaments.yaml` på labbdatorn.
    (`docs/SETUP.sv.md` steg 8).
 2. Kör `python run_session.py --language sv`. Utan `--language sv` öppnas startfönstret på
    engelska.
-3. Startfönstret öppnas med fem val: **Kör en session**, **Instrument och miljö**, **Skapa ett
-   mönster**, **Förhandsgranska schemat** och **Kontrollera utrustningen**. **Skapa ett mönster**
-   är endast för S: öppna det inte (se "För att hålla blindningen" ovan). Att starta en session
-   stänger det om det lämnats öppet.
+3. Startfönstret öppnas med sex val: **Kör en session**, **Kör en demo**, **Instrument och
+   miljö**, **Skapa ett mönster**, **Förhandsgranska schemat** och **Kontrollera utrustningen**.
+   **Skapa ett mönster** är endast för S: öppna det inte (se "För att hålla blindningen" ovan).
+   Att starta en session stänger det om det lämnats öppet. **Kör en demo** visar programmet utan
+   deltagare och registrerar inga studiedata: använd det aldrig med en deltagare.
 
 ### 2.1a Kontrollera utrustningen, innan deltagaren kommer
 

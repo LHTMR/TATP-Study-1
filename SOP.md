@@ -118,10 +118,11 @@ Saving changes `config/filaments.yaml` on the lab PC.
    `docs/SETUP.md` step 8.
 2. Run `python run_session.py`. (`python run_session.py --language sv` opens the launcher in
    Swedish.)
-3. The launcher opens with five entries: **Run a session**, **Instruments and environment**,
-   **Design a pattern**, **Preview schedule** and **Check the hardware**. **Design a pattern**
-   is for S only: do not open it (see "To keep the blind" above). Starting a session closes it
-   if it was left open.
+3. The launcher opens with six entries: **Run a session**, **Run a demo**, **Instruments and
+   environment**, **Design a pattern**, **Preview schedule** and **Check the hardware**.
+   **Design a pattern** is for S only: do not open it (see "To keep the blind" above). Starting a
+   session closes it if it was left open. **Run a demo** shows the software without a
+   participant and records no study data: never use it with a participant.
 
 ### 2.1a Check the hardware, before the participant arrives
 
