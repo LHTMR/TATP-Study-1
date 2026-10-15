@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
 from tatp.clock import Clock
-from tatp.interruption import EMERGENCY_STOP, PAUSE, Interruptions
+from tatp.interruption import EMERGENCY_STOP, PAUSE, RECALIBRATION, Interruptions
 from tatp.responder import Responder
 from tatp.session import Session, SessionError
 from tatp.ui.experimenter import ExperimenterWindow
@@ -250,6 +250,24 @@ def test_a_stop_can_end_with_the_garment_left_at_zero_and_nothing_repeated(rigge
     assert resumed["origin"] == "experimenter"
     assert resumed["detail"] == "emergency_stop; garment not restored: restart"
     assert not _events(session, "garment_restored") and not _events(session, "warning_cue")
+
+
+def test_a_recalibration_from_the_controls_abandons_the_step_and_leaves_nothing_in_force(
+    rigged
+):
+    session, participant, _, interruptions, seen = rigged
+    _deliver(session)
+    interruptions.take_over("rebalance")
+    assert seen == [RECALIBRATION], "the step in progress is abandoned, as for a stop"
+    assert interruptions.active is None, "nothing to resume"
+    assert session.garment.pressure_kpa[CHANNEL] == 0.0
+    (row,) = _events(session, "interrupted_for_recalibration")
+    assert row["origin"] == "experimenter" and row["detail"] == "rebalance"
+    assert not _events(session, "emergency_stop") and not _events(session, "paused")
+    experimenter = rigged[2]
+    experimenter.pause_requested.emit()
+    with pytest.raises(SessionError, match="while pause is in force"):
+        interruptions.take_over("restart")
 
 
 def test_only_a_stop_ends_without_a_restore_and_never_under_a_resume(rigged):

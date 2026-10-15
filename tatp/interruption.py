@@ -21,10 +21,10 @@ is touched.
 Contract with procedures (`tatp/procedure.py`): `interrupted` fires once per interruption, after
 the garment is at zero and the screen is up. `resumed` fires after the garment is restored. A
 second stop during an interruption commands zero again and is logged, but does not fire
-`interrupted` again -- nothing is running to abandon. The one other way out of an emergency
-stop is `end_without_restore`, for touch calibration's re-calibration in place of Resume
-(docs/research/R36): the garment stays at zero, `resumed` is not emitted, and the procedure
-takes its new path itself.
+`interrupted` again -- nothing is running to abandon. A re-calibration (docs/LOG.md N7.F12a1)
+is the one other way on: after a stop, `end_without_restore` ends it with the garment left at
+zero; from the controls, `take_over` abandons the step as a stop would and leaves nothing in
+force. Neither emits `resumed`: the re-calibration starts the garment with its own cue.
 
 A stop during the intervention is counted for the session file, `intervention_emergency_stops`.
 """
@@ -40,6 +40,8 @@ from tatp.ui.participant import ParticipantWindow
 # The two kinds of interruption, as carried by `interrupted` and written to the log.
 EMERGENCY_STOP = "emergency_stop"
 PAUSE = "pause"
+# Carried by `interrupted` only: a re-calibration from the controls, which is never in force.
+RECALIBRATION = "recalibration"
 # A key in config/text/participant_*.yaml, not wording.
 PAUSED_SCREEN = "paused"
 
@@ -146,11 +148,24 @@ class Interruptions(QObject):
         stopped for an error (`SessionRunner.stop_for_error`)."""
         self._cancel_pending()
 
+    def take_over(self, why: str) -> None:
+        """The garment to zero and the step in progress abandoned, for a re-calibration chosen
+        from the controls (docs/LOG.md N7.F12a1): what a stop does, without the stop screen and
+        with nothing left to resume. `interrupted` carries `RECALIBRATION` and `resumed` never
+        follows: the re-calibration starts the garment with its own cue, and the step abandoned
+        is replaced by it, or repeated after it (`Procedure.detour`)."""
+        if self.active is not None:
+            raise SessionError(f"a re-calibration from the controls while {self.active} is in "
+                               "force")
+        self._zero_garment()
+        self.session.log("interrupted_for_recalibration", origin="experimenter", detail=why)
+        self.interrupted.emit(RECALIBRATION)
+
     def end_without_restore(self, why: str) -> None:
-        """End an emergency stop with the garment left at zero and nothing repeated: the
-        procedure it interrupted goes on along another path, which starts the garment with its
-        own cue (touch calibration's re-calibration after a stop, docs/research/R36). `resumed`
-        is not emitted, because no step is to be repeated."""
+        """End an emergency stop with the garment left at zero and nothing restored: the
+        session goes on with a re-calibration, which starts the garment with its own cue
+        (docs/LOG.md N7.F12a1). `resumed` is not emitted: the step abandoned is replaced by the
+        re-calibration, or repeated after it (`Procedure.detour`)."""
         if self.active != EMERGENCY_STOP:
             raise SessionError(
                 f"only an emergency stop ends without a restore, not {self.active}"

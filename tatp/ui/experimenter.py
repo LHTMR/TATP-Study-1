@@ -131,10 +131,10 @@ ITEM_NUMBER = re.compile(r"^\[([^\]]+)\]")
 EMERGENCY_STOP = "emergency_stop"
 PAUSE = "pause"
 INTERRUPTIONS = (EMERGENCY_STOP, PAUSE)
-# What `recalibration_requested` carries first, and the `recalibration_after_stop` log
-# vocabulary (docs/DATA_SCHEMA.md).
-REBALANCE_AFTER_STOP = "rebalance"
-RESTART_AFTER_STOP = "restart"
+# What `recalibration_requested` carries first, and the `recalibration` log vocabulary
+# (docs/DATA_SCHEMA.md).
+RECALIBRATE_REBALANCE = "rebalance"
+RECALIBRATE_RESTART = "restart"
 BLOCK = "block"
 # The phases during which per-channel pressure would differ by condition (SPEC.md 16). The view
 # already withholds it then; the window holds the same line, so a view that leaked it would not
@@ -212,8 +212,9 @@ class ExperimenterWindow(QWidget):
     fit_accepted = Signal()
     fit_rerun_requested = Signal(str)
     rebalance_requested = Signal()
-    # Instead of Resume, after an emergency stop in touch calibration (docs/research/R36):
-    # `rebalance` or `restart`, then the reason's key from `dialogs.recalibration_reasons`.
+    # Re-calibration, while touch is calibrated or delivered, or in place of Resume after a
+    # stop then (docs/LOG.md N7.F12a1): `rebalance` or `restart`, then the reason's key from
+    # `dialogs.recalibration_reasons`.
     recalibration_requested = Signal(str, str)
     # End touch calibration early, on a pilot rig only (docs/LOG.md N7.F8b). Not a skip-trial
     # control: shown only while the procedure offers it, and recorded as a skipped calibration.
@@ -238,7 +239,7 @@ class ExperimenterWindow(QWidget):
         # What the running procedure is waiting for, beyond what the view says (SPEC.md 11).
         self._awaiting = {"rebalance": False, "fit_decision": False, "discard": False,
                           "skip_calibration": False, "substitution": False, "closed": False,
-                          "rebalance_after_stop": False, "restart_after_stop": False,
+                          "recalibrate_rebalance": False, "recalibrate_restart": False,
                           "recalibration_used": False}
         self._interruption: str | None = None
         self._connected = False
@@ -456,11 +457,12 @@ class ExperimenterWindow(QWidget):
         self.rebalance_button = button(controls["rebalance"])
         self.fit_accept_button = button(controls["fit_accept"])
         self.fit_rerun_button = button(controls["fit_rerun"])
-        # Beside Resume, after an emergency stop in touch calibration while the session's cap
-        # allows (docs/research/R36); each asks for a reason first.
-        self.rebalance_after_stop_button = button(controls["rebalance_after_stop"])
-        self.restart_after_stop_button = button(controls["restart_after_stop"])
-        # In their place once the cap is used, saying why only Resume is offered.
+        # Re-calibration, while touch is calibrated or delivered and beside Resume after a stop
+        # then, while the limit allows (docs/LOG.md N7.F12a1); each asks for a reason first.
+        self.recalibrate_rebalance_button = button(controls["recalibrate_rebalance"])
+        self.recalibrate_restart_button = button(controls["recalibrate_restart"])
+        # In their place after a stop once the limit is reached, saying why only Resume is
+        # offered.
         self.recalibration_used = label(SIZE_SMALL, colour=SECONDARY)
         self.recalibration_used.setText(self.text["status"]["recalibration_used"].format(
             controls=controls
@@ -483,11 +485,11 @@ class ExperimenterWindow(QWidget):
         self.rebalance_button.clicked.connect(self.rebalance_requested.emit)
         self.fit_accept_button.clicked.connect(self.fit_accepted.emit)
         self.fit_rerun_button.clicked.connect(self.open_rerun_dialog)
-        self.rebalance_after_stop_button.clicked.connect(
-            lambda: self.open_recalibration_dialog(REBALANCE_AFTER_STOP)
+        self.recalibrate_rebalance_button.clicked.connect(
+            lambda: self.open_recalibration_dialog(RECALIBRATE_REBALANCE)
         )
-        self.restart_after_stop_button.clicked.connect(
-            lambda: self.open_recalibration_dialog(RESTART_AFTER_STOP)
+        self.recalibrate_restart_button.clicked.connect(
+            lambda: self.open_recalibration_dialog(RECALIBRATE_RESTART)
         )
         self.abort_button.clicked.connect(self.open_abort_dialog)
 
@@ -512,12 +514,13 @@ class ExperimenterWindow(QWidget):
             row, column = divmod(index, CONTROL_COLUMNS)
             self.controls.addWidget(widget, row, column)
             _reserve(widget)
-        # The re-calibrations after a stop are offered only while stopped, when nothing else in
-        # the situational row is, so they share its slots rather than add a row the laptop has
-        # no room for: each in the place of its kin, Rebalance over Rebalance and Restart over
-        # Re-run (UI_PRINCIPLES.md 5.5). The line saying they are used up spans the row.
-        for kin, widget in ((self.rebalance_button, self.rebalance_after_stop_button),
-                            (self.fit_rerun_button, self.restart_after_stop_button)):
+        # The re-calibrations share the slots of their kin rather than add a row the laptop has
+        # no room for: Rebalance channels… over Rebalance channels, Restart calibration… over
+        # Re-run the procedure (UI_PRINCIPLES.md 5.5). When the procedure offers the kin, which
+        # does the same from where it stands, the kin has the slot. The line saying they are
+        # used up, shown only while stopped, spans the row, where nothing else is offered then.
+        for kin, widget in ((self.rebalance_button, self.recalibrate_rebalance_button),
+                            (self.fit_rerun_button, self.recalibrate_restart_button)):
             row, column, _, _ = self.controls.getItemPosition(self.controls.indexOf(kin))
             self.controls.addWidget(widget, row, column)
             _reserve(widget)
@@ -667,8 +670,8 @@ class ExperimenterWindow(QWidget):
         skip_calibration: bool | None = None,
         substitution: bool | None = None,
         closed: bool | None = None,
-        rebalance_after_stop: bool | None = None,
-        restart_after_stop: bool | None = None,
+        recalibrate_rebalance: bool | None = None,
+        recalibrate_restart: bool | None = None,
         recalibration_used: bool | None = None,
     ) -> None:
         """What the running procedure waits for (SPEC.md 9, 11, 11.1). None leaves it as is.
@@ -682,9 +685,10 @@ class ExperimenterWindow(QWidget):
         `closed` is the session closed and its files written (docs/LOG.md N7.F11c9): Pause
         and the garment button are withdrawn, since nothing is left to pause and the garment,
         disconnected by the close, is not to be connected again with no stop wired to it.
-        `rebalance_after_stop` and `restart_after_stop` offer the two re-calibrations beside
-        Resume, and `recalibration_used` says instead that the session's are used up
-        (docs/research/R36); all three are shown only while an emergency stop is in force.
+        `recalibrate_rebalance` and `recalibrate_restart` offer the two re-calibrations
+        (docs/LOG.md N7.F12a1), shown while running or stopped but not paused, and not while
+        the procedure offers their kin; `recalibration_used` says, while stopped, that the
+        limit is reached.
 
         The substitution entry is withdrawn through `withdraw_substitution`, which hands back
         anything typed and not recorded, so it is never dropped unseen.
@@ -696,8 +700,8 @@ class ExperimenterWindow(QWidget):
         for key, value in (("rebalance", rebalance), ("fit_decision", fit_decision),
                            ("discard", discard), ("skip_calibration", skip_calibration),
                            ("substitution", substitution), ("closed", closed),
-                           ("rebalance_after_stop", rebalance_after_stop),
-                           ("restart_after_stop", restart_after_stop),
+                           ("recalibrate_rebalance", recalibrate_rebalance),
+                           ("recalibrate_restart", recalibrate_restart),
                            ("recalibration_used", recalibration_used)):
             if value is not None:
                 self._awaiting[key] = bool(value)
@@ -779,13 +783,14 @@ class ExperimenterWindow(QWidget):
         )
 
     def recalibration_dialog(self, choice: str) -> ChoiceDialog:
-        """What the re-calibration instead of Resume does, and why it is chosen, from a fixed
-        list (docs/research/R36). The same in every condition: touch calibration is."""
+        """What the re-calibration does, and why it is chosen, from a fixed list (docs/LOG.md
+        N7.F12a1). The same in every condition, wherever it is offered."""
         controls, dialogs = self.text["controls"], self.text["dialogs"]
-        action = {REBALANCE_AFTER_STOP: "rebalance", RESTART_AFTER_STOP: "restart_calibration"}
+        action = {RECALIBRATE_REBALANCE: "rebalance",
+                  RECALIBRATE_RESTART: "restart_calibration"}
         return ChoiceDialog(
-            controls[f"{choice}_after_stop"],
-            dialogs[f"{choice}_after_stop"],
+            controls[f"recalibrate_{choice}"],
+            dialogs[f"recalibrate_{choice}"],
             dialogs["recalibration_reason"],
             dialogs["recalibration_reasons"],
             controls[action[choice]],
@@ -1098,9 +1103,10 @@ class ExperimenterWindow(QWidget):
 
         While the session is interrupted, Resume and Abort are the only ways forward, so they
         are the only controls offered besides the entries (SPEC.md 13), with the two
-        re-calibrations after a stop in touch calibration (docs/research/R36). Next step stays
-        in sight, greyed, because it is the way forward again after the resume (LOG N7.U10a).
-        A control not offered is hidden, and disabled too, so no key press reaches it.
+        re-calibrations after a stop where touch is calibrated or delivered (docs/LOG.md
+        N7.F12a1). Next step stays in sight, greyed, because it is the way forward again after
+        the resume (LOG N7.U10a). A control not offered is hidden, and disabled too, so no key
+        press reaches it.
         """
         running = self._interruption is None
         self.proceed_button.setEnabled(running)
@@ -1110,10 +1116,14 @@ class ExperimenterWindow(QWidget):
         skipping = self._awaiting["skip_calibration"]
         substituting = self._awaiting["substitution"]
         stopped = self._interruption == EMERGENCY_STOP
-        rebalancing_after = stopped and self._awaiting["rebalance_after_stop"]
-        restarting_after = stopped and self._awaiting["restart_after_stop"]
         mapped = bool(self._mapping_phases)
         open_ = not self._awaiting["closed"]
+        # Not while paused: the pause is the experimenter's own, and Resume ends it.
+        recalibrating = (running or stopped) and open_
+        rebalancing_after = (recalibrating and self._awaiting["recalibrate_rebalance"]
+                             and not rebalancing)
+        restarting_after = (recalibrating and self._awaiting["recalibrate_restart"]
+                            and not deciding)
         # (widget, shown, pressable). Skip calibration stays in sight through an
         # interruption, as it was, but cannot be pressed then.
         offered = (
@@ -1124,8 +1134,8 @@ class ExperimenterWindow(QWidget):
             (self.rebalance_button, rebalancing, rebalancing),
             (self.fit_accept_button, deciding, deciding),
             (self.fit_rerun_button, deciding, deciding),
-            (self.rebalance_after_stop_button, rebalancing_after, rebalancing_after),
-            (self.restart_after_stop_button, restarting_after, restarting_after),
+            (self.recalibrate_rebalance_button, rebalancing_after, rebalancing_after),
+            (self.recalibrate_restart_button, restarting_after, restarting_after),
             (self.skip_button, skipping, running and skipping),
             (self.substitution, substituting, substituting),
             (self.substitution_button, substituting, substituting),

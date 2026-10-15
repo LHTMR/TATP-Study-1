@@ -375,11 +375,12 @@ controls:
   # DRAFT (LOG N7.F8b): written by the build. Shown only with the mock or prototype garment,
   # after a few touch-calibration ratings; ends the calibration, recorded as skipped.
   skip_calibration: Hoppa över kalibreringen
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Beside Resume after an
-  # emergency stop in touch calibration (docs/research/R36); each opens a dialog asking why.
-  rebalance_after_stop: Balansera om kanalerna…
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Re-calibration, while
+  # touch is calibrated or delivered and beside Resume after a stop; each opens a dialog
+  # asking why.
+  recalibrate_rebalance: Balansera om kanalerna…
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
-  restart_after_stop: Starta om kalibreringen…
+  recalibrate_restart: Starta om kalibreringen…
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Confirms the restart's dialog.
   restart_calibration: Starta om kalibreringen
   # Fritextfälten (SPEC.md 8.2, 8.4, 11). Inget av dem avbryter någonsin sessionen.
@@ -421,10 +422,10 @@ status:
   interrupted_emergency_stop: Deltagaren stoppade; plagget på noll. Ta bort eventuellt stimulus, fråga vad hen behöver, tryck på {controls[resume]}.
   # DRAFT (LOG N7.F11b12): written by the build, not ethics-sourced
   interrupted_pause: Pausad; plagget på noll. Steget som pågick görs om. Tryck på {controls[resume]} för att fortsätta.
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Under Återuppta, i stället
-  # för omkalibreringarna efter ett stopp i beröringskalibreringen när sessionens är förbrukade.
-  # En rad i liten storlek: ett test håller båda språken till det.
-  recalibration_used: Ombalansering eller omstart efter ett stopp är redan använd i den här sessionen, så bara {controls[resume]} erbjuds.
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Under Återuppta efter ett
+  # stopp, i stället för omkalibreringarna när gränsen för en session är nådd. En rad i liten
+  # storlek: ett test håller båda språken till det.
+  recalibration_used: Omkalibreringarna som tillåts i en session är förbrukade, så bara {controls[resume]} erbjuds.
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   discarded: Senaste försöket kasserat. Det upprepas.
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
@@ -548,11 +549,11 @@ dialogs:
   distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem med Kartläggningsavstånd…, eller tryck på Nästa steg för att avsluta med dem registrerade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
   fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The re-calibrations after
-  # an emergency stop in touch calibration (docs/research/R36), the same in every condition.
-  rebalance_after_stop: 'Balansera om kanalerna i stället för att återuppta? Deltagaren ställer in var och en av de andra kanalerna mot mittkanalen igen och jämför dem (steg 3 och 4), och sedan kommer frågan om jämnhet. En behaglighetsnivå som redan är inställd behålls. Plagget är avstängt tills det första av detta börjar, och allt som registrerats hittills sparas.'
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The re-calibrations, the
+  # same in every condition and wherever they are offered.
+  recalibrate_rebalance: 'Balansera om kanalerna nu? Plagget går till noll och det som pågår avbryts. Deltagaren ställer in var och en av de andra kanalerna mot mittkanalen igen och jämför dem (steg 3 och 4), och sedan kommer frågan om jämnhet och valet av mönster; en behaglighetsnivå som redan är inställd behålls. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
-  restart_after_stop: 'Starta om beröringskalibreringen i stället för att återuppta? Den börjar om från steg 1 som en ny omgång, utan övningen på skattningsskalan. Plagget är avstängt tills steg 1 börjar, och allt som registrerats hittills sparas; den tidigare omgången markeras som ersatt.'
+  recalibrate_restart: 'Starta om beröringskalibreringen nu? Plagget går till noll och det som pågår avbryts. Kalibreringen börjar om från steg 1 som en ny omgång, utan övningen på skattningsskalan. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
   recalibration_reason: Varför? Registreras tillsammans med valet.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The keys are what the log

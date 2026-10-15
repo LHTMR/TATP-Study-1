@@ -146,7 +146,6 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "touch_calibration.equalisation_readjust_max_passes", int, 0, None),
     ("study1.yaml", "touch_calibration.evenness_max_rebalances", int, 0, None),
     ("study1.yaml", "touch_calibration.pilot_skip_min_ratings", int, 1, None),
-    ("study1.yaml", "touch_calibration.recalibrations_after_stop_max", int, 0, None),
     ("study1.yaml", "patterns.condition_pattern", dict, None, None),
     ("study1.yaml", "patterns.preference_candidates", list, None, None),
     ("study1.yaml", "patterns.fixed_ct_pattern", str, None, None),
@@ -491,6 +490,21 @@ def load(
     # The schema's minimums are inclusive, so this one is checked here.
     if loaded["study1.yaml"]["vas"]["hold_tick_interval_s"] <= 0:
         raise ConfigError("study1.yaml: 'vas.hold_tick_interval_s' must be above 0")
+
+    # Null is a value here, no limit (docs/LOG.md N7.F12a1), which the schema refuses as a
+    # placeholder, so it is checked here.
+    touch = loaded["study1.yaml"]["touch_calibration"]
+    if "recalibrations_max" not in touch:
+        raise ConfigError(
+            "study1.yaml: required key 'touch_calibration.recalibrations_max' is missing"
+        )
+    limit = touch["recalibrations_max"]
+    if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int)
+                              or limit < 0):
+        raise ConfigError(
+            f"study1.yaml: 'touch_calibration.recalibrations_max' is {limit!r}; it must be "
+            "null, for no limit, or a whole number from 0"
+        )
 
     config = Config(
         study1=loaded["study1.yaml"],

@@ -19,10 +19,11 @@ logs, because an append-only file cannot be rewritten to say so.
 **What is reloaded, not redone.** The F40 estimates and the chosen filament
 (`calibration_pinprick`), the touch calibration and the preferred pattern
 (`touchcal_channels`), the masking check's level, the stop rehearsal, the ceiling ratings that
-cap the time point in progress, the mapping distances still outstanding, the stops during the
-intervention and the re-calibrations after a stop already used (docs/research/R36), and the
-RNG seed. Each is read from every file in the resume chain, since a session resumed twice has
-its history in three sets of files.
+cap the time point in progress, the mapping distances still outstanding, the counts of stops,
+re-calibrations and calibrations used (docs/LOG.md N7.F12a1), and the RNG seed. Each is read
+from every file in the resume chain, since a session resumed twice has its history in three
+sets of files. The touch calibration reloaded is the latest to have governed the touch: a
+re-calibration during the intervention writes its channels as a new set.
 
 The RNG is not reloaded as a state: every stage draws from a stream derived from the seed and
 its own id (`tatp/session_runner.py`), so the stages after the crash draw exactly what they
@@ -55,11 +56,12 @@ PATH_MARKER = ", path "
 # Written by `tatp/trials.py`'s `VasTraining`, which takes the name from here.
 VAS_TRAINING_CONFIRMED = "vas_training_confirmed"
 CONDITIONS = ("sham", "ct_targeted", "participant_preferred")
-# The participant's stop, as `tatp/interruption.py` logs it; and how the experimenter went on
-# from one in touch calibration (docs/research/R36), which `tatp/touchcal.py` takes from here.
+# The participant's stop, as `tatp/interruption.py` logs it; and the re-calibrations, with the
+# choice of a plain resume after a stop (docs/LOG.md N7.F12a1), which `tatp/touchcal.py` takes
+# from here.
 EMERGENCY_STOP = "emergency_stop"
-RECALIBRATION_AFTER_STOP = "recalibration_after_stop"
-RESUME_AFTER_STOP = "resume"
+RECALIBRATION_EVENT = "recalibration"
+RESUME_CHOICE = "resume"
 
 
 class ResumeError(Exception):
@@ -153,10 +155,13 @@ class ResumeState:
     current_file: str = ""
     # The scales whose VAS training the participant had already confirmed (SPEC.md 10.6).
     vas_trained: frozenset[str] = frozenset()
-    # docs/research/R36: the stops during the intervention, for the session file, and the
-    # re-calibrations after a stop already used against the session's cap.
+    # docs/LOG.md N7.F12a1: the stops and re-calibrations during the intervention, for the
+    # session file; every re-calibration, against `recalibrations_max`; and how many
+    # calibrations have governed the touch (`touchcal_channels.calibration_index`).
     intervention_emergency_stops: int = 0
-    recalibrations_after_stop: int = 0
+    intervention_recalibrations: int = 0
+    recalibrations: int = 0
+    calibrations_used: int = 0
 
     @property
     def after_t_zero(self) -> bool:
@@ -222,12 +227,24 @@ def load(open_session: OpenSession, config, per_channel_pressure: bool) -> Resum
             and row["phase"] in CONDITION_PHASES
             for row in _rows(chain, "log")
         ),
-        recalibrations_after_stop=sum(
-            row["event"] == RECALIBRATION_AFTER_STOP
-            and not row["detail"].startswith(f"{RESUME_AFTER_STOP};")
+        intervention_recalibrations=sum(
+            _recalibrated(row) and row["phase"] in CONDITION_PHASES
             for row in _rows(chain, "log")
         ),
+        recalibrations=sum(_recalibrated(row) for row in _rows(chain, "log")),
+        # Files before 15 Oct 2026 have no calibration_index: one calibration, if any.
+        calibrations_used=max(
+            (int(row.get("calibration_index") or 1)
+             for row in _rows(chain, "touchcal_channels")),
+            default=0,
+        ),
     )
+
+
+def _recalibrated(row: dict[str, str]) -> bool:
+    """A rebalance or a restart, not the plain resume the same event records."""
+    return (row["event"] == RECALIBRATION_EVENT
+            and not row["detail"].startswith(f"{RESUME_CHOICE};"))
 
 
 def previous_session_f40(

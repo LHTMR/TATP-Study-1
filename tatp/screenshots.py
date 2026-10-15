@@ -595,18 +595,32 @@ def _experimenter_states(config: cfg.Config) -> dict:
             "The participant pressed the stop during touch calibration's step 4, with step 2's "
             "fit accepted: beside Resume, Rebalance channels… and Restart calibration… are "
             "offered, each in the place of its kin in the situational row, and each asks why "
-            "(docs/research/R36). The same in every condition; nothing else moved.",
+            "(docs/LOG.md N7.F12a1). The same in every condition; nothing else moved.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "emergency_stop"},
             lambda window: (
                 window.set_instruction(cfg.instruction(config, "touchcal_equalise",
                                                        **SAMPLE_MATCH)),
-                window.set_actions_enabled(rebalance_after_stop=True, restart_after_stop=True),
+                window.set_actions_enabled(recalibrate_rebalance=True,
+                                           recalibrate_restart=True),
+            ),
+        ),
+        "intervention_recalibrate": (
+            "The intervention, waiting for the next block with the condition's touch on: "
+            "Rebalance channels… and Restart calibration… offered at any time, as during touch "
+            "calibration (S, 15 Oct 2026; docs/LOG.md N7.F12a1). The same in every condition, "
+            "and no pressures (SPEC.md 16).",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S, "next_event": upcoming},
+            lambda window: (
+                waiting(window),
+                window.set_actions_enabled(recalibrate_rebalance=True,
+                                           recalibrate_restart=True),
             ),
         ),
         "touchcal_stopped_recalibration_used": (
-            "A stop during touch calibration once the session's re-calibration after a stop "
-            "is used: Resume only, and one grey line where the two offers were saying why.",
+            "A stop during touch calibration once the re-calibrations a limit allows "
+            "(recalibrations_max, none by default) are used: Resume only, and one grey line "
+            "where the two offers were saying why.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "emergency_stop"},
             lambda window: (
@@ -788,15 +802,15 @@ def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             "The error dialog: a red title and the message as raised.",
             window.error_dialog(SAMPLE_ERROR),
         ),
-        "rebalance_after_stop_dialog": (
-            "Rebalance channels… after a stop in touch calibration: what it does instead of "
-            "Resume, and why, from a fixed list; Rebalance channels disabled until a reason "
-            "is chosen (docs/research/R36).",
+        "recalibrate_rebalance_dialog": (
+            "Rebalance channels…: what it does, wherever it is offered, and why, from a fixed "
+            "list; Rebalance channels disabled until a reason is chosen (docs/LOG.md "
+            "N7.F12a1).",
             window.recalibration_dialog("rebalance"),
         ),
-        "restart_after_stop_dialog": (
-            "Restart calibration… after a stop in touch calibration, with a reason chosen, "
-            "shown pressed, so Restart calibration is enabled (docs/research/R36).",
+        "recalibrate_restart_dialog": (
+            "Restart calibration…, with a reason chosen, shown pressed, so Restart calibration "
+            "is enabled (docs/LOG.md N7.F12a1).",
             _chosen(window.recalibration_dialog("restart"), "channel_uneven"),
         ),
     }
