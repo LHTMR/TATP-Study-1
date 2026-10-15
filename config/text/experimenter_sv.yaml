@@ -293,16 +293,25 @@ warnings:
     och detta registreras.
 
 banners:
-  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. {value} är plaggets namn från
-  # terms.garments, som har egna parenteser.
-  reduced_capability: >-
-    DENNA SESSION SAMLAR INTE IN GILTIG BERÖRINGSKALIBRERINGSDATA. Den anslutna enheten kan
+  # Varje banner är en rad på skärmen; dess _detail är verktygstipset (LOG N7.F11a4).
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced. {value} är plaggets namn
+  # från terms.garments, som har egna parenteser.
+  reduced_capability: 'INGEN GILTIG BERÖRINGSKALIBRERINGSDATA: {value}'
+  # DRAFT (LOG N7.U4, N7.F11a4): written by the build, not ethics-sourced
+  reduced_capability_detail: >-
+    Denna session samlar inte in giltig beröringskalibreringsdata. Den anslutna enheten kan
     inte ställa tryck per kanal: {value}. Tiderna är verkliga; trycken är det inte.
-  placeholder_text: >-
-    DELTAGARSKÄRMARNA INNEHÅLLER FORTFARANDE PLATSHÅLLARTEXT. Kör inte en riktig deltagare.
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced
+  placeholder_text: 'KÖR INTE EN RIKTIG DELTAGARE: deltagarskärmarna innehåller platshållartext.'
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced
+  placeholder_text_detail: >-
+    En del text på deltagarskärmarna är fortfarande platshållare och är inte godkänd. Kör bara
+    tester och pilotförsök tills den är ersatt.
   # SPEC.md 11.1. Omöjlig att missa, eftersom försöksledaren inte ska kunna slå på detta utan
   # att se vad det kostar.
-  fit_preview: >-
+  # DRAFT (LOG N7.F11a4): written by the build, not ethics-sourced
+  fit_preview: 'FÖRHANDSGRANSKNING AV ANPASSNINGEN ÄR PÅ: du ser deltagarens skattningar.'
+  fit_preview_detail: >-
     FÖRHANDSGRANSKNING AV ANPASSNINGEN ÄR PÅ. Du ser deltagarens skattningar, vilket Bilaga 1
     3.3 och forskningspersonsinformationen säger att du inte gör. Sessionen registreras som
     oblindad i det avseendet.

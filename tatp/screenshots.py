@@ -110,6 +110,8 @@ SAMPLE_HARDWARE = {"connected": True, "link_lost": False, "faults": [],
                    "channel_pressure_kpa": None}
 SAMPLE_PRESSURES_KPA = {1: 38.5, 2: 41.0, 3: 40.0, 4: 39.5, 5: 42.0}
 SAMPLE_FAULT = "channel 4: valve did not report"
+# Unresolved open items as `config.OpenItem.__str__` gives them, "[number] summary".
+SAMPLE_OPEN_ITEMS = ["[L3] audio levels", "[5] patterns"]
 # What the prototype driver reports when its link goes, at full length (arduino_mosfet.py).
 SAMPLE_LINK_FAULT = ("serial write failed on COM3: WriteFile failed (PermissionError(13, "
                      "'The device does not recognize the command.', None, 22))")
@@ -430,6 +432,8 @@ def _experimenter_states(text: dict) -> dict:
         window.set_instruction(apply_filament)
         window.set_target("primary", SAMPLE_SITE, filament=True)
         window.set_status(instructions["await_participant"])
+        # What a filament trial offers while it runs (tatp/pinprick.py `_connect_extra`).
+        window.set_actions_enabled(substitution=True)
 
     def ready(window):
         window.set_instruction(instructions["ready"])
@@ -437,9 +441,11 @@ def _experimenter_states(text: dict) -> dict:
     return {
         "plain": (
             "No banners, no open items, nothing scheduled -- a correctly configured session "
-            "at setup. Controls along the bottom, Resume, Rebalance and the fit choice "
-            "disabled; the zone diagram with no zone marked; the hardware panel connected "
-            "with no pressures.",
+            "at setup. The routine controls along the bottom, Next step emphasised; the "
+            "situational ones (Resume, Discard, Rebalance, the fit choice, the filament "
+            "entry, Mapping distances) hidden in places kept for them; no zone diagram, "
+            "since there is no target; the garment connected, its button quiet at the foot "
+            "of the side column.",
             {}, None,
         ),
         "placeholder_banner": (
@@ -457,27 +463,37 @@ def _experimenter_states(text: dict) -> dict:
             {"demo": True}, None,
         ),
         "all_banners": (
-            "All three banners at once, in the space they need, which is fixed from the "
-            "session's start: no banner comes or goes during a session, so nothing below "
-            "moves (UI_PRINCIPLES.md 3.3). The fit-preview banner is amber like the "
-            "reduced-capability one (SPEC.md 11.1).",
+            "All three banners at once, one line each with the detail in the tooltip, in the "
+            "space they need, which is fixed from the session's start: no banner comes or "
+            "goes during a session, so nothing below moves (UI_PRINCIPLES.md 3.3). The "
+            "fit-preview banner is amber like the reduced-capability one (SPEC.md 11.1).",
             {"placeholder_text": True, "reduced_capability_device": True,
              "garment_driver": SAMPLE_GARMENT, "fit_preview_enabled": True}, None,
         ),
         "open_items": (
-            "Unresolved open items listed for the experimenter (SPEC.md 20).",
-            {"unresolved_open_items": ["L3 audio levels", "5 patterns"]}, None,
+            "Unresolved open items listed for the experimenter (SPEC.md 20): one small amber "
+            "line at the foot of the banner region, by number, the summaries in the tooltip.",
+            {"unresolved_open_items": SAMPLE_OPEN_ITEMS}, None,
         ),
         "disconnected": (
-            "The garment reported disconnected: red and bold in the hardware panel, Connect "
-            "enabled and Disconnect not.",
+            "The garment reported disconnected: red and bold in the hardware panel, and its "
+            "button reading Connect garment, emphasised as the way forward.",
             {"hardware": {**SAMPLE_HARDWARE, "connected": False}}, None,
         ),
         "pinprick_primary": (
             "A pinprick application: the filament by its gram label, the primary zone "
             "outlined on the diagram with its site beside it, the technique text below, and "
-            "the response pending -- never its value.",
+            "the response pending -- never its value. The filament-applied-instead entry is "
+            "offered, as it is only during a filament trial.",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S}, pinprick,
+        ),
+        "pilot_rig_pinprick": (
+            "What the 15 Oct 2026 pilot looked like: the prototype sleeve's reduced-capability "
+            "banner and the open items above a filament trial.",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
+             "reduced_capability_device": True, "garment_driver": SAMPLE_GARMENT,
+             "unresolved_open_items": SAMPLE_OPEN_ITEMS},
+            pinprick,
         ),
         "brush_secondary": (
             "A brush stroke in the secondary zone: the dashed ellipse outlined.",
@@ -489,7 +505,7 @@ def _experimenter_states(text: dict) -> dict:
         ),
         "mapping": (
             "A mapping path: the secondary zone outlined without a site, the technique text "
-            "shown because a filament is used, and Mapping distances enabled now that a "
+            "shown because a filament is used, and Mapping distances offered now that a "
             "phase has been mapped.",
             {"phase": "post_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: (
@@ -543,14 +559,18 @@ def _experimenter_states(text: dict) -> dict:
             ready,
         ),
         "interrupted_emergency_stop": (
-            "The participant pressed the stop: the red line under the phase, Resume and "
-            "Abort the only controls enabled, and nothing else moved.",
+            "The participant pressed the stop: the red line under the phase, the step on hold "
+            "dimmed beneath it, Resume emphasised in its own slot and Abort the only controls "
+            "offered, Next step greyed, and nothing moved.",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "emergency_stop"},
-            pinprick,
+            # The stop cancels the trial, which withdraws the substitution entry
+            # (tatp/pinprick.py `_disconnect_extra`).
+            lambda window: (pinprick(window), window.withdraw_substitution()),
         ),
         "interrupted_pause": (
-            "The experimenter's pause: the same line in amber, Resume enabled.",
+            "The experimenter's pause: the same line in amber, the step dimmed, Resume "
+            "offered.",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "pause"},
             ready,
@@ -580,12 +600,16 @@ def _experimenter_states(text: dict) -> dict:
         "long_instruction": (
             "The longest instruction the session gives, set down the type scale so it fits "
             "its region: nothing below it has moved, and the controls are where they always "
-            "are.",
+            "are. It asks for Accept, so Accept and Re-run are offered, as the procedure "
+            "offers them.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S},
-            lambda window: window.set_instruction(
-                instructions["touchcal_stage1_exhausted"].format(
-                    value=text["terms"]["stage1"]["flat"]
-                )
+            lambda window: (
+                window.set_instruction(
+                    instructions["touchcal_stage1_exhausted"].format(
+                        value=text["terms"]["stage1"]["flat"]
+                    )
+                ),
+                window.set_actions_enabled(fit_decision=True),
             ),
         ),
         "touchcal_estimation_skip": (
@@ -603,8 +627,8 @@ def _experimenter_states(text: dict) -> dict:
             ),
         ),
         "awaiting_rebalance": (
-            "The evenness question answered 'uneven': Rebalance and Next step both "
-            "enabled, because the procedure waits on either.",
+            "The evenness question answered 'uneven': Rebalance offered beside Next step, "
+            "because the procedure waits on either.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA}},
             lambda window: (
@@ -615,7 +639,7 @@ def _experimenter_states(text: dict) -> dict:
         "fit_preview_f40": (
             "The main window while the F40 fit preview (SPEC.md 11.1) is open, only with "
             "fit_preview.enabled: the banner saying what it costs, the instruction saying the "
-            "decision is due, Re-run and Accept enabled, and no rating anywhere on this "
+            "decision is due, Re-run and Accept offered, and no rating anywhere on this "
             "window -- they are in the preview window.",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
              "fit_preview_enabled": True},
@@ -626,7 +650,7 @@ def _experimenter_states(text: dict) -> dict:
         ),
         "fit_preview_touch": (
             "The main window while the touch-calibration fit preview is open: its instruction "
-            "at a smaller size because it is long, Accept and Re-run enabled.",
+            "at a smaller size because it is long, Accept and Re-run offered.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "fit_preview_enabled": True},
             lambda window: (
