@@ -1202,6 +1202,7 @@ class TouchCalibration(Procedure):
 
         self.run_index = 0
         self.reruns = 0
+        self._run_warning: str | None = None
         self.rebalances = 0
         self.comparisons = 0
         self.fit: maths.RatingFit | None = None
@@ -1323,6 +1324,10 @@ class TouchCalibration(Procedure):
 
     def _start_run(self) -> None:
         self.run_index += 1
+        # A warning about the run a re-run discards is not about the one now starting.
+        if self._run_warning is not None:
+            self.experimenter.clear_warning(self._run_warning)
+            self._run_warning = None
         self.session.log("touch_calibration_run", detail=f"run {self.run_index}")
         self.anchor_settings: dict[float, list[float]] = {}
         self.fit = None
@@ -1468,11 +1473,10 @@ class TouchCalibration(Procedure):
                 "catch_trials_felt", severity="warning",
                 detail=f"{felt} of {len(catches)} catch trials felt",
             )
-            self.experimenter.set_warning(
-                self.experimenter.text["warnings"]["catch_trials_felt"].format(
-                    value=f"{felt}/{len(catches)}"
-                )
+            self._run_warning = self.experimenter.text["warnings"]["catch_trials_felt"].format(
+                value=f"{felt}/{len(catches)}"
             )
+            self.experimenter.set_warning(self._run_warning)
         self._gate(reasons, usable=held is not None)
 
     def _gate(self, reasons: tuple[str, ...], usable: bool) -> None:

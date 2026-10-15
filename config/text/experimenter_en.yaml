@@ -82,6 +82,11 @@ phases:
 
 instructions:
   # SPEC.md 11: what to do now, alongside the zone diagram.
+  #
+  # Filled by `tatp.config.instruction`: {controls[...]} with the button labels below, so an
+  # instruction never names a button its own way (LOG N7.F11b18); {say[...]} with a sentence
+  # from `say:` in the PARTICIPANT's language, since it is said to them (LOG N7.F11b19); the
+  # remote's button symbols ({confirm} ...) from hardware.yaml; and the step's own values.
   monofilament: >-
     Approach perpendicular from about 3 cm. Bend the filament to about three-quarters of its
     extended length, hold for about 1 s, no lateral movement, then remove slowly. Keep the
@@ -97,91 +102,81 @@ instructions:
   # rating, so the last application's prompt is not left up as if still to do. Never names
   # the next filament.
   between_applications: 'Response received. Wait: the next application will appear here.'
+  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced. The same gap after a
+  # discard, which the status reports, whether a repeat follows or not.
+  between_applications_discarded: 'Discarded. Wait: the next step will appear here.'
   # DRAFT (LOG N7.F11b11): written by the build, not ethics-sourced. {step} is
   # mapping.step_size_mm.
-  mapping_path: 'Path {path}: move the filament {step} mm inward on each tick. When the participant reports a change, press Next step and mark the border on the skin.'
-  # Read aloud before the first path. The mapping is instructed verbally and the participant
-  # answers verbally, so this is the only place the wording exists -- there is no participant
-  # mapping screen. Examples of the change are Bilaga 1's own ("burning", "tenderness", "more
-  # intense pricking"); keep them, they are what the plan says participants are told.
-  mapping_script: >-
-    Say aloud: "I will touch you with this filament, moving a small step at a time towards the
-    marked area. Tell me as soon as the feeling clearly changes — burning, tenderness, or a
-    sharper pricking."
+  mapping_path: 'Path {path}: move the filament {step} mm inward on each tick. When the participant reports a change, press {controls[proceed]} and mark the border on the skin.'
+  # Read aloud before the first path: `say.mapping`.
+  mapping_script: 'Say aloud: "{say[mapping]}"'
   mapping_distances: Measure each border from the centre of the primary zone, and enter the four distances in mm whenever convenient. This never blocks the session.
-  # DRAFT (LOG N7.F11b1): written by the build, not ethics-sourced. The button symbols are
-  # filled from hardware.yaml responder.button_symbols. The cue is named by its shape only.
+  # DRAFT (LOG N7.F11b1): written by the build, not ethics-sourced. The cue is named by its
+  # shape only.
   fit_garment: >-
     Fit the garment and check that all five channels are seated. Give the participant the
     remote and show the buttons: {decrease} {increase} move, {confirm} confirms,
-    {emergency_stop} stops. Put the headphones on. Tell them a circle on the screen means
-    something is about to start. Then press Next step.
+    {emergency_stop} stops. Put the headphones on. Tell them: "{say[circle]}" Then press
+    {controls[proceed]}.
   # DRAFT (LOG N7.F11b2): written by the build, not ethics-sourced
   welcome: >-
     The participant reads the welcome and presses {confirm}. The stop rehearsal follows at
     once: the touch starts and they are asked to press the stop button.
   # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. {minutes} is the
-  # sensitisation window's length (schedule.yaml).
+  # sensitisation window's length (schedule.yaml), inside `say.heat`.
   thermode_start: >-
-    Heat: tell the participant "You will now feel heat on your hand for {minutes} minutes."
-    Place the thermode (50 °C) on the primary zone and press Next step the moment it starts
-    heating: this is time zero.
+    Heat: tell the participant "{say[heat]}" Place the thermode (50 °C) on the primary zone
+    and press {controls[proceed]} the moment it starts heating: this is time zero.
   # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. While the heat is on.
   heat_on: Heat on. Remove the thermode when the capsaicin is due.
   # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced
-  capsaicin_apply: Remove the thermode. Apply 0.075 % capsaicin to the primary zone, then press Next step.
+  capsaicin_apply: Remove the thermode. Apply 0.075 % capsaicin to the primary zone, then press {controls[proceed]}.
   # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. While the capsaicin is on.
   capsaicin_on: Capsaicin on. Remove it when the countdown ends.
   # DRAFT (LOG N7.F11b10): written by the build, not ethics-sourced
   thermode_rekindle: >-
     Rekindle: the garment's touch is off. Place the thermode on the primary zone and press
-    Next step as it starts heating.
+    {controls[proceed]} as it starts heating.
   # DRAFT (LOG N7.F11b10): written by the build, not ethics-sourced. While the rekindle heat is
   # on; the countdown above counts to its end.
   rekindle_heating: Rekindle heat on. Remove the thermode when the countdown ends.
   # DRAFT (LOG N7.F11b10): written by the build, not ethics-sourced
-  rekindle_remove: Remove the thermode, then press Next step. The garment's touch starts again.
+  rekindle_remove: Remove the thermode, then press {controls[proceed]}. The garment's touch starts again.
   # SPEC.md 7.4, 8.3: the software times, the experimenter launches. One per kind of series,
   # saying what is about to be applied (LOG N7.F11b7). {n} is the configured count.
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
   ready_long: >-
     Filament series, {region} zone, starting with the {filament} g filament. Have the
-    filaments to hand, then press Next step.
+    filaments to hand, then press {controls[proceed]}.
   # DRAFT (LOG N7.F11b14): written by the build, not ethics-sourced. Before the session's
-  # first pain measure, which is followed by the pain scale's training. The brush is rated on
-  # the pain scale too (study1.yaml brush.rating_scale).
-  ready_long_first: >-
-    First pain measures. Tell the participant: "Next I will test the skin with thin plastic
-    filaments and a soft brush. Each time, a circle appears first, then you feel it, then the
-    line appears and you rate how painful it was. This first line is practice." Then press
-    Next step.
+  # first pain measure, which is followed by the pain scale's training.
+  ready_long_first: 'First pain measures. Tell the participant: "{say[first_pain]}" Then press {controls[proceed]}.'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
-  ready_short: '{n} applications of the {filament} g filament, {region} zone. Have it to hand, then press Next step.'
+  ready_short: '{n} applications of the {filament} g filament, {region} zone. Have it to hand, then press {controls[proceed]}.'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
-  ready_brush: '{n} brush strokes, {region} zone. Have the brush to hand, then press Next step.'
+  ready_brush: '{n} brush strokes, {region} zone. Have the brush to hand, then press {controls[proceed]}.'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced. An intervention pinprick
   # block: {ready} is `ready_short`.
   ready_pinprick_block: 'Pinprick block {block}: {ready}'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
-  ready_touch_block: 'Touch-rating block {block}: nothing to apply. Press Next step and the participant rates the touch.'
+  ready_touch_block: 'Touch-rating block {block}: nothing to apply. Press {controls[proceed]} and the participant rates the touch.'
   # DRAFT (LOG N7.F11b11): written by the build, not ethics-sourced
-  mapping_ready: 'Path {index} of {count} ({path}). Start outside the area. Press Next step to start the tick.'
+  mapping_ready: 'Path {index} of {count} ({path}). Start outside the area. Press {controls[proceed]} to start the tick.'
   await_participant: Waiting for the participant's response.
   response_received: Response received.
   # DRAFT (LOG N7.F11b5): written by the build, not ethics-sourced. The VAS proportionality
   # training (SPEC.md 10.6), before a scale's first rating; the same in every condition. The
   # experimenter cannot see the participant's screen, so the labels are given here:
   # {anchors} are the participant text's anchors for the scale, left to right, and
-  # {explanation} is `vas_training_explain`, both in the PARTICIPANT's language.
+  # {explanation} is `say.proportionality`, both in the PARTICIPANT's language.
   vas_training: >-
-    Rating-scale training. Tell the participant: "There is no touch now. This is the scale you
-    will use." Read the labels from left to right: {anchors}. Then say: "{explanation}" Then
-    press Next step.
+    Rating-scale training. Tell the participant: "{say[training_scale]}" Read the labels from
+    left to right: {anchors}. Then say: "{explanation}" Then press {controls[proceed]}.
   # DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. After that Next step, while
   # the participant makes the practice rating. Never shows where they put the marker.
   vas_training_wait: >-
-    Rating scale training: the participant is making a practice rating and confirms it with ▶.
-    It is not recorded as a rating.
+    Rating scale training: the participant is making a practice rating and confirms it with
+    {confirm}. It is not recorded as a rating.
   # Setup and touch calibration (SPEC.md 9, 10.7, 10.9). None names a pattern or a condition.
   # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced. Step 1 of the masking
   # check, with the garment still off.
@@ -191,29 +186,27 @@ instructions:
   # experimenter's Next step is what records it.
   masking_check_mask: >-
     Audio setup, part 2: the garment is running and the participant raises the noise to cover
-    it. Press Next step only if they say they can still hear the garment: that records it and
-    stops the noise so you can offer earplugs.
+    it. Press {controls[proceed]} only if they say they can still hear the garment: that
+    records it and stops the noise so you can offer earplugs.
   # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced. The same step with earplugs in.
   masking_check_mask_earplugs: >-
     Audio setup, with earplugs: the participant raises the noise to cover the garment. Press
-    Next step only if they say they can still hear it: that records it, and the session
-    continues recorded as not fully masked.
+    {controls[proceed]} only if they say they can still hear it: that records it, and the
+    session continues recorded as not fully masked.
   # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced. The `settled` screen, where
   # Next step does nothing.
   masking_done: 'Audio setup done. The participant reads the screen and presses {confirm}; touch calibration follows.'
   # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced
   earplugs: >-
-    Fit the earplugs under the headphones. Tell the participant they will set the noise again
-    from the start, the same way. Then press Next step.
+    Fit the earplugs under the headphones. Tell the participant: "{say[earplugs]}" Then press
+    {controls[proceed]}.
   # DRAFT (LOG N7.F11b3): written by the build, not ethics-sourced
   stop_rehearsal: >-
     Stop rehearsal: the touch is running and the participant is asked to press the stop
-    button. Wait for the press. Next step is only for a participant who cannot press, and it
-    records no press.
+    button. Wait for the press. {controls[proceed]} is only for a participant who cannot press,
+    and it records no press.
   # DRAFT (LOG N7.F11b3): written by the build, not ethics-sourced
-  stop_rehearsal_resume: >-
-    The stop worked. Tell the participant: "That is how the stop button works. I will start the
-    touch again now." Then press Resume.
+  stop_rehearsal_resume: 'The stop worked. Tell the participant: "{say[stop_works]}" Then press {controls[resume]}.'
   # DRAFT (LOG N7.F11b3): written by the build, not ethics-sourced. After the resume, while
   # `stop_rehearsal_done` is up.
   stop_rehearsal_done: The participant reads that the stop button works at any time and presses {confirm}. The audio setup follows.
@@ -239,35 +232,34 @@ instructions:
   touchcal_evenness: 'Touch calibration, after step 5: the participant is asked whether the movement feels even.'
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_preference: 'Touch calibration, step 6 of 6: the participant chooses a kind of touch.'
-  touchcal_fit_review: The touch-calibration estimate is ready. Accept it, or re-run the procedure.
+  # DRAFT (LOG N7.F11b18): written by the build, not ethics-sourced
+  touchcal_fit_review: 'The touch-calibration estimate is ready. Press {controls[fit_accept]}, or {controls[fit_rerun]}.'
   # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced
-  f40_fit_review: The pinprick-force estimate (F40) is ready. Accept it, or re-run the procedure.
-  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced. The decisions name the
-  # buttons as controls.fit_rerun, fit_accept, rebalance and proceed label them.
+  f40_fit_review: 'The pinprick-force estimate (F40) is ready. Press {controls[fit_accept]}, or {controls[fit_rerun]}.'
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_failed: >-
-    The touch-calibration estimate failed its quality check ({value}). Press Re-run the
-    procedure to repeat steps 1 and 2, and tell the participant: "We will do the settings and
-    ratings once more." Or press Accept this estimate to go on with it flagged.
+    The touch-calibration estimate failed its quality check ({value}). Press
+    {controls[fit_rerun]} to repeat steps 1 and 2, and tell the participant: "{say[rerun]}" Or
+    press {controls[fit_accept]} to go on with it flagged.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_unusable: >-
-    The touch-calibration estimate cannot be used ({value}). Press Re-run the procedure to
-    repeat steps 1 and 2, and tell the participant: "We will do the settings and ratings once
-    more." Or abort the session.
+    The touch-calibration estimate cannot be used ({value}). Press {controls[fit_rerun]} to
+    repeat steps 1 and 2, and tell the participant: "{say[rerun]}" Or press {controls[abort]}.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced. No re-run is offered: the
-  # limit is reached, and a Re-run is refused.
+  # limit is reached, and a re-run is refused.
   touchcal_stage1_exhausted: >-
     The touch-calibration estimate cannot be used ({value}) and the re-run limit is reached.
-    Press Accept this estimate to go on with a fallback that is recorded as not valid for
-    analysis, or abort the session.
+    Press {controls[fit_accept]} to go on with a fallback that is recorded as not valid for
+    analysis, or press {controls[abort]}.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_gain_undefined: >-
-    Channel {channel} was matched at 0 kPa again. Press Rebalance channels to repeat the
-    match, or press Next step to continue with this channel at the middle channel's pressure,
-    which is recorded as not valid for analysis.
+    Channel {channel} was matched at 0 kPa again. Press {controls[rebalance]} to repeat the
+    match, or {controls[proceed]} to continue with this channel at the middle channel's
+    pressure, which is recorded as not valid for analysis.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_uneven: >-
-    The participant reports the movement as uneven along the arm. Press Rebalance channels to
-    repeat steps 3 and 4, or Next step to go on.
+    The participant reports the movement as uneven along the arm. Press {controls[rebalance]}
+    to repeat steps 3 and 4, or {controls[proceed]} to go on.
   # Shown at the start of every touch delivery in EVERY condition, and nothing else is: only
   # one condition is self-started, so any line about starting it would name that condition
   # (SPEC.md 16). A test holds the experimenter screen identical across the three.
@@ -277,34 +269,69 @@ instructions:
   # none of these names a condition, a pattern or anything about the touch that differs.
   # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced
   waiting: Nothing to do until the next step. The countdown above shows when it is due.
-  capsaicin_remove: Remove the capsaicin, then press Next step to begin the post-sensitisation measures.
+  # DRAFT (LOG N7.F11b18): written by the build, not ethics-sourced
+  capsaicin_remove: Remove the capsaicin, then press {controls[proceed]} to begin the post-sensitisation measures.
   # DRAFT (LOG N7.F11b13): written by the build, not ethics-sourced. Identical in every
-  # condition: in every condition the garment touches (SPEC.md 12). {hours}
-  # is the intervention window's length (schedule.yaml).
-  intervention_start: >-
-    Intervention. Tell the participant: "The next part takes about {hours} hours. You will feel
-    touch from the garment, and in between I will repeat the skin tests and you will rate the
-    touch. Just follow the screen." Then press Next step.
+  # condition: in every condition the garment touches (SPEC.md 12). {hours} is the
+  # intervention window's length (schedule.yaml), inside `say.intervention`.
+  intervention_start: 'Intervention. Tell the participant: "{say[intervention]}" Then press {controls[proceed]}.'
   touch_block: 'Touch-rating block: the participant rates the touch.'
   baseline_ratings: 'Baseline: the participant rates how they feel right now.'
   intervention_end: The intervention has ended and the garment has been switched off.
   # SPEC.md 15: a session resumed during the rekindle never prompts the heat a second time.
+  # DRAFT (LOG N7.F11b18): written by the build, not ethics-sourced
   rekindle_resumed: >-
     The session resumed during the rekindle. The heat was started before the interruption and
-    is not prompted again; the rekindle is timed from then. Press Next step to confirm. If the
-    heat was not in fact applied, apply it now and enter a note. The garment stays off until the
-    rekindle is over.
+    is not prompted again; the rekindle is timed from then. Press {controls[proceed]} to
+    confirm. If the heat was not in fact applied, apply it now and enter a note. The garment
+    stays off until the rekindle is over.
 
-# DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. What the experimenter says
-# about proportionality in the VAS training (SPEC.md 10.6), shown inside `instructions.
-# vas_training` as {explanation}. It was on the participant's screen until S's lab-run list
-# (5 Oct 2026); it is the participant text's old sentence, and Bilaga 1's "a mark twice as far
-# along the line indicates it is twice as painful" / "twice as pleasant/intense". One key per
-# trained scale, the same scales as the participant text's `training`.
-vas_training_explain:
-  pain: A mark twice as far along the line means it was twice as painful.
-  intensity: A mark twice as far along the line means the touch felt twice as intense.
-  pleasantness: A mark twice as far along the line means the touch felt twice as pleasant.
+# What the experimenter says aloud to the participant, quoted inside `instructions` as
+# {say[...]}. Loaded in the PARTICIPANT's language (`Config.say`), whatever the experimenter's
+# (LOG N7.F11b19). None may differ by condition (SPEC.md 16).
+say:
+  # Read aloud before the first mapping path. The mapping is instructed verbally and the
+  # participant answers verbally, so this is the only place the wording exists -- there is no
+  # participant mapping screen. Examples of the change are Bilaga 1's own ("burning",
+  # "tenderness", "more intense pricking"); keep them, they are what the plan says
+  # participants are told.
+  mapping: >-
+    I will touch you with this filament, moving a small step at a time towards the marked
+    area. Tell me as soon as the feeling clearly changes — burning, tenderness, or a sharper
+    pricking.
+  # DRAFT (LOG N7.F11b1): written by the build, not ethics-sourced
+  circle: A circle on the screen means something is about to start.
+  # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. {minutes} is filled after.
+  heat: You will now feel heat on your hand for {minutes} minutes.
+  # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced
+  earplugs: You will set the noise again from the start, the same way.
+  # DRAFT (LOG N7.F11b3): written by the build, not ethics-sourced
+  stop_works: That is how the stop button works. I will start the touch again now.
+  # DRAFT (LOG N7.F11b5): written by the build, not ethics-sourced
+  training_scale: There is no touch now. This is the scale you will use.
+  # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
+  rerun: We will do the settings and ratings once more.
+  # DRAFT (LOG N7.F11b14): written by the build, not ethics-sourced. The brush is rated on the
+  # pain scale too (study1.yaml brush.rating_scale).
+  first_pain: >-
+    Next I will test the skin with thin plastic filaments and a soft brush. Each time, a circle
+    appears first, then you feel it, then the line appears and you rate how painful it was.
+    This first line is practice.
+  # DRAFT (LOG N7.F11b13): written by the build, not ethics-sourced. {hours} is filled after.
+  intervention: >-
+    The next part takes about {hours} hours. You will feel touch from the garment, and in
+    between I will repeat the skin tests and you will rate the touch. Just follow the screen.
+  # DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. What the experimenter says
+  # about proportionality in the VAS training (SPEC.md 10.6), shown inside
+  # `instructions.vas_training` as {explanation}. It was on the participant's screen until S's
+  # lab-run list (5 Oct 2026); it is the participant text's old sentence, and Bilaga 1's "a
+  # mark twice as far along the line indicates it is twice as painful" / "twice as
+  # pleasant/intense". One key per trained scale, the same scales as the participant text's
+  # `training`.
+  proportionality:
+    pain: A mark twice as far along the line means it was twice as painful.
+    intensity: A mark twice as far along the line means the touch felt twice as intense.
+    pleasantness: A mark twice as far along the line means the touch felt twice as pleasant.
 
 controls:
   proceed: Next step
@@ -356,9 +383,9 @@ status:
   # Shown for as long as the session is interrupted (SPEC.md 13). One line at body size: a test
   # holds both languages to it.
   # DRAFT (LOG N7.F11b12): written by the build, not ethics-sourced
-  interrupted_emergency_stop: Stopped by the participant; garment at zero. Remove any stimulus, ask what they need, then Resume.
+  interrupted_emergency_stop: Stopped by the participant; garment at zero. Remove any stimulus, ask what they need, then press {controls[resume]}.
   # DRAFT (LOG N7.F11b12): written by the build, not ethics-sourced
-  interrupted_pause: Paused; garment at zero. The step in progress will be repeated. Press Resume to continue.
+  interrupted_pause: Paused; garment at zero. The step in progress will be repeated. Press {controls[resume]} to continue.
   discarded: Last trial discarded. It will be repeated.
   discarded_not_repeated: >-
     Last trial discarded. The application limit has been reached, so it will not be repeated.

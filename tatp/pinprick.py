@@ -88,6 +88,7 @@ FIT_PREVIEW_KEY = "f40"
 
 # Keys in the experimenter text's `instructions`, not wording.
 BETWEEN_APPLICATIONS = "between_applications"
+BETWEEN_DISCARDED = "between_applications_discarded"
 READY_LONG = "ready_long"
 READY_LONG_FIRST = "ready_long_first"
 READY_SHORT = "ready_short"
@@ -771,6 +772,8 @@ class PinprickTrial(_RatedTrial):
         self.filaments = ladder(session.config)
         # Changed by the experimenter's substitution while the trial runs (SPEC.md 8.2).
         self.applied_label_g = application.applied_label_g
+        # The substitution warning this trial raised, withdrawn once a lower one is recorded.
+        self._substitution_warning: str | None = None
 
     def _filament(self, label_g: str) -> Filament:
         return self.filaments[ladder_index(self.filaments, label_g)]
@@ -808,10 +811,7 @@ class PinprickTrial(_RatedTrial):
                 "substitution_unknown", origin="experimenter", severity="warning",
                 detail=f"{label_g} g",
             )
-            self.experimenter.set_warning(
-                warnings["substitution_unknown"].format(filament=label_g)
-            )
-            self.experimenter.refresh()
+            self._warn_substitution(warnings["substitution_unknown"].format(filament=label_g))
             return
         self.applied_label_g = label_g
         asked = self._filament(self.application.filament_label_g).force_nominal_mn
@@ -823,10 +823,16 @@ class PinprickTrial(_RatedTrial):
             detail=f"asked {self.application.filament_label_g} g, applied {label_g} g",
         )
         if not lower:
-            self.experimenter.set_warning(
-                warnings["substitution_not_lower"].format(filament=label_g)
-            )
-            self.experimenter.refresh()
+            self._warn_substitution(warnings["substitution_not_lower"].format(filament=label_g))
+        elif self._substitution_warning is not None:
+            # Resolved: a substitution the spec allows is now what is recorded.
+            self.experimenter.clear_warning(self._substitution_warning)
+            self._substitution_warning = None
+
+    def _warn_substitution(self, text: str) -> None:
+        self._substitution_warning = text
+        self.experimenter.set_warning(text)
+        self.experimenter.refresh()
 
     def _rated(self, response) -> None:
         if response.rating_percent >= self.intolerable_vas_pct:
@@ -1039,7 +1045,9 @@ class _Series(Procedure):
         self.experimenter.set_status("")
         self._wait_then_next()
 
-    def _wait_then_next(self) -> None:
+    def _wait_then_next(self, discarded: bool = False) -> None:
+        """`discarded`: the gap follows a discard, which the status reports, rather than a
+        rating, so the line says nothing about a response received."""
         seconds = jittered_isi_s(self.session.rng, self.isi_min_s, self.isi_max_s)
         self.session.log("interval", detail=f"{seconds:.2f} s")
 
@@ -1048,10 +1056,7 @@ class _Series(Procedure):
             self.participant.show_blank()
             # The application just rated is done: its prompt and site come down, rather than
             # reading as still to do through the gap (15 Oct 2026 pilot review).
-            self.experimenter.set_instruction(
-                self.experimenter.text["instructions"][BETWEEN_APPLICATIONS]
-            )
-            self.experimenter.refresh()
+            self.instruct(BETWEEN_DISCARDED if discarded else BETWEEN_APPLICATIONS)
             self._after(seconds, self._advance)
 
         self.step(begin)
@@ -1101,7 +1106,7 @@ class _Series(Procedure):
         self.experimenter.refresh()
         # The interval restarts in full, so the repeat is as far from the discarded
         # application as any application is from the one before it.
-        self._wait_then_next()
+        self._wait_then_next(discarded=True)
 
 
 @dataclass(frozen=True)
@@ -1183,6 +1188,9 @@ class LongProtocol(_Series):
         self._awaiting_fit: LongResult | None = None
         self._last: tuple[Planned, int] | None = None  # the planned application and its site
         self._logged_plan: list[int] | None = None
+        # The warning the last run ended with, withdrawn when a re-run starts: it was about the
+        # run the re-run discards, not the one now under review.
+        self._run_warning: str | None = None
 
     def connect_actions(self) -> None:
         super().connect_actions()
@@ -1199,6 +1207,9 @@ class LongProtocol(_Series):
     def begin(self) -> None:
         pinprick = self.pinprick
         self.applications = 0
+        if self._run_warning is not None:
+            self.experimenter.clear_warning(self._run_warning)
+            self._run_warning = None
         self.state = LongProtocolState(
             n_filaments=len(self.filaments),
             start=self.start_index,
@@ -1217,13 +1228,12 @@ class LongProtocol(_Series):
         self.wait_to_start(self._next)
 
     def _ready_instruction(self) -> str:
-        instructions = self.experimenter.text["instructions"]
         # The session's first pain measure: what is about to happen is said to the participant
         # first, and the pain scale's training follows the go (SPEC.md 10.6).
         if self.session.vas_training_due(PAIN_SCALE):
-            return instructions[READY_LONG_FIRST]
-        return instructions[READY_LONG].format(
-            region=self._region_name(), filament=self.prior.start_filament_label_g
+            return self.instruction_text(READY_LONG_FIRST)
+        return self.instruction_text(
+            READY_LONG, region=self._region_name(), filament=self.prior.start_filament_label_g
         )
 
     def _next(self) -> None:
@@ -1328,9 +1338,7 @@ class LongProtocol(_Series):
             self._awaiting_fit = result
             # What is due now, in place of the last trial's instruction and site (which this
             # clears), left up as if another application were wanted.
-            self.experimenter.set_instruction(
-                self.experimenter.text["instructions"]["f40_fit_review"]
-            )
+            self.experimenter.set_instruction(self.instruction_text("f40_fit_review"))
             # Accept and Re-run are live exactly while this waits on them (SPEC.md 11.1).
             self.experimenter.set_actions_enabled(fit_decision=True)
             self.fit_ready.emit(fit)
@@ -1368,7 +1376,8 @@ class LongProtocol(_Series):
                 detail=f"rho {result.ordinal_rho}, threshold {rho_min}",
             )
         if warnings:
-            self.experimenter.set_warning(" ".join(warnings))
+            self._run_warning = " ".join(warnings)
+            self.experimenter.set_warning(self._run_warning)
             self.experimenter.refresh()
 
     def _record(self, result: LongResult, superseded: bool, rerun_reason: str) -> None:
@@ -1566,13 +1575,13 @@ class ShortProtocol(_RatingSeries):
         self._site = 0
 
     def _ready_instruction(self) -> str:
-        instructions = self.experimenter.text["instructions"]
-        ready = instructions[READY_SHORT].format(
-            n=self.n_trials, filament=self.filament_label_g, region=self._region_name()
+        ready = self.instruction_text(
+            READY_SHORT, n=self.n_trials, filament=self.filament_label_g,
+            region=self._region_name(),
         )
         if self.block_index is None:
             return ready
-        return instructions[READY_PINPRICK_BLOCK].format(block=self.block_index, ready=ready)
+        return self.instruction_text(READY_PINPRICK_BLOCK, block=self.block_index, ready=ready)
 
     def _stimulus(self) -> str:
         return self.filament_label_g
@@ -1635,9 +1644,7 @@ class BrushProtocol(_RatingSeries):
         return BRUSH_TABLE
 
     def _ready_instruction(self) -> str:
-        return self.experimenter.text["instructions"][READY_BRUSH].format(
-            n=self.n_trials, region=self._region_name()
-        )
+        return self.instruction_text(READY_BRUSH, n=self.n_trials, region=self._region_name())
 
     def rating_scale(self) -> str:
         return self.session.config.study1["brush"]["rating_scale"]

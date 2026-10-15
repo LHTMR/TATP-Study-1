@@ -103,9 +103,6 @@ SAMPLE_PRESENTATIONS = 12
 # The channel matched, which of the channels matched it is, and how many there are.
 SAMPLE_MATCH = {"channel": SAMPLE_CHANNEL, "index": 2, "count": 4}
 SAMPLE_PATH = "lateral"
-SAMPLE_STEP_MM = "5"
-SAMPLE_BUTTON_SYMBOLS = {"decrease": "‹", "increase": "›", "confirm": "▶",
-                         "emergency_stop": "!"}
 SAMPLE_DISTANCES = ("42", "37,5")
 SAMPLE_BLOCK = {"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch"}
 SAMPLE_DUE_IN_S = 245.0
@@ -412,14 +409,16 @@ def _sample_touch_fit() -> FitReady:
     )
 
 
-def _experimenter_states(text: dict) -> dict:
+def _experimenter_states(config: cfg.Config) -> dict:
     """Every state of the window: (description, view overrides, what the protocol pushes in).
 
     What the protocol pushes -- the instruction, the status, the target, the awaited actions --
     is a function of the window, applied after a fresh window is built for each state so no
     state inherits another's.
     """
+    text = config.experimenter_text
     instructions = text["instructions"]
+    step_mm = f"{float(config.study1['mapping']['step_size_mm']):g}"
     filament = SAMPLE_F40["filament"]
     apply_filament = instructions["apply_filament"].format(
         filament=filament, force_mn=f"{SAMPLE_F40['filament_mn']:g}", site=SAMPLE_SITE,
@@ -437,7 +436,7 @@ def _experimenter_states(text: dict) -> dict:
         window.set_status(instructions["await_participant"])
 
     def instruct(key, **values):
-        return lambda window: window.set_instruction(instructions[key].format(**values))
+        return lambda window: window.set_instruction(cfg.instruction(config, key, **values))
 
     # What is up while a block is waited for, and once it is due: the sample block is a touch
     # block.
@@ -504,7 +503,7 @@ def _experimenter_states(text: dict) -> dict:
             {"phase": "post_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: (
                 window.set_instruction(
-                    instructions["mapping_path"].format(path=path, step=SAMPLE_STEP_MM)
+                    cfg.instruction(config, "mapping_path", path=path, step=step_mm)
                 ),
                 window.set_target("secondary", filament=True),
                 window.set_mapping_phases(["post_sensitisation"]),
@@ -592,7 +591,7 @@ def _experimenter_states(text: dict) -> dict:
             "The first step of a session: the garment, the remote's buttons by their printed "
             "symbols, the headphones and the cue, then Next step.",
             {"phase": "setup"},
-            instruct("fit_garment", **SAMPLE_BUTTON_SYMBOLS),
+            instruct("fit_garment"),
         ),
         "hardware_pressures": (
             "Touch calibration: the hardware panel with every channel's pressure and one "
@@ -618,7 +617,7 @@ def _experimenter_states(text: dict) -> dict:
             "are.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: window.set_instruction(
-                instructions["touchcal_stage1_exhausted"].format(
+                cfg.instruction(config, "touchcal_stage1_exhausted",
                     value=text["terms"]["stage1"]["flat"]
                 )
             ),
@@ -643,7 +642,7 @@ def _experimenter_states(text: dict) -> dict:
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA}},
             lambda window: (
-                window.set_instruction(instructions["touchcal_uneven"]),
+                window.set_instruction(cfg.instruction(config, "touchcal_uneven")),
                 window.set_actions_enabled(rebalance=True),
             ),
         ),
@@ -655,7 +654,7 @@ def _experimenter_states(text: dict) -> dict:
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
              "fit_preview_enabled": True},
             lambda window: (
-                window.set_instruction(instructions["f40_fit_review"]),
+                window.set_instruction(cfg.instruction(config, "f40_fit_review")),
                 window.show_fit_preview(_sample_f40_fit()),
             ),
         ),
@@ -665,7 +664,7 @@ def _experimenter_states(text: dict) -> dict:
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "fit_preview_enabled": True},
             lambda window: (
-                window.set_instruction(instructions["touchcal_fit_review"]),
+                window.set_instruction(cfg.instruction(config, "touchcal_fit_review")),
                 window.show_fit_preview(_sample_touch_fit()),
             ),
         ),
@@ -674,7 +673,7 @@ def _experimenter_states(text: dict) -> dict:
 
 def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     text = config.experimenter_text
-    for name, (description, overrides, push) in _experimenter_states(text).items():
+    for name, (description, overrides, push) in _experimenter_states(config).items():
         view = _experimenter_view(**overrides)
         window = ExperimenterWindow(text, lambda view=view: view)
         # Sized first, so a long instruction is fitted to the width it will be drawn at.

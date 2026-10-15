@@ -371,7 +371,7 @@ def test_a_watchable_experimenter_reads_the_instruction_before_pressing(app, loa
     pressed = []
     experimenter.proceed_requested.connect(lambda: pressed.append(True))
     # Any instruction that waits on Next step.
-    experimenter.set_instruction(experimenter.text["instructions"]["rekindle_remove"])
+    experimenter.set_instruction(cfg.instruction(runner.session.config, "rekindle_remove"))
     demo.experimenter._tick()
     assert pressed == [], "still reading"
     demo.experimenter.reaction_s = 0.0
@@ -385,7 +385,7 @@ def test_a_person_at_the_experimenter_screen_is_not_pressed_for(app, loaded):
     experimenter = runner.rig.experimenter
     pressed = []
     experimenter.proceed_requested.connect(lambda: pressed.append(True))
-    experimenter.set_instruction(experimenter.text["instructions"]["rekindle_remove"])
+    experimenter.set_instruction(cfg.instruction(runner.session.config, "rekindle_remove"))
     demo.experimenter._tick()
     assert pressed == []
     _finish(runner, demo)

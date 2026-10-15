@@ -193,10 +193,14 @@ def finished(app, loaded, tmp_path_factory):
     runner = make_runner(loaded, tmp_path_factory.mktemp("full"))
     # Every instruction the experimenter was shown, in order, for the tests of what they say.
     runner.shown_instructions = []
+    # And what the countdown named as each was shown.
+    runner.shown_upcoming = []
     real = runner.experimenter.set_instruction
 
     def spy(text):
         runner.shown_instructions.append(text)
+        upcoming = runner.session._upcoming
+        runner.shown_upcoming.append(None if upcoming is None else upcoming[1])
         real(text)
 
     runner.experimenter.set_instruction = spy
@@ -355,7 +359,7 @@ def test_the_garment_is_off_for_the_rekindle_and_on_again_after(finished):
 
 def _shown(finished, key, **values) -> int:
     """Where the instruction `key` was first shown, in the order the session showed them."""
-    text = finished.experimenter.text["instructions"][key].format(**values)
+    text = cfg.instruction(finished.session.config, key, **values)
     return finished.shown_instructions.index(text)
 
 
@@ -397,9 +401,8 @@ def test_each_block_says_what_it_is_before_it_starts(finished):
     n = finished.session.config.study1["pinprick"]["short_protocol_n_trials"]
     for block in finished.session.schedule.blocks:
         if block.type == "pinprick":
-            ready = text["instructions"]["ready_short"].format(
-                n=n, filament=filament, region=region
-            )
+            ready = cfg.instruction(finished.session.config, "ready_short",
+                                    n=n, filament=filament, region=region)
             _shown(finished, "ready_pinprick_block", block=block.index, ready=ready)
         else:
             _shown(finished, "ready_touch_block", block=block.index)
@@ -407,11 +410,11 @@ def test_each_block_says_what_it_is_before_it_starts(finished):
 
 def test_the_first_pain_measure_is_introduced_once(finished):
     """Before the pain scale's training, what the participant is told (LOG N7.F11b14)."""
-    first = finished.experimenter.text["instructions"]["ready_long_first"]
+    config = finished.session.config
+    first = cfg.instruction(config, "ready_long_first")
     assert finished.shown_instructions.count(first) >= 1
     training = next(i for i, t in enumerate(finished.shown_instructions)
-                    if finished.experimenter.text["vas_training_explain"]["pain"] in t
-                    or finished.session.config.vas_training_explain["pain"] in t)
+                    if config.say["proportionality"]["pain"] in t)
     assert finished.shown_instructions.index(first) < training
     later = finished.shown_instructions[training:]
     assert first not in later, "the later long protocols have the ordinary ready line"
@@ -665,6 +668,41 @@ def test_a_resume_during_the_rekindle_never_prompts_the_heat_again(app, loaded, 
     assert not early, "the garment stays off until the rekindle is over"
     runner.cancel()
     runner.session.close()
+
+
+def test_a_resume_after_the_thermode_came_off_only_restarts_the_touch(app, loaded, tmp_path):
+    """Code review of N7.F11b10: the removal was pressed before the crash, so neither the heat
+    nor the removal is asked for again; the heat-resume logic of N7.D14 is not reached."""
+    crashed = _crash_after(app, loaded, tmp_path, "", event="rekindle_thermode_removed")
+    runner = _resumed(loaded, tmp_path, crashed)
+    assert runner.resume.rekindle_thermode_removed
+    shown = []
+    real = runner.experimenter.set_instruction
+    runner.experimenter.set_instruction = lambda text: (shown.append(text), real(text))
+    Driver(runner.rig, runner, stop_when=lambda: "garment_activated" in [
+        r["event"] for r in _events(runner.session)
+    ]).run()
+    names = [r["event"] for r in _events(runner.session)]
+    assert "rekindle_resumed" in names
+    assert "rekindle_heat_confirmed" not in names, "the heat is not asked about"
+    assert "rekindle_thermode_removed" not in names, "nor the removal"
+    config = runner.session.config
+    for key in ("rekindle_resumed", "rekindle_remove", "thermode_rekindle"):
+        assert cfg.instruction(config, key) not in shown
+    runner.cancel()
+    runner.session.close()
+
+
+def test_once_the_heat_has_ended_the_countdown_moves_on(finished):
+    """Code review of N7.F11b10: while the thermode is waited for, the heat's end does not go
+    due and overdue in the alarm colours; the countdown is the next block's."""
+    config = finished.session.config
+    heating = finished.shown_instructions.index(cfg.instruction(config, "rekindle_heating"))
+    remove = finished.shown_instructions.index(cfg.instruction(config, "rekindle_remove"))
+    assert finished.shown_upcoming[heating] == "rekindle_end"
+    assert finished.shown_upcoming[remove] == "block"
+    events = [r["event"] for r in _events(finished.session)]
+    assert events.index("rekindle_thermode_removed") < events.index("garment_reactivated")
 
 
 def test_a_chain_that_resumes_from_itself_is_refused(tmp_path):
@@ -935,7 +973,7 @@ def test_with_the_fit_preview_on_an_f40_is_rerun_once_then_accepted(app, loaded,
     assert rows[0]["rerun_reason"] == "the driver re-runs once"
     f40_fits = [fit for fit in shown if isinstance(fit, F40Fit)]
     assert len(f40_fits) == 2, "the preview is shown for each run"
-    review = loaded.experimenter_text["instructions"]["f40_fit_review"]
+    review = cfg.instruction(runner.session.config, "f40_fit_review")
     said = [text for text, fit in zip(instructions, shown, strict=True)
             if isinstance(fit, F40Fit)]
     assert said == [review, review], "the decision due is said, not the last trial's"

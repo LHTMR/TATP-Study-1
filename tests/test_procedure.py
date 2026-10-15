@@ -160,9 +160,9 @@ def test_the_training_gives_what_to_say_in_the_participants_language(rig, loaded
     anchors = [a["label"] for a in sorted(loaded.participant_text["vas"]["pain"]["anchors"],
                                           key=lambda a: a["pct"])]
     assert " / ".join(anchors) in shown
-    assert loaded.vas_training_explain["pain"] in shown
-    swedish = cfg.load("sv", "sv").experimenter_text["vas_training_explain"]["pain"]
-    assert loaded.vas_training_explain["pain"] == swedish
+    assert loaded.say["proportionality"]["pain"] in shown
+    swedish = cfg.load("sv", "sv").experimenter_text["say"]["proportionality"]["pain"]
+    assert loaded.say["proportionality"]["pain"] == swedish
     assert shown.startswith(loaded.experimenter_text["instructions"]["vas_training"][:10])
     procedure.cancel()
 

@@ -209,6 +209,7 @@ class ExperimenterWindow(QWidget):
         self._status_text = ""
         self._warning_text = ""
         self._warning_stages = 0
+        self._reminder_text = ""
         self._open_items_text = ""
         self._open_items_detail = ""
         # Faults first seen during the intervention or the rekindle: never shown in detail.
@@ -502,7 +503,18 @@ class ExperimenterWindow(QWidget):
         self._warning_stages = 0
         self._fit_text()
 
-    def clear_warning(self) -> None:
+    def set_reminder(self, text: str) -> None:
+        """Something to do whenever convenient -- the mapping distances -- under the status,
+        until whatever set it clears it with "". Neither the status nor a stage start takes
+        it down, as they would a line in the status."""
+        self._reminder_text = text
+        self._fit_text()
+
+    def clear_warning(self, text: str | None = None) -> None:
+        """Clear the warning; given `text`, only if that is the one shown, so whatever raised a
+        warning can withdraw it without taking down another's."""
+        if text is not None and text != self._warning_text:
+            return
         self._warning_text = ""
         self._fit_text()
 
@@ -755,27 +767,30 @@ class ExperimenterWindow(QWidget):
         wrapped text at up to four sizes every tick is work that changes nothing.
         """
         width = self._left_width()
-        wanted = (self._instruction_text, self._status_text, self._warning_text,
-                  self._open_items_text, self._open_items_detail, width)
+        wanted = (self._instruction_text, self._status_text, self._reminder_text,
+                  self._warning_text, self._open_items_text, self._open_items_detail, width)
         if wanted == self._fitted:
             return
         self._fitted = wanted
         _fit_to(self.instruction, self._instruction_text, INSTRUCTION_SIZES, width,
                 self.instruction.height())
-        # The warning on a line of its own under the status, in the warning colour, so it is
-        # told from the routine line before it is read (UI_PRINCIPLES.md 3.2).
-        lines = [escape(self._status_text, quote=False)] if self._status_text else []
-        warning = (f'<span style="color: {WARNING_COLOUR};">'
-                   f'{escape(self._warning_text, quote=False)}</span>')
+        # The status, then any reminder, then any warning, each on a line of its own; the
+        # warning in the warning colour, so it is told from the others before it is read
+        # (UI_PRINCIPLES.md 3.2). What does not fit gives way in that order: the routine
+        # status, which the next one replaces anyway, then the reminder, which comes back;
+        # never the warning (UI_PRINCIPLES.md 3.1).
+        lines = [escape(text, quote=False)
+                 for text in (self._status_text, self._reminder_text) if text]
         if self._warning_text:
-            lines.append(warning)
+            lines.append(f'<span style="color: {WARNING_COLOUR};">'
+                         f'{escape(self._warning_text, quote=False)}</span>')
         self.status.setTextFormat(Qt.RichText)
         height = self.status.height()
-        _fit_to(self.status, RICH_LINE_BREAK.join(lines), STATUS_SIZES, width, height)
-        if len(lines) > 1 and self.status.heightForWidth(width) > height:
-            # Both do not fit even at the smallest size: the warning outranks the routine
-            # line (UI_PRINCIPLES.md 3.1), which the next one replaces anyway.
-            _fit_to(self.status, warning, STATUS_SIZES, width, height)
+        while True:
+            _fit_to(self.status, RICH_LINE_BREAK.join(lines), STATUS_SIZES, width, height)
+            if len(lines) <= 1 or self.status.heightForWidth(width) <= height:
+                break
+            lines.pop(0)
         self.open_items.setText(self._open_items_text)
         self.open_items.setToolTip(self._open_items_detail)
 
@@ -823,7 +838,10 @@ class ExperimenterWindow(QWidget):
             self.alert.setText("")
             self.alert.setStyleSheet("")
             return
-        self.alert.setText(self.text["status"][f"interrupted_{interruption}"])
+        # Resume by the label its button carries.
+        self.alert.setText(self.text["status"][f"interrupted_{interruption}"].format(
+            controls=self.text["controls"]
+        ))
         # The stop is the participant's and is red; a pause is the experimenter's own and amber.
         colour = DISCONNECTED_COLOUR if interruption == EMERGENCY_STOP else WARNING_COLOUR
         self.alert.setStyleSheet(emphasis_style(colour))

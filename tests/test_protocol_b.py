@@ -211,6 +211,28 @@ def test_a_failing_fit_is_put_to_the_experimenter_and_a_rerun_keeps_the_first(ri
     assert _events(session, "touchcal_stage1_rerun")
 
 
+def test_a_rerun_takes_down_the_warning_about_the_run_it_discards(rig):
+    """Code review of N7.F11b16: the first run's felt catch trials were still warned under the
+    second run's decision. Flat at 50 % on the first run, so its catch trials are felt too."""
+    window = rig.experimenter
+    warning_at_decision = []
+
+    def decide(trial):
+        warning_at_decision.append(window._warning_text)
+        return ("rerun", ("flat",)) if len(warning_at_decision) == 1 else ("accept", ())
+
+    procedure = touchcal.TouchCalibration(rig)
+    virtual = Virtual(rig, procedure)
+    virtual.decide = decide
+    virtual.before_step = lambda trial: (
+        _flat(rig)(trial) if procedure.run_index == 1 else None
+    )
+    virtual.run()
+    felt = window.text["warnings"]["catch_trials_felt"].split("(")[0]
+    assert felt in warning_at_decision[0]
+    assert felt not in window._warning_text, "the second run's catch trials were not felt"
+
+
 def test_an_estimate_that_cannot_be_inverted_cannot_be_accepted(rig):
     session = rig.session
     procedure = touchcal.TouchCalibration(rig)

@@ -254,10 +254,8 @@ def test_the_settled_screen_does_not_offer_next_step(rig):
     """15 Oct 2026 pilot review: the masking step's "press Next step if they can still hear"
     stayed up on the closing screen, where Next step does nothing (LOG N7.F11b4)."""
     Virtual(rig, MaskingCheck(rig)).run()
-    confirm = rig.session.config.hardware["responder"]["button_symbols"]["confirm"]
-    instructions = rig.experimenter.text["instructions"]
-    assert rig.experimenter.instruction.text() == instructions["masking_done"].format(
-        confirm=confirm
+    assert rig.experimenter.instruction.text() == cfg.instruction(
+        rig.session.config, "masking_done"
     )
 
 
@@ -277,7 +275,6 @@ def test_the_earplug_warning_is_cleared_when_the_check_restarts(rig):
 
 
 def test_the_experimenter_is_told_what_next_step_does_in_the_masking_step(rig):
-    instructions = rig.experimenter.text["instructions"]
     shown = []
 
     def watch(trial):
@@ -287,8 +284,8 @@ def test_the_experimenter_is_told_what_next_step_does_in_the_masking_step(rig):
     virtual = Virtual(rig, MaskingCheck(rig))
     virtual.before_step = _reports_audible(rig, 1, also=watch)
     virtual.run()
-    assert shown[0] == instructions["masking_check_mask"]
-    assert shown[-1] == instructions["masking_check_mask_earplugs"]
+    assert shown[0] == cfg.instruction(rig.session.config, "masking_check_mask")
+    assert shown[-1] == cfg.instruction(rig.session.config, "masking_check_mask_earplugs")
 
 
 def test_unmaskable_even_with_earplugs_is_recorded_not_refused(rig):
@@ -407,10 +404,9 @@ def test_the_rehearsal_fires_the_real_stop_and_shows_the_resume(rig, loaded, tmp
     assert result == StopRehearsalResult(press_detected=True)
     # After the press, what to say and then Resume; after the Resume, not Resume again
     # (LOG N7.F11b3).
-    text = rig.experimenter.text["instructions"]
-    confirm = session.config.hardware["responder"]["button_symbols"]["confirm"]
-    done = text["stop_rehearsal_done"].format(confirm=confirm)
-    assert instructions.index(text["stop_rehearsal_resume"]) < instructions.index(done)
+    done = cfg.instruction(session.config, "stop_rehearsal_done")
+    resume = cfg.instruction(session.config, "stop_rehearsal_resume")
+    assert instructions.index(resume) < instructions.index(done)
     stops = _events(session, "emergency_stop")
     assert len(stops) == 1 and stops[0]["origin"] == "participant", "the real path's own event"
     assert _events(session, "stop_rehearsal_press_detected")

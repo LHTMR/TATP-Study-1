@@ -705,7 +705,9 @@ def test_resume_is_enabled_only_while_interrupted(drawn):
         seen = _emitted(window.resume_requested)
         window.resume_button.click()
         assert seen == [()]
-        assert window.alert.text() == window.text["status"][f"interrupted_{kind}"]
+        assert window.alert.text() == window.text["status"][f"interrupted_{kind}"].format(
+            controls=window.text["controls"]
+        )
     held["view"] = _all_keys()
     window.refresh()
     assert not window.resume_button.isEnabled()
@@ -732,11 +734,27 @@ class _Filled(dict):
         return "00"
 
 
-@pytest.mark.parametrize("language", ["sv", "en"])
-def test_every_instruction_fits_its_region(app, language):
+LANGUAGE_PAIRS = [("sv", "sv"), ("en", "en"), ("sv", "en"), ("en", "sv")]
+
+
+def _instructions_to_show(config) -> dict[str, str]:
+    """Every instruction as `config.instruction` leaves it for the step to fill, the mapping
+    script with the first path's line as the screen shows them together."""
+    keys = [key for key in config.experimenter_text["instructions"]
+            if key not in ("monofilament", "mapping_script")]
+    shown = {key: cfg.instruction_template(config, key) for key in keys}
+    script = cfg.instruction_template(config, "mapping_script")
+    shown["mapping_ready"] = f"{script}\n\n{shown['mapping_ready']}"
+    return shown
+
+
+@pytest.mark.parametrize("participant, experimenter", LANGUAGE_PAIRS)
+def test_every_instruction_fits_its_region(app, participant, experimenter):
     """Each instruction, filled with its longest values, fits the instruction region at some
-    size of the scale rather than running off its bottom (LOG N7.F11b)."""
-    config = cfg.load(language, language)
+    size of the scale rather than running off its bottom (LOG N7.F11b). The sentences said
+    aloud are in the participant's language, so a Swedish one inside an English instruction
+    is measured too."""
+    config = cfg.load(participant, experimenter)
     text = config.experimenter_text
     terms = text["terms"]
     window = ExperimenterWindow(text, lambda: _all_keys())
@@ -747,26 +765,37 @@ def test_every_instruction_fits_its_region(app, language):
     )
     values = _Filled(
         anchors=" / ".join(a["label"] for a in longest_anchors),
-        explanation=max(config.vas_training_explain.values(), key=len),
+        explanation=max(config.say["proportionality"].values(), key=len),
         region=max(terms["regions"].values(), key=len),
         path=max(terms["mapping_paths"].values(), key=len),
         value=", ".join(terms["stage1"].values()),
         filament="1.4",
-        ready=text["instructions"]["ready_short"],
-        **config.hardware["responder"]["button_symbols"],
+        ready=cfg.instruction_template(config, "ready_short"),
     )
-    instructions = dict(text["instructions"])
-    # Shown elsewhere, or only inside another: the technique under the instruction, and the
-    # script that precedes the first mapping path.
-    instructions.pop("monofilament")
-    script = instructions.pop("mapping_script")
-    instructions["mapping_ready"] = f"{script}\n\n{instructions['mapping_ready']}"
-    for key, template in instructions.items():
+    for key, template in _instructions_to_show(config).items():
         window.set_instruction(template.format_map(values))
         label = window.instruction
         assert label.heightForWidth(window._left_width()) <= label.height(), (
-            f"instructions.{key} runs past its region in {language}"
+            f"instructions.{key} runs past its region ({participant} participant, "
+            f"{experimenter} experimenter)"
         )
+
+
+@pytest.mark.parametrize("participant, experimenter", LANGUAGE_PAIRS)
+def test_every_instruction_names_buttons_by_their_labels(participant, experimenter):
+    """Code review of N7.F11b: an instruction names a button only through {controls[...]},
+    so renaming a control cannot leave a dangling name; and every instruction formats."""
+    config = cfg.load(participant, experimenter)
+    text = config.experimenter_text
+    labels = [label for label in text["controls"].values() if "{" not in label]
+    for key, raw in text["instructions"].items():
+        for label in labels:
+            assert label not in raw, f"instructions.{key} types the button {label!r}"
+        filled = cfg.instruction_template(config, key).format_map(_Filled())
+        assert "{" not in filled and "}" not in filled, f"instructions.{key}: {filled!r}"
+    for kind in ("emergency_stop", "pause"):
+        # The one button these name; "Paused" holds the word Pause, which is no button name.
+        assert text["controls"]["resume"] not in text["status"][f"interrupted_{kind}"]
 
 
 def test_a_warning_outlives_the_routine_status_and_one_stage_start(drawn):

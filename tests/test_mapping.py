@@ -130,22 +130,50 @@ def test_the_experimenter_is_told_which_path_and_then_to_measure(rig, ledger, lo
     text = rig.experimenter.text
     mapping = AreaMapping(rig, ledger)
     mapping.start()
-    ready = text["instructions"]["mapping_ready"].format(
-        index=1, count=4, path=text["terms"]["mapping_paths"]["proximal"]
-    )
+    paths = text["terms"]["mapping_paths"]
+    ready = cfg.instruction(loaded, "mapping_ready", index=1, count=4, path=paths["proximal"])
     assert rig.experimenter.instruction.text().endswith(ready)
     rig.experimenter.proceed_requested.emit()
     step = f"{loaded.study1['mapping']['step_size_mm']:g}"
-    assert rig.experimenter.instruction.text() == text["instructions"]["mapping_path"].format(
-        path=text["terms"]["mapping_paths"]["proximal"], step=step
+    assert rig.experimenter.instruction.text() == cfg.instruction(
+        loaded, "mapping_path", path=paths["proximal"], step=step
     )
     rig.experimenter.proceed_requested.emit()
-    assert rig.experimenter.instruction.text() == text["instructions"]["mapping_ready"].format(
-        index=2, count=4, path=text["terms"]["mapping_paths"]["lateral"]
+    assert rig.experimenter.instruction.text() == cfg.instruction(
+        loaded, "mapping_ready", index=2, count=4, path=paths["lateral"]
     )
     mapping.cancel()
     _run_paths(rig, ledger)
     assert rig.experimenter.status.text() == text["instructions"]["mapping_distances"]
+
+
+def test_the_distances_reminder_stays_until_they_are_entered(rig, ledger):
+    """Code review of N7.F11b11: in the status line the next trial replaced the reminder and a
+    warning could hide it. It is a line of its own that only the entry takes down."""
+    window = rig.experimenter
+    reminder = window.text["instructions"]["mapping_distances"]
+    _run_paths(rig, ledger)
+    window.set_status(window.text["instructions"]["await_participant"])
+    window.new_stage()
+    window.new_stage()
+    assert reminder in window.status.text(), "a status and two stage starts later"
+    window.distances_entered.emit(PHASE, (30.0, None, 50.0, None))
+    assert reminder in window.status.text(), "two still to enter"
+    window.distances_entered.emit(PHASE, (30.0, 40.0, 50.0, 45.0))
+    assert reminder not in window.status.text()
+
+
+def test_an_answered_distance_query_takes_its_warning_down(rig, ledger, loaded):
+    window = rig.experimenter
+    _run_paths(rig, ledger)
+    too_far = loaded.study1["mapping"]["distance_plausible_max_mm"] * 2
+    window.distances_entered.emit(PHASE, (too_far, None, None, None))
+    assert window._warning_text, "queried"
+    window.distances_entered.emit(PHASE, (40.0, None, None, None))
+    assert window._warning_text == "", "a plausible value answers the query"
+    window.distances_entered.emit(PHASE, (None, too_far, None, None))
+    window.distances_entered.emit(PHASE, (None, too_far, None, None))
+    assert window._warning_text == "", "the same value again confirms it"
 
 
 def test_the_cue_train_stops_itself_at_max_steps(rig, ledger, loaded):

@@ -255,8 +255,8 @@ def test_the_run_waits_for_the_experimenter(rig):
     assert rig.participant.stack.currentWidget() is not rig.participant.cue
     # The ready line says what is about to be applied, not only "ready" (LOG N7.F11b7).
     text = rig.experimenter.text
-    assert rig.experimenter.instruction.text() == text["instructions"]["ready_long"].format(
-        region=text["terms"]["regions"][protocol.region],
+    assert rig.experimenter.instruction.text() == cfg.instruction(
+        rig.session.config, "ready_long", region=text["terms"]["regions"][protocol.region],
         filament=protocol.prior.start_filament_label_g,
     )
     protocol.cancel()
@@ -351,6 +351,10 @@ def test_a_discard_at_the_application_cap_says_it_will_not_be_repeated(app, load
     rig.experimenter.discard_requested.emit()
     status = rig.experimenter.status.text()
     assert status == rig.experimenter.text["status"]["discarded_not_repeated"]
+    # The line in the gap fits either case, and says nothing about a response received.
+    assert rig.experimenter.instruction.text() == cfg.instruction(
+        rig.session.config, "between_applications_discarded"
+    )
     _spin(lambda: done)
     assert len(_rows(rig.session, "pinprick")) == 2 and done[0].capped
     assert len(_rows(rig.session, "discards")) == 1
@@ -434,6 +438,48 @@ def test_an_unknown_substitution_is_refused(rig):
     _drive(protocol, done, before_answer=bad)
     assert _rows(rig.session, "pinprick")[0]["substituted"] == "false"
     assert "substitution_unknown" in _events(rig.session)
+
+
+def test_a_substitution_warning_goes_once_a_lower_filament_is_recorded(rig):
+    """Code review of N7.F11b16: a resolved warning does not outlive its resolution."""
+    window = rig.experimenter
+    protocol = _long(rig)
+    done = _start(protocol)
+    _spin(lambda: rig.participant.stack.currentWidget() is rig.participant.vas)
+    window.substitution_entered.emit("999")
+    assert "999" in window._warning_text
+    window.substitution_entered.emit("15")
+    assert window._warning_text == ""
+    window.substitution_entered.emit("300")
+    assert "300" in window._warning_text, "not lower than asked for"
+    window.substitution_entered.emit("15")
+    assert window._warning_text == ""
+    protocol.cancel()
+    assert not done
+
+
+def test_a_rerun_takes_down_the_warning_about_the_run_it_discards(app, loaded, tmp_path):
+    """Code review of N7.F11b16: the first run's application-cap warning stayed up under the
+    re-run. Another stage's warning is left alone by a first run."""
+    study1 = {**loaded.study1,
+              "pinprick": {**loaded.study1["pinprick"], "max_applications": 2},
+              "fit_preview": {**loaded.study1["fit_preview"], "enabled": True}}
+    rig = _make_rig(loaded, tmp_path, study1=study1)
+    window = rig.experimenter
+    window.set_warning("from the stage before")
+    protocol = _long(rig)
+    _start(protocol)
+    assert window._warning_text == "from the stage before"
+    for _ in range(2):
+        _spin(lambda: rig.participant.stack.currentWidget() is rig.participant.vas)
+        _answer(rig.participant, 0)
+    _spin(lambda: protocol._awaiting_fit is not None)
+    capped = window.text["warnings"]["application_cap"].format(value=2)
+    assert capped in window._warning_text
+    window.fit_rerun_requested.emit("again")
+    assert capped not in window._warning_text
+    protocol.cancel()
+    rig.session.close()
 
 
 def test_a_ceiling_rating_caps_the_site(rig):

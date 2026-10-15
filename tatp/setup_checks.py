@@ -283,7 +283,7 @@ class MaskingCheck(Procedure):
             # A Next step this soon after the report is the same click again -- a double
             # click -- not "the earplugs are in", which takes longer than this to be true.
             self.participant.show_message(PAUSED_SCREEN)
-            self.experimenter.set_instruction(self.experimenter.text["instructions"][EARPLUGS])
+            self.experimenter.set_instruction(self.instruction_text(EARPLUGS))
             self.experimenter.refresh()
             self._after(self.earplugs_lockout_s, self._offer_earplugs)
 
@@ -328,7 +328,7 @@ class MaskingCheck(Procedure):
         def show() -> None:
             self.participant.show_audio_setup(SETTLED)
             # Next step does nothing here, so the instruction that offered it is replaced.
-            self.instruct_with_symbols(MASKING_DONE)
+            self.instruct(MASKING_DONE)
 
         self.run_trial(
             lambda: MessageConfirm(*self._windows(), show, SETTLED),
@@ -406,9 +406,7 @@ class StopRehearsal(Procedure):
             self.awaiting = False
             self.press_detected = True
             self.session.log("stop_rehearsal_press_detected", origin="participant")
-            text = self.experimenter.text["instructions"]["stop_rehearsal_resume"]
-            self.experimenter.set_instruction(text)
-            self.experimenter.refresh()
+            self.instruct("stop_rehearsal_resume")
 
     def on_resumed(self) -> None:
         if not self.press_detected or self.done_shown:
@@ -423,7 +421,7 @@ class StopRehearsal(Procedure):
         def show() -> None:
             self.participant.show_message(STOP_REHEARSAL_DONE_SCREEN)
             # The Resume this instruction asked for has been pressed.
-            self.instruct_with_symbols(STOP_REHEARSAL_DONE_INSTRUCTION)
+            self.instruct(STOP_REHEARSAL_DONE_INSTRUCTION)
 
         self.run_trial(
             lambda: MessageConfirm(*self._windows(), show, STOP_REHEARSAL_DONE_SCREEN),

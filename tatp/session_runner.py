@@ -249,9 +249,7 @@ class TouchBlock(Procedure):
         def prepare() -> None:
             self.participant.show_blank()
             self.experimenter.set_instruction(
-                self.experimenter.text["instructions"][READY_TOUCH_BLOCK].format(
-                    block=self.block_index
-                )
+                self.instruction_text(READY_TOUCH_BLOCK, block=self.block_index)
             )
             self.experimenter.refresh()
 
@@ -340,6 +338,8 @@ class SessionRunner(Procedure):
         self._touch_after_block = False
         # Set for a session resumed after its rekindle heat was launched (LOG N7.D14).
         self._resumed_heat_t_s: float | None = None
+        # And whether its thermode had been removed too, so only the touch is left to restart.
+        self._resumed_thermode_removed = False
         self._stopping_for_error = False
         # Set when an error ended the program with the session open (`_leave_open`): nothing
         # afterwards may close it, or it could not be resumed.
@@ -461,9 +461,7 @@ class SessionRunner(Procedure):
     def _standby(self, instruction: str, **values: object) -> Callable[[], None]:
         def prepare() -> None:
             self._show_between()
-            self.experimenter.set_instruction(
-                self.experimenter.text["instructions"][instruction].format(**values)
-            )
+            self.experimenter.set_instruction(self.instruction_text(instruction, **values))
             self.experimenter.set_status("")
             self.experimenter.refresh()
 
@@ -484,9 +482,7 @@ class SessionRunner(Procedure):
     # == setup and touch calibration ===========================================================
 
     def _fit_garment(self) -> None:
-        standby = self._standby(
-            "fit_garment", **self.session.config.hardware["responder"]["button_symbols"]
-        )
+        standby = self._standby("fit_garment")
 
         def prepare() -> None:
             standby()
@@ -497,7 +493,7 @@ class SessionRunner(Procedure):
 
     def _welcome(self) -> None:
         # What happens next, which the experimenter is about to see from across the divider.
-        self.instruct_with_symbols("welcome")
+        self.instruct("welcome")
         self.run_trial(
             lambda: MessageConfirm(
                 self.session, self.participant, self.experimenter,
@@ -912,10 +908,23 @@ class SessionRunner(Procedure):
             self.await_proceed(confirmed, self._standby("rekindle_resumed"))
 
         def ended() -> None:
-            # The thermode comes off before the garment's touch starts again under it.
-            self.await_proceed(removed, self._standby("rekindle_remove"))
+            # The thermode comes off before the garment's touch starts again under it. The
+            # heat's end is past, so the countdown goes on to the next block rather than
+            # showing the heat's end due, then overdue, in the alarm colours.
+            standby = self._standby("rekindle_remove")
+
+            def prepare() -> None:
+                self._show_upcoming(self.stage_index + 1)
+                standby()
+
+            self.await_proceed(removed, prepare)
 
         def removed() -> None:
+            # Logged, so a resume after this press does not ask for it again.
+            self.session.log(resumption.REKINDLE_THERMODE_REMOVED, origin="experimenter")
+            reactivate()
+
+        def reactivate() -> None:
             self.session.set_phase(INTERVENTION)
             self._show_upcoming(self.stage_index + 1)
 
@@ -927,6 +936,14 @@ class SessionRunner(Procedure):
 
         if self._resumed_heat_t_s is not None:
             heat_t_s, self._resumed_heat_t_s = self._resumed_heat_t_s, None
+            if self._resumed_thermode_removed:
+                # The heat and the thermode's removal are both done: only the touch is left.
+                self.session.log(
+                    "rekindle_resumed", severity="warning",
+                    detail="the thermode was removed before the crash; the touch starts again",
+                )
+                reactivate()
+                return
             resumed_after_heat(heat_t_s)
             return
         self._set_alarms(at, REKINDLE)
@@ -1205,6 +1222,7 @@ class SessionRunner(Procedure):
             # never prompted a second time (docs/LOG.md N7.D14).
             if state.in_progress == REKINDLE:
                 self._resumed_heat_t_s = state.rekindle_heat_t_s
+                self._resumed_thermode_removed = state.rekindle_thermode_removed
             self._run_stage(index)
         elif stage.phase == INTERVENTION and stage.id != "intervention.start":
             # The garment was on when the session crashed; it is started again, with the cue.
