@@ -56,6 +56,7 @@ from tatp.ui.vas import (
     QUESTION_Y_FRACTION,
     SIDE_MARGIN_FRACTION,
     VasWidget,
+    draw_prose,
 )
 from tatp.units import MS_PER_S
 
@@ -129,6 +130,8 @@ class _MessageScreen(QWidget):
         # window from hardware.yaml.
         self.stop_colour = FOREGROUND
         self.stop_disc: QColor | None = None
+        # The play button's symbol, coloured wherever the text names it; set by the window.
+        self.play_symbol = ""
 
     def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
@@ -141,7 +144,7 @@ class _MessageScreen(QWidget):
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
         top = int(self.height() * QUESTION_Y_FRACTION)
         box = self.rect().adjusted(margin, top, -margin, 0)
-        painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.text)
+        draw_prose(painter, box, self.text, self.play_symbol)
         if self.stop_symbol is not None:
             painter.setRenderHint(QPainter.Antialiasing)
             _draw_symbol_button(
@@ -356,7 +359,7 @@ class _ControlScreen(QWidget):
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
         top = int(self.height() * ADJUST_CONFIRM_Y_FRACTION)
         box = self.rect().adjusted(margin, top, -margin, 0)
-        painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, self.confirm)
+        draw_prose(painter, box, self.confirm, self.responder.symbol_for(Action.CONFIRM))
         painter.end()
 
 
@@ -369,7 +372,7 @@ def _draw_top_text(painter: QPainter, widget: QWidget, text: str) -> None:
     margin = int(widget.width() * SIDE_MARGIN_FRACTION)
     top = int(widget.height() * QUESTION_Y_FRACTION)
     box = widget.rect().adjusted(margin, top, -margin, 0)
-    painter.drawText(box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, text)
+    draw_prose(painter, box, text, widget.responder.symbol_for(Action.CONFIRM))
 
 
 def _button_rect(widget: QWidget, side: str) -> QRect:
@@ -467,7 +470,7 @@ def _draw_button(
         label_width,
         widget.height() - rect.bottom() - BUTTON_LABEL_GAP_PX,
     )
-    painter.drawText(label_box, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, label)
+    draw_prose(painter, label_box, label, responder.symbol_for(Action.CONFIRM))
 
 
 class ParticipantWindow(QWidget):
@@ -528,6 +531,7 @@ class ParticipantWindow(QWidget):
         self.message.stop_disc = QColor(
             responder_config["button_symbol_discs"]["emergency_stop"]
         )
+        self.message.play_symbol = responder.symbol_for(Action.CONFIRM)
         self.cue = _CueScreen()
         self.vas = VasWidget(config.study1["vas"], responder, clock)
         self.vas.confirmed.connect(self.confirmed)

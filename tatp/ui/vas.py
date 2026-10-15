@@ -14,7 +14,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PySide6.QtCore import QPointF, QRect, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QPolygonF
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetrics,
+    QFontMetricsF,
+    QPainter,
+    QPen,
+    QPolygonF,
+    QTextCharFormat,
+    QTextLayout,
+    QTextOption,
+)
 from PySide6.QtWidgets import QWidget
 
 from tatp.clock import Clock
@@ -26,6 +37,15 @@ from tatp.units import MS_PER_S
 # screenshots are what pins them (SPEC.md 17.4).
 BACKGROUND = QColor(20, 20, 20)
 FOREGROUND = QColor(235, 235, 235)
+# The play button's symbol, wherever participant text names it, in the blue of the sticker on
+# the remote's play button (docs/LOG.md N7.I4), so the words point at the button in the hand.
+# The same blue as the experimenter screen's TARGET_COLOUR (`tatp/ui/widgets.py`), which the
+# participant window does not import.
+PLAY_SYMBOL_COLOUR = QColor("#4fa3e0")
+PROSE_FLAGS = Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap
+# What `drawText` turns a newline into before laying text out.
+LINE_SEPARATOR = " "
+UTF16_UNIT_BYTES = 2
 LINE_WIDTH_PX = 3
 MARKER_HALF_WIDTH_PX = 14
 MARKER_HEIGHT_PX = 22
@@ -59,6 +79,48 @@ ANCHOR_POINT_SIZE = 18
 ANCHOR_GAP_PX = 18
 ANCHOR_LABEL_GAP_PX = 16  # clear space required between two anchor labels sharing a row
 TICK_LABEL_GAP_PX = 6
+
+
+def draw_prose(painter: QPainter, box: QRect, text: str, play_symbol: str) -> None:
+    """Participant text, centred and wrapped as `drawText` lays it out, with every
+    `play_symbol` in PLAY_SYMBOL_COLOUR (S, lab run 5 Oct 2026).
+
+    The one place participant text is coloured, so the approved wording stays plain text and
+    `ParticipantWindow` still finds the symbol in it. `drawText` takes one pen for the whole
+    string, so the text is laid out line by line as Qt's own `drawText` does it -- the same
+    breaks and line spacing, pixel for pixel, so `boundingRect` still measures it.
+    """
+    assert play_symbol, "no play-button symbol to colour"
+    layout = QTextLayout(text.replace("\n", LINE_SEPARATOR), painter.font(), painter.device())
+    option = QTextOption(Qt.AlignHCenter)
+    option.setWrapMode(QTextOption.WordWrap)
+    layout.setTextOption(option)
+    coloured = QTextCharFormat()
+    coloured.setForeground(PLAY_SYMBOL_COLOUR)
+    ranges = []
+    start = text.find(play_symbol)
+    while start >= 0:
+        span = QTextLayout.FormatRange()
+        # Qt counts UTF-16 code units, Python code points.
+        span.start = _utf16_length(text[:start])
+        span.length = _utf16_length(play_symbol)
+        span.format = coloured
+        ranges.append(span)
+        start = text.find(play_symbol, start + len(play_symbol))
+    layout.setFormats(ranges)
+    leading = QFontMetricsF(painter.font(), painter.device()).leading()
+    y = 0.0
+    layout.beginLayout()
+    while (line := layout.createLine()).isValid():
+        line.setLineWidth(box.width())
+        line.setPosition(QPointF(0.0, y))
+        y += line.height() + leading
+    layout.endLayout()
+    layout.draw(painter, QPointF(box.topLeft()))
+
+
+def _utf16_length(text: str) -> int:
+    return len(text.encode("utf-16-le")) // UTF16_UNIT_BYTES
 
 
 # The anchor tick (UI_PRINCIPLES.md 1.4). It straddles the line rather than hanging below it --
@@ -436,7 +498,7 @@ class VasWidget(QWidget):
             drawn = QFontMetrics(font).boundingRect(box, flags, text)
             if painter is not None:
                 painter.setFont(font)
-                painter.drawText(box, flags, text)
+                draw_prose(painter, box, text, self.responder.symbol_for(Action.CONFIRM))
             y = drawn.bottom() + (STATEMENT_GAP_PX if index == 0 else 0)
         return y
 
@@ -485,7 +547,7 @@ class VasWidget(QWidget):
         if painter is not None:
             painter.setFont(font)
             painter.setPen(FOREGROUND)
-            painter.drawText(box, flags, self.training)
+            draw_prose(painter, box, self.training, self.responder.symbol_for(Action.CONFIRM))
         return QFontMetrics(font).boundingRect(box, flags, self.training)
 
     def training_clearance(self) -> tuple[float, float]:

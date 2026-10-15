@@ -10,8 +10,8 @@ import shutil
 
 import pytest
 import yaml
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QFontMetrics, QKeyEvent
+from PySide6.QtCore import QEvent, QRect, Qt
+from PySide6.QtGui import QFont, QFontMetrics, QImage, QKeyEvent, QPainter
 from PySide6.QtWidgets import QApplication
 
 from tatp import config as cfg
@@ -574,3 +574,61 @@ def test_the_widget_renders_headless(widget):
     assert pixmap.width() == 1280
     assert pixmap.height() == 800
     assert not pixmap.isNull()
+
+
+# -- the play symbol in participant text (S, lab run 5 Oct 2026) ----------------------------
+
+
+def _prose_image(text: str, symbol: str) -> QImage:
+    image = QImage(1280, 800, QImage.Format_ARGB32)
+    image.fill(vas_module.BACKGROUND)
+    painter = QPainter(image)
+    font = QFont()
+    font.setPointSize(QUESTION_POINT_SIZE)
+    painter.setFont(font)
+    painter.setPen(vas_module.FOREGROUND)
+    vas_module.draw_prose(painter, QRect(150, 240, 980, 560), text, symbol)
+    painter.end()
+    return image
+
+
+def _colours(image: QImage) -> set[int]:
+    return {image.pixel(x, y) for y in range(image.height()) for x in range(image.width())}
+
+
+def _participant_texts(node):
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for value in node.values():
+            yield from _participant_texts(value)
+
+
+def test_the_play_symbol_is_drawn_in_its_colour_and_nothing_else_is(app, loaded):
+    symbol = Responder(loaded.hardware).symbol_for(Action.CONFIRM)
+    blue = vas_module.PLAY_SYMBOL_COLOUR.rgba()
+    assert blue in _colours(_prose_image(f"Press {symbol} to continue.", symbol))
+    assert blue not in _colours(_prose_image("Press the button to continue.", symbol))
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_colouring_the_play_symbol_moves_no_text(app, loaded, monkeypatch, language):
+    """Every participant string naming ▶ lays out exactly as `drawText` would: the screens'
+    clearance checks measure with `boundingRect`, which knows only `drawText`'s layout."""
+    symbol = Responder(loaded.hardware).symbol_for(Action.CONFIRM)
+    path = cfg.CONFIG_DIR / "text" / f"participant_{language}.yaml"
+    texts = [t for t in _participant_texts(yaml.safe_load(path.read_text(encoding="utf-8")))
+             if symbol in t]
+    assert texts, f"no participant text names {symbol}"
+    monkeypatch.setattr(vas_module, "PLAY_SYMBOL_COLOUR", vas_module.FOREGROUND)
+    for text in texts:
+        plain = QImage(1280, 800, QImage.Format_ARGB32)
+        plain.fill(vas_module.BACKGROUND)
+        painter = QPainter(plain)
+        font = QFont()
+        font.setPointSize(QUESTION_POINT_SIZE)
+        painter.setFont(font)
+        painter.setPen(vas_module.FOREGROUND)
+        painter.drawText(QRect(150, 240, 980, 560), vas_module.PROSE_FLAGS, text)
+        painter.end()
+        assert _prose_image(text, symbol) == plain, text
