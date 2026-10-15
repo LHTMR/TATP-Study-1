@@ -566,10 +566,14 @@ preflight:
   remote_missing: The participant's remote is not plugged in (no keyboard matching {value}). Plug in its receiver, then start again.
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_needs_windows: This computer ({value}) cannot tell the remote from other keyboards. Set responder.key_source to any_keyboard in hardware.yaml, or run the session on the lab PC.
-  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
-  participant_audio_missing: 'The participant''s headphones cannot be used ({value}). Connect or switch them on, then close and reopen this program: it sees only the devices there were when it opened. Check the hardware lists the sound devices this computer has; audio.participant_device in hardware.yaml names the one used.'
-  # DRAFT (LOG N7.F10c): written by the build, not ethics-sourced
-  experimenter_audio_missing: 'The experimenter''s speakers cannot be used ({value}). Connect them, then close and reopen this program: it sees only the devices there were when it opened. Check the hardware lists the sound devices this computer has; audio.experimenter_device in hardware.yaml names the one used.'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  participant_audio_missing: 'The participant''s headphones cannot be used ({value}). Connect or switch them on, or choose another output in Check the hardware, then check again. There is no need to restart.'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  experimenter_audio_missing: 'The experimenter''s speakers cannot be used ({value}). Connect them, or choose another output in Check the hardware, then check again. There is no need to restart.'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  alternative_input_study_code: 'Participant code {value} is a study participant''s, who responds with the remote. The keyboard and the on-screen buttons are for pilot codes and demonstrations. Plug in the remote and choose it in Check the hardware.'
+  # DRAFT (LOG N7.F12e3): written by the build, not ethics-sourced
+  hardware_changed: 'This session runs on hardware other than the lab setup ({value}). The session file records it.'
 
 zones:
   # Beside the zone diagram (SPEC.md 11): where the current stimulus goes.
@@ -631,8 +635,8 @@ launcher:
   preview_schedule_detail: The session timeline and its warnings. Nothing is started.
   # DRAFT (LOG N7.F4): written by the build, not ethics-sourced
   hardware_check: Check the hardware
-  # DRAFT (LOG N7.F4): written by the build, not ethics-sourced
-  hardware_check_detail: Before the participant arrives. The remote, the screens, the sound and the garment, one by one. Nothing is recorded.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  hardware_check_detail: The page shown at startup. Choose and test the remote, the screens, the sound and the garment, before the participant arrives. Nothing is recorded.
   environment_entered: 'Room {temperature} °C, {humidity} % RH, handed to the next session.'
   # The session dialog. It collects only what SPEC.md 6 lists; everything else is config.
   session_title: Run a session
@@ -867,34 +871,80 @@ schedule_warnings:
 # DRAFT (LOG N7.F4): every key in this block is written by the build, not ethics-sourced.
 hardware_check:
   title: Check the hardware
-  remote: Remote
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  page_hint: Each choice starts on the lab's own setup. Connect anything missing; it is found here without restarting.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  continue: Continue
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input: Participant's responses
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input_choice: Respond with
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  inputs:
+    remote: The remote
+    keyboard: 'Keyboard: ← → Return, Esc stops'
+    on_screen: 'Mouse or trackpad: buttons on the participant''s window'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
   remote_hint: Press each button; its own count should go up. ▶ sends two keys in turn, and both count.
   remote_last: 'Last press: {symbol} ({value})'
   # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
   remote_found: Remote found; only it counts.
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_missing: 'Remote not found: plug it in.'
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_any_keyboard: Any keyboard counts here.
-  # DRAFT (LOG N7.D22): written by the build, not ethics-sourced
-  remote_needs_windows: 'Needs Windows: any keyboard counts.'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  remote_missing: 'Remote not found: plug in its receiver.'
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  remote_unknown: This computer cannot tell the remote from a keyboard, so every keyboard counts as the remote.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input_keyboard: Pilot codes and demonstrations only; or a simulated participant in Run a demo.
+  # DRAFT (LOG N7.F12e4): written by the build, not ethics-sourced
+  input_on_screen: Pilot codes and demonstrations only. Click and hold as on the remote.
+  # DRAFT (LOG N7.F12e3): written by the build, not ethics-sourced. Each choice, as the
+  # preflight's warning names it when it is not the lab's.
+  changed:
+    participant_screen_index: the participant screen
+    experimenter_screen_index: the experimenter screen
+    participant_audio_device: the participant's headphones
+    experimenter_audio_device: the experimenter's speakers
+    garment_port: the sleeve's port
+    participant_input: the participant's responses
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  found: Found.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  not_connected: '{value} (not connected)'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  none: none
   screens: Screens
   role_participant: Participant screen
   role_experimenter: Experimenter screen
-  screen_found: '{role}: screen {index}, {width} × {height}'
-  screen_missing: '{role}: screen {index} is not connected ({count} found). Check the cable, then hardware.yaml.'
-  screen_unset: '{role}: not set, so the primary screen is used.'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  screen_choice: 'Screen {index}: {width} × {height}'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  screen_numbered: Screen {index}
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  screen_window: A window on this screen
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  screen_missing: 'Not connected: check the cable.'
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  screen_unplaced_participant: 'A window over the experimenter''s: for testing only.'
+  # DRAFT (LOG N7.F12e5): written by the build, not ethics-sourced
+  screen_unplaced_experimenter: A window where the computer puts it.
   show_label: Show a label on the participant screen
   hide_label: Take the label down
   label_text: Participant screen
   sound: Sound
-  sound_hint: Start the noise and raise it until you hear it in the participant's headphones, then play the cue over it. Play the alert and check it comes from the lab-side speakers only.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  sound_hint: Raise the noise until it is heard in the headphones, then play the cue over it. The alert must sound lab-side only.
   role_participant_audio: Participant headphones
   role_experimenter_audio: Experimenter speakers
-  device_found: '{role}: {value}'
-  device_missing: '{role}: not found. {value}'
-  devices_available: 'Output devices on this computer:{value}'
-  backend_recording: The audio backend is the test double, which plays nothing.
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_default: 'System default ({value})'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_default_line: The computer's default output, which follows its own sound setting.
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_missing: 'Not connected: connect it or switch it on.'
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_listing: Looking for sound devices…
+  # DRAFT (LOG N7.F12e2): written by the build, not ethics-sourced
+  audio_list_failed: 'The sound devices could not be listed: {value}'
   start_noise: Start the noise
   stop_noise: Stop the noise
   noise_level: '{value} dBFS'
@@ -903,6 +953,12 @@ hardware_check:
   audio_failed: 'Sound failed: {value}'
   garment: Garment
   garment_hint: Connect, then turn each channel on and off and watch the sleeve.
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  port: Prototype sleeve's port
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  port_missing: 'Not connected: plug in the sleeve''s USB cable.'
+  # DRAFT (LOG N7.F12e1): written by the build, not ethics-sourced
+  ports_none: No serial port found.
   connect: Connect
   disconnect: Disconnect
   connecting: 'Connecting to the {garment}…'

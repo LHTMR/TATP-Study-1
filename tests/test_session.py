@@ -14,7 +14,8 @@ import pytest
 from tatp import config as cfg
 from tatp.clock import Clock
 from tatp.datafiles import SCHEMA_PATH, parse_schema
-from tatp.session import PHASES, Session, SessionError
+from tatp.devices import KEYBOARD, HardwareChoices
+from tatp.session import PHASES, Session, SessionError, with_hardware_choices
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 
@@ -97,6 +98,42 @@ def test_every_session_key_is_written_exactly_once(session):
     _, keys = parse_schema()
     rows = [row["key"] for row in _table(session, "session")]
     assert rows == list(keys), "every key, in the order DATA_SCHEMA.md lists them"
+
+
+def test_the_hardware_it_ran_on_is_recorded(loaded, tmp_path):
+    """A session run on other hardware than the lab's is identifiable (docs/LOG.md N7.F12e3):
+    a MacBook's one screen, its own speakers, and the keyboard for the remote."""
+    macbook = HardwareChoices(
+        participant_screen_index=None, experimenter_screen_index=0,
+        participant_audio_device=None, experimenter_audio_device="MacBook Air Speakers",
+        garment_port=None, participant_input=KEYBOARD,
+    )
+    config = with_hardware_choices(loaded, macbook)
+    hardware = {**config.hardware, "data": {**config.hardware["data"],
+                                            "folder": str(tmp_path / "data")}}
+    config = cfg.Config(**{**config.__dict__, "hardware": hardware})
+    made = Session(config, "901", 1, "SM", EXAMPLES, clock=Clock(), rng_seed=7)
+    made.start()
+    values = _session_values(made)
+    made.close()
+    assert values["participant_screen"] == "window"
+    assert values["experimenter_screen"] == "0"
+    assert values["participant_audio_device"] == "default"
+    assert values["experimenter_audio_device"] == "MacBook Air Speakers"
+    assert values["garment_port"] == ""
+    assert values["participant_input"] == KEYBOARD
+    assert values["key_source"] == "any_keyboard"
+    assert values["hardware_changed"].split(";") == [
+        "participant_screen_index", "participant_audio_device", "experimenter_audio_device",
+        "garment_port", "participant_input",
+    ]
+
+
+def test_a_session_named_on_the_command_line_records_the_lab_setup(session):
+    session.start()
+    values = _session_values(session)
+    assert values["participant_input"] == "remote"
+    assert values["hardware_changed"] == ""
 
 
 def test_provenance_is_populated_from_the_real_environment(session):

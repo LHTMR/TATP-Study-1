@@ -26,10 +26,19 @@ from tatp.audio import Audio
 from tatp.clock import ISO_FORMAT, Clock
 from tatp.config import REPO_ROOT, Config, hash_files
 from tatp.datafiles import DataFileCollection
+from tatp.devices import (
+    CHOICE_NAMES,
+    KEYBOARD,
+    PARTICIPANT_INPUTS,
+    REMOTE,
+    HardwareChoices,
+    configured,
+)
 from tatp.garment.arduino_mosfet import ArduinoMosfetGarment
 from tatp.garment.base import LINK_LOST, GarmentController, Limits
 from tatp.garment.mock import MockGarment
 from tatp.garment.patterns import load_folder
+from tatp.remote_keys import ANY_KEYBOARD, raw_input_available
 from tatp.units import S_PER_MIN
 
 # A drawn seed is recorded and reused (docs/LOG.md N6.13), so it only has to be large
@@ -63,6 +72,10 @@ CONDITION_PHASES = ("intervention", "rekindle")
 UPCOMING_KINDS = ("block", "phase", "rekindle")
 
 ORIGINS = ("software", "experimenter", "participant")
+# The session file's words for a null screen index and a null sound device
+# (docs/DATA_SCHEMA.md): a window where the system puts it, and the system's default output.
+SHARED_SCREEN = "window"
+DEFAULT_DEVICE = "default"
 SEVERITIES = ("info", "warning", "error")
 
 DRIVERS: dict[str, type[GarmentController]] = {
@@ -89,6 +102,56 @@ def with_session_choices(
             raise SessionError(f"garment {garment!r} is not one of {sorted(DRIVERS)}")
         hardware["garment"] = {**hardware["garment"], "driver": garment}
     return dataclasses.replace(config, hardware=hardware)
+
+
+def with_hardware_choices(config: Config, choices: HardwareChoices) -> Config:
+    """`config` with the hardware page's choices (`tatp.devices`, docs/LOG.md N7.F12e1).
+
+    The launcher loads every session's configuration through here, a demonstration's included,
+    so what the page chose is what the preflight checks and the session runs with. Which choices
+    differ from hardware.yaml's lab setup is kept as `hardware.changed_at_launch`, and the
+    session file records it (`hardware_changed`), so a session run on other hardware is
+    identifiable.
+    """
+    return dataclasses.replace(config, hardware=hardware_with_choices(config.hardware, choices))
+
+
+def hardware_with_choices(hardware: dict, choices: HardwareChoices) -> dict:
+    """`with_hardware_choices`, for the hardware alone: the page tests with it too.
+
+    The alternative inputs read every keyboard (any_keyboard): neither is the remote, so there
+    is nothing to tell apart. So does the remote off Windows, where it cannot be told apart.
+    """
+    assert choices.participant_input in PARTICIPANT_INPUTS, (
+        f"participant input {choices.participant_input!r} is not one of {PARTICIPANT_INPUTS}"
+    )
+    responder = {**hardware["responder"], "participant_input": choices.participant_input}
+    if choices.participant_input == KEYBOARD:
+        responder["keys"] = dict(hardware["responder"]["alternative_keys"])
+    if choices.participant_input != REMOTE or not raw_input_available():
+        responder["key_source"] = ANY_KEYBOARD
+    lab = configured(hardware)
+    changed = [
+        name for name in CHOICE_NAMES if getattr(choices, name) != getattr(lab, name)
+    ]
+    garment = hardware["garment"]
+    return {
+        **hardware,
+        "screens": {
+            **hardware["screens"],
+            "participant_screen_index": choices.participant_screen_index,
+            "experimenter_screen_index": choices.experimenter_screen_index,
+        },
+        "audio": {
+            **hardware["audio"],
+            "participant_device": choices.participant_audio_device,
+            "experimenter_device": choices.experimenter_audio_device,
+        },
+        "garment": {**garment, "prototype": {**garment["prototype"],
+                                             "port": choices.garment_port}},
+        "responder": responder,
+        "changed_at_launch": ";".join(changed),
+    }
 
 
 class SessionError(Exception):
@@ -632,6 +695,29 @@ class Session:
             self.data_folder, self.participant_code, self.files.path("session")
         )
 
+    def _hardware_used(self) -> dict:
+        hardware = self.config.hardware
+        screens, audio = hardware["screens"], hardware["audio"]
+        responder = hardware["responder"]
+
+        def screen(index: int | None) -> object:
+            return SHARED_SCREEN if index is None else index
+
+        def device(name: str | None) -> str:
+            return DEFAULT_DEVICE if name is None else name
+
+        return {
+            "participant_screen": screen(screens["participant_screen_index"]),
+            "experimenter_screen": screen(screens["experimenter_screen_index"]),
+            "participant_audio_device": device(audio["participant_device"]),
+            "experimenter_audio_device": device(audio["experimenter_device"]),
+            "garment_port": hardware["garment"]["prototype"]["port"] or "",
+            "participant_input": responder["participant_input"],
+            "key_source": responder["key_source"],
+            # Absent for a session named on the command line, which runs as hardware.yaml says.
+            "hardware_changed": hardware.get("changed_at_launch", ""),
+        }
+
     def _provenance(
         self,
         room_temperature_c: float | None,
@@ -694,5 +780,9 @@ class Session:
             # files look like a session's, and this is what tells them apart.
             "clock_speed": self.clock.speed,
             "demo": self.demo,
+            # What it ran on (docs/LOG.md N7.F12e3), so a session on hardware other than the
+            # lab's -- a laptop's own screen and speakers, the keyboard for the remote -- is
+            # identifiable.
+            **self._hardware_used(),
             "session_start_iso": self.session_start_iso,
         }

@@ -102,14 +102,19 @@ screens:
     with the demonstration''s own participant code shown and not editable, no data
     folder or REDCap form, the mock garment and the example patterns chosen, and the
     speed and who presses for the participant and the experimenter (en).'
-  experimenter_en_launcher_hardware_check: 'The hardware check (LOG N7.F4), at the
-    lab laptop''s size, as it opens: a count for each remote button, where each screen
-    lands, the sound devices, the noise within the participant''s own range with the
-    cue and the alert, and each garment channel on and off. Drawn with a sample device
-    list and the mock garment (en).'
+  experimenter_en_launcher_hardware_check: 'The hardware page (LOG N7.F4, N7.F12e1),
+    shown before the launcher, at the lab laptop''s size, with the lab''s hardware
+    connected: each choice on hardware.yaml''s own, found; a count for each remote
+    button; the noise within the participant''s own range with the cue and the alert;
+    each garment channel on and off. Continue opens the launcher (en).'
   experimenter_en_launcher_hardware_check_channel_on: 'The hardware check with the
     mock garment connected and channel 2 on: each channel button says on or off, and
     one that is on is filled (LOG N7.F10b; en).'
+  experimenter_en_launcher_hardware_check_nothing_found: 'The hardware page (LOG N7.F12e1)
+    with nothing of the lab''s connected: one screen, so the participant''s window
+    shares it; no remote, so the keyboard stands in, for pilot codes and demonstrations
+    only; the headphones and the sleeve''s port missing, each in its own colour and
+    saying what to do. Each is found when connected (en).'
   experimenter_en_launcher_instruments: 'Instruments and environment (SPEC.md 8.1),
     at the lab laptop''s size: all twenty filaments in view at once, in two halves,
     each with its label, size and nominal force, a field for the weighing in grams
@@ -163,8 +168,8 @@ screens:
   experimenter_en_session_complete: 'The last state: the session closed and every
     file written, the garment to come off, and Next step to close the program (docs/LOG.md
     N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
-    and Connect garment and Pause are disabled: nothing is left to pause or to connect
-    again. (en)'
+    and Pause and the garment button are withdrawn: nothing is left to pause or to
+    connect again. (en)'
   experimenter_en_status_warning: A warning in the status region, in amber, kept apart
     from the routine status so the next 'Waiting for...' does not replace it (15 Oct
     2026 pilot review). It goes under the routine line; this one is too long for both,
@@ -269,14 +274,19 @@ screens:
     with the demonstration''s own participant code shown and not editable, no data
     folder or REDCap form, the mock garment and the example patterns chosen, and the
     speed and who presses for the participant and the experimenter (sv).'
-  experimenter_sv_launcher_hardware_check: 'The hardware check (LOG N7.F4), at the
-    lab laptop''s size, as it opens: a count for each remote button, where each screen
-    lands, the sound devices, the noise within the participant''s own range with the
-    cue and the alert, and each garment channel on and off. Drawn with a sample device
-    list and the mock garment (sv).'
+  experimenter_sv_launcher_hardware_check: 'The hardware page (LOG N7.F4, N7.F12e1),
+    shown before the launcher, at the lab laptop''s size, with the lab''s hardware
+    connected: each choice on hardware.yaml''s own, found; a count for each remote
+    button; the noise within the participant''s own range with the cue and the alert;
+    each garment channel on and off. Continue opens the launcher (sv).'
   experimenter_sv_launcher_hardware_check_channel_on: 'The hardware check with the
     mock garment connected and channel 2 on: each channel button says on or off, and
     one that is on is filled (LOG N7.F10b; sv).'
+  experimenter_sv_launcher_hardware_check_nothing_found: 'The hardware page (LOG N7.F12e1)
+    with nothing of the lab''s connected: one screen, so the participant''s window
+    shares it; no remote, so the keyboard stands in, for pilot codes and demonstrations
+    only; the headphones and the sleeve''s port missing, each in its own colour and
+    saying what to do. Each is found when connected (sv).'
   experimenter_sv_launcher_instruments: 'Instruments and environment (SPEC.md 8.1),
     at the lab laptop''s size: all twenty filaments in view at once, in two halves,
     each with its label, size and nominal force, a field for the weighing in grams
@@ -330,8 +340,8 @@ screens:
   experimenter_sv_session_complete: 'The last state: the session closed and every
     file written, the garment to come off, and Next step to close the program (docs/LOG.md
     N7.F11c9). The garment is shown disconnected, as closing the session leaves it,
-    and Connect garment and Pause are disabled: nothing is left to pause or to connect
-    again. (sv)'
+    and Pause and the garment button are withdrawn: nothing is left to pause or to
+    connect again. (sv)'
   experimenter_sv_status_warning: A warning in the status region, in amber, kept apart
     from the routine status so the next 'Waiting for...' does not replace it (15 Oct
     2026 pilot review). It goes under the routine line; this one is too long for both,
@@ -385,6 +395,11 @@ screens:
   participant_en_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
     and neither emphasised -- the state before the first stimulus, en.'
   participant_en_cue: 'The visual warning cue: one filled disc, centred, no wording.'
+  participant_en_on_screen_buttons: 'The adjustment screen with the remote''s four
+    buttons drawn below it, for a mouse or trackpad (hardware page, ''Mouse or trackpad''):
+    ‹ and › at the left, ▶ apart, the stop alone at the right on its sticker''s disc.
+    Pilot codes and demonstrations only; with the remote the window has no such row
+    (en).'
   participant_en_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, en.'
   participant_en_screen_emergency_stop: The participant text `screens.emergency_stop`,
@@ -497,6 +512,11 @@ screens:
   participant_sv_choice_evenness_waiting: '`choices.evenness` with both buttons drawn
     and neither emphasised -- the state before the first stimulus, sv.'
   participant_sv_cue: 'The visual warning cue: one filled disc, centred, no wording.'
+  participant_sv_on_screen_buttons: 'The adjustment screen with the remote''s four
+    buttons drawn below it, for a mouse or trackpad (hardware page, ''Mouse or trackpad''):
+    ‹ and › at the left, ▶ apart, the stop alone at the right on its sticker''s disc.
+    Pilot codes and demonstrations only; with the remote the window has no such row
+    (sv).'
   participant_sv_preference: 'The preference selection (SPEC.md 9 step 6): the opening
     line, both large buttons drawn with their labels, and the confirm sentence, sv.'
   participant_sv_screen_emergency_stop: The participant text `screens.emergency_stop`,

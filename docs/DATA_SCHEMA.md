@@ -96,6 +96,14 @@ written, with an empty value — an absent row and an empty value must not be co
 | `resumed_from_session_file` | - | Filename resumed from, else empty (§15) |
 | `clock_speed` | - | `Clock.speed`. `1.0` in every real session; anything else is a development run with every session-paced interval accelerated (§17.3), and must never be analysed as data |
 | `demo` | - | `true` for a demonstration session (`run_session.py --demo`, docs/LOG.md N7.D23): its own code, a folder under `data_demo/` with its own shuffled allocation, the mock garment, perhaps a simulated participant or experimenter, and session time perhaps skipped. Never study data. `false` otherwise |
+| `participant_screen` | - | The participant window's screen index, or `window` for a window on the experimenter's screen (one display, a development machine). Chosen on the hardware page (docs/LOG.md N7.F12e1); `hardware.yaml` for a session named on the command line |
+| `experimenter_screen` | - | The experimenter window's screen index, or `window` |
+| `participant_audio_device` | - | The participant's sound device as matched by name (`audio.participant_device`), or `default` for the system's default output |
+| `experimenter_audio_device` | - | The experimenter's sound device, likewise |
+| `garment_port` | - | The prototype sleeve's serial port as chosen (`garment.prototype.port`), recorded whichever driver ran; `garment_driver` says whether it was used |
+| `participant_input` | - | What the participant responded with: `remote` (the R400), or, for a pilot code or a demonstration only, `keyboard` (arrows, Return, Esc) or `on_screen` (buttons on the participant window, by mouse or trackpad). Preflight refuses the alternatives for a study participant (N7.F12e4) |
+| `key_source` | - | `raw_input` when the remote was told apart from other keyboards (the lab), `any_keyboard` when every keyboard counted as the participant's (§10.1) |
+| `hardware_changed` | - | Semicolon-separated: which hardware-page choices differ from `hardware.yaml`'s lab setup (`participant_screen_index`, `participant_audio_device`, `participant_input`, ...). Empty for the lab setup, and for a session named on the command line |
 | `session_start_iso` | - | Process start, wall clock |
 | `stop_rehearsal_ran` | - | `true` once the emergency-stop rehearsal has run (§10.9); empty if it never did. This key and the next five are written when their setup procedure ends, not at session start, so they follow the start keys, in the order the procedures run (the rehearsal first since 5 Oct 2026); each value is also in `log` from the moment it is measured |
 | `stop_rehearsal_press_detected` | - | `true` when the participant's stop press was detected during the rehearsal; `false` if the experimenter moved on without one |

@@ -65,6 +65,11 @@ class Responder:
         """Every key that does something, so the UI can swallow the rest."""
         return tuple(sorted(self._by_key))
 
+    def key_for(self, action: Action) -> str:
+        """The first key bound to `action`: what an on-screen button presses in its place
+        (docs/LOG.md N7.F12e4)."""
+        return next(key for key, bound in self._by_key.items() if bound is action)
+
     def action_for(self, key: str) -> Action | None:
         """The action for a key name, or None if the key does nothing."""
         return self._by_key.get(key)

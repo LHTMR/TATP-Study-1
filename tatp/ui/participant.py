@@ -37,8 +37,10 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QApplication,
+    QHBoxLayout,
     QLineEdit,
     QPlainTextEdit,
+    QPushButton,
     QStackedWidget,
     QTextEdit,
     QVBoxLayout,
@@ -47,6 +49,7 @@ from PySide6.QtWidgets import (
 
 from tatp.clock import Clock
 from tatp.config import Config
+from tatp.devices import ON_SCREEN
 from tatp.responder import Action, Responder
 from tatp.ui.vas import (
     BACKGROUND,
@@ -111,6 +114,13 @@ STOP_BUTTON_CENTRE_FRACTION = 0.5
 # button's own label.
 PAIR_ROW_FRACTIONS = (0.3, 0.7)
 PAIR_UNDERLINE_GAP_PX = 6
+# The on-screen buttons that stand in for the remote (docs/LOG.md N7.F12e4), in a row below the
+# screens. Large enough to hit without looking twice.
+RESPONSE_BUTTON_POINT_SIZE = 28
+RESPONSE_BUTTON_WIDTH_PX = 110
+RESPONSE_BUTTON_HEIGHT_PX = 64
+RESPONSE_BAR_MARGIN_PX = 12
+RESPONSE_BAR_GROUP_GAP_PX = 48
 
 
 class _MessageScreen(QWidget):
@@ -517,6 +527,40 @@ def _draw_button(
     draw_prose(painter, label_box, label, responder)
 
 
+class _ResponseButton(QPushButton):
+    """One of the remote's buttons on screen, for a mouse or trackpad (docs/LOG.md N7.F12e4).
+
+    Its press and its release are delivered as the remote's key going down and up, stamped
+    with the mouse event's own time, exactly as a raw report from the remote is
+    (`ParticipantWindow.deliver_remote_key`): the adjustment and the VAS time a hold from those
+    stamps. It never takes the focus, which the window or the VAS keeps for the keys.
+    """
+
+    def __init__(self, symbol: str, key: str, deliver, parent: QWidget):
+        super().__init__(symbol, parent)
+        self.key = key
+        self._deliver = deliver
+        self.setFocusPolicy(Qt.NoFocus)
+        font = self.font()
+        font.setPointSize(RESPONSE_BUTTON_POINT_SIZE)
+        self.setFont(font)
+        self.setMinimumSize(RESPONSE_BUTTON_WIDTH_PX, RESPONSE_BUTTON_HEIGHT_PX)
+        self.setStyleSheet(
+            f"QPushButton {{ color: {FOREGROUND.name()}; "
+            f"background-color: {BACKGROUND.name()}; "
+            f"border: {BUTTON_LINE_WIDTH_PX}px solid {FOREGROUND.name()}; "
+            f"border-radius: {BUTTON_RADIUS_PX}px; }}"
+        )
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        super().mousePressEvent(event)
+        self._deliver(self.key, False, False, event.timestamp())
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 -- Qt's name
+        super().mouseReleaseEvent(event)
+        self._deliver(self.key, True, False, event.timestamp())
+
+
 class ParticipantWindow(QWidget):
     """The participant's screen. Everything shown to a participant goes through here."""
 
@@ -596,12 +640,48 @@ class ParticipantWindow(QWidget):
             self.stack.addWidget(screen)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.addWidget(self.stack)
+        # Only when the hardware page chose them, so with the remote the window is the
+        # approved screens and nothing else (docs/LOG.md N7.F12e4).
+        self.response_buttons: dict[Action, _ResponseButton] = {}
+        if responder_config["participant_input"] == ON_SCREEN:
+            layout.addWidget(self._response_bar(responder_config))
 
         self._adjusting = False
         self._choosing = False
         self.setFocusPolicy(Qt.StrongFocus)
         self.show_blank()
+
+    def _response_bar(self, responder_config: dict) -> QWidget:
+        """The remote's four buttons, on screen for a mouse or trackpad (docs/LOG.md
+        N7.F12e4): the two large ones at the left, where the hand would hold them, ▶ apart, and
+        the stop alone at the far right, on its sticker's disc. Each presses and releases the
+        key the remote's button sends, at the moment the mouse does, so a hold is a hold."""
+        bar = QWidget(self)
+        bar.setAttribute(Qt.WA_StyledBackground, True)
+        bar.setStyleSheet(f"background-color: {BACKGROUND.name()};")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(RESPONSE_BAR_MARGIN_PX, RESPONSE_BAR_MARGIN_PX,
+                               RESPONSE_BAR_MARGIN_PX, RESPONSE_BAR_MARGIN_PX)
+        row.setSpacing(RESPONSE_BAR_MARGIN_PX)
+        for action in Action:
+            made = _ResponseButton(
+                self.responder.symbol_for(action, pointing_at_stop=True),
+                self.responder.key_for(action), self.deliver_remote_key, bar,
+            )
+            if action is Action.EMERGENCY_STOP:
+                row.addStretch(1)
+                colour = responder_config["button_symbol_colours"][action]
+                disc = responder_config["button_symbol_discs"][action]
+                made.setStyleSheet(made.styleSheet() + (
+                    f"QPushButton {{ color: {colour}; background-color: {disc}; }}"
+                ))
+            elif action is Action.CONFIRM:
+                row.addSpacing(RESPONSE_BAR_GROUP_GAP_PX)
+            self.response_buttons[action] = made
+            row.addWidget(made)
+        return bar
 
     # -- placement ---------------------------------------------------------------------
 

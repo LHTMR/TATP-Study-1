@@ -25,6 +25,8 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
+from PySide6.QtCore import Qt
+
 from tatp import config as cfg
 from tatp import preflight as pre
 from tatp import resume as resumption
@@ -294,11 +296,26 @@ def _build_holding(config, args, resume_decision, data_folder) -> SessionRunner:
         session.experimenter_view,
         refresh_interval_s=config.hardware["screens"]["experimenter_refresh_interval_s"],
     )
-    participant.place(config.hardware["screens"])
+    screens = config.hardware["screens"]
+    participant.place(screens)
+    if screens["participant_screen_index"] is None:
+        share_screen(participant, screens)
     participant.show()
-    experimenter.place(config.hardware["screens"])
+    experimenter.place(screens)
     experimenter.show()
     return SessionRunner(Rig(session, participant, experimenter), resume=state)
+
+
+def share_screen(participant: ParticipantWindow, screens: dict) -> None:
+    """The participant window on the experimenter's screen: one display, a MacBook or a
+    development machine (docs/LOG.md N7.F12e5). A window of its own size in the screen's
+    lower right, kept above the experimenter window, which is maximised and would otherwise
+    hide it at every click of Next step. It can be moved and resized."""
+    width, height = screens["shared_participant_window_px"]
+    participant.setWindowFlag(Qt.WindowStaysOnTopHint)
+    participant.resize(width, height)
+    available = participant.screen().availableGeometry()
+    participant.move(available.right() - width, available.bottom() - height)
 
 
 def shut_down(runner: SessionRunner) -> None:

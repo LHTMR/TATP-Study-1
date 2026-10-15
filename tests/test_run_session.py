@@ -11,6 +11,7 @@ import csv
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 import run_session
@@ -245,6 +246,17 @@ def test_unresolved_open_items_are_printed_before_the_windows_open(loaded):
 
 
 # -- build and shut_down ------------------------------------------------------------------
+
+
+def test_one_screen_puts_the_participant_window_above_the_experimenters(app, config):
+    """A MacBook (docs/LOG.md N7.F12e5): the experimenter window is maximised, so a
+    participant window on the same screen is kept above it, at its own size, to be usable."""
+    runner = run_session.build(config, run_session.parse_args(ARGV), _never)
+    participant = runner.rig.participant
+    width, height = config.hardware["screens"]["shared_participant_window_px"]
+    assert participant.windowFlags() & Qt.WindowStaysOnTopHint
+    assert (participant.width(), participant.height()) == (width, height)
+    run_session.shut_down(runner)
 
 
 def test_build_returns_an_unstarted_runner_holding_the_lock(app, config):

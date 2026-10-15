@@ -50,6 +50,10 @@ KEY_SOURCES = (RAW_INPUT, ANY_KEYBOARD)
 # names the key the remote sent by these, independent of Shift or any other keyboard's state.
 VIRTUAL_KEYS = {
     "pageup": 0x21, "pagedown": 0x22, "f5": 0x74, "escape": 0x1B, "period": 0xBE,
+    # The keyboard that stands in for the remote (docs/LOG.md N7.F12e4), read as any_keyboard
+    # and never through Raw Input; here so the two key tables stay one set. Windows gives
+    # Return and the keypad's Enter one virtual key.
+    "left": 0x25, "right": 0x27, "return": 0x0D, "enter": 0x0D,
 }
 
 # Windows constants (WinUser.h, winerror.h), not study parameters.

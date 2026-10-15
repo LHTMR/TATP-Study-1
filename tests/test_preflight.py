@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
+
 import pytest
 
 from tatp import config as cfg
+from tatp import devices
 from tatp import preflight as pre
-from tatp.audio import SOUNDDEVICE
+from tatp.audio import SOUNDDEVICE, unresolved_devices
 from tatp.clock import Clock
 from tatp.remote_keys import RAW_INPUT, with_key_source
 from tatp.session import Session
@@ -184,6 +188,11 @@ class _FakeSounddevice:
             raise self.PortAudioError(f"Invalid sample rate {samplerate} for {device!r}")
 
 
+def _through(sd):
+    """The preflight's sound check, answered by `sd` here rather than in a child process."""
+    return lambda hardware: unresolved_devices(hardware["audio"], sd)
+
+
 def _played_through_sounddevice(config):
     audio = {**config.hardware["audio"], "backend": SOUNDDEVICE,
              "participant_device": "Bose QC Headphones WASAPI",
@@ -197,15 +206,15 @@ def test_a_sound_device_that_cannot_be_found_is_refused(config):
     config = _played_through_sounddevice(config)
     folder = pre.data_folder_for(config)
     speakers = _FakeSounddevice("Speakers Realtek WASAPI")
-    findings = pre.preflight(config, "01", 1, "SM", folder, sound=lambda: speakers)
+    findings = pre.preflight(config, "01", 1, "SM", folder, _through(speakers))
     assert [(f.severity, f.text_key) for f in findings] == [
         (pre.REFUSE, "preflight.participant_audio_missing")
     ]
     assert "Bose QC Headphones" in findings[0].value
     both = _FakeSounddevice("Bose QC Headphones WASAPI", "Speakers Realtek WASAPI")
-    assert pre.preflight(config, "01", 1, "SM", folder, sound=lambda: both) == []
+    assert pre.preflight(config, "01", 1, "SM", folder, _through(both)) == []
     headphones = _FakeSounddevice("Bose QC Headphones WASAPI")
-    assert _keys(pre.preflight(config, "01", 1, "SM", folder, sound=lambda: headphones)) == [
+    assert _keys(pre.preflight(config, "01", 1, "SM", folder, _through(headphones))) == [
         "preflight.experimenter_audio_missing"
     ]
 
@@ -216,17 +225,70 @@ def test_a_sound_device_that_cannot_play_the_configured_settings_is_refused(conf
     config = _played_through_sounddevice(config)
     sd = _FakeSounddevice("Bose QC Headphones WASAPI", "Speakers Realtek WASAPI",
                           wrong_rate=("Bose QC Headphones WASAPI",))
-    findings = pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config),
-                             sound=lambda: sd)
+    findings = pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config), _through(sd))
     assert _keys(findings) == ["preflight.participant_audio_missing"]
     assert "Invalid sample rate" in findings[0].value
 
 
 def test_the_recording_double_asks_for_no_device(config):
-    def never():
-        raise AssertionError("sounddevice was loaded for a session that plays nothing")
+    def never(_hardware):
+        raise AssertionError("the sound devices were asked for by a session that plays nothing")
 
-    assert pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config), sound=never) == []
+    assert pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config), never) == []
+
+
+def test_the_sound_devices_are_checked_in_a_child_process(config, monkeypatch):
+    """This process must not load PortAudio before the session plays, or a headset switched on
+    later is never seen (docs/LOG.md N7.F12e2): the default check runs `tatp.devices` apart."""
+    asked = []
+
+    def run(command, **kwargs):
+        asked.append(command)
+        return SimpleNamespace(stdout=json.dumps(
+            {"outputs": [], "default": None, "unresolved": {"participant": "gone"}}
+        ))
+
+    monkeypatch.setattr(devices.subprocess, "run", run)
+    config = _played_through_sounddevice(config)
+    findings = pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config))
+    assert _keys(findings) == ["preflight.participant_audio_missing"]
+    assert asked[0][1:4] == ["-m", "tatp.devices", devices.PROBE]
+    assert json.loads(asked[0][4]) == config.hardware["audio"]
+
+
+def _with_input(config, participant_input):
+    responder = {**config.hardware["responder"], "participant_input": participant_input}
+    return cfg.Config(**{**config.__dict__,
+                         "hardware": {**config.hardware, "responder": responder}})
+
+
+@pytest.mark.parametrize("participant_input", [devices.KEYBOARD, devices.ON_SCREEN])
+def test_an_alternative_to_the_remote_is_refused_for_a_study_participant(config,
+                                                                        participant_input):
+    """A study participant's responses come from the device the study describes; the keyboard
+    and the on-screen buttons are for pilots and demonstrations (docs/LOG.md N7.F12e4)."""
+    config = _with_input(config, participant_input)
+    folder = pre.data_folder_for(config)
+    assert pre.preflight(config, "01", 1, "SM", folder) == [
+        pre.Finding(pre.REFUSE, "preflight.alternative_input_study_code", "01")
+    ]
+    pilot = str(config.study1["design"]["pilot_code_offset"] + 1)
+    assert pre.preflight(config, pilot, 1, "SM", folder) == []
+
+
+def test_a_demonstrations_code_may_use_an_alternative(loaded):
+    assert not pre.is_study_participant(loaded, loaded.study1["demo"]["participant_code"])
+
+
+def test_hardware_other_than_the_labs_is_a_warning_naming_it(config):
+    hardware = {**config.hardware,
+                "changed_at_launch": "participant_screen_index;participant_audio_device"}
+    config = cfg.Config(**{**config.__dict__, "hardware": hardware})
+    names = config.experimenter_text["hardware_check"]["changed"]
+    assert pre.preflight(config, "01", 1, "SM", pre.data_folder_for(config)) == [
+        pre.Finding(pre.WARN, "preflight.hardware_changed",
+                    f"{names['participant_screen_index']}, {names['participant_audio_device']}")
+    ]
 
 
 def test_every_finding_has_its_text_in_both_languages(loaded):
@@ -236,7 +298,8 @@ def test_every_finding_has_its_text_in_both_languages(loaded):
                 "preflight.session_aborted_before", "preflight.previous_session_missing",
                 "preflight.another_instance", "preflight.remote_missing",
                 "preflight.remote_needs_windows", "preflight.participant_audio_missing",
-                "preflight.experimenter_audio_missing", "warnings.experimenter_changed"):
+                "preflight.experimenter_audio_missing", "warnings.experimenter_changed",
+                "preflight.alternative_input_study_code", "preflight.hardware_changed"):
         for text in (english, swedish):
             node = text
             for part in key.split("."):

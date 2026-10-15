@@ -181,6 +181,12 @@ QT_KEYS: dict[str, Qt.Key] = {
     "period": Qt.Key_Period,
     "f5": Qt.Key_F5,
     "escape": Qt.Key_Escape,
+    # The keyboard that stands in for the remote at a pilot or a demonstration
+    # (hardware.yaml responder.alternative_keys, docs/LOG.md N7.F12e4).
+    "left": Qt.Key_Left,
+    "right": Qt.Key_Right,
+    "return": Qt.Key_Return,
+    "enter": Qt.Key_Enter,
 }
 
 MIN_PCT = 0.0
