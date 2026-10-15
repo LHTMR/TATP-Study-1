@@ -57,7 +57,7 @@ Företagsportal:
 | `make` | **Gnu Make**. Inte CMake, som är ett annat verktyg | Korta kommandon för vanliga uppgifter, som `make preview` |
 
 **Vänta tills varje installation är klar** innan du går vidare. Företagsportal visar
-**Installerad** med en blå bock när den är klar. Nedladdningen kan bli klar flera minuter innan
+**Installerad** (Installed) med en blå bock när den är klar. Nedladdningen kan bli klar flera minuter innan
 installationen är det.
 
 Om programmen redan är markerade som **Installerad** har någon annan på datorn installerat dem,
@@ -81,9 +81,10 @@ administratörsbehörighet behövs.
 
 1. Öppna Start-menyn och sök efter **Redigera miljövariabler för ditt konto**. (På engelska:
    **Edit environment variables for your account**.) Öppna den.
-2. I den **övre** rutan ("Användarvariabler för …"), markera **Path** och klicka på
-   **Redigera…**.
-3. Klicka på **Ny** och klistra in:
+   Windows-knapparnas engelska namn står inom parentes nedan.
+2. I den **övre** rutan ("Användarvariabler för …", "User variables for …"), markera **Path** och
+   klicka på **Redigera…** (Edit…).
+3. Klicka på **Ny** (New) och klistra in:
 
    ```
    C:\Program Files\Miniconda\condabin
@@ -96,12 +97,12 @@ administratörsbehörighet behövs.
    ```
 
 5. Klicka på **OK** för att stänga Path-fönstret. Du är tillbaka i det första fönstret.
-6. Fortfarande i den **övre** rutan, klicka på **Ny…** och fyll i:
+6. Fortfarande i den **övre** rutan, klicka på **Ny…** (New…) och fyll i:
 
    | | |
    |---|---|
-   | Variabelnamn | `CONDA_DEFAULT_CHANNELS` |
-   | Variabelvärde | `https://conda.anaconda.org/conda-forge` |
+   | Variabelnamn (Variable name) | `CONDA_DEFAULT_CHANNELS` |
+   | Variabelvärde (Variable value) | `https://conda.anaconda.org/conda-forge` |
 
    Klicka på **OK**.
 

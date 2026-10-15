@@ -8,7 +8,10 @@ försöksledaren i labbet, på papper eller på en andra skärm.
 - Du förväntas känna till studieprotokollet (Bilaga 1). Det här dokumentet beskriver hur
   programvaran genomför det.
 - Ord i **fetstil** är exakt vad skärmen visar: en knapp, ett fält eller ett meddelande. Texterna
-  är de som visas när **Försöksledarens språk** är **Svenska**.
+  är de svenska. Startfönstret visas på svenska bara om det öppnas med
+  `python run_session.py --language sv` (avsnitt 2.1), och sessionsfönstret när
+  **Försöksledarens språk** är **Svenska**. Texterna på deltagarens skärm visas på det
+  **Deltagarens språk** som valts för sessionen.
 - **[TBC: …]** markerar ett steg som programvaran och Bilaga 1 ännu inte avgör. Fråga S före
   sessionen om något av dem berör dig.
 
@@ -31,9 +34,10 @@ låter annorlunda än vid ett annat besök är det väntat och inget fel. Nämn 
 och försök inte lista ut vilken det är.
 
 Vad du får säga till deltagaren om studien styrs av Bilaga 1 §3.3 och
-forskningspersonsinformationen. Studien beskrivs som en undersökning av **beröring och smärtupplevelse
-tillsammans**, och av behagliga och obehagliga kroppsliga förnimmelser. Deltagaren får veta att det
-finns tre olika sorters beröring, en per besök, och inget mer. **Säg eller antyd aldrig att
+forskningspersonsinformationen (Bilaga 3a). Använd informationens egna ord: studien undersöker
+**hur människor upplever beröring och smärta** – vad som känns behagligt, vad som känns obehagligt,
+och hur de två slagen av upplevelser hänger ihop. Deltagaren får veta att **plagget ger tre olika
+slags beröring, en vid varje besök**, och inget mer. **Säg eller antyd aldrig att
 beröringen förväntas minska smärtan, och nämn aldrig forskningsprogrammets namn.** Beskriv inte ett
 besöks beröring som annorlunda än ett annats.
 
@@ -117,7 +121,8 @@ Att spara ändrar `config/filaments.yaml` på labbdatorn.
 
 1. Öppna PowerShell i repository-mappen och aktivera studiens miljö, som i `docs/SETUP.md` steg 8
    (`docs/SETUP.sv.md` steg 8).
-2. Kör `python run_session.py`.
+2. Kör `python run_session.py --language sv`. Utan `--language sv` öppnas startfönstret på
+   engelska.
 3. Startfönstret öppnas med fem val: **Kör en session**, **Instrument och miljö**, **Skapa ett
    mönster**, **Förhandsgranska schemat** och **Kontrollera utrustningen**. **Skapa ett mönster**
    är endast för S: öppna det inte (se "För att hålla blindningen" ovan). Att starta en session
@@ -178,6 +183,7 @@ Värdena sparas bara tills startfönstret stängs, och en session kan köras uta
    | **Försöksledarens initialer** | Dina. Använd samma vid varje besök. |
    | **Deltagarens språk** | Språket deltagaren läser: Svenska eller English. |
    | **Försöksledarens språk** | Språket du vill ha din skärm på. |
+   | **Plagg** | Plagget du kontrollerade i avsnitt 2.1a. Aldrig **Simulerat plagg (ingen hårdvara)** med en deltagare. |
    | **Datamapp** | Låt den vara som den är (`data`) om inte S säger något annat. |
    | **Mönstermapp** | Mappen som S har angett för studien. Det finns ingen standardmapp. **Bläddra…** öppnas där mönstermapparna finns. **[TBC: sökvägen till mönstermappen för riktiga sessioner (öppen punkt 5).]** |
    | **REDCap-formuläret för besöket är ifyllt** | Bocka i när deltagarens REDCap-formulär för detta besök är ifyllt (avsnitt 2.2). Det registreras i båda fallen, och det hindrar inte en session. |
@@ -199,7 +205,7 @@ Om du ändrar något fält efter **Kontrollera** blir **Starta sessionen** grå 
 | **Obligatoriskt: …** | Fyll i de fält som nämns och tryck på **Kontrollera** igen. |
 | **Deltagarkoden … finns inte i allokeringsfilen. Kontrollera koden.** | Koden är felskriven, eller så finns inte det sessionsnumret för deltagaren. Kontrollera båda mot deltagarens uppgifter. |
 | **Session … för denna deltagare är redan genomförd. Den körs inte igen.** | Sessionsnumret är fel, eller så har besöket redan ägt rum. Kontrollera deltagarens uppgifter. Försök inte kringgå det. |
-| **En annan session körs redan från den här datamappen (…). Stäng den först.** | En annan kopia av programvaran är öppen. Hitta den och stäng den. Om ingen är öppen, se avsnitt 14. |
+| **En annan session körs redan från den här datamappen (…). Stäng den först.** | En annan kopia av programvaran är öppen. Hitta den och stäng den. Om ingen är öppen, se avsnitt 15. |
 
 **Varningar, i gult, under Varningar. Sessionen kan starta, och var och en registreras:**
 
@@ -743,7 +749,8 @@ Om programvaran stannar oväntat (en krasch, ett strömavbrott):
   återuppvärmningen är klar.**
 
 **Stäng inte sessionsfönstret för att starta om det.** Att stänga fönstret registrerar sessionen
-som avbruten ("fönstret stängdes innan sessionen var slut"), och en avbruten session kan inte
+som avbruten (i data med den engelska orsaken "the window was closed before the session
+ended"), och en avbruten session kan inte
 återupptas.
 
 ---
@@ -810,7 +817,7 @@ blocks_use i config/open_items.yaml.]**
 |---|---|
 | **Frånkopplad**, i rött, under **Plagget** | Kontrollera plaggets kabel och försörjning och tryck sedan på **Anslut plagget**. |
 | **Fel: …** eller **Fel i plagget: … (detalj i data)** | Skriv en anteckning. Om det kvarstår, pausa och fråga S. |
-| En dialog med rubriken **Fel** | Skriv ner meddelandet, tryck på **Stäng** och se avsnitt 14. |
+| En dialog med rubriken **Fel** | Skriv ner meddelandet, tryck på **Stäng** och se avsnitt 15. |
 
 ---
 
@@ -852,9 +859,9 @@ Den har tre mappar:
 1. Kopiera alla sessionens filer från datamappen till `01_raw`. Det är varje fil vars namn
    innehåller `P<kod>_S<session>_`, inklusive en återupptagen sessions andra uppsättning. Kopiera
    filerna; flytta dem inte.
-2. Om Windows säger att en fil redan finns i `01_raw`, välj **Hoppa över**, aldrig **Ersätt**, och
-   säg till S.
-3. **Kontrollera uppladdningen.** Visa båda mapparna i vyn **Detaljer**. För den här sessionens
+2. Om Windows säger att en fil redan finns i `01_raw`, välj **Hoppa över** (Skip), aldrig
+   **Ersätt** (Replace), och säg till S.
+3. **Kontrollera uppladdningen.** Visa båda mapparna i vyn **Detaljer** (Details). För den här sessionens
    filer måste `01_raw` ha lika många filer som datamappen, med samma namn och samma storlek. Om
    något skiljer sig, kopiera den saknade eller avvikande filen igen, kontrollera igen, och säg
    till S om det fortfarande skiljer sig.

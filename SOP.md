@@ -6,6 +6,8 @@ experimenter in the lab, on paper or on a second screen.
 - You are expected to know the study protocol (Bilaga 1). This document tells you how the
   software runs it.
 - Words in **bold** are exactly what the screen shows: a button, a field or a message.
+  Participant-screen texts are shown in the **Participant language** chosen for the session.
+- A Swedish translation is in `SOP.sv.md`. Change both when you change this one.
 - **[TBC: …]** marks a step the software and Bilaga 1 do not settle yet. Ask S before the
   session if one of them affects you.
 
@@ -114,7 +116,8 @@ Saving changes `config/filaments.yaml` on the lab PC.
 
 1. Open PowerShell in the repository folder and activate the study environment, as in
    `docs/SETUP.md` step 8.
-2. Run `python run_session.py`.
+2. Run `python run_session.py`. (`python run_session.py --language sv` opens the launcher in
+   Swedish.)
 3. The launcher opens with five entries: **Run a session**, **Instruments and environment**,
    **Design a pattern**, **Preview schedule** and **Check the hardware**. **Design a pattern**
    is for S only: do not open it (see "To keep the blind" above). Starting a session closes it
@@ -156,8 +159,8 @@ When the REDCap session form is completed, you tick that it is in the Run a sess
 
 ### 2.3 Room temperature and humidity (optional)
 
-1. In **Instruments and environment**, fill in **Room temperature (°C):** and **Relative humidity
-   (%):** under **Room environment (optional)**.
+1. In **Instruments and environment**, fill in **Temperature (°C):** and **Humidity (% RH):** under
+   **Room environment (optional)**.
 2. Press **Use for the next session**. The launcher shows **Room … °C, … % RH, handed to the next
    session.**
 
@@ -175,6 +178,7 @@ They are kept only until the launcher closes, and a session runs without them.
    | **Experimenter initials** | Yours. Use the same ones at every visit. |
    | **Participant language** | The language the participant reads: Svenska or English. |
    | **Experimenter language** | The language you want your screen in. |
+   | **Garment** | The garment you checked in section 2.1a. Never **Mock garment (no hardware)** with a participant. |
    | **Data folder** | Leave it as it is (`data`) unless S says otherwise. |
    | **Pattern folder** | The folder S has named for the study. There is no default. **Browse…** opens where the pattern folders are kept. **[TBC: the pattern folder path for real sessions (open item 5).]** |
    | **The REDCap session form has been completed for this visit** | Tick it once the participant's REDCap session form for this visit is complete (section 2.2). It is recorded either way, and it does not stop a session. |
@@ -195,7 +199,7 @@ If you change any field after **Check**, **Start session** greys out again. Pres
 | **Required: …** | Fill in the fields named, then press **Check** again. |
 | **Participant code … is not in the allocation file. Check the code.** | The code is mistyped, or that session number does not exist for the participant. Check both against the participant's record. |
 | **Session … for this participant has already been completed. It will not be run again.** | The session number is wrong, or this visit has already happened. Check the participant's record. Do not try to get round it. |
-| **Another session is already running from this data folder (…). Close it first.** | Another copy of the software is open. Find it and close it. If none is open, see section 14. |
+| **Another session is already running from this data folder (…). Close it first.** | Another copy of the software is open. Find it and close it. If none is open, see section 15. |
 
 **Warnings, in amber, under Warnings. The session can start, and each is recorded:**
 
@@ -533,7 +537,7 @@ block and post-intervention.
 1. Press **Next step** at **Ready. Press Next step when the participant is ready.**
 2. For each application:
    1. The screen names the stimulus: **Apply the … g filament (… mN) at site …, … zone.** or
-      **Brush the … zone at site … -- one single stroke of about 2 cm.** The zone diagram outlines
+      **Brush the … zone at site …: one single stroke of about 2 cm.** The zone diagram outlines
       the zone.
    2. The participant sees a short warning cue. Apply the stimulus straight after it, at the site
       named.
@@ -775,7 +779,7 @@ the software does not detect. Pausing first and writing a note seems sensible.]*
 | Banner | What it means | What to do |
 |---|---|---|
 | Red: **PARTICIPANT SCREENS STILL CONTAIN PLACEHOLDER TEXT. Do not run a real participant.** | Some participant wording is not final. | **Do not run a real participant.** Piloting with lab members only. |
-| Amber: **THIS SESSION IS NOT COLLECTING VALID TOUCH-CALIBRATION DATA. The connected device (…) cannot set pressure per channel. Timings are real; pressures are not.** | The garment in use cannot set a pressure per channel, for example the prototype or the mock. | Fine for piloting timings. Not a real data session. |
+| Amber: **THIS SESSION IS NOT COLLECTING VALID TOUCH-CALIBRATION DATA. The connected device cannot set pressure per channel: …. Timings are real; pressures are not.** | The garment in use cannot set a pressure per channel, for example the prototype or the mock. | Fine for piloting timings. Not a real data session. |
 | Amber: **FIT PREVIEW IS ON. You will see the participant's ratings, …** | Section 12.3. | Piloting only, unless S says otherwise. |
 
 Banners stay for the whole session. The screen does not move when one appears.
@@ -806,7 +810,7 @@ in config/open_items.yaml.]**
 |---|---|
 | **Disconnected**, in red, under **Garment** | Check the garment's cable and supply, then press **Connect garment**. |
 | **Fault: …** or **Garment faults: … (detail in the data)** | Write a note. If it stays, pause and ask S. |
-| A dialog titled **Error** | Write down the message, press **Close**, and see section 14. |
+| A dialog titled **Error** | Write down the message, press **Close**, and see section 15. |
 
 ---
 

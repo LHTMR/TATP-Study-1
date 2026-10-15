@@ -9,6 +9,8 @@ asks for an administrator password during these steps, the guide tells you what 
 
 Allow about 45 minutes. Most of it is waiting for downloads.
 
+A Swedish translation is in `docs/SETUP.sv.md`. Change both when you change this one.
+
 **Already set up on this computer by someone else?** Some of the software (step 3) is shared
 by everyone on the computer. Everything else is per person, so you still need to do the other
 steps under your own login.
