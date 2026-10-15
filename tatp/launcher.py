@@ -9,8 +9,9 @@ Six entries, so the auxiliary tools are reachable without the command line:
    refuses. An unfinished session found by the preflight is put to the experimenter as a
    question (SPEC.md 15).
 1a. **Run a demo.** The same dialog for a demonstration (`tatp/demo.py`, docs/LOG.md N7.D23):
-   its own code and folder, and the speed and who presses -- a person or a simulation, for the
-   participant and the experimenter apart.
+   its own code and folder, the garment -- the mock unless another is chosen, and then real
+   time only, with people pressing -- and the speed and who presses -- a person
+   or a simulation, for the participant and the experimenter apart.
 2. **Instruments and environment** (`tatp/instruments.py`).
 3. **Design a pattern.** `tools/design_pattern.py`, in its own window. For S only: it shows
    pattern names and shapes, which a blinded experimenter must not see (SPEC.md 16), and its
@@ -75,6 +76,7 @@ from tatp.demo import (
     check_speed,
     demo_config,
     resolved,
+    worn_garment,
 )
 from tatp.devices import HardwareChoices, configured, settle
 from tatp.hardware_check import HardwareCheckDialog, present_now
@@ -357,14 +359,15 @@ class SessionDialog(QDialog):
         self.pattern_folder.setText(str(resolved(demo["pattern_folder"])))
         self.form.setRowVisible(self.data_folder.parentWidget(), False)
         self.form.setRowVisible(self.redcap_form, False)
-        # Nothing is worn at a demonstration (tatp/demo.py): shown, not chosen.
+        # The mock, where nothing is worn, unless another garment is chosen (tatp/demo.py).
         self.garment.setCurrentIndex(self.garment.findData(DEMO_GARMENT))
-        self.garment.setEnabled(False)
         self.demo_speed = sized(QDoubleSpinBox(), SIZE_BODY)
         self.demo_speed.setRange(REAL_TIME_SPEED, float(demo["max_clock_speed"]))
         # Checked, not clamped: a configured default out of range is refused at once, as the
         # command line refuses it (tatp.demo.check_speed).
-        self.demo_speed.setValue(check_speed(demo, float(demo["clock_speed"])))
+        self.demo_speed.setValue(check_speed(demo, float(demo["clock_speed"]), DEMO_GARMENT))
+        # The speed set while the mock was chosen, given back when it is chosen again.
+        self._mock_speed = self.demo_speed.value()
         modes = [(self.text["demo"]["modes"][mode], mode) for mode in MODES]
         self.sim_participant = self._options(modes)
         self.sim_experimenter = self._options(modes)
@@ -377,6 +380,23 @@ class SessionDialog(QDialog):
         self.demo_speed.valueChanged.connect(self._stale)
         self.sim_participant.currentIndexChanged.connect(self._stale)
         self.sim_experimenter.currentIndexChanged.connect(self._stale)
+        self.garment.currentIndexChanged.connect(self._demo_garment_changed)
+
+    def _demo_garment_changed(self, *_) -> None:
+        """A worn garment runs a demonstration at real time with people as the participant
+        and the experimenter (tatp.demo.check_speed, check_person). Where the command line
+        refuses the other choices, here they are set and held, and the speed set for the mock
+        is given back when it is chosen again."""
+        garment = self.garment.currentData()
+        worn = garment is not None and worn_garment(garment)
+        if worn and self.demo_speed.isEnabled():
+            self._mock_speed = self.demo_speed.value()
+        self.demo_speed.setValue(REAL_TIME_SPEED if worn else self._mock_speed)
+        self.demo_speed.setEnabled(not worn)
+        for simulation in (self.sim_participant, self.sim_experimenter):
+            if worn:
+                simulation.setCurrentIndex(simulation.findData(OFF))
+            simulation.setEnabled(not worn)
 
     def _options(self, options: list[tuple[str, object]]) -> QComboBox:
         """A choice with no placeholder: each option is a fair default."""
@@ -482,7 +502,7 @@ class SessionDialog(QDialog):
         demonstration's own (tatp/demo.py), with a fresh folder each time."""
         loaded = self._load(args.participant_language, args.experimenter_language)
         if args.demo:
-            return demo_config(loaded, args.clock_speed)
+            return demo_config(loaded, args.clock_speed, args.garment)
         return with_session_choices(loaded, args.data_folder, args.garment)
 
     # -- check, then start ------------------------------------------------------------

@@ -32,8 +32,18 @@ screens:
   experimenter_en_demo_banner: The demonstration banner (docs/LOG.md N7.D23), amber
     like the others that say the session runs but what it records is not data. (en)
   experimenter_en_demo_controls: 'The Demo controls window beside a demonstration
-    (docs/LOG.md N7.D23): who presses for the participant and the experimenter, changeable
-    at any time, Skip the wait, and Finish this stage (en).'
+    (docs/LOG.md N7.D23, N7.F12f): what the garment is commanded to do, steady --
+    every channel''s pressure set, channels 2, 3 on -- then who presses for the participant
+    and the experimenter, changeable at any time, Skip the wait, and Finish this stage
+    (en).'
+  experimenter_en_demo_controls_garment_changed: 'The Demo controls'' garment display
+    0.2 s after channel 4 was turned on (docs/LOG.md N7.F12f): its row lit and its
+    bar outlined, fading back over demo.garment_highlight_s (en).'
+  experimenter_en_demo_controls_worn_link_lost: 'The Demo controls on a worn garment,
+    its link lost (docs/LOG.md N7.F12f): the participant and the experimenter people
+    and Finish this stage off, said in amber; the channels held at their last command
+    in amber, not shown switching off, with the warning that the outputs may still
+    hold it (N7.U16) (en).'
   experimenter_en_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column
@@ -100,7 +110,8 @@ screens:
     (en).
   experimenter_en_launcher_demo: 'Run a demo (docs/LOG.md N7.D23): the session dialog
     with the demonstration''s own participant code shown and not editable, no data
-    folder or REDCap form, the mock garment and the example patterns chosen, and the
+    folder or REDCap form, the mock garment (changeable: another runs at real time
+    only, with people pressing, N7.F12f) and the example patterns chosen, and the
     speed and who presses for the participant and the experimenter (en).'
   experimenter_en_launcher_hardware_check: 'The hardware page (LOG N7.F4, N7.F12e1),
     shown before the launcher, at the lab laptop''s size, with the lab''s hardware
@@ -204,8 +215,18 @@ screens:
   experimenter_sv_demo_banner: The demonstration banner (docs/LOG.md N7.D23), amber
     like the others that say the session runs but what it records is not data. (sv)
   experimenter_sv_demo_controls: 'The Demo controls window beside a demonstration
-    (docs/LOG.md N7.D23): who presses for the participant and the experimenter, changeable
-    at any time, Skip the wait, and Finish this stage (sv).'
+    (docs/LOG.md N7.D23, N7.F12f): what the garment is commanded to do, steady --
+    every channel''s pressure set, channels 2, 3 on -- then who presses for the participant
+    and the experimenter, changeable at any time, Skip the wait, and Finish this stage
+    (sv).'
+  experimenter_sv_demo_controls_garment_changed: 'The Demo controls'' garment display
+    0.2 s after channel 4 was turned on (docs/LOG.md N7.F12f): its row lit and its
+    bar outlined, fading back over demo.garment_highlight_s (sv).'
+  experimenter_sv_demo_controls_worn_link_lost: 'The Demo controls on a worn garment,
+    its link lost (docs/LOG.md N7.F12f): the participant and the experimenter people
+    and Finish this stage off, said in amber; the channels held at their last command
+    in amber, not shown switching off, with the warning that the outputs may still
+    hold it (N7.U16) (sv).'
   experimenter_sv_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column
@@ -272,7 +293,8 @@ screens:
     (sv).
   experimenter_sv_launcher_demo: 'Run a demo (docs/LOG.md N7.D23): the session dialog
     with the demonstration''s own participant code shown and not editable, no data
-    folder or REDCap form, the mock garment and the example patterns chosen, and the
+    folder or REDCap form, the mock garment (changeable: another runs at real time
+    only, with people pressing, N7.F12f) and the example patterns chosen, and the
     speed and who presses for the participant and the experimenter (sv).'
   experimenter_sv_launcher_hardware_check: 'The hardware page (LOG N7.F4, N7.F12e1),
     shown before the launcher, at the lab laptop''s size, with the lab''s hardware

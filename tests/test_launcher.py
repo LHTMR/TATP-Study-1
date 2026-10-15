@@ -7,6 +7,7 @@ what is tested here is what the launcher collects and how it answers what they s
 from __future__ import annotations
 
 import argparse
+import dataclasses
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -146,6 +147,23 @@ def test_every_session_runs_with_the_hardware_pages_choices(app, loaded, tmp_pat
     assert hardware["responder"]["participant_input"] == KEYBOARD
     assert hardware["responder"]["keys"] == loaded.hardware["responder"]["alternative_keys"]
     assert "participant_input" in hardware["changed_at_launch"]
+
+
+def test_a_demonstration_on_the_sleeve_uses_the_pages_port(app, loaded, tmp_path):
+    """Stream F's worn garment in a demo (held at real time, people at both places) and the
+    hardware page's port choice together (merge of N7.F12e1 with stream F)."""
+    choices = dataclasses.replace(MACBOOK, garment_port="COM9")
+    window = LauncherWindow(loaded, Fakes().preflight, Fakes().build, choices=choices)
+    dialog = window.session_dialog(demo=True)
+    dialog.experimenter.setText("SM")
+    _choose(dialog.session_number, 1)
+    _choose(dialog.participant_language, "sv")
+    _choose(dialog.experimenter_language, "en")
+    _choose(dialog.garment, "arduino_mosfet")
+    hardware = dialog.config(dialog.args()).hardware
+    assert hardware["garment"]["driver"] == "arduino_mosfet"
+    assert hardware["garment"]["prototype"]["port"] == "COM9"
+    assert hardware["responder"]["participant_input"] == KEYBOARD
 
 
 def test_the_hardware_entry_reopens_the_page_and_continue_keeps_its_choices(

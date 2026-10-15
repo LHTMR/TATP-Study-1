@@ -114,6 +114,19 @@ def test_the_rate_limit_holds_between_commands(garment):
     assert garment.set_pressure(1, 200.0) == pytest.approx(50.0 + allowed)
 
 
+def test_a_skip_does_not_loosen_the_rate_limit(garment):
+    """A demonstration's Skip the wait moves session time on at once (tatp/demo.py), also on
+    a real garment since N7.F12f. The skipped seconds never passed for the garment, so the
+    next rise is limited by the real interval alone, not by the skip."""
+    garment.set_pressure(1, 50.0)
+    skipped_s = 600.0
+    garment.clock.now += skipped_s
+    garment.skip(skipped_s)
+    garment.clock.now += 0.1
+    allowed = garment.limits.pressure_rate_max_kpa_s * 0.1
+    assert garment.set_pressure(1, 200.0) == pytest.approx(50.0 + allowed)
+
+
 def test_a_fall_is_not_rate_limited(garment):
     """A fall moves away from harm, so it is never slowed (docs/LOG.md N7.D21)."""
     garment.set_pressure(1, 150.0)
