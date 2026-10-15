@@ -231,6 +231,7 @@ class ExperimenterWindow(QWidget):
         self._mapping_phases: list[str] = []
         self._instruction_text = ""
         self._status_text = ""
+        self._open_items_text = ""
         # Faults first seen during the intervention or the rekindle: never shown in detail.
         self._withheld_faults: set[str] = set()
         # What `_fit_text` last fitted, so a refresh with nothing new does no layout work.
@@ -492,9 +493,8 @@ class ExperimenterWindow(QWidget):
         self.substitution_button.clicked.connect(self._enter_substitution)
         # Only during a filament application: it is listened to only then, and a filament typed
         # at any other time was cleared and lost (S, 15 Oct 2026 pilot review).
-        for widget in (self.substitution, self.substitution_button):
-            _reserve(widget)
-            widget.setVisible(False)
+        _reserve(self.substitution)
+        _reserve(self.substitution_button)
 
         # The distances are typed long after the path, a few times a session, so they live in a
         # window of their own that never blocks this one (SPEC.md 8.4). Offered from the first
@@ -590,13 +590,29 @@ class ExperimenterWindow(QWidget):
         while a filament trial listens for it. Each is hidden, in a place kept for it, when not
         offered, because a control that does nothing when pressed is one the experimenter
         learns to distrust (UI_PRINCIPLES.md 5.1), and ten of them are a lot to look at.
+
+        The substitution entry is withdrawn through `withdraw_substitution`, which hands back
+        anything typed and not recorded, so it is never dropped unseen.
         """
+        assert not (substitution is False and self.substitution.text().strip()), (
+            "the substitution entry holds unrecorded text: withdraw it with "
+            "withdraw_substitution()"
+        )
         for key, value in (("rebalance", rebalance), ("fit_decision", fit_decision),
                            ("discard", discard), ("skip_calibration", skip_calibration),
                            ("substitution", substitution)):
             if value is not None:
                 self._awaiting[key] = bool(value)
         self._apply_enabled()
+
+    def withdraw_substitution(self) -> str:
+        """Stop offering the filament-applied-instead entry. Returns what was typed in it and
+        not recorded, for the trial to log, and empties it so it can never be recorded against
+        the next trial."""
+        unrecorded = self.substitution.text().strip()
+        self.substitution.clear()
+        self.set_actions_enabled(substitution=False)
+        return unrecorded
 
     def set_mapping_phases(self, phases: Sequence[str]) -> None:
         """The time points that have a mapping, in session order (SPEC.md 8.4).
@@ -779,7 +795,7 @@ class ExperimenterWindow(QWidget):
         for item in items:
             number = ITEM_NUMBER.match(item)
             numbers.append(number[1] if number else item)
-        self.open_items.setText(
+        self._open_items_text = (
             text["warnings"]["open_items"].format(value=", ".join(numbers)) if items else ""
         )
         self.open_items.setToolTip(LINE_SEPARATOR.join(items))
@@ -796,16 +812,22 @@ class ExperimenterWindow(QWidget):
         return self.width() - 2 * MARGIN_PX - GROUP_GAP_PX - SIDE_COLUMN_PX
 
     def _fit_text(self) -> None:
-        """Fit the instruction and the status to their regions, stepping down the scale.
+        """Fit the instruction and the status to their regions, stepping down the scale, and
+        the open-items line to the window's width.
 
         Only when a text or the width has changed: `refresh()` runs on a timer, and measuring
         wrapped text at up to four sizes every tick is work that changes nothing.
         """
         width = self._left_width()
-        wanted = (self._instruction_text, self._status_text, width)
+        wanted = (self._instruction_text, self._status_text, self._open_items_text, width)
         if wanted == self._fitted:
             return
         self._fitted = wanted
+        # One line across the window; cut with an ellipsis, so a cut list says it is cut. The
+        # whole list is the tooltip.
+        self.open_items.setText(self.open_items.fontMetrics().elidedText(
+            self._open_items_text, Qt.ElideRight, self.width() - 2 * MARGIN_PX
+        ))
         _fit_to(self.instruction, self._instruction_text, INSTRUCTION_SIZES, width,
                 self.instruction.height())
         _fit_to(self.status, self._status_text, STATUS_SIZES, width, self.status.height())
@@ -940,36 +962,44 @@ class ExperimenterWindow(QWidget):
         running = self._interruption is None
         self.proceed_button.setEnabled(running)
         deciding = running and self._awaiting["fit_decision"]
+        discarding = running and self._awaiting["discard"]
+        rebalancing = running and self._awaiting["rebalance"]
+        skipping = self._awaiting["skip_calibration"]
+        substituting = self._awaiting["substitution"]
+        mapped = bool(self._mapping_phases)
+        # (widget, shown, pressable). Skip calibration stays in sight through an
+        # interruption, as it was, but cannot be pressed then.
         offered = (
-            (self.pause_button, running),
-            (self.resume_button, not running),
-            (self.discard_button, running and self._awaiting["discard"]),
-            (self.rebalance_button, running and self._awaiting["rebalance"]),
-            (self.fit_accept_button, deciding),
-            (self.fit_rerun_button, deciding),
-            (self.skip_button, self._awaiting["skip_calibration"]),
-            (self.substitution, self._awaiting["substitution"]),
-            (self.substitution_button, self._awaiting["substitution"]),
-            (self.distances_button, bool(self._mapping_phases)),
+            (self.pause_button, running, running),
+            (self.resume_button, not running, not running),
+            (self.discard_button, discarding, discarding),
+            (self.rebalance_button, rebalancing, rebalancing),
+            (self.fit_accept_button, deciding, deciding),
+            (self.fit_rerun_button, deciding, deciding),
+            (self.skip_button, skipping, running and skipping),
+            (self.substitution, substituting, substituting),
+            (self.substitution_button, substituting, substituting),
+            (self.distances_button, mapped, mapped),
         )
-        for widget, offer in offered:
-            widget.setVisible(offer)
-            widget.setEnabled(offer)
-        # A filament typed and not recorded belongs to the trial that has ended, never to the
-        # next one.
-        if not self._awaiting["substitution"]:
-            self.substitution.clear()
-        # Skip calibration is shown through an interruption, as it was, but not pressable.
-        self.skip_button.setEnabled(running and self._awaiting["skip_calibration"])
+        for widget, shown, pressable in offered:
+            # Hiding or disabling the control that has the focus makes Qt pass it to the next
+            # one -- after Pause, that is Abort, so a Space press would open the abort dialog.
+            # The window takes it instead: neither a control nor a text field, which under
+            # `any_keyboard` would take the participant's remote keys (docs/LOG.md N7.I1).
+            if widget.hasFocus() and not (shown and pressable):
+                self.setFocus()
+            widget.setVisible(shown)
+            widget.setEnabled(pressable)
         self.fit_preview.accept_button.setEnabled(deciding)
         self.fit_preview.rerun_button.setEnabled(deciding)
         # Quiet while connected, the expected state; the way forward when it reads Connect.
+        # The same size in both, so Skip calibration above it never moves.
         self.garment_button.setText(
             self.text["controls"]["disconnect" if self._connected else "connect"]
         )
         _restyle(self.garment_button,
                  f"QPushButton {{ color: {SECONDARY}; }}" if self._connected
-                 else primary_button_style())
+                 else primary_button_style(SIZE_SMALL))
 
 
 class FitPreviewWindow(QDialog):

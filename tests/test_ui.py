@@ -11,8 +11,8 @@ from __future__ import annotations
 import time
 
 import pytest
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QFontMetrics, QKeyEvent
+from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtGui import QFontInfo, QFontMetrics, QKeyEvent
 from PySide6.QtWidgets import QApplication, QLabel
 
 from tatp import config as cfg
@@ -30,6 +30,9 @@ EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 SPIN_TIMEOUT_S = 5.0
 LAPTOP_WIDTH_PX = screenshots.LAPTOP_WIDTH_PX
 LAPTOP_HEIGHT_PX = screenshots.LAPTOP_HEIGHT_PX
+# The share of a banner's width a headline may take, leaving room for a machine that renders
+# the same font a little wider.
+BANNER_WIDTH_MARGIN = 0.95
 
 
 @pytest.fixture(scope="module")
@@ -616,10 +619,16 @@ def test_the_session_identity_and_phase_are_shown(experimenter, session):
 
 
 def test_the_unresolved_open_items_are_on_the_screen(experimenter, session):
+    """By number on one line, cut with an ellipsis when they do not all fit (since the 15 Oct
+    2026 pilot review); every one is in the tooltip."""
     window, held = experimenter
     assert window.open_items.isVisibleTo(window)
+    shown = window.open_items.text()
+    numbers = [item.number for item in session.config.unresolved]
+    assert numbers[0] in shown
+    assert all(number in shown for number in numbers) or shown.endswith("…")
     for item in session.config.unresolved:
-        assert item.number in window.open_items.text()
+        assert str(item) in window.open_items.toolTip()
     held["override"] = {"unresolved_open_items": []}
     window.refresh()
     assert not window.open_items.isVisibleTo(window)
@@ -790,6 +799,70 @@ def test_nothing_moves_when_a_control_or_entry_is_offered(drawn):
                              hardware=_hardware(pressures={1: 40.0}, faults=["f"]))
     window.refresh()
     assert places() == before
+    # The garment button takes on its emphasis when it reads Connect without changing size,
+    # so Skip calibration above it stays put.
+    QApplication.processEvents()
+    skip = window.skip_button.mapTo(window, QPoint(0, 0))
+    height = window.garment_button.height()
+    held["view"] = _all_keys(hardware=_hardware(connected=False))
+    window.refresh()
+    QApplication.processEvents()
+    assert places() == before
+    assert window.garment_button.height() == height
+    assert window.skip_button.mapTo(window, QPoint(0, 0)) == skip
+
+
+def test_a_hidden_control_leaves_the_focus_with_the_window(drawn):
+    """Hiding the control that has the focus made Qt pass it on: after Pause, to Abort, so a
+    Space press opened the abort dialog. The window takes it, never a control or a text field
+    (under any_keyboard a focused field takes the participant's keys, docs/LOG.md N7.I1)."""
+    window, held = drawn
+    window.show()
+    window.activateWindow()
+    QApplication.processEvents()
+    window.pause_button.setFocus()
+    assert window.pause_button.hasFocus()
+    held["view"] = _all_keys(interruption="pause")
+    window.refresh()
+    assert QApplication.focusWidget() is window
+    window.resume_button.setFocus()
+    held["view"] = _all_keys()
+    window.refresh()
+    assert QApplication.focusWidget() is window
+    window.set_actions_enabled(substitution=True)
+    window.substitution.setFocus()
+    assert window.withdraw_substitution() == ""
+    assert QApplication.focusWidget() is window
+
+
+def test_withdrawing_the_substitution_hands_back_unrecorded_text(drawn):
+    window, _ = drawn
+    window.set_actions_enabled(substitution=True)
+    window.substitution.setText(" 15 ")
+    with pytest.raises(AssertionError, match="withdraw_substitution"):
+        window.set_actions_enabled(substitution=False)
+    assert window.withdraw_substitution() == "15"
+    assert window.substitution.text() == ""
+    assert not window.substitution.isVisibleTo(window)
+    window.refresh()
+    assert window.withdraw_substitution() == "", "handed back once only"
+
+
+def test_a_long_open_items_line_is_cut_visibly(app):
+    """One line, so a long list is cut -- with an ellipsis that says so, and the whole list in
+    the tooltip."""
+    loaded = cfg.load("sv", "sv")
+    items = [f"[L{n}] {'lång sammanfattning ' * 3}" for n in range(1, 61)]
+    window = ExperimenterWindow(loaded.experimenter_text,
+                                lambda: _all_keys(unresolved_open_items=items))
+    window.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+    window.refresh()
+    shown = window.open_items.text()
+    assert shown.endswith("…")
+    assert window.open_items.fontMetrics().horizontalAdvance(shown) <= (
+        LAPTOP_WIDTH_PX - 2 * experimenter_ui.MARGIN_PX
+    )
+    assert all(item in window.open_items.toolTip() for item in items)
 
 
 def test_next_step_looks_the_same_whatever_is_awaited(drawn):
@@ -853,12 +926,20 @@ def test_open_items_sit_in_the_banner_region(experimenter):
 def test_every_banner_is_one_line_at_the_laptop_width(app, language):
     """One line each, the detail in the tooltip (15 Oct 2026 pilot review). A banner is cut
     rather than wrapped, so its headline must fit the narrowest screen the window is used on,
-    with the longest garment name."""
-    text = cfg.load(language, language).experimenter_text
+    with the longest garment name.
+
+    Measured in the study's own font, which `tests/conftest.py` installs as the lab PC draws
+    it (`tatp/ui/application.py`), with a margin for rendering differences between machines.
+    """
+    loaded = cfg.load(language, language)
+    text = loaded.experimenter_text
     window = ExperimenterWindow(text, _all_keys)
     banners = text["banners"]
-    available = LAPTOP_WIDTH_PX - 2 * experimenter_ui.MARGIN_PX - 2 * widgets.BANNER_PADDING_PX
+    available = BANNER_WIDTH_MARGIN * (
+        LAPTOP_WIDTH_PX - 2 * experimenter_ui.MARGIN_PX - 2 * widgets.BANNER_PADDING_PX
+    )
     font = window.placeholder_banner.font()
+    assert QFontInfo(font).family() == loaded.hardware["screens"]["font_families"][0]
     font.setBold(True)
     metrics = QFontMetrics(font)
     headlines = [banners["placeholder_text"], banners["fit_preview"], banners["demo"]] + [
@@ -1247,7 +1328,7 @@ def test_a_fit_is_refused_while_the_preview_is_off_and_nothing_is_drawn(drawn):
     assert preview.plot.points == ()
     assert preview.quality.text() == preview.derived.text() == ""
     assert not window.fit_accept_button.isVisibleTo(window)
-    shown =" ".join(_visible_texts(window) + _visible_texts(preview))
+    shown = " ".join(_visible_texts(window) + _visible_texts(preview))
     for rating in ("23.5", "37.5", "58.5", "41.5", "71.5", "321"):
         assert rating not in shown
     assert window.grab().toImage() == before

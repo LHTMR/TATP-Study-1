@@ -167,13 +167,14 @@ def emphasis_button_style(colour: str) -> str:
     )
 
 
-def primary_button_style() -> str:
-    """The way forward: filled, outlined in the foreground colour, and a size up, so it is the
+def primary_button_style(point_size: int = SIZE_BODY) -> str:
+    """The way forward: filled, outlined in the foreground colour, and bold, so it is the
     button found first at a glance (UI_PRINCIPLES.md 5.1). Greyed like any other while
-    disabled, with its fill dropped so a disabled one never reads as the way forward."""
+    disabled, with its fill dropped so a disabled one never reads as the way forward.
+    `point_size` is the button's own size, so taking on the emphasis never resizes it."""
     return (
         f"QPushButton {{ background-color: {CONTROL_BORDER}; color: {FOREGROUND}; "
-        f"border: 1px solid {FOREGROUND}; font-size: {SIZE_BODY}pt; font-weight: bold; }}"
+        f"border: 1px solid {FOREGROUND}; font-size: {point_size}pt; font-weight: bold; }}"
         f"QPushButton:disabled {{ background-color: {CONTROL_BACKGROUND}; color: {DISABLED}; "
         f"border-color: {CONTROL_BACKGROUND}; font-weight: normal; }}"
     )

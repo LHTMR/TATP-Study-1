@@ -564,7 +564,9 @@ def _experimenter_states(text: dict) -> dict:
             "offered, Next step greyed, and nothing moved.",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "emergency_stop"},
-            pinprick,
+            # The stop cancels the trial, which withdraws the substitution entry
+            # (tatp/pinprick.py `_disconnect_extra`).
+            lambda window: (pinprick(window), window.withdraw_substitution()),
         ),
         "interrupted_pause": (
             "The experimenter's pause: the same line in amber, the step dimmed, Resume "

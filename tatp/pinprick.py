@@ -787,7 +787,14 @@ class PinprickTrial(_RatedTrial):
 
     def _disconnect_extra(self) -> None:
         self.experimenter.substitution_entered.disconnect(self._on_substitution)
-        self.experimenter.set_actions_enabled(substitution=False)
+        # A filament typed and not recorded is not this trial's data, but it is not lost
+        # without trace either: it was what the experimenter meant to say about it.
+        unrecorded = self.experimenter.withdraw_substitution()
+        if unrecorded:
+            self.session.log(
+                "substitution_not_recorded", origin="experimenter", severity="warning",
+                detail=f"trial {self.trial_index}: {unrecorded}",
+            )
 
     def _on_substitution(self, label_g: str) -> None:
         """The experimenter applied another filament than the one asked for (SPEC.md 8.2).

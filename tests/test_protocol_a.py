@@ -404,9 +404,18 @@ def test_the_substitution_entry_is_offered_only_while_a_filament_trial_listens(r
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
     for widget in (experimenter.substitution, experimenter.substitution_button):
         assert not widget.isHidden() and widget.isEnabled(), "a filament trial is running"
+    # Typed and never recorded: not applied, but logged when the trial withdraws the entry.
+    experimenter.substitution.setText("15")
     _answer(participant, _observer(protocol._trial))
     assert experimenter.substitution.isHidden(), "the trial has ended"
     assert experimenter.substitution_button.isHidden()
+    assert experimenter.substitution.text() == ""
+    (logged,) = [row for row in _rows(rig.session, "log")
+                 if row["event"] == "substitution_not_recorded"]
+    assert logged["origin"] == "experimenter" and logged["severity"] == "warning"
+    assert logged["detail"].endswith(": 15")
+    assert not [row for row in _rows(rig.session, "log")
+                if row["event"] == "substitution_entered"]
     protocol.cancel()
     assert experimenter.substitution.isHidden(), "the protocol has ended"
 
