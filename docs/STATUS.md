@@ -1,12 +1,13 @@
 # STATUS
 
-**Last updated:** 16 October 2026 (early morning, on S's MacBook).
+**Last updated:** 16 October 2026 (on the lab PC).
 **Milestone:** 6 (pilotable), in progress, in lab piloting.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
-back (`CLAUDE.md`, Committing). **`pilot/keep-files-open` is open, reviewed (`/code-review
-high`, spec-review, fixes applied) and not merged**: `make check` cannot pass on the Mac for
-reasons unrelated to it (below), so it waits for `make check` on the lab PC. `pilot/swedish-docs`
-belongs to another session. `main` is ahead of `origin` and not pushed.
+back (`CLAUDE.md`, Committing). `pilot/keep-files-open` is merged and deleted locally; its copy
+on `origin` is stale and can be deleted when `main` is pushed. **`pilot/swedish-docs` is parked
+on purpose** (S, 16 Oct): Swedish SOP and setup guide, reviewed and pushed, with `main` merged
+in, but both SOPs (`SOP.md` too) predate the 15 Oct screens, so they wait for the next SOP
+update. `main` is ahead of `origin` and not pushed.
 
 ---
 
@@ -52,20 +53,21 @@ high`, spec-review) with `make check` passing on the merged tree:
   whether a demo may name its condition, and whether a blinded experimenter may watch a demo's
   intervention with the garment display).
 
+**The data files stay open for the session** (N7.F13a, merged 16 Oct). On the lab PC:
+- `make check` passes on `main` (1354 tests, 36 validator checks in 193 s). It first failed at
+  the validator's clean-up, because the simulated crash left its files open and Windows cannot
+  delete an open file; the harness now closes them, as the OS does for a dead process.
+- Reopening a file per row costs 0.146 ms there (0.004 ms kept open), a hundredth of the Mac's
+  14 ms, so Defender does not by itself explain the lab PC's whole-demo stall.
+- That stall is nonetheless gone: the whole-demo test passed in 10 of 10 parallel copies, twice
+  (it failed in 1–2 of 10 before). Its cause on the lab PC is unexplained; if it returns, look
+  there first (step 3 below).
+
 ---
 
 ## Next steps
 
-1. **Merge `pilot/keep-files-open` from the lab PC** (N7.F13a): pull, `make check`; if it
-   passes, merge `--no-ff` into `main`, `make check` on `main`, delete the branch. It keeps the
-   data files open (unbuffered) instead of reopening them per row, which Microsoft Defender
-   made cost 14 ms a row on S's MacBook. That cost was the cause of the stalls: on the Mac it
-   took `make check` from 1 h 42 min with five stalled tests and a hung validator to a 3½-min
-   suite and a 206 s validator with no stalls. **Very probably the same as the lab PC's
-   whole-demo stall under parallel load** (formerly step 2 here; not checked on the lab PC).
-   Re-run the 10-copy check there after the merge
-   (`make test-one ARGS="tests/test_demo.py::test_a_whole_demonstration_runs_quarantined_and_recorded_as_one -n 10 --dist=each"`).
-2. **Make `make check` pass on a Mac** (all pre-existing, none caused by the change above):
+1. **Make `make check` pass on a Mac** (all pre-existing, none caused by the change above):
    - lint: conda-forge's osx `ruff` 0.17 has no Python module, so `python -m ruff` fails; the
      Makefile could call `ruff check .`;
    - two tests assume the lab platform without pinning it:
@@ -76,22 +78,25 @@ high`, spec-review) with `make check` passing on the merged tree:
      218 of 220 screenshots differ, because the references and metrics come from the lab PC.
    - The STATUS demo command lacked `--session` and `--experimenter`; it is
      `python run_session.py --demo --sim-participant watch --session 1 --experimenter SM --garment mock`.
-3. **On S's MacBook, by hand** (only started so far: the automatic demo ran 90 s without an
+2. **On S's MacBook, by hand** (only started so far: the automatic demo ran 90 s without an
    error; no one watched the windows). Check always-on-top and Spaces, CoreAudio at 48 kHz, the
    `tatp.devices` child process, fonts, key events. The conda shell function is broken in the
    Claude app's shell there; `Makefile.local` points `make` at
    `/Users/sarmc72/miniconda3/bin/conda`.
-4. **Left open from the review of N7.F13a:** at the validator's 1000× clock the pattern timer is
+3. **Left open from the review of N7.F13a:** at the validator's 1000× clock the pattern timer is
    always due and can still starve every other timer, including the validator's own 120 s
    guard, on a slow enough machine; a floor on timer intervals in wall time, or a guard outside
    the Qt loop, would turn a hang into a failure. A batch only partly written before a write
    error is retried whole, leaving a broken line (pre-existing, no row lost).
-5. **Re-run the lab session with the new screens**, starting at the hardware page: the sound
+4. **Re-run the lab session with the new screens**, starting at the hardware page: the sound
    device, a note and its confirmation, walk a session as both people (intros, read-aloud
    lines, the session end), try a re-calibration in calibration and in the intervention; and
    the 5 Oct checks still open (R400 hold acceleration N7.F7b, the touch-calibration pause R32,
    Skip calibration, the HP at 1.5, remote routing N7.I1, alerts over the noise, N2.9).
-6. **L15: the lab check N2.10** (seven steps in LOG).
+5. **L15: the lab check N2.10** (seven steps in LOG).
+6. **Update `SOP.md` for the 15 Oct screens** (hardware page, re-calibration, intros, standby,
+   read-aloud lines, about 45 quoted texts), then `SOP.sv.md` on `pilot/swedish-docs` to match,
+   when S says the screens have settled.
 7. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
 8. **The adversarial review** (spec-review, §17.6) over the whole build before Milestone 6.
 9. **Left open, not blocking:** preflight's sound check can freeze the launcher up to 8 s
