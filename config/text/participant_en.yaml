@@ -91,17 +91,23 @@ screens:
   # There is no `mapping` key. The area mapping is instructed verbally and the participant
   # signals verbally (SPEC.md 8.4); the experimenter's script is `instructions.mapping_script`
   # in experimenter_{sv,en}.yaml. The participant screen shows `standby` throughout.
-  # Practical only. The participant has already read the information sheet, so the screen does
-  # not re-explain the study -- it explains the buttons. The line about the circle (LOG
-  # N7.F11c2) is removed again (N7.F12g1): the warning cue is now text, `warning_cue`, which
-  # explains itself. The screen is back to S's approved wording.
+  # S's wording, 16 Oct 2026 (LOG N7.F14a). Says only what comes next, the stop rehearsal's
+  # touch: the buttons and the scale are explained by `practice_intro`, when a scale is first
+  # on the screen.
   welcome: |-
     Welcome.
+    Next you will feel a touch on your arm.
+
+    Press ▶ when you are ready.
+  # S's wording, 16 Oct 2026 (LOG N7.F14a), moved here from `welcome`. Shown once per session,
+  # before the first rating-scale practice.
+  practice_intro: |-
+    Next you will practise using the rating scale.
     The two large buttons move the marker along the line.
     ▶ confirms your answer.
     There are no right answers — mark what you feel. The experimenter does not see your answers.
 
-    Press ▶ to begin.
+    Press ▶ to start the practice.
   # The first screen of a session, up while the garment is fitted and before the welcome. S's
   # wording, 30 Sep 2026 (LOG N7.F3).
   # (LOG N7.F11c11: the Swedish was reworded; this English is S's, unchanged.)

@@ -201,6 +201,9 @@ def test_the_pain_training_comes_before_the_first_application(app, loaded, tmp_p
         participant = made.participant
         protocol = _long(made)
         done = _start(protocol)
+        # The session's first practice is introduced first (LOG N7.F14a).
+        _spin(lambda: participant.message.text == participant.text["screens"]["practice_intro"])
+        participant.message_confirmed.emit()
         _spin(lambda: participant.stack.currentWidget() is participant.vas)
         vas = participant.vas
         assert vas.explaining and vas.scale == "pain" and not vas.practising

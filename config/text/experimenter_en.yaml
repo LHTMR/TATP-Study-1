@@ -122,6 +122,10 @@ instructions:
   welcome: >-
     The participant reads the welcome and presses {confirm}. The stop rehearsal follows at
     once: the touch starts and they are asked to press the stop button.
+  # DRAFT (LOG N7.F14a): written by the build, not ethics-sourced
+  practice_intro: >-
+    The participant is reading that the rating-scale practice comes next, and presses
+    {confirm} to start it.
   # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. {minutes} is the
   # sensitisation window's length (schedule.yaml), inside `say.heat`.
   thermode_start: >-

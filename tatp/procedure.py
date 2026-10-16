@@ -67,6 +67,8 @@ from tatp.units import MS_PER_S
 VAS_TRAINING_SHOWN = "vas_training_shown"
 VAS_TRAINING_EXPLAINED = "vas_training_explained"
 VAS_TRAINING_INSTRUCTION = "vas_training"
+# The screen and the experimenter's line before the session's first practice (LOG N7.F14a).
+PRACTICE_INTRO = "practice_intro"
 # The `say` key of the proportionality sentences, one per trained scale.
 PROPORTIONALITY = "proportionality"
 # Between the scale's labels where the experimenter is told to read them out.
@@ -302,12 +304,21 @@ class Procedure(QObject):
            `vas_training_explained`.
         2. `VasTraining`: a practice rating, never recorded as a rating.
 
-        Once confirmed it is not shown again this session (`Session.vas_training_due`).
+        Once confirmed it is not shown again this session (`Session.vas_training_due`). The
+        session's first practice is introduced first (`screens.practice_intro`): the welcome no
+        longer explains the buttons and the scale, since no scale is on the screen there.
         """
         due = [scale for scale in dict.fromkeys(scales) if self.session.vas_training_due(scale)]
         if not due:
             then()
             return
+        if not self.session.vas_trained:
+            self.introduce(PRACTICE_INTRO, self.instruction_text(PRACTICE_INTRO),
+                           lambda: self._train(due, then))
+            return
+        self._train(due, then)
+
+    def _train(self, due: list[str], then: Callable[[], None]) -> None:
         scale = due[0]
 
         def show() -> None:

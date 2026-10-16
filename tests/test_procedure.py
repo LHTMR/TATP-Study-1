@@ -156,6 +156,7 @@ def test_the_training_gives_what_to_say_in_the_participants_language(rig, loaded
     participant, so in their language (Swedish here) inside the experimenter's (English)."""
     procedure = Trains(rig)
     procedure.start()
+    rig.participant.message_confirmed.emit()  # the practice introduction
     shown = rig.experimenter.instruction.text()
     anchors = [a["label"] for a in sorted(loaded.participant_text["vas"]["pain"]["anchors"],
                                           key=lambda a: a["pct"])]
@@ -164,6 +165,22 @@ def test_the_training_gives_what_to_say_in_the_participants_language(rig, loaded
     swedish = cfg.load("sv", "sv").experimenter_text["say"]["proportionality"]["pain"]
     assert loaded.say["proportionality"]["pain"] == swedish
     assert shown.startswith(loaded.experimenter_text["instructions"]["vas_training"][:10])
+    procedure.cancel()
+
+
+def test_the_first_practice_of_a_session_is_introduced_and_later_ones_are_not(rig):
+    """The welcome no longer explains the scale; the screen before the first practice does
+    (S, 16 Oct 2026; LOG N7.F14a)."""
+    participant = rig.participant
+    procedure = Trains(rig)
+    procedure.start()
+    assert participant.stack.currentWidget() is participant.message
+    assert participant.message.text == participant.text["screens"]["practice_intro"]
+    procedure.cancel()
+    rig.session.vas_trained.add("intensity")  # a practice already done this session
+    procedure = Trains(rig)
+    procedure.start()
+    assert participant.stack.currentWidget() is participant.vas, "straight to the scale"
     procedure.cancel()
 
 

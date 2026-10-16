@@ -415,6 +415,7 @@ def test_uneven_offers_a_rebalance_which_reruns_steps_3_and_4(rig):
     # Steps 3 and 4 introduced again when the rebalance returns to them (LOG N7.F11c1).
     intros = [row["detail"] for row in _events(session, "message_confirmed")]
     assert intros == [
+        "practice_intro",
         "intro_bracket", "intro_estimation", "intro_match", "intro_compare", "intro_pleasant",
         "intro_match", "intro_compare",
     ]
@@ -565,7 +566,8 @@ def test_a_rebalance_after_a_stop_in_step_4_reruns_steps_3_and_4_and_restores_no
     assert sorted({row["pass_index"] for row in match}) == ["1", "2"]
     assert sum(row["stage"] == "pleasantness" for row in adjust) == 2
     intros = [row["detail"] for row in _events(session, "message_confirmed")]
-    assert intros == ["intro_bracket", "intro_estimation", "intro_match", "intro_compare",
+    assert intros == ["practice_intro",
+                      "intro_bracket", "intro_estimation", "intro_match", "intro_compare",
                       "intro_match", "intro_compare", "intro_pleasant"]
     (fit,) = _rows(session, "touchcal_fit")
     assert fit["superseded"] == "false"

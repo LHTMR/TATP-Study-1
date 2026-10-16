@@ -125,6 +125,10 @@ instructions:
   welcome: >-
     Deltagaren läser välkomsttexten och trycker på {confirm}. Direkt efter kommer övningen med
     stoppknappen: beröringen startar och deltagaren ombeds trycka på stoppknappen.
+  # DRAFT (LOG N7.F14a): written by the build, not ethics-sourced
+  practice_intro: >-
+    Deltagaren läser att övningen med skattningsskalan kommer härnäst och trycker på {confirm}
+    för att börja den.
   # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. {minutes} är
   # sensitiseringsfönstrets längd (schedule.yaml), inuti `say.heat`.
   thermode_start: >-
