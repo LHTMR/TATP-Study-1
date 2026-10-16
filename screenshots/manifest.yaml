@@ -478,6 +478,10 @@ screens:
   participant_en_screen_intro_pleasant: The participant text `screens.intro_pleasant`,
     centred, en.
   participant_en_screen_paused: The participant text `screens.paused`, centred, en.
+  participant_en_screen_please_wait: The participant text `screens.please_wait`, centred,
+    en.
+  participant_en_screen_practice_intro: The participant text `screens.practice_intro`,
+    centred, en.
   participant_en_screen_self_start: The participant text `screens.self_start`, centred,
     en.
   participant_en_screen_session_end: The participant text `screens.session_end`, centred,
@@ -596,6 +600,10 @@ screens:
   participant_sv_screen_intro_pleasant: The participant text `screens.intro_pleasant`,
     centred, sv.
   participant_sv_screen_paused: The participant text `screens.paused`, centred, sv.
+  participant_sv_screen_please_wait: The participant text `screens.please_wait`, centred,
+    sv.
+  participant_sv_screen_practice_intro: The participant text `screens.practice_intro`,
+    centred, sv.
   participant_sv_screen_self_start: The participant text `screens.self_start`, centred,
     sv.
   participant_sv_screen_session_end: The participant text `screens.session_end`, centred,
