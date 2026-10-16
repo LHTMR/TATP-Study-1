@@ -322,6 +322,55 @@ def test_a_resume_in_the_interval_restores_the_blank_screen(rig):
     _drive(protocol, done)
 
 
+def test_the_interval_shows_the_next_application_counting_down_to_it(rig):
+    """The experimenter prepares the next application during the interval (S, 16 Oct 2026;
+    LOG N7.F14c). The one just rated is on the status line; its rating never is."""
+    participant, experimenter = rig.participant, rig.experimenter
+    config = rig.session.config
+    protocol = _long(rig)
+    done = _start(protocol)
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    first = protocol._trial
+    _answer(participant, 0)
+    expected = protocol._expected
+    assert expected is not None and expected.trial_index == first.trial_index + 1
+    force_mn = next(f["force_nominal_mn"] for f in config.filaments["filaments"]
+                    if f["label_g"] == expected.filament_label_g)
+
+    def shown(seconds: int) -> str:
+        return cfg.instruction(
+            config, "next_filament", seconds=seconds, site=expected.site_index,
+            region=experimenter.text["terms"]["regions"][expected.region],
+            filament=expected.filament_label_g, force_mn=force_mn,
+        )
+
+    def remaining() -> int:
+        clock = rig.session.clock
+        return math.ceil(clock.remaining_s(protocol._interval_start_s, protocol._interval_s))
+
+    def redrawn() -> tuple[int, str]:
+        # The test clock runs fast, so a second can pass during the redraw itself.
+        before = remaining()
+        protocol._show_expected()
+        return before, experimenter.instruction.text()
+
+    try:
+        before, text = redrawn()
+        assert text in (shown(before), shown(remaining())), text
+        assert experimenter.status.text() == cfg.instruction(
+            config, "received_filament", filament=first.applied_label_g,
+            site=first.application.site_index,
+        )
+        rig.session.clock.skip(1.0)
+        after, text = redrawn()
+        assert after < before and text in (shown(after), shown(remaining())), "it counts down"
+        _spin(lambda: protocol._trial is not None and protocol._trial is not first)
+        assert protocol._trial.application == expected, "the one shown is the one given"
+        _drive(protocol, done)
+    finally:
+        protocol.cancel()
+
+
 def test_a_resume_while_waiting_to_start_restores_the_standby_screen(rig):
     """The wait for the go shows standby, not a blank identical to the one under a stimulus
     (15 Oct 2026 pilot review, LOG N7.F11c8), and a resume puts it back."""

@@ -101,13 +101,23 @@ instructions:
   # Ett drag på cirka 2 cm, aldrig upprepat: upprepning höjer smärtan (docs/research/RB2).
   # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced
   apply_brush: 'Nu: borsta den {region} zonen på plats {site}, ett enda drag på cirka 2 cm.'
-  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced. Det slumpade uppehållet
-  # efter en skattning, så att förra appliceringens uppmaning inte står kvar som om den vore
-  # ogjord. Nämner aldrig nästa filament.
-  between_applications: 'Svar mottaget. Vänta: nästa applicering visas här.'
+  # DRAFT (LOG N7.F11b8, N7.F14c): written by the build, not ethics-sourced. Det slumpade
+  # uppehållet efter en skattning när ingen applicering följer: serien är slut. Svaret
+  # rapporteras på statusraden (`received_*`).
+  between_applications: 'Vänta: nästa steg visas här.'
   # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced. Samma uppehåll efter en
-  # kassering, som statusraden rapporterar, vare sig en upprepning följer eller inte.
+  # kassering, som statusraden rapporterar, när ingen applicering följer.
   between_applications_discarded: 'Kasserat. Vänta: nästa steg visas här.'
+  # DRAFT (LOG N7.F14c): written by the build, not ethics-sourced; "Deliver in" är S:s.
+  # Uppehållet före en applicering, så att försöksledaren kan förbereda den (S, 16 okt 2026):
+  # vad som kommer härnäst, med nedräkning i hela sekunder till varningssignalen.
+  next_filament: 'Nästa: filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen. Applicera om {seconds} s.'
+  next_brush: 'Nästa: penseln på plats {site}, {region} zonen. Applicera om {seconds} s.'
+  # DRAFT (LOG N7.F14c): written by the build, not ethics-sourced. Statusraden under det
+  # uppehållet: appliceringen som just skattades, aldrig skattningen (Bilaga 3a:
+  # försöksledaren ser inte deltagarens skattningar).
+  received_filament: 'Svar mottaget: {filament} g på plats {site}.'
+  received_brush: 'Svar mottaget: penseln på plats {site}.'
   # DRAFT (LOG N7.F11b11): written by the build, not ethics-sourced. {step} är
   # mapping.step_size_mm.
   mapping_path: 'Bana {path}: flytta filamentet {step} mm inåt vid varje taktsignal. Tryck på {controls[proceed]} när deltagaren säger till att känslan förändras, och markera gränsen på huden.'
