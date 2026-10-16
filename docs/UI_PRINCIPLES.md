@@ -68,7 +68,9 @@ after a left press and 75 % after a right. Not a presentation choice.
 from the next without counting.** A response is only interpretable if it is known which
 presentation it answers. Each trial therefore ends with its choice shown back long enough to be
 seen, and begins after a blank that is unmistakably a break rather than a lag. Both durations
-are config, pilot-tunable, and start at 0.5 s.
+are config, pilot-tunable, and start at 0.5 s. A rest between two stimuli longer than
+`cues.please_wait_min_s` says "Please wait" instead of being blank, so a long pause reads as
+meant rather than as a fault (S, 16 Oct 2026; docs/LOG.md N7.F14d).
 
 ## 2. Blinding and approved wording
 

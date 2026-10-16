@@ -990,6 +990,10 @@ class _Series(Procedure):
         self._expected: Application | BrushApplication | None = None
         self._interval_start_s = 0.0
         self._interval_s = 0.0
+        # The application is due a warning cue's lead after the interval ends: that is what
+        # the countdown counts to. Redrawn only when its whole second changes.
+        self._warning_lead_s = float(self.session.config.study1["cues"]["warning_lead_s"])
+        self._shown_seconds: int | None = None
         self._countdown = QTimer(self)
         screens = self.session.config.hardware["screens"]
         self._countdown.setInterval(
@@ -1111,6 +1115,7 @@ class _Series(Procedure):
             if self._expected is None:
                 self.instruct(BETWEEN_APPLICATIONS if received else BETWEEN_DISCARDED)
             else:
+                self._shown_seconds = None
                 self._show_expected()
                 self._countdown.start()
             self._after(seconds, self._advance)
@@ -1118,8 +1123,12 @@ class _Series(Procedure):
         self.step(begin)
 
     def _show_expected(self) -> None:
-        clock = self.session.clock
-        seconds = max(0, math.ceil(clock.remaining_s(self._interval_start_s, self._interval_s)))
+        due_s = self._interval_s + self._warning_lead_s
+        remaining_s = self.session.clock.remaining_s(self._interval_start_s, due_s)
+        seconds = max(0, math.ceil(remaining_s))
+        if seconds == self._shown_seconds:
+            return
+        self._shown_seconds = seconds
         expected = self._expected
         if isinstance(expected, BrushApplication):
             self.instruct(NEXT_BRUSH, seconds=seconds, site=expected.site_index,
@@ -1708,23 +1717,21 @@ class ShortProtocol(_RatingSeries):
         return self.filament_label_g
 
     def _apply_next(self) -> None:
-        placed = place(self.cap, self.rotation, self.region, self.index)
-        if placed is None:
+        application = self._planned()
+        if application is None:
             # Not even the lightest filament may be given: the series stops with what it has.
             self.session.log("cap_bars_every_filament", severity="warning", detail=self.region)
             self.n_trials = len(self.ratings)
             self._next()
             return
-        index, site = placed
-        if index != self.index:
+        if application.filament_label_g != self.filament_label_g:
             self.session.log(
                 "cap_lowered", severity="warning",
                 detail=f"asked {self.filament_label_g} g, capped at every site; "
-                f"{self.filaments[index].label_g} g instead",
+                f"{application.filament_label_g} g instead",
             )
-        self.rotation.take(site)
-        self._site = site
-        application = self._application(index, site)
+        self.rotation.take(application.site_index)
+        self._site = application.site_index
         self._given(application)
         self.apply(
             lambda: PinprickTrial(

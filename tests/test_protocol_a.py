@@ -362,8 +362,9 @@ def test_the_interval_shows_the_next_application_counting_down_to_it(app, loaded
         )
 
     def remaining() -> int:
-        clock = rig.session.clock
-        return math.ceil(clock.remaining_s(protocol._interval_start_s, protocol._interval_s))
+        # To when the application is due: the interval, then the warning cue's lead.
+        due_s = protocol._interval_s + config.study1["cues"]["warning_lead_s"]
+        return math.ceil(rig.session.clock.remaining_s(protocol._interval_start_s, due_s))
 
     def redrawn() -> tuple[int, str]:
         # The test clock runs fast, so a second can pass during the redraw itself.
