@@ -138,6 +138,22 @@ def test_a_worn_garment_refuses_a_window_shorter_than_the_slowest_ramp(app, load
         made.session.close()
 
 
+def test_every_estimation_presentation_waits_the_whole_window(rig, monkeypatch):
+    """The first one too: cued as soon as its ramp ended, a catch trial in first place would
+    come at once and a strong touch seconds later (spec-review, LOG N7.F14e)."""
+    window_s = rig.session.config.study1["touch_calibration"]["estimation_window_s"]
+    windows = []
+    original = touchcal.EstimationPresentation.__init__
+
+    def recording(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        windows.append(self.off_s)
+
+    monkeypatch.setattr(touchcal.EstimationPresentation, "__init__", recording)
+    _calibrate(rig)
+    assert windows and all(off_s == window_s for off_s in windows), windows
+
+
 def test_what_each_condition_delivers(rig):
     result, _ = _calibrate(rig, gains={1: 1.3, 2: 1.1, 4: 0.9, 5: 1.2})
     patterns = rig.session.config.study1["patterns"]["condition_pattern"]

@@ -1269,10 +1269,14 @@ class TouchCalibration(Procedure):
         # run it shorter (`demo.estimation_window_mock_s`).
         if garment.worn:
             window_s = float(self.touch["estimation_window_s"])
-            slowest_s = self.ceiling_kpa / garment.limits.pressure_rate_max_kpa_s
+            # A ramp re-checks the rate limit once a tick, so it can end up to a tick late.
+            slowest_s = self.ceiling_kpa / garment.limits.pressure_rate_max_kpa_s + float(
+                config.hardware["adjustment"]["tick_interval_s"]
+            )
             assert window_s >= slowest_s, (
                 f"study1.yaml: touch_calibration.estimation_window_s ({window_s} s) is shorter "
-                f"than the slowest ramp, the ceiling at the rate limit ({slowest_s:.2f} s)"
+                f"than the slowest ramp, the ceiling at the rate limit plus a tick "
+                f"({slowest_s:.2f} s)"
             )
         self.reference = int(self.touch["reference_channel"])
         self.others = tuple(c for c in garment.channels() if c != self.reference)
@@ -1596,7 +1600,11 @@ class TouchCalibration(Procedure):
         plans = list(maths.estimation_plans(amplitudes, n_catch, self.session.rng))
         self._introduce(
             INTRO_ESTIMATION,
-            lambda: self._present(plans, off_s=0.0, stopped_s=None),
+            # The whole window before the first presentation too, counted from its own start:
+            # a first one cued as soon as its ramp ended would give a catch trial away by its
+            # pause (spec-review, LOG N7.F14e).
+            lambda: self._present(plans, off_s=float(self.touch["estimation_window_s"]),
+                                  stopped_s=None),
         )
 
     def _device_range(self) -> tuple[float, float]:
