@@ -40,6 +40,10 @@ demo:
   participant_reaction_s: 1.0        # from a new screen to the first press on it
   participant_press_interval_s: 0.2  # between presses, so the marker is seen to move
   experimenter_reaction_s: 1.5       # from a new instruction to pressing Next step
+  # Every rest between two stimuli in a demonstration -- the touch calibration's estimation
+  # run and the pinprick and brush series -- in session seconds, in place of the study's
+  # (S, 16 Oct 2026; LOG N7.F14b): a demonstration shows what happens, not the waiting.
+  rest_s: 0.5
   # What the garment is commanded to do, channel by channel, in the Demo controls window
   # (tatp/ui/garment_display.py; N7.F12f): read this often, and a channel that changes is lit
   # up and fades back over garment_highlight_s, so a watcher's eye is drawn to it.
@@ -205,8 +209,11 @@ touch_calibration:
   estimation_settle_s: 3.0           # [R] R32. Stimulus on this long before the intensity VAS
                                      # appears, and it stays on until confirm: the question is
                                      # in the present tense. The comparison hold's 3 s.
-  estimation_iti_min_s: 8.0          # [R] R32. Stimulus off to the next cue, jittered uniformly
-  estimation_iti_max_s: 12.0         # between these, drawn from the session RNG
+  estimation_iti_min_s: 0.5          # Stimulus off to the next cue, jittered uniformly between
+  estimation_iti_max_s: 0.5          # these, drawn from the session RNG. S, 16 Oct 2026 (LOG
+                                     # N7.F14b): 0.5 s, to be lengthened if needed; R32 had
+                                     # recommended 8-12 s. Watch on the sleeve that it has
+                                     # deflated before the next "Get ready".
   catch_felt_min_pct: 10.0           # [R] R32. A catch trial counts as felt when rated at or
                                      # above the scale's own "just noticeable" anchor
   stage1:

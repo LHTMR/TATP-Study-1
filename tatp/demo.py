@@ -105,6 +105,16 @@ def real_time_settings(study1: dict, speed: float, scale_timeout: bool = True) -
     return {**study1, "choice": choice, "touch_calibration": touch}
 
 
+def demo_rests(study1: dict, rest_s: float) -> dict:
+    """`study1` with every rest between two stimuli set to `rest_s` (`demo.rest_s`; LOG
+    N7.F14b): the touch calibration's estimation run, and the pinprick and brush series."""
+    touch = {**study1["touch_calibration"],
+             "estimation_iti_min_s": rest_s, "estimation_iti_max_s": rest_s}
+    pinprick = {**study1["pinprick"], "isi_min_s": rest_s, "isi_max_s": rest_s}
+    brush = {**study1["brush"], "isi_min_s": rest_s, "isi_max_s": rest_s}
+    return {**study1, "touch_calibration": touch, "pinprick": pinprick, "brush": brush}
+
+
 def resolved(path: str) -> Path:
     """A configured path, relative to the repository unless absolute."""
     return Path(path) if Path(path).is_absolute() else REPO_ROOT / path
@@ -206,7 +216,7 @@ def demo_config(loaded: Config, speed: float, garment: str) -> Config:
     # another demonstration.
     study_folder = str(resolved(loaded.hardware["data"]["folder"]))
     hardware = {**hardware, "data": {**hardware["data"], "study_folder": study_folder}}
-    study1 = real_time_settings(config.study1, speed)
+    study1 = demo_rests(real_time_settings(config.study1, speed), float(demo["rest_s"]))
     # The template until the run begins: it has the code and every session number to check.
     design = {**study1["design"], "allocation_file": str(resolved(demo["allocation_file"]))}
     study1 = {**study1, "design": design}

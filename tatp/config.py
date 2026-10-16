@@ -57,6 +57,8 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "demo.participant_reaction_s", NUMBER, 0, None),
     ("study1.yaml", "demo.participant_press_interval_s", NUMBER, 0, None),
     ("study1.yaml", "demo.experimenter_reaction_s", NUMBER, 0, None),
+    # Above zero: a pinprick series asserts a positive interval (`_Series`).
+    ("study1.yaml", "demo.rest_s", NUMBER, 0.01, None),
     ("study1.yaml", "demo.garment_display_refresh_s", NUMBER, 0.01, 1),
     ("study1.yaml", "demo.garment_highlight_s", NUMBER, 0.1, None),
     ("study1.yaml", "vas.start_pct_after_left_press", NUMBER, 0, 100),
