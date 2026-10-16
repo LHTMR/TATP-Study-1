@@ -59,6 +59,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "demo.experimenter_reaction_s", NUMBER, 0, None),
     # Above zero: a pinprick series asserts a positive interval (`_Series`).
     ("study1.yaml", "demo.rest_s", NUMBER, 0.01, None),
+    ("study1.yaml", "demo.estimation_window_mock_s", NUMBER, 0, None),
     ("study1.yaml", "demo.garment_display_refresh_s", NUMBER, 0.01, 1),
     ("study1.yaml", "demo.garment_highlight_s", NUMBER, 0.1, None),
     ("study1.yaml", "vas.start_pct_after_left_press", NUMBER, 0, 100),
@@ -137,8 +138,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "touch_calibration.sham_target_intensity_pct", NUMBER, 0, 100),
     ("study1.yaml", "touch_calibration.evenness_check", bool, None, None),
     ("study1.yaml", "touch_calibration.estimation_settle_s", NUMBER, 0, None),
-    ("study1.yaml", "touch_calibration.estimation_iti_min_s", NUMBER, 0, None),
-    ("study1.yaml", "touch_calibration.estimation_iti_max_s", NUMBER, 0, None),
+    ("study1.yaml", "touch_calibration.estimation_window_s", NUMBER, 0, None),
     ("study1.yaml", "touch_calibration.catch_felt_min_pct", NUMBER, 0, 100),
     ("study1.yaml", "touch_calibration.stage1.min_span_vas", NUMBER, 0, 100),
     ("study1.yaml", "touch_calibration.stage1.min_spearman_rho", NUMBER, -1, 1),

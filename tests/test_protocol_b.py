@@ -121,6 +121,23 @@ def test_a_full_calibration_writes_every_table_and_finds_the_observer(rig):
     assert preference["all_felt"] == "true"
 
 
+def test_a_worn_garment_refuses_a_window_shorter_than_the_slowest_ramp(app, loaded, tmp_path):
+    """A ramp outlasting the fixed window would delay the cue by more for a stronger touch
+    and never for a catch trial (S, 16 Oct 2026; LOG N7.F14e). The mock, which nobody wears,
+    may run shorter, as a demonstration's does."""
+    garment = loaded.hardware["garment"]
+    slowest_s = garment["pressure_ceiling_kpa"] / garment["pressure_rate_max_kpa_s"]
+    touch = {**loaded.study1["touch_calibration"], "estimation_window_s": slowest_s / 2}
+    made = make_rig(make_config(loaded, tmp_path, touch_calibration=touch))
+    try:
+        touchcal.TouchCalibration(made)  # the mock: allowed
+        made.session.garment.worn = True
+        with pytest.raises(AssertionError, match="slowest ramp"):
+            touchcal.TouchCalibration(made)
+    finally:
+        made.session.close()
+
+
 def test_what_each_condition_delivers(rig):
     result, _ = _calibrate(rig, gains={1: 1.3, 2: 1.1, 4: 0.9, 5: 1.2})
     patterns = rig.session.config.study1["patterns"]["condition_pattern"]

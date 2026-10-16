@@ -783,12 +783,14 @@ class EstimationPresentation(Trial):
     pressure, switching one on would be a real touch.
 
     **The off-interval is this trial's, and the ramp runs inside it.** `off_s` is the time from
-    the previous presentation's stop to this one's warning cue (docs/research/R32: "from the
-    deflate command to the next warning cue"). The pressure is reached with the channel closed
-    during it, so a high amplitude's ramp no longer adds to the interval. Ramping after the
-    interval made the pause after a response the drawn interval plus up to the ceiling over the
-    rate limit -- 4 s more on the prototype, whose pressures are not even delivered (docs/LOG.md
-    N7.F8a). A ramp longer than the interval still ends before the cue, so the cue waits for it.
+    the previous presentation's stop to this one's warning cue: the fixed
+    `touch_calibration.estimation_window_s` (docs/LOG.md N7.F14e). The pressure is reached
+    with the channel closed during it, so the pause is the same whatever comes next, a catch
+    trial included. Ramping after the interval made the pause after a response the interval
+    plus up to the ceiling over the rate limit -- 4 s more on the prototype, whose pressures
+    are not even delivered (docs/LOG.md N7.F8a). A ramp longer than the interval still ends
+    before the cue, so the cue waits for it; on a worn garment `TouchCalibration` refuses a
+    window shorter than the slowest ramp.
 
     The interval counts from `stopped_s`, the previous presentation's stop as it reported it,
     so the work between -- a row written, a screen redrawn -- is inside the interval rather
@@ -1259,6 +1261,19 @@ class TouchCalibration(Procedure):
         self.real = garment.per_channel_pressure
         self.valid = self.real
         self.ceiling_kpa = garment.limits.pressure_ceiling_kpa
+        # Stage boundary (CLAUDE.md). The next presentation's ramp runs inside the fixed
+        # estimation window; one that outlasted it would delay the cue by an amount that
+        # grows with the pressure, and a catch trial, with no ramp, would never be delayed:
+        # the pause would tell the participant what is coming (LOG N7.F14e). On the mock
+        # garment nobody feels the touch and nothing recorded is data, so a demonstration may
+        # run it shorter (`demo.estimation_window_mock_s`).
+        if garment.worn:
+            window_s = float(self.touch["estimation_window_s"])
+            slowest_s = self.ceiling_kpa / garment.limits.pressure_rate_max_kpa_s
+            assert window_s >= slowest_s, (
+                f"study1.yaml: touch_calibration.estimation_window_s ({window_s} s) is shorter "
+                f"than the slowest ramp, the ceiling at the rate limit ({slowest_s:.2f} s)"
+            )
         self.reference = int(self.touch["reference_channel"])
         self.others = tuple(c for c in garment.channels() if c != self.reference)
         assert self.reference in garment.channels(), (
@@ -1610,12 +1625,7 @@ class TouchCalibration(Procedure):
             if len(plans) == 1:
                 self._fit()
                 return
-            # Drawn now, before the presentation, so a repeated one waits the same.
-            iti_s = self.session.rng.uniform(
-                float(self.touch["estimation_iti_min_s"]),
-                float(self.touch["estimation_iti_max_s"]),
-            )
-            self._present(plans[1:], iti_s, stopped_s)
+            self._present(plans[1:], float(self.touch["estimation_window_s"]), stopped_s)
 
         # The last stop anchors the first attempt only: one repeated after an interruption
         # waits the whole interval again from its own start, as a repeated wait did.

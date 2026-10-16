@@ -105,13 +105,18 @@ def real_time_settings(study1: dict, speed: float, scale_timeout: bool = True) -
     return {**study1, "choice": choice, "touch_calibration": touch}
 
 
-def demo_rests(study1: dict, rest_s: float) -> dict:
-    """`study1` with every rest between two stimuli set to `rest_s` (`demo.rest_s`; LOG
-    N7.F14b): the touch calibration's estimation run, and the pinprick and brush series."""
-    touch = {**study1["touch_calibration"],
-             "estimation_iti_min_s": rest_s, "estimation_iti_max_s": rest_s}
+def demo_rests(study1: dict, garment: str) -> dict:
+    """`study1` with a demonstration's rests (LOG N7.F14b, N7.F14e): `demo.rest_s` between
+    pinprick and brush applications, and on the mock garment `demo.estimation_window_mock_s`
+    for the touch calibration's estimation window. A worn garment keeps the study's window,
+    which covers the slowest ramp."""
+    demo = study1["demo"]
+    rest_s = float(demo["rest_s"])
     pinprick = {**study1["pinprick"], "isi_min_s": rest_s, "isi_max_s": rest_s}
     brush = {**study1["brush"], "isi_min_s": rest_s, "isi_max_s": rest_s}
+    touch = study1["touch_calibration"]
+    if not worn_garment(garment):
+        touch = {**touch, "estimation_window_s": float(demo["estimation_window_mock_s"])}
     return {**study1, "touch_calibration": touch, "pinprick": pinprick, "brush": brush}
 
 
@@ -216,7 +221,7 @@ def demo_config(loaded: Config, speed: float, garment: str) -> Config:
     # another demonstration.
     study_folder = str(resolved(loaded.hardware["data"]["folder"]))
     hardware = {**hardware, "data": {**hardware["data"], "study_folder": study_folder}}
-    study1 = demo_rests(real_time_settings(config.study1, speed), float(demo["rest_s"]))
+    study1 = demo_rests(real_time_settings(config.study1, speed), garment)
     # The template until the run begins: it has the code and every session number to check.
     design = {**study1["design"], "allocation_file": str(resolved(demo["allocation_file"]))}
     study1 = {**study1, "design": design}
