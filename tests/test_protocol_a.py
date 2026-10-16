@@ -310,21 +310,38 @@ def test_a_stop_before_delivery_repeats_the_same_application(rig):
     assert done[0].applications_total == len(rows)
 
 
-def test_a_resume_in_the_interval_restores_the_blank_screen(rig):
+def test_a_resume_in_the_interval_restores_please_wait(rig):
+    """The interval is longer than `cues.please_wait_min_s` (13-17 s), so it says so (LOG
+    N7.F14d), and a resume puts that back rather than leaving the stop screen up."""
     participant, experimenter = rig.participant, rig.experimenter
+    please_wait = participant.text["screens"]["please_wait"]
     protocol = _long(rig)
     done = _start(protocol)
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
     _answer(participant, 0)  # now in the interval
+    assert participant.message.text == please_wait
     participant.emergency_stop.emit()
     experimenter.resume_requested.emit()
-    assert participant.message.text == "", "blank, not the stop screen"
+    assert participant.message.text == please_wait, "not the stop screen"
     _drive(protocol, done)
 
 
-def test_the_interval_shows_the_next_application_counting_down_to_it(rig):
+def test_a_rest_no_longer_than_please_wait_min_s_is_blank(rig):
+    participant = rig.participant
+    threshold_s = rig.session.config.study1["cues"]["please_wait_min_s"]
+    participant.show_rest(threshold_s)
+    assert participant.message.text == ""
+    participant.show_rest(threshold_s + 0.1)
+    assert participant.message.text == participant.text["screens"]["please_wait"]
+
+
+def test_the_interval_shows_the_next_application_counting_down_to_it(app, loaded, tmp_path):
     """The experimenter prepares the next application during the interval (S, 16 Oct 2026;
     LOG N7.F14c). The one just rated is on the status line; its rating never is."""
+    # Long enough at the test's clock speed to be read while it runs: about a real second.
+    interval_s = CLOCK_SPEED
+    pinprick = {**loaded.study1["pinprick"], "isi_min_s": interval_s, "isi_max_s": interval_s}
+    rig = _make_rig(loaded, tmp_path, study1={**loaded.study1, "pinprick": pinprick})
     participant, experimenter = rig.participant, rig.experimenter
     config = rig.session.config
     protocol = _long(rig)
@@ -369,6 +386,7 @@ def test_the_interval_shows_the_next_application_counting_down_to_it(rig):
         _drive(protocol, done)
     finally:
         protocol.cancel()
+        rig.session.close()
 
 
 def test_a_resume_while_waiting_to_start_restores_the_standby_screen(rig):

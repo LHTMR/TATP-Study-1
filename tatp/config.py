@@ -155,6 +155,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("study1.yaml", "patterns.fixed_ct_pattern", str, None, None),
     ("study1.yaml", "cues.warning_lead_s", NUMBER, 0, None),
     ("study1.yaml", "cues.warning_duration_s", NUMBER, 0, None),
+    ("study1.yaml", "cues.please_wait_min_s", NUMBER, 0, None),
     ("hardware.yaml", "garment.driver", str, None, None),
     ("hardware.yaml", "garment.connect_timeout_s", NUMBER, 0, None),
     ("hardware.yaml", "garment.pressure_max_kpa", NUMBER, 0, None),

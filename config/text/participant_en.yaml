@@ -120,6 +120,9 @@ screens:
   standby: |-
     Rest for now.
     The experimenter will tell you what comes next.
+  # S's wording, 16 Oct 2026 (LOG N7.F14d). A rest between two stimuli longer than
+  # `cues.please_wait_min_s`, so the pause reads as meant rather than as a fault.
+  please_wait: Please wait.
   session_end: |-
     That is the end of today's visit.
     Thank you.

@@ -81,6 +81,8 @@ EMERGENCY_STOP_SCREEN = "emergency_stop"
 STOP_REHEARSAL_SCREEN = "stop_rehearsal"
 # The rest screen between parts (SPEC.md 10.5). A key in the participant text file.
 STANDBY_SCREEN = "standby"
+# A long rest between two stimuli (`show_rest`). A key in the participant text file.
+PLEASE_WAIT_SCREEN = "please_wait"
 # The participant text key whose two option labels name the two touches of a pair: the
 # comparison's "The first" / "The second", reused on the channel match (docs/LOG.md N7.F11c5).
 PAIR_LABELS = "comparison"
@@ -641,6 +643,7 @@ class ParticipantWindow(QWidget):
         responder_config = config.hardware["responder"]
         self._confirm_lockout_s = float(responder_config["repeat_confirm_lockout_s"])
         self._confirm_accepted_s: float | None = None
+        self._please_wait_min_s = float(config.study1["cues"]["please_wait_min_s"])
 
         self.message = _MessageScreen(responder)
         self.message.stop_colour = QColor(
@@ -754,6 +757,15 @@ class ParticipantWindow(QWidget):
         self.message.emphasised = False
         self.message.stop_symbol = None
         self._show(self.message)
+
+    def show_rest(self, seconds: float) -> None:
+        """A rest of `seconds` between two stimuli: "Please wait" when it is longer than
+        `cues.please_wait_min_s`, so a long pause reads as meant; a blank otherwise (S, 16 Oct
+        2026; docs/LOG.md N7.F14d)."""
+        if seconds > self._please_wait_min_s:
+            self.show_message(PLEASE_WAIT_SCREEN)
+        else:
+            self.show_blank()
 
     def show_level_adjustment(self, key: str) -> None:
         """`audio_setup.<key>`, with the two large buttons moving the noise (SPEC.md 10.7).

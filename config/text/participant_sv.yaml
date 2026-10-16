@@ -115,6 +115,9 @@ screens:
   standby: |-
     Vila så länge.
     Försöksledaren berättar vad som händer härnäst.
+  # S:s lydelse, 16 okt 2026 (LOG N7.F14d). Ett uppehåll mellan två stimuli längre än
+  # `cues.please_wait_min_s`, så att pausen ser avsiktlig ut och inte som ett fel.
+  please_wait: Vänta.
   session_end: |-
     Då är dagens besök slut.
     Tack.

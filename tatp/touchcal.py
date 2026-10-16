@@ -812,6 +812,8 @@ class EstimationPresentation(Trial):
     def start(self) -> None:
         clock = self.session.clock
         stopped_s = clock.elapsed_s() if self.stopped_s is None else self.stopped_s
+        # The rest since the last presentation, which the rating left blank (LOG N7.F14d).
+        self.participant.show_rest(clock.remaining_s(stopped_s, self.off_s))
         # From nothing, whatever an interrupted attempt or a restored garment left behind.
         self.session.garment.stop()
         levels = {} if self.plan.catch_trial else {self.channel: self.plan.pressure_kpa}

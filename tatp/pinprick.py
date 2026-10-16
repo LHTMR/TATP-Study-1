@@ -1099,7 +1099,7 @@ class _Series(Procedure):
 
         def begin() -> None:
             # Also what a resume lands on, so the stop screen does not outlast the stop.
-            self.participant.show_blank()
+            self.participant.show_rest(seconds)
             if received:
                 self.experimenter.set_status(received)
             # The application just rated is done: its prompt comes down, and the next one is
