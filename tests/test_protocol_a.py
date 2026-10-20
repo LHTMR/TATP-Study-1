@@ -344,6 +344,20 @@ def test_a_resume_in_the_interval_restores_please_wait(app, loaded, tmp_path):
     rig.session.close()
 
 
+def test_a_participant_awaited_too_long_is_warned_of_and_logged(rig):
+    """SPEC.md 8.3: warned and logged, never auto-advanced. Through the rig's own connection,
+    so a broken one fails here (spec review of N7.F17e; CLAUDE.md engineering lesson 1)."""
+    experimenter = rig.experimenter
+    experimenter.set_no_response_s(0.0)
+    experimenter.set_status(experimenter.text["instructions"]["await_participant"])
+    experimenter.refresh()
+    assert experimenter._no_response_shown is not None
+    (row,) = [r for r in _rows(rig.session, "log") if r["event"] == "no_response"]
+    assert row["severity"] == "warning"
+    experimenter.refresh()
+    assert _events(rig.session).count("no_response") == 1, "logged once, not every refresh"
+
+
 def test_a_rest_no_longer_than_please_wait_min_s_is_blank(rig):
     participant = rig.participant
     threshold_s = rig.session.config.study1["cues"]["please_wait_min_s"]

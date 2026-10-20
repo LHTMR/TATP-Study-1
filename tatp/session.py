@@ -69,6 +69,9 @@ PHASES = (
 # The phases in which the garment delivers the condition's own touch. The experimenter view
 # carries no per-channel pressure during them (SPEC.md 16, docs/LOG.md N7.D1).
 CONDITION_PHASES = ("intervention", "rekindle")
+# The session key `rating_cue_at`: the pain scale is cued at the experimenter's delivery press
+# (LOG N7.F17a). A file without the key cued it 9 s after the stimulus.
+RATING_CUE_AT_DELIVERY_PRESS = "delivery_press"
 # What the experimenter's countdown can be counting down to (`Session.set_upcoming`).
 UPCOMING_KINDS = ("block", "phase", "rekindle")
 
@@ -794,6 +797,10 @@ class Session:
             "slope_prior_vas_per_log10": self.config.study1["pinprick"][
                 "slope_prior_vas_per_log10"
             ],
+            # What `rating_cue_iso` means in this file, so it is never read the old way
+            # (CLAUDE.md engineering lesson 10): absent before 20 Oct 2026, when it was 9 s
+            # after the stimulus.
+            "rating_cue_at": RATING_CUE_AT_DELIVERY_PRESS,
             "room_temperature_c": room_temperature_c,
             "relative_humidity_pct": relative_humidity_pct,
             # SPEC.md 1.2: the questionnaires are in REDCap, and the software records only

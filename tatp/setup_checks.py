@@ -86,8 +86,9 @@ class NoiseAdjustment(Trial):
     is logged, as for the pressure adjustment (SPEC.md 10.3). Finishes with the level set.
 
     The masking step can instead be finished by `report_still_audible`, with None: the
-    participant has said they can still hear the garment, and the experimenter's Next step,
-    which is the procedure's (`MaskingCheck`), reports it (SPEC.md 10.7).
+    participant has said they can still hear the garment, and the experimenter reports it
+    with "They can still hear it", the procedure's other answer (`MaskingCheck`; SPEC.md
+    10.7). Not Next step, which never means "no" (review of N7.F16).
     """
 
     def __init__(self, session, participant, experimenter, screen_key: str):
@@ -251,7 +252,7 @@ class MaskingCheck(Procedure):
         if (not isinstance(self._trial, NoiseAdjustment) or self._child is not None
                 or self.rig.interruptions.active is not None):
             return
-        self.session.log("still_audible_reported", origin="experimenter")
+        # Logged once, as `masking_reported_audible` (spec review of N7.F17e: a second row).
         self._trial.report_still_audible()
 
     def _masked(self, level_dbfs: float | None) -> None:

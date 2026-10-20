@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from tatp import config as cfg
+from tatp.session import RATING_CUE_AT_DELIVERY_PRESS
 from tools import validate_session as vs
 
 
@@ -210,7 +211,8 @@ def _timed(loaded, rating_cue_ms: int, delivered_ms: int = 100) -> dict:
     ]
     speed = str(vs.SLOW_CLOCK_SPEED)
     return {vs.TIMING: _run(loaded, vs.TIMING, rows={"pinprick": rows},
-                            session={"clock_speed": speed})}
+                            session={"clock_speed": speed,
+                                     "rating_cue_at": RATING_CUE_AT_DELIVERY_PRESS})}
 
 
 def test_the_scale_goes_up_at_the_press_judged_in_session_seconds(loaded):

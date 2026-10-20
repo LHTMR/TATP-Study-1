@@ -1267,8 +1267,9 @@ class _Series(Procedure):
         status = "discarded" if repeats else "discarded_not_repeated"
         self.experimenter.set_status(self.experimenter.text["status"][status])
         self.experimenter.refresh()
-        # The interval restarts in full, so the repeat is as far from the discarded
-        # application as any application is from the one before it.
+        # A fresh interval, timed from the discarded application's press as every interval is
+        # (SPEC.md 8.3; LOG N7.F17a), so the repeat is as far from the stimulus actually given
+        # as any application is from the one before it -- not from the discard.
         self._wait_then_next()
 
 

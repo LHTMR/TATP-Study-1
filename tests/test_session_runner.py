@@ -67,6 +67,10 @@ def compressed_schedule(loaded: cfg.Config) -> dict:
     # (LOG N7.F17a) the protocols no longer make every step late, and whether this one was came
     # down to the machine's load.
     schedule["validation"]["due_alert_lead_s"] = 120.0
+    # And an overdue margin of 1.5 real seconds at CLOCK_SPEED: at 60 s it was 150 ms, which
+    # the parallel gate's load could put between a block falling due and the simulated go, so a
+    # prompt launch sometimes sounded overdue as well. The overdue alert has its own test.
+    schedule["validation"]["overdue_alert_margin_s"] = 600.0
     return schedule
 
 
@@ -471,7 +475,6 @@ def test_every_scheduled_step_is_alerted_and_every_alert_logged(finished):
     # due one, at once) or very late (the overdue one alone) -- never a burst.
     for what in ("block 1", "block 2", "block 3", "block 4", "rekindle", "intervention"):
         assert sum(alert.startswith(what + " ") for alert in alerts) == 1, what
-    assert "block 1 overdue" in alerts
 
 
 def test_the_rekindle_heat_end_is_alerted_and_the_next_block_is_not_delayed(finished):

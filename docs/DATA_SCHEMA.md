@@ -87,6 +87,7 @@ written, with an empty value — an absent row and an empty value must not be co
 | `filament_calibration_date` | - | Latest weighing date in `filaments.yaml`; empty if unweighed |
 | `filaments_measured` | - | `true` when every listed filament has a measured force |
 | `slope_prior_vas_per_log10` | VAS·log₁₀⁻¹ | The fixed slope used by the estimator (§8.2) |
+| `rating_cue_at` | - | When `rating_cue_iso` is in the `pinprick` and `brush` tables: `delivery_press`, the experimenter's press saying the stimulus was applied (§8.3, docs/LOG.md N7.F17a). **Absent in files written before 20 Oct 2026**, whose rating cue came `pinprick.rating_cue_delay_s` (9 s) after the stimulus, and whose `rt_s` is measured from that later cue |
 | `room_temperature_c` | °C | Optional (§8.1) |
 | `relative_humidity_pct` | % | Optional (§8.1) |
 | `redcap_session_form_completed` | - | `true` when the experimenter ticked that the REDCap session form was completed, in the launcher or with `--redcap-form-completed` (§1.2). Not checked against REDCap |
@@ -173,12 +174,18 @@ screen before it accepts one; and `confirm_carried_over`, a play-button press wi
 `responder.repeat_confirm_lockout_s` of the last one the software accepted, which is ignored
 as a double tap or a bounce rather than taken as the new screen's (docs/LOG.md N7.U15).
 
+A participant awaited for longer than `vas.no_response_warning_s` is logged once per wait as
+`no_response` (`severity` warning, `detail` the seconds waited, real time), and warned of on
+the experimenter screen; the session never moves on for it (§8.3). The wait does not run
+through a stop or a pause, and starts again at the resume (docs/LOG.md N7.F17e).
+
 A demonstration (`demo` true in the session file, docs/LOG.md N7.D23) logs who presses:
 `demo_simulation`, `detail` `participant: <mode>` or `experimenter: <mode>` (`off` a person,
 `watch` or `fast` a simulation), at the start and at every change, so each response's origin
 can be read back; and each Skip, `demo_wait_skipped`, `detail` the session seconds
-skipped -- `t_session_s` jumps by that much there. An Auto-run is `demo_auto_run`, `detail`
-the stage id it runs fast; a Fast-forward is `demo_fast_forward`, `detail` the phase it runs
+skipped -- `t_session_s` jumps by that much there. Auto-run is `demo_auto_run`, `detail`
+`on` when switched on and `off` when switched off (docs/LOG.md N7.F17d; before 20 Oct 2026 it
+ran one stage, and `detail` was that stage's id); a Fast-forward is `demo_fast_forward`, `detail` the phase it runs
 to, and skips every timed wait on the way, each a `demo_wait_skipped` with no lead left
 (docs/LOG.md N7.F16j).
 

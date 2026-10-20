@@ -100,6 +100,7 @@ from tatp.resume import (
     STAGE_COMPLETED,  # noqa: E402
     VAS_TRAINING_CONFIRMED,  # noqa: E402
 )
+from tatp.session import RATING_CUE_AT_DELIVERY_PRESS  # noqa: E402
 from tatp.trials import VAS_PRACTICE_RATING  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
 from tatp.units import MS_PER_S, S_PER_MIN  # noqa: E402
@@ -916,6 +917,10 @@ def check_rating_cue_interval(runs):
     expected_s = 0.0
     rated = [row for row in run.rows.get("pinprick", []) if row["rating_cue_iso"]]
     failures = []
+    # The file says which meaning its `rating_cue_iso` has (docs/DATA_SCHEMA.md).
+    if run.session.get("rating_cue_at") != RATING_CUE_AT_DELIVERY_PRESS:
+        failures.append(f"rating_cue_at is {run.session.get('rating_cue_at')!r}, not "
+                        f"{RATING_CUE_AT_DELIVERY_PRESS!r}")
     early = [row for row in rated
              if _session_s(run, row["cue_onset_iso"], row["stimulus_delivered_iso"])
              < lead_s - TIMING_TOLERANCE_S]

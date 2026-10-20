@@ -1,12 +1,12 @@
 # STATUS
 
-**Last updated:** 20 October 2026, late (on the lab PC).
+**Last updated:** 21 October 2026 (on the lab PC).
 **Milestone:** 6 (pilotable), in progress. **Priority: testing the code in demo mode** (S,
 20 Oct). The real valve garment is not built yet, so everything that needs it is parked.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
-back (`CLAUDE.md`, Committing). `pilot/ux-review` (S's 20 Oct demo test, N7.F16a–n) is merged
-into `main` and deleted. **`pilot/ux-batch-2`** (S's second 20 Oct message, N7.F17a–e) is in
-review: see "Where things stand". Neither is pushed. **`pilot/swedish-docs` is parked
+back (`CLAUDE.md`, Committing). `pilot/ux-review` (N7.F16a–n) and `pilot/ux-batch-2` (N7.F17a–e,
+`/code-review high` and spec-review done, their findings fixed: N7.F17e (21), (22)) are merged
+into `main` and deleted; neither is pushed. **`pilot/swedish-docs` is parked
 on purpose** (S, 16 Oct): Swedish SOP and setup guide, reviewed and pushed, with `main` merged
 in, but both SOPs (`SOP.md` too) predate the 15 Oct and 16 Oct screens, so they wait for the
 next SOP update. `main` is pushed.
@@ -90,14 +90,13 @@ validator checks, 224 screens), in sessions and demonstrations alike:
   at the start of pre-sensitisation; "This rating is not recorded".
 - 78 experimenter screens and 4 participant screens re-approved (listed in the commit).
 
-**S's second message of 20 Oct, on `pilot/ux-batch-2`** (N7.F17a–e; `make check` passing;
-`/code-review high` and spec-review next, then merge):
+**S's second message of 20 Oct is in `main`** (N7.F17a–e, reviewed, findings fixed):
 - **The scale comes at the delivery press**; the 13–17 s interval runs from that press and its
   countdown tells the experimenter when the next may be applied (N7.F17a). `rating_cue_delay_s`
-  is gone.
-- The zone diagram back to 200 px, the channel display beside it (N7.F17b); the simulated
-  participant holds, settles and taps, judging only what it feels (N7.F17c); demo switches for
-  who presses at any time, Auto-run, "Demo vs session…" (N7.F17d).
+  is gone; the session file's new `rating_cue_at` says which meaning `rating_cue_iso` has.
+- The zone diagram back to 200 px, the channel display beside it (N7.F17b); the watched
+  simulated participant holds, settles and taps, judging only what it feels (N7.F17c); demo
+  switches for who presses at any time, and an Auto-run toggle (N7.F17d).
 - The build's own walk-through list (N7.F17e): Next step never means "no" (own buttons for the
   other answer); only answers that will be taken are offered; abort pauses first and ends on the
   end screen; disconnect asks; the note's "saved at" goes; Enter in the re-run dialog; short
@@ -114,11 +113,6 @@ validator checks, 224 screens), in sessions and demonstrations alike:
 ---
 
 ## Next steps
-
-### 0. Finish `pilot/ux-batch-2`
-
-Review (`/code-review high`, spec-review), fix, `make check`, merge `--no-ff`, `make check` on
-`main`, delete the branch.
 
 ### 1. Test the code in demo mode — the priority (S, 20 Oct; LOG N7.F15a)
 
@@ -150,7 +144,10 @@ fix it on a `pilot/` branch.
    timeline; "Get ready" then "Now: apply" then Space for each filament and brush stroke; the
    R400 behind Notepad; the remote's buttons lighting in the demo panel; "1 of 3" in the
    preference selection; the skin-marking step.
-9. **On S's MacBook:** the participant window stepping aside for a dialog (N7.F12e5). The
+9. **Since N7.F17:** the scale straight after the press, and the countdown to the next; the
+   alternative buttons (masking, stop rehearsal, fallbacks); abort's end screen; the demo's
+   violet notes on how it differs, where they apply; the watched participant's holds and taps.
+10. **On S's MacBook:** the participant window stepping aside for a dialog (N7.F12e5). The
    rest of the MacBook hand check passed on 16 Oct.
 
 ### 2. Lab checks that need lab hardware but not the real sleeve (after section 1)
