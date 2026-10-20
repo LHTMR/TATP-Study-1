@@ -44,6 +44,7 @@ No literals (SPEC.md 4.2): every interval, force and threshold comes from `confi
 
 from __future__ import annotations
 
+import copy
 import math
 import random
 import statistics
@@ -57,6 +58,7 @@ from tatp.procedure import Procedure, Rig
 from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
+from tatp.units import MS_PER_S
 
 # The `vas` block this protocol presents. A config key, not wording.
 PAIN_SCALE = "pain"
@@ -89,6 +91,10 @@ FIT_PREVIEW_KEY = "f40"
 # Keys in the experimenter text's `instructions`, not wording.
 BETWEEN_APPLICATIONS = "between_applications"
 BETWEEN_DISCARDED = "between_applications_discarded"
+NEXT_FILAMENT = "next_filament"
+NEXT_BRUSH = "next_brush"
+RECEIVED_FILAMENT = "received_filament"
+RECEIVED_BRUSH = "received_brush"
 READY_LONG = "ready_long"
 READY_LONG_FIRST = "ready_long_first"
 READY_SHORT = "ready_short"
@@ -978,6 +984,22 @@ class _Series(Procedure):
         self._discardable: tuple[str, str, int] | None = None
         # What was discardable when a re-calibration took this protocol's place.
         self._held_discardable: tuple[str, str, int] | None = None
+        # Through the interval: the application it leads to, shown so the experimenter can
+        # prepare it, counting down to the end of the interval (LOG N7.F14c). Checked against
+        # the one actually given, which is decided only when the interval ends.
+        self._expected: Application | BrushApplication | None = None
+        self._interval_start_s = 0.0
+        self._interval_s = 0.0
+        # The application is due a warning cue's lead after the interval ends: that is what
+        # the countdown counts to. Redrawn only when its whole second changes.
+        self._warning_lead_s = float(self.session.config.study1["cues"]["warning_lead_s"])
+        self._shown_seconds: int | None = None
+        self._countdown = QTimer(self)
+        screens = self.session.config.hardware["screens"]
+        self._countdown.setInterval(
+            round(float(screens["experimenter_refresh_interval_s"]) * MS_PER_S)
+        )
+        self._countdown.timeout.connect(self._show_expected)
 
     def connect_actions(self) -> None:
         self.experimenter.discard_requested.connect(self._on_discard)
@@ -1070,27 +1092,78 @@ class _Series(Procedure):
     def interval(self, table: str, trial: _RatedTrial) -> None:
         """The jittered wait after an application, during which it may be discarded."""
         self._set_discardable((table, trial.cue_onset_iso, trial.trial_index))
-        # The instruction says the response is in, so the status need not.
-        self.experimenter.set_status("")
-        self._wait_then_next()
+        self._wait_then_next(received=self._received(trial))
 
-    def _wait_then_next(self, discarded: bool = False) -> None:
-        """`discarded`: the gap follows a discard, which the status reports, rather than a
-        rating, so the line says nothing about a response received."""
+    def _wait_then_next(self, received: str = "") -> None:
+        """`received`: the status line naming the application just rated -- never its rating,
+        which the experimenter does not see. Empty after a discard, which the status reports.
+        """
         seconds = jittered_isi_s(self.session.rng, self.isi_min_s, self.isi_max_s)
         self.session.log("interval", detail=f"{seconds:.2f} s")
 
         def begin() -> None:
             # Also what a resume lands on, so the stop screen does not outlast the stop.
-            self.participant.show_blank()
-            # The application just rated is done: its prompt and site come down, rather than
-            # reading as still to do through the gap (15 Oct 2026 pilot review).
-            self.instruct(BETWEEN_DISCARDED if discarded else BETWEEN_APPLICATIONS)
+            self.participant.show_rest(seconds)
+            if received:
+                self.experimenter.set_status(received)
+            # The application just rated is done: its prompt comes down, and the next one is
+            # shown instead, so the experimenter can prepare it (S, 16 Oct 2026; LOG N7.F14c).
+            # Worked out again on every start of the interval: a discard changes it.
+            self._expected = self._upcoming()
+            self._interval_start_s = self.session.clock.elapsed_s()
+            self._interval_s = seconds
+            if self._expected is None:
+                self.instruct(BETWEEN_APPLICATIONS if received else BETWEEN_DISCARDED)
+            else:
+                self._shown_seconds = None
+                self._show_expected()
+                self._countdown.start()
             self._after(seconds, self._advance)
 
         self.step(begin)
 
+    def _show_expected(self) -> None:
+        due_s = self._interval_s + self._warning_lead_s
+        remaining_s = self.session.clock.remaining_s(self._interval_start_s, due_s)
+        seconds = max(0, math.ceil(remaining_s))
+        if seconds == self._shown_seconds:
+            return
+        self._shown_seconds = seconds
+        expected = self._expected
+        if isinstance(expected, BrushApplication):
+            self.instruct(NEXT_BRUSH, seconds=seconds, site=expected.site_index,
+                          region=self._region_name())
+            return
+        filament = self.filaments[ladder_index(self.filaments, expected.filament_label_g)]
+        self.instruct(NEXT_FILAMENT, seconds=seconds, site=expected.site_index,
+                      region=self._region_name(), filament=expected.filament_label_g,
+                      force_mn=filament.force_nominal_mn)
+
+    def _received(self, trial: _RatedTrial) -> str:
+        if isinstance(trial, BrushTrial):
+            return self.instruction_text(RECEIVED_BRUSH, site=trial.application.site_index)
+        return self.instruction_text(RECEIVED_FILAMENT, filament=trial.applied_label_g,
+                                     site=trial.application.site_index)
+
+    def _halt(self) -> None:
+        self._countdown.stop()
+        super()._halt()
+
+    def _given(self, application: Application | BrushApplication | None) -> None:
+        """The application about to be given -- None: the series ends -- was the one the
+        interval showed, if it showed one: the experimenter prepared it."""
+        expected, self._expected = self._expected, None
+        assert expected is None or expected == application, (
+            f"the interval showed {expected}, but {application} was decided"
+        )
+
+    def _upcoming(self) -> Application | BrushApplication | None:
+        """The next application, or None if the series ends, worked out without deciding,
+        logging or drawing anything."""
+        raise NotImplementedError
+
     def _advance(self) -> None:
+        self._countdown.stop()
         self._set_discardable(None)
         self._next()
 
@@ -1135,7 +1208,7 @@ class _Series(Procedure):
         self.experimenter.refresh()
         # The interval restarts in full, so the repeat is as far from the discarded
         # application as any application is from the one before it.
-        self._wait_then_next(discarded=True)
+        self._wait_then_next()
 
 
 @dataclass(frozen=True)
@@ -1273,6 +1346,7 @@ class LongProtocol(_Series):
             state.bar_everything()
         planned = state.next(ceiling)
         if planned is None:
+            self._given(None)
             self._conclude()
             return
         if state.measuring and state.plan is not self._logged_plan:
@@ -1297,21 +1371,38 @@ class LongProtocol(_Series):
             )
         self.rotation.take(site)
         self._last = (planned, site)
-        application = Application(
-            protocol=LONG,
-            region=self.region,
-            trial_index=self.applications + 1,
-            purpose=planned.purpose,
-            filament_label_g=self.filaments[index].label_g,
-            site_index=site,
-            run_index=self.run_index,
-        )
+        application = self._application(planned.purpose, index, site)
+        self._given(application)
         self.apply(
             lambda: PinprickTrial(
                 self.session, self.participant, self.experimenter, application
             ),
             self._rated,
         )
+
+    def _application(self, purpose: str, index: int, site: int) -> Application:
+        return Application(
+            protocol=LONG,
+            region=self.region,
+            trial_index=self.applications + 1,
+            purpose=purpose,
+            filament_label_g=self.filaments[index].label_g,
+            site_index=site,
+            run_index=self.run_index,
+        )
+
+    def _upcoming(self) -> Application | None:
+        # On a copy of the search: `next` may bracket the crossing, which draws the measurement
+        # order from the state's RNG, and the copy draws the same order the real step will.
+        ceiling = self.cap.ceiling(self.region, self.rotation.n_sites)
+        if ceiling == 0:
+            return None
+        planned = copy.deepcopy(self.state).next(ceiling)
+        if planned is None:
+            return None
+        placed = place(self.cap, self.rotation, self.region, planned.index)
+        assert placed is not None, "a ceiling of zero ends the run before placing"
+        return self._application(planned.purpose, *placed)
 
     def _rated(self, trial: PinprickTrial, response) -> None:
         planned, site = self._last
@@ -1538,6 +1629,7 @@ class _RatingSeries(_Series):
 
     def _next(self) -> None:
         if len(self.ratings) == self.n_trials:
+            self._given(None)
             self.finish(
                 RatingSeriesResult(
                     region=self.region,
@@ -1566,6 +1658,15 @@ class _RatingSeries(_Series):
         raise NotImplementedError
 
     def _apply_next(self) -> None:
+        raise NotImplementedError
+
+    def _upcoming(self) -> Application | BrushApplication | None:
+        if len(self.ratings) == self.n_trials:
+            return None
+        return self._planned()
+
+    def _planned(self) -> Application | BrushApplication | None:
+        """The next application if one is still to come, None if none can be given."""
         raise NotImplementedError
 
 
@@ -1616,23 +1717,31 @@ class ShortProtocol(_RatingSeries):
         return self.filament_label_g
 
     def _apply_next(self) -> None:
-        placed = place(self.cap, self.rotation, self.region, self.index)
-        if placed is None:
+        application = self._planned()
+        if application is None:
             # Not even the lightest filament may be given: the series stops with what it has.
             self.session.log("cap_bars_every_filament", severity="warning", detail=self.region)
             self.n_trials = len(self.ratings)
             self._next()
             return
-        index, site = placed
-        if index != self.index:
+        if application.filament_label_g != self.filament_label_g:
             self.session.log(
                 "cap_lowered", severity="warning",
                 detail=f"asked {self.filament_label_g} g, capped at every site; "
-                f"{self.filaments[index].label_g} g instead",
+                f"{application.filament_label_g} g instead",
             )
-        self.rotation.take(site)
-        self._site = site
-        application = Application(
+        self.rotation.take(application.site_index)
+        self._site = application.site_index
+        self._given(application)
+        self.apply(
+            lambda: PinprickTrial(
+                self.session, self.participant, self.experimenter, application
+            ),
+            self._rated,
+        )
+
+    def _application(self, index: int, site: int) -> Application:
+        return Application(
             protocol=SHORT,
             region=self.region,
             trial_index=self.applications + 1,
@@ -1640,12 +1749,10 @@ class ShortProtocol(_RatingSeries):
             filament_label_g=self.filaments[index].label_g,
             site_index=site,
         )
-        self.apply(
-            lambda: PinprickTrial(
-                self.session, self.participant, self.experimenter, application
-            ),
-            self._rated,
-        )
+
+    def _planned(self) -> Application | None:
+        placed = place(self.cap, self.rotation, self.region, self.index)
+        return None if placed is None else self._application(*placed)
 
     def _rated(self, trial: PinprickTrial, response) -> None:
         applied = ladder_index(self.filaments, trial.applied_label_g)
@@ -1678,10 +1785,13 @@ class BrushProtocol(_RatingSeries):
     def rating_scale(self) -> str:
         return self.session.config.study1["brush"]["rating_scale"]
 
+    def _planned(self) -> BrushApplication:
+        return BrushApplication(self.region, self.applications + 1, self.rotation.order()[0])
+
     def _apply_next(self) -> None:
-        site = self.rotation.order()[0]
-        self.rotation.take(site)
-        application = BrushApplication(self.region, self.applications + 1, site)
+        application = self._planned()
+        self.rotation.take(application.site_index)
+        self._given(application)
         self.apply(
             lambda: BrushTrial(self.session, self.participant, self.experimenter, application),
             self._on_rated,

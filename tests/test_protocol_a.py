@@ -201,6 +201,9 @@ def test_the_pain_training_comes_before_the_first_application(app, loaded, tmp_p
         participant = made.participant
         protocol = _long(made)
         done = _start(protocol)
+        # The session's first practice is introduced first (LOG N7.F14a).
+        _spin(lambda: participant.message.text == participant.text["screens"]["practice_intro"])
+        participant.message_confirmed.emit()
         _spin(lambda: participant.stack.currentWidget() is participant.vas)
         vas = participant.vas
         assert vas.explaining and vas.scale == "pain" and not vas.practising
@@ -307,16 +310,84 @@ def test_a_stop_before_delivery_repeats_the_same_application(rig):
     assert done[0].applications_total == len(rows)
 
 
-def test_a_resume_in_the_interval_restores_the_blank_screen(rig):
+def test_a_resume_in_the_interval_restores_please_wait(rig):
+    """The interval is longer than `cues.please_wait_min_s` (13-17 s), so it says so (LOG
+    N7.F14d), and a resume puts that back rather than leaving the stop screen up."""
     participant, experimenter = rig.participant, rig.experimenter
+    please_wait = participant.text["screens"]["please_wait"]
     protocol = _long(rig)
     done = _start(protocol)
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
     _answer(participant, 0)  # now in the interval
+    assert participant.message.text == please_wait
     participant.emergency_stop.emit()
     experimenter.resume_requested.emit()
-    assert participant.message.text == "", "blank, not the stop screen"
+    assert participant.message.text == please_wait, "not the stop screen"
     _drive(protocol, done)
+
+
+def test_a_rest_no_longer_than_please_wait_min_s_is_blank(rig):
+    participant = rig.participant
+    threshold_s = rig.session.config.study1["cues"]["please_wait_min_s"]
+    participant.show_rest(threshold_s)
+    assert participant.message.text == ""
+    participant.show_rest(threshold_s + 0.1)
+    assert participant.message.text == participant.text["screens"]["please_wait"]
+
+
+def test_the_interval_shows_the_next_application_counting_down_to_it(app, loaded, tmp_path):
+    """The experimenter prepares the next application during the interval (S, 16 Oct 2026;
+    LOG N7.F14c). The one just rated is on the status line; its rating never is."""
+    # Long enough at the test's clock speed to be read while it runs: about a real second.
+    interval_s = CLOCK_SPEED
+    pinprick = {**loaded.study1["pinprick"], "isi_min_s": interval_s, "isi_max_s": interval_s}
+    rig = _make_rig(loaded, tmp_path, study1={**loaded.study1, "pinprick": pinprick})
+    participant, experimenter = rig.participant, rig.experimenter
+    config = rig.session.config
+    protocol = _long(rig)
+    done = _start(protocol)
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    first = protocol._trial
+    _answer(participant, 0)
+    expected = protocol._expected
+    assert expected is not None and expected.trial_index == first.trial_index + 1
+    force_mn = next(f["force_nominal_mn"] for f in config.filaments["filaments"]
+                    if f["label_g"] == expected.filament_label_g)
+
+    def shown(seconds: int) -> str:
+        return cfg.instruction(
+            config, "next_filament", seconds=seconds, site=expected.site_index,
+            region=experimenter.text["terms"]["regions"][expected.region],
+            filament=expected.filament_label_g, force_mn=force_mn,
+        )
+
+    def remaining() -> int:
+        # To when the application is due: the interval, then the warning cue's lead.
+        due_s = protocol._interval_s + config.study1["cues"]["warning_lead_s"]
+        return math.ceil(rig.session.clock.remaining_s(protocol._interval_start_s, due_s))
+
+    def redrawn() -> tuple[int, str]:
+        # The test clock runs fast, so a second can pass during the redraw itself.
+        before = remaining()
+        protocol._show_expected()
+        return before, experimenter.instruction.text()
+
+    try:
+        before, text = redrawn()
+        assert text in (shown(before), shown(remaining())), text
+        assert experimenter.status.text() == cfg.instruction(
+            config, "received_filament", filament=first.applied_label_g,
+            site=first.application.site_index,
+        )
+        rig.session.clock.skip(1.0)
+        after, text = redrawn()
+        assert after < before and text in (shown(after), shown(remaining())), "it counts down"
+        _spin(lambda: protocol._trial is not None and protocol._trial is not first)
+        assert protocol._trial.application == expected, "the one shown is the one given"
+        _drive(protocol, done)
+    finally:
+        protocol.cancel()
+        rig.session.close()
 
 
 def test_a_resume_while_waiting_to_start_restores_the_standby_screen(rig):

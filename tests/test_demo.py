@@ -148,6 +148,22 @@ def test_a_demonstration_on_a_real_garment_runs_at_real_time_only(loaded):
     assert demo_config(loaded, 2.0, DEMO_GARMENT).hardware["garment"]["driver"] == DEMO_GARMENT
 
 
+def test_a_demonstration_shortens_its_rests(loaded):
+    """S, 16 Oct 2026 (LOG N7.F14b, N7.F14e): the pinprick and brush rests, and the touch
+    estimation window on the mock garment only."""
+    demo = loaded.study1["demo"]
+    study1 = demo_config(loaded, REAL_TIME_SPEED, DEMO_GARMENT).study1
+    for series in ("pinprick", "brush"):
+        assert study1[series]["isi_min_s"] == study1[series]["isi_max_s"] == demo["rest_s"]
+    window_key = "estimation_window_s"
+    assert study1["touch_calibration"][window_key] == demo["estimation_window_mock_s"]
+    worn = demo_config(loaded, REAL_TIME_SPEED, "arduino_mosfet").study1
+    assert worn["touch_calibration"][window_key] == (
+        loaded.study1["touch_calibration"][window_key]
+    ), "a worn garment keeps the study's window, which covers the slowest ramp"
+    assert loaded.study1["pinprick"]["isi_min_s"] != demo["rest_s"], "the study's is untouched"
+
+
 def test_worn_is_declared_by_the_driver():
     """Not read from the name: a new driver is worn unless it says otherwise."""
     assert worn_garment("arduino_mosfet") and not worn_garment(DEMO_GARMENT)

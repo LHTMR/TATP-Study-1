@@ -98,13 +98,23 @@ instructions:
   # One stroke of about 2 cm, never repeated: repetition raises pain (docs/research/RB2).
   # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced
   apply_brush: 'Now: brush the {region} zone at site {site}, one single stroke of about 2 cm.'
-  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced. The jittered gap after a
-  # rating, so the last application's prompt is not left up as if still to do. Never names
-  # the next filament.
-  between_applications: 'Response received. Wait: the next application will appear here.'
+  # DRAFT (LOG N7.F11b8, N7.F14c): written by the build, not ethics-sourced. The jittered gap
+  # after a rating when no application follows it: the series is over. The response is
+  # reported on the status line (`received_*`).
+  between_applications: 'Wait: the next step will appear here.'
   # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced. The same gap after a
-  # discard, which the status reports, whether a repeat follows or not.
+  # discard, which the status reports, when no application follows it.
   between_applications_discarded: 'Discarded. Wait: the next step will appear here.'
+  # DRAFT (LOG N7.F14c): written by the build, not ethics-sourced; "Deliver in" is S's. The
+  # gap before an application, so the experimenter can prepare it (S, 16 Oct 2026): what
+  # comes next, counting down in whole seconds to its warning cue.
+  next_filament: 'Next: the {filament} g filament ({force_mn} mN) at site {site}, {region} zone. Deliver in {seconds} s.'
+  next_brush: 'Next: the brush at site {site}, {region} zone. Deliver in {seconds} s.'
+  # DRAFT (LOG N7.F14c): written by the build, not ethics-sourced. The status line through
+  # that gap: the application just rated, never its rating (Bilaga 3a: the experimenter does
+  # not see the participant's ratings).
+  received_filament: 'Response received: {filament} g at site {site}.'
+  received_brush: 'Response received: brush at site {site}.'
   # DRAFT (LOG N7.F11b11): written by the build, not ethics-sourced. {step} is
   # mapping.step_size_mm.
   mapping_path: 'Path {path}: move the filament {step} mm inward on each tick. When the participant reports a change, press {controls[proceed]} and mark the border on the skin.'
@@ -122,6 +132,10 @@ instructions:
   welcome: >-
     The participant reads the welcome and presses {confirm}. The stop rehearsal follows at
     once: the touch starts and they are asked to press the stop button.
+  # DRAFT (LOG N7.F14a): written by the build, not ethics-sourced
+  practice_intro: >-
+    The participant is reading that the rating-scale practice comes next, and presses
+    {confirm} to start it.
   # DRAFT (LOG N7.F11b9): written by the build, not ethics-sourced. {minutes} is the
   # sensitisation window's length (schedule.yaml), inside `say.heat`.
   thermode_start: >-

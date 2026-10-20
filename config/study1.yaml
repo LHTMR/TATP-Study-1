@@ -40,6 +40,14 @@ demo:
   participant_reaction_s: 1.0        # from a new screen to the first press on it
   participant_press_interval_s: 0.2  # between presses, so the marker is seen to move
   experimenter_reaction_s: 1.5       # from a new instruction to pressing Next step
+  # The rest between two pinprick or brush applications in a demonstration, in session
+  # seconds, in place of the study's (S, 16 Oct 2026; LOG N7.F14b): a demonstration shows
+  # what happens, not the waiting.
+  rest_s: 0.5
+  # The touch calibration's estimation window in a demonstration on the mock garment (S, 16
+  # Oct 2026; LOG N7.F14e). Shorter than the slowest ramp: nothing a demonstration records
+  # is data. A demonstration on a worn garment keeps the study's window.
+  estimation_window_mock_s: 1.5
   # What the garment is commanded to do, channel by channel, in the Demo controls window
   # (tatp/ui/garment_display.py; N7.F12f): read this often, and a channel that changes is lit
   # up and fades back over garment_highlight_s, so a watcher's eye is drawn to it.
@@ -52,8 +60,9 @@ fit_preview:
   # to re-run. OFF BY DEFAULT and intended for piloting.
   #
   # Turning it on shows the experimenter the participant's ratings. That breaks Bilaga 1 3.3,
-  # contradicts Bilaga 3a ("Försöksledaren ser inte dina skattningar") and makes the welcome
-  # screen's own sentence untrue -- see SPEC.md 11.1 before enabling it for real sessions.
+  # contradicts Bilaga 3a ("Försöksledaren ser inte dina skattningar") and makes
+  # `screens.practice_intro`'s own sentence untrue -- see SPEC.md 11.1 before enabling it for
+  # real sessions.
   # Blinding to condition is unaffected; the estimation runs do not differ between conditions.
   enabled: false
   procedures: [f40, touch_calibration]  # which adaptive procedures offer the preview
@@ -205,8 +214,14 @@ touch_calibration:
   estimation_settle_s: 3.0           # [R] R32. Stimulus on this long before the intensity VAS
                                      # appears, and it stays on until confirm: the question is
                                      # in the present tense. The comparison hold's 3 s.
-  estimation_iti_min_s: 8.0          # [R] R32. Stimulus off to the next cue, jittered uniformly
-  estimation_iti_max_s: 12.0         # between these, drawn from the session RNG
+  estimation_window_s: 4.5           # Fixed: stimulus off to the next "Get ready", the same for
+                                     # every presentation, with the next pressure's ramp inside
+                                     # it. A pause that varied with the ramp would tell the
+                                     # participant how strong the next touch is, and a catch
+                                     # trial's would be the shortest (S, 16 Oct 2026; LOG
+                                     # N7.F14e). On a worn garment it must cover the slowest
+                                     # ramp, the ceiling at the rate limit (asserted). R32 had
+                                     # recommended a jittered 8-12 s.
   catch_felt_min_pct: 10.0           # [R] R32. A catch trial counts as felt when rated at or
                                      # above the scale's own "just noticeable" anchor
   stage1:
@@ -318,3 +333,6 @@ cues:
   # A visual warning cue precedes every stimulus (SPEC.md 10.5).
   warning_lead_s: 1.0
   warning_duration_s: 0.5
+  # A rest between two stimuli longer than this shows `screens.please_wait` rather than a
+  # blank, so the participant can see that the pause is meant (S, 16 Oct 2026; LOG N7.F14d).
+  please_wait_min_s: 1.0

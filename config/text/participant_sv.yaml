@@ -88,17 +88,23 @@ screens:
   # Det finns ingen `mapping`-nyckel. Kartläggningen instrueras muntligt och deltagaren
   # markerar muntligt (SPEC.md 8.4); försöksledarens manus är `instructions.mapping_script` i
   # experimenter_{sv,en}.yaml. Deltagarskärmen visar `standby` under tiden.
-  # Endast praktiskt. Deltagaren har redan läst forskningspersonsinformationen, så skärmen
-  # förklarar inte studien -- den förklarar knapparna. Raden om cirkeln (LOG N7.F11c2) är
-  # borttagen igen (N7.F12g1): varningssignalen är nu text, `warning_cue`, som förklarar sig
-  # själv. Skärmen är åter S:s godkända lydelse.
+  # S:s lydelse, 16 okt 2026 (LOG N7.F14a). Säger bara vad som kommer härnäst, beröringen i
+  # övningen med stoppknappen: knapparna och skalan förklaras av `practice_intro`, när en skala
+  # först visas.
   welcome: |-
     Välkommen.
+    Härnäst kommer du att känna en beröring på armen.
+
+    Tryck på ▶ när du är redo.
+  # S:s lydelse, 16 okt 2026 (LOG N7.F14a), flyttad hit från `welcome`. Visas en gång per
+  # session, före den första övningen med skattningsskalan.
+  practice_intro: |-
+    Härnäst får du öva på att använda skattningsskalan.
     De två stora knapparna flyttar markören längs linjen.
     ▶ bekräftar ditt svar.
     Det finns inga rätta svar – markera det du känner. Försöksledaren ser inte dina svar.
 
-    Tryck på ▶ för att börja.
+    Tryck på ▶ för att börja övningen.
   # The first screen of a session, up while the garment is fitted and before the welcome.
   # DRAFT (LOG N7.F11c11): written by the build, not ethics-sourced. "Sessionen" is not how
   # the visit is spoken of to a participant.
@@ -109,6 +115,9 @@ screens:
   standby: |-
     Vila så länge.
     Försöksledaren berättar vad som händer härnäst.
+  # S:s lydelse, 16 okt 2026 (LOG N7.F14d). Ett uppehåll mellan två stimuli längre än
+  # `cues.please_wait_min_s`, så att pausen ser avsiktlig ut och inte som ett fel.
+  please_wait: Vänta.
   session_end: |-
     Då är dagens besök slut.
     Tack.

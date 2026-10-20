@@ -121,6 +121,39 @@ def test_a_full_calibration_writes_every_table_and_finds_the_observer(rig):
     assert preference["all_felt"] == "true"
 
 
+def test_a_worn_garment_refuses_a_window_shorter_than_the_slowest_ramp(app, loaded, tmp_path):
+    """A ramp outlasting the fixed window would delay the cue by more for a stronger touch
+    and never for a catch trial (S, 16 Oct 2026; LOG N7.F14e). The mock, which nobody wears,
+    may run shorter, as a demonstration's does."""
+    garment = loaded.hardware["garment"]
+    slowest_s = garment["pressure_ceiling_kpa"] / garment["pressure_rate_max_kpa_s"]
+    touch = {**loaded.study1["touch_calibration"], "estimation_window_s": slowest_s / 2}
+    made = make_rig(make_config(loaded, tmp_path, touch_calibration=touch))
+    try:
+        touchcal.TouchCalibration(made)  # the mock: allowed
+        made.session.garment.worn = True
+        with pytest.raises(AssertionError, match="slowest ramp"):
+            touchcal.TouchCalibration(made)
+    finally:
+        made.session.close()
+
+
+def test_every_estimation_presentation_waits_the_whole_window(rig, monkeypatch):
+    """The first one too: cued as soon as its ramp ended, a catch trial in first place would
+    come at once and a strong touch seconds later (spec-review, LOG N7.F14e)."""
+    window_s = rig.session.config.study1["touch_calibration"]["estimation_window_s"]
+    windows = []
+    original = touchcal.EstimationPresentation.__init__
+
+    def recording(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        windows.append(self.off_s)
+
+    monkeypatch.setattr(touchcal.EstimationPresentation, "__init__", recording)
+    _calibrate(rig)
+    assert windows and all(off_s == window_s for off_s in windows), windows
+
+
 def test_what_each_condition_delivers(rig):
     result, _ = _calibrate(rig, gains={1: 1.3, 2: 1.1, 4: 0.9, 5: 1.2})
     patterns = rig.session.config.study1["patterns"]["condition_pattern"]
@@ -415,6 +448,7 @@ def test_uneven_offers_a_rebalance_which_reruns_steps_3_and_4(rig):
     # Steps 3 and 4 introduced again when the rebalance returns to them (LOG N7.F11c1).
     intros = [row["detail"] for row in _events(session, "message_confirmed")]
     assert intros == [
+        "practice_intro",
         "intro_bracket", "intro_estimation", "intro_match", "intro_compare", "intro_pleasant",
         "intro_match", "intro_compare",
     ]
@@ -565,7 +599,8 @@ def test_a_rebalance_after_a_stop_in_step_4_reruns_steps_3_and_4_and_restores_no
     assert sorted({row["pass_index"] for row in match}) == ["1", "2"]
     assert sum(row["stage"] == "pleasantness" for row in adjust) == 2
     intros = [row["detail"] for row in _events(session, "message_confirmed")]
-    assert intros == ["intro_bracket", "intro_estimation", "intro_match", "intro_compare",
+    assert intros == ["practice_intro",
+                      "intro_bracket", "intro_estimation", "intro_match", "intro_compare",
                       "intro_match", "intro_compare", "intro_pleasant"]
     (fit,) = _rows(session, "touchcal_fit")
     assert fit["superseded"] == "false"

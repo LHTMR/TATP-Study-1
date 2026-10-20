@@ -1042,7 +1042,7 @@ for re-running, the discarded estimate must remain visible to analysis — a pro
 repeated until it looks right is a garden of forking paths unless every attempt is retained.
 
 **The cost.** The preview shows the participant's ratings to the experimenter, which Bilaga 1
-§3.3 says does not happen and which `screens.welcome` tells the participant does not happen.
+§3.3 says does not happen and which `screens.practice_intro` tells the participant does not happen.
 Enabling it for real sessions means changing that sentence. Blinding to *condition* is
 unaffected — both estimation runs are identical across conditions.
 

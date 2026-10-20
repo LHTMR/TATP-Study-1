@@ -1,10 +1,11 @@
 # STATUS
 
-**Last updated:** 16 October 2026 (on the lab PC).
+**Last updated:** 16 October 2026 (on S's MacBook).
 **Milestone:** 6 (pilotable), in progress, in lab piloting.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
 back (`CLAUDE.md`, Committing). `pilot/keep-files-open` is merged and deleted, here and on
-`origin`. **`pilot/swedish-docs` is parked
+`origin`. **`pilot/rests-and-welcome` is open, reviewed and pushed, not merged** (next step
+1). **`pilot/swedish-docs` is parked
 on purpose** (S, 16 Oct): Swedish SOP and setup guide, reviewed and pushed, with `main` merged
 in, but both SOPs (`SOP.md` too) predate the 15 Oct screens, so they wait for the next SOP
 update. `main` is pushed.
@@ -67,7 +68,27 @@ high`, spec-review) with `make check` passing on the merged tree:
 
 ## Next steps
 
-1. **Make `make check` pass on a Mac** (all pre-existing, none caused by the change above):
+1. **Merge `pilot/rests-and-welcome` from the lab PC** (LOG N7.F14a–e, S's requests of 16 Oct
+   after a demo on the MacBook): the welcome says only that a touch comes next, and a new
+   `practice_intro` before the session's first practice carries the scale explanation; touch
+   calibration's estimation run waits a fixed 4.5 s window (1.5 s on a demo's mock garment) so
+   the pause cannot give a catch trial away; demo pinprick and brush rests 0.5 s; the
+   experimenter sees the next pinprick or brush application with a countdown through the
+   interval; "Please wait" through any rest over 1 s. `/code-review high` and spec-review done
+   and their findings fixed (one kept: the preview-equals-decision assertion, see N7.F14c).
+   On the Mac `make check` fails only for the known Mac reasons (step 2). On the lab PC:
+   `make check`; then approve the screens it changed, and only those —
+   `participant_{en,sv}_screen_welcome` (changed), `participant_{en,sv}_screen_practice_intro`
+   and `participant_{en,sv}_screen_please_wait` (new) — with
+   `make shots ARGS="--approve participant_en_screen_welcome …"`, look at each, `make check`
+   again, merge `--no-ff`, `make check` on `main`, delete the branch here and on `origin`.
+   **In the next lab run:** check on the sleeve that 4.5 s is enough for it to deflate and
+   reach the next pressure (the window must cover the slowest ramp, 4.22 s at the current rate
+   limit, open item L2); and whether the interval's countdown helps the experimenter.
+   `tests/test_session_runner.py::test_the_session_ends_on_the_experimenters_last_next_step`
+   failed once under parallel load on the Mac and passed 3 of 3 alone (a double press "at
+   once" timed in real seconds); watch for it.
+2. **Make `make check` pass on a Mac** (all pre-existing, none caused by the change above):
    - lint: conda-forge's osx `ruff` 0.17 has no Python module, so `python -m ruff` fails; the
      Makefile could call `ruff check .`;
    - two tests assume the lab platform without pinning it:
@@ -78,28 +99,28 @@ high`, spec-review) with `make check` passing on the merged tree:
      218 of 220 screenshots differ, because the references and metrics come from the lab PC.
    - The STATUS demo command lacked `--session` and `--experimenter`; it is
      `python run_session.py --demo --sim-participant watch --session 1 --experimenter SM --garment mock`.
-2. **On S's MacBook, by hand** (only started so far: the automatic demo ran 90 s without an
-   error; no one watched the windows). Check always-on-top and Spaces, CoreAudio at 48 kHz, the
-   `tatp.devices` child process, fonts, key events. The conda shell function is broken in the
-   Claude app's shell there; `Makefile.local` points `make` at
-   `/Users/sarmc72/miniconda3/bin/conda`.
-3. **Left open from the review of N7.F13a:** at the validator's 1000× clock the pattern timer is
+3. **On S's MacBook, by hand:** S ran the hardware page and a demo into touch calibration on
+   16 Oct: the hardware page, the shared participant window on top, sound, keys and Spaces
+   all fine. Not yet seen: the participant window stepping aside for a dialog. The conda
+   shell function is broken in the Claude app's shell there; `Makefile.local` points `make`
+   at `/Users/sarmc72/miniconda3/bin/conda`.
+4. **Left open from the review of N7.F13a:** at the validator's 1000× clock the pattern timer is
    always due and can still starve every other timer, including the validator's own 120 s
    guard, on a slow enough machine; a floor on timer intervals in wall time, or a guard outside
    the Qt loop, would turn a hang into a failure. A batch only partly written before a write
    error is retried whole, leaving a broken line (pre-existing, no row lost).
-4. **Re-run the lab session with the new screens**, starting at the hardware page: the sound
+5. **Re-run the lab session with the new screens**, starting at the hardware page: the sound
    device, a note and its confirmation, walk a session as both people (intros, read-aloud
    lines, the session end), try a re-calibration in calibration and in the intervention; and
    the 5 Oct checks still open (R400 hold acceleration N7.F7b, the touch-calibration pause R32,
    Skip calibration, the HP at 1.5, remote routing N7.I1, alerts over the noise, N2.9).
-5. **L15: the lab check N2.10** (seven steps in LOG).
-6. **Update `SOP.md` for the 15 Oct screens** (hardware page, re-calibration, intros, standby,
+6. **L15: the lab check N2.10** (seven steps in LOG).
+7. **Update `SOP.md` for the 15 Oct screens** (hardware page, re-calibration, intros, standby,
    read-aloud lines, about 45 quoted texts), then `SOP.sv.md` on `pilot/swedish-docs` to match,
    when S says the screens have settled.
-7. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
-8. **The adversarial review** (spec-review, §17.6) over the whole build before Milestone 6.
-9. **Left open, not blocking:** preflight's sound check can freeze the launcher up to 8 s
+8. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
+9. **The adversarial review** (spec-review, §17.6) over the whole build before Milestone 6.
+10. **Left open, not blocking:** preflight's sound check can freeze the launcher up to 8 s
    (N7.F12e2); the 640 px laptop-height target is exceeded in the pilot case (fine at
    1280×800); the emergency stop does not stop the white noise; the hold-acceleration integral
    is duplicated (N7.F7b); the screenshot tolerance hides glyph-sized changes;
