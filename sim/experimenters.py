@@ -63,13 +63,13 @@ PROCEED_INSTRUCTIONS = (
     "touchcal_uneven", "earplugs", "ready_long_first", "mark_zone",
     # The intervention's end, told to the participant, and the session complete, whose Next
     # step closes the program (docs/LOG.md N7.F11c9, N7.F11c10).
-    "intervention_end", "session_complete",
+    "intervention_end", "session_complete", "session_aborted",
 )
 # Templated instructions after which the software waits for Next step: the ready line of each
 # kind of series and block, and the VAS training -- the anchors and proportionality explained
 # aloud, then the go (SPEC.md 10.6).
 PROCEED_TEMPLATES = (
-    "fit_garment", "thermode_start", "intervention_start", "touchcal_gain_undefined",
+    "fit_garment", "thermode_start", "intervention_start",
     "vas_training", "ready_long", "ready_short", "ready_brush", "ready_pinprick_block",
     "ready_touch_block",
 )
@@ -119,9 +119,13 @@ class VirtualExperimenter(QObject):
             text["dialogs"]["distances_outstanding"]
         }
         self._accept = {instruction_template(config, key) for key in (
-            "touchcal_stage1_failed", "touchcal_fit_review", "touchcal_stage1_exhausted"
+            "touchcal_stage1_failed", "touchcal_fit_review"
         )}
         self._rerun = template("touchcal_stage1_unusable")
+        # Instructions whose answer is the step's own other button (review of N7.F16): go on
+        # with the fallback, or with the channel flagged.
+        self._alternative_patterns = [template(key) for key in (
+            "touchcal_stage1_exhausted", "touchcal_gain_undefined")]
         self._accept_patterns = [template_pattern(t) for t in self._accept]
         self._phases = {label: key for key, label in text["phases"].items()}
         self._forces = {
@@ -217,9 +221,10 @@ class VirtualExperimenter(QObject):
             if label.text():
                 self.seen_text.add(label.text())
 
-        if self.aborted or not self.acts:
+        if not self.acts:
             return
-        if self.abort_when is not None and self.abort_when():
+        # Aborted, it goes on only to the Next step that closes the program (LOG N7.F17e).
+        if not self.aborted and self.abort_when is not None and self.abort_when():
             self.aborted = True
             window.abort_requested.emit(SCENARIO_ENDED)
             return
@@ -247,6 +252,8 @@ class VirtualExperimenter(QObject):
             window.proceed_requested.emit()  # stop at the border
         elif any(p.fullmatch(instruction) for p in self._accept_patterns):
             window.fit_accepted.emit()
+        elif any(p.fullmatch(instruction) for p in self._alternative_patterns):
+            window.alternative_requested.emit()
         elif self._rerun.fullmatch(instruction):
             window.fit_rerun_requested.emit(self.rerun_reason)
         else:

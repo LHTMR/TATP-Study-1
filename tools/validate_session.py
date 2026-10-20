@@ -96,7 +96,11 @@ from tatp.demo import real_time_settings  # noqa: E402
 from tatp.pinprick import PAIN_SCALE, prior_for  # noqa: E402
 from tatp.procedure import VAS_TRAINING_EXPLAINED  # noqa: E402
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source  # noqa: E402
-from tatp.resume import VAS_TRAINING_CONFIRMED  # noqa: E402
+from tatp.resume import (
+    STAGE_COMPLETED,  # noqa: E402
+    VAS_TRAINING_CONFIRMED,  # noqa: E402
+)
+from tatp.session import RATING_CUE_AT_DELIVERY_PRESS  # noqa: E402
 from tatp.trials import VAS_PRACTICE_RATING  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
 from tatp.units import MS_PER_S, S_PER_MIN  # noqa: E402
@@ -340,10 +344,22 @@ def run_one(scenario: Scenario, folder: Path, loaded: cfg.Config) -> Run:
     runner = run_session.build(config, args, lambda _open: scenario.resumes is not None)
     rig, session = runner.rig, runner.session
     participant = scenario.participant(rig.participant, session.garment, config, scenario.seed)
+    # The stages completed so far, noted as each is logged. Read back from the log file on
+    # every look the simulated experimenter took, it was half of every run's time.
+    completed: set[str] = set()
+    log = session.log
+
+    def noting_log(event: str, origin: str = "software", severity: str = "info",
+                   detail: str = "") -> str:
+        if event == STAGE_COMPLETED:
+            completed.add(detail)
+        return log(event, origin, severity, detail)
+
+    session.log = noting_log
 
     def ended() -> bool:
         if scenario.ends_after_stage is not None:
-            return scenario.ends_after_stage in _completed_now(session)
+            return scenario.ends_after_stage in completed
         if scenario.ends_after_adjustments is not None:
             return participant.adjustments_seen >= scenario.ends_after_adjustments
         if scenario.ends_after_pinprick is not None:
@@ -429,15 +445,6 @@ def run_one(scenario: Scenario, folder: Path, loaded: cfg.Config) -> Run:
         made_object.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
     return made
-
-
-def _completed_now(session) -> set[str]:
-    path = session.files.path("log")
-    if not path.exists():
-        return set()
-    with path.open(encoding="utf-8", newline="") as handle:
-        return {row["detail"] for row in csv.DictReader(handle)
-                if row["event"] == "stage_completed"}
 
 
 def _read_run(scenario, config, session, runner, participant, experimenter, errors) -> Run:
@@ -900,16 +907,20 @@ def needs_rated_pinprick_rows(runs):
 
 
 def check_rating_cue_interval(runs):
-    """The experimenter's press saying the filament is applied, to the rating cue: the 9 s
-    delay (SPEC.md 8; docs/LOG.md N7.F16f), in session seconds, within TIMING_TOLERANCE_S, on
-    the application the load disturbed least. And never a press before the cue's 1 s lead
-    is over (SPEC.md 10.5)."""
+    """The experimenter's press saying the filament is applied, to the rating cue: none, the
+    scale goes up at the press (SPEC.md 8.3; docs/LOG.md N7.F17a), in session seconds, within
+    TIMING_TOLERANCE_S, on the application the load disturbed least. And never a press
+    before the cue's 1 s lead is over (SPEC.md 10.5)."""
     run = runs[TIMING]
     study = run.config.study1
     lead_s = float(study["cues"]["warning_lead_s"])
-    expected_s = float(study["pinprick"]["rating_cue_delay_s"])
+    expected_s = 0.0
     rated = [row for row in run.rows.get("pinprick", []) if row["rating_cue_iso"]]
     failures = []
+    # The file says which meaning its `rating_cue_iso` has (docs/DATA_SCHEMA.md).
+    if run.session.get("rating_cue_at") != RATING_CUE_AT_DELIVERY_PRESS:
+        failures.append(f"rating_cue_at is {run.session.get('rating_cue_at')!r}, not "
+                        f"{RATING_CUE_AT_DELIVERY_PRESS!r}")
     early = [row for row in rated
              if _session_s(run, row["cue_onset_iso"], row["stimulus_delivered_iso"])
              < lead_s - TIMING_TOLERANCE_S]
@@ -930,7 +941,8 @@ def check_rating_cue_interval(runs):
 
 def _isi_deviations(run: Run) -> list[tuple[float, float]]:
     """(drawn, measured - drawn) in session seconds for every jittered interval followed by
-    its next application's cue. The draw is what the protocol logged as `interval`."""
+    its next application's cue. The draw is what the protocol logged as `interval`; it runs
+    from the application's "applied" press, the rating inside it (docs/LOG.md N7.F17a)."""
     events = run.events()
     found = []
     for i, row in enumerate(events):
@@ -940,7 +952,9 @@ def _isi_deviations(run: Run) -> list[tuple[float, float]]:
         cue = next((later for later in events[i + 1:] if later["event"] == "warning_cue"), None)
         if cue is None or not cue["detail"].startswith("trial"):
             continue  # the protocol ended; the next cue is another protocol's
-        found.append((drawn_s, _session_s(run, row["timestamp_iso"], cue["timestamp_iso"])
+        applied = next(earlier for earlier in reversed(events[:i])
+                       if earlier["event"] == "stimulus_delivered")
+        found.append((drawn_s, _session_s(run, applied["timestamp_iso"], cue["timestamp_iso"])
                       - drawn_s))
     return found
 

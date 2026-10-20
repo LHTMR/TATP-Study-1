@@ -1,11 +1,12 @@
 # STATUS
 
-**Last updated:** 20 October 2026, evening (on the lab PC).
+**Last updated:** 21 October 2026 (on the lab PC).
 **Milestone:** 6 (pilotable), in progress. **Priority: testing the code in demo mode** (S,
 20 Oct). The real valve garment is not built yet, so everything that needs it is parked.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
-back (`CLAUDE.md`, Committing). `pilot/ux-review` (S's 20 Oct demo test, N7.F16a–n) is merged
-into `main` and deleted; not pushed. **`pilot/swedish-docs` is parked
+back (`CLAUDE.md`, Committing). `pilot/ux-review` (N7.F16a–n) and `pilot/ux-batch-2` (N7.F17a–e,
+`/code-review high` and spec-review done, their findings fixed: N7.F17e (21), (22)) are merged
+into `main` and deleted; neither is pushed. **`pilot/swedish-docs` is parked
 on purpose** (S, 16 Oct): Swedish SOP and setup guide, reviewed and pushed, with `main` merged
 in, but both SOPs (`SOP.md` too) predate the 15 Oct and 16 Oct screens, so they wait for the
 next SOP update. `main` is pushed.
@@ -48,8 +49,6 @@ high`, spec-review) with `make check` passing on the merged tree:
 - **Changed S-approved participant wording** (DRAFT): `screens.standby`,
   `audio_setup.find_level`, sv `choices.comparison.question` (N7.F11c6, c8, c11); the new
   `warning_cue` (N7.F12g1).
-- **Screens to review:** about 150 changed or added on 15 Oct (rows N7.F10b–N7.F12), plus the
-  earlier list.
 - **Open items still S's:** L11, L13, L3, L14, L15 (closes with lab check N2.10), L16 (now:
   whether a demo may name its condition, and whether a blinded experimenter may watch a demo's
   intervention with the garment display).
@@ -91,30 +90,29 @@ validator checks, 224 screens), in sessions and demonstrations alike:
   at the start of pre-sensitisation; "This rating is not recorded".
 - 78 experimenter screens and 4 participant screens re-approved (listed in the commit).
 
+**S's second message of 20 Oct is in `main`** (N7.F17a–e, reviewed, findings fixed):
+- **The scale comes at the delivery press**; the 13–17 s interval runs from that press and its
+  countdown tells the experimenter when the next may be applied (N7.F17a). `rating_cue_delay_s`
+  is gone; the session file's new `rating_cue_at` says which meaning `rating_cue_iso` has.
+- The zone diagram back to 200 px, the channel display beside it (N7.F17b); the watched
+  simulated participant holds, settles and taps, judging only what it feels (N7.F17c); demo
+  switches for who presses at any time, and an Auto-run toggle (N7.F17d).
+- The build's own walk-through list (N7.F17e): Next step never means "no" (own buttons for the
+  other answer); only answers that will be taken are offered; abort pauses first and ends on the
+  end screen; disconnect asks; the note's "saved at" goes; Enter in the re-run dialog; short
+  re-calibration dialogs; Start always pressable; the hardware page's garment carried over; a
+  hint for ▶ before the marker; Space/P/R; no-response warning; link lost in red in the alert
+  row; "Resuming…"; the rehearsal's expected stop; which anchor; "Applied: …" after the press;
+  every instruction at the large size (tested); mapping's tick count and step-limit warning;
+  Discard asks first.
+- How a demo differs from a session is said where it applies, not in a list; everything only a
+  demo has is violet (N7.F17d, UI_PRINCIPLES.md 3.7).
+- `CLAUDE.md` "Engineering lessons" and `docs/UI_PRINCIPLES.md` §5.13–5.22 and §7, from the
+  whole history (S's request); S does not review screens, the build re-approves them.
+
 ---
 
 ## Next steps
-
-### 0. The next UI batch, from the build's own review (20 Oct; not yet done)
-
-A walk-through of the whole session for problems S had not raised found these. Proposed, in
-order; each would go on its own `pilot/` branch:
-1. **No-response warning**: `vas.no_response_warning_s` (60 s) is configured and never used;
-   show the wait's length and `warnings.no_response` after it.
-2. **Link lost** is small print in the side column; put it in the alert row in red, with the
-   alert sound and what to do (L14 is S's).
-3. **Next step meaning "no"**: in the masking check ("still audible"), the stop rehearsal (no
-   press) and `touchcal_gain_undefined`, give the answer a button of its own.
-4. **The stop rehearsal's expected stop** shows the full emergency-stop alarm and dims the
-   instruction that says it worked.
-5. **Abort** leaves the garment running behind its dialog, and quits without saying the data
-   are saved.
-6. Smaller: Accept/Re-run shown when one will be refused; "Resuming…" while a resume's cue
-   plays; long read-aloud scripts squeezed into the three-line instruction; mapping's tick
-   count and a warning when a path ends at the limit; Discard below Next step with no confirm;
-   one-click Disconnect; the two "Rebalance channels" labels; `touchcal_bracket` not naming
-   which anchor; the paused screen's "continues shortly"; Enter in the re-run dialog; the
-   note's "saved at" never going away; the fit preview opening over the main window.
 
 ### 1. Test the code in demo mode — the priority (S, 20 Oct; LOG N7.F15a)
 
@@ -124,8 +122,7 @@ conda run -n tatp-study-1 python run_session.py --demo --sim-participant watch -
 
 On the lab PC or S's MacBook, with no hardware. A demo runs every stage and screen, and the
 session plan, through the real code (N7.D23). It only finishes stages early, never skips
-them. What it changes: rests 0.5 s (N7.F14b), the application-to-scale delay 1 s (N7.F16g),
-the estimation window 1.5 s and its settle 0.5 s on the mock (N7.F14e, N7.F16g), Skip,
+them. What it changes: rests 0.5 s (N7.F14b), the estimation window 1.5 s and its settle 0.5 s on the mock (N7.F14e, N7.F16g), Skip,
 Auto-run, Fast-forward and a faster clock (mock only, N7.F16j), the example patterns, and every
 keyboard counting as the remote unless the R400 is plugged in (N7.F16a). So it tests the flow,
 the screens and the data, but not real stimuli or real timing. Record what turns up in LOG and
@@ -147,7 +144,10 @@ fix it on a `pilot/` branch.
    timeline; "Get ready" then "Now: apply" then Space for each filament and brush stroke; the
    R400 behind Notepad; the remote's buttons lighting in the demo panel; "1 of 3" in the
    preference selection; the skin-marking step.
-9. **On S's MacBook:** the participant window stepping aside for a dialog (N7.F12e5). The
+9. **Since N7.F17:** the scale straight after the press, and the countdown to the next; the
+   alternative buttons (masking, stop rehearsal, fallbacks); abort's end screen; the demo's
+   violet notes on how it differs, where they apply; the watched participant's holds and taps.
+10. **On S's MacBook:** the participant window stepping aside for a dialog (N7.F12e5). The
    rest of the MacBook hand check passed on 16 Oct.
 
 ### 2. Lab checks that need lab hardware but not the real sleeve (after section 1)

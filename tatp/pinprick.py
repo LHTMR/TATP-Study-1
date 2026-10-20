@@ -11,9 +11,9 @@ here: ascend from an informed prior, 3 adjacent filaments x 3 repetitions in pse
 estimate with the slope held fixed.
 
 **One application.** `PinprickTrial` and `BrushTrial` run the visual warning cue, the prompt
-telling the experimenter what to apply and where, the rating cue `rating_cue_delay_s` after the
-stimulus, and one row. What to apply, where and why is decided by the caller and carried in an
-`Application`.
+telling the experimenter what to get ready and then to apply, the rating cue at their press
+saying it is applied, and one row. What to apply, where and why is decided by the caller and
+carried in an `Application`.
 
 **The protocols.** `LongProtocol`, `ShortProtocol` and `BrushProtocol` are `Procedure`s
 (`tatp/procedure.py`): the experimenter launches each, the participant's response advances it,
@@ -54,7 +54,7 @@ from dataclasses import dataclass
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
 from tatp.config import Config, instruction
-from tatp.procedure import Procedure, Rig
+from tatp.procedure import NO_RERUNS_LEFT, Procedure, Rig
 from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -66,6 +66,7 @@ PAIN_SCALE = "pain"
 # experimenter text: through the cue's lead, and once the stimulus is due (LOG N7.F16f).
 PREPARE = "prepare"
 APPLY = "apply"
+APPLIED = "applied"
 
 # Controlled vocabularies of the data files (docs/DATA_SCHEMA.md), not wording.
 LONG = "long"
@@ -593,7 +594,6 @@ class _RatedTrial(QObject):
         participant: ParticipantWindow,
         experimenter: ExperimenterWindow,
         trial_index: int,
-        rating_cue_delay_s: float,
         scale: str,
         parent: QObject | None = None,
     ):
@@ -602,7 +602,6 @@ class _RatedTrial(QObject):
         self.participant = participant
         self.experimenter = experimenter
         self.trial_index = trial_index
-        self.rating_cue_delay_s = rating_cue_delay_s
         self.scale = scale
 
         cues = session.config.study1["cues"]
@@ -618,6 +617,8 @@ class _RatedTrial(QObject):
         self.cue_onset_iso = ""
         self._apply_text = ""
         self.stimulus_delivered_iso = ""
+        # The press, on the clock's elapsed time: the next application is spaced from it.
+        self.delivered_elapsed_s: float | None = None
         self.rating_cue_iso = ""
         # From `stimulus_due` on, the experimenter may have applied the stimulus: an
         # interruption after it has cost the participant a delivery even though no row is
@@ -640,7 +641,8 @@ class _RatedTrial(QObject):
     # -- hooks -------------------------------------------------------------------------
 
     def _instruction(self, key: str) -> str:
-        """`PREPARE` through the cue's lead, `APPLY` once the stimulus is due."""
+        """`PREPARE` through the cue's lead, `APPLY` once the stimulus is due, `APPLIED` once
+        the press says it was (review of N7.F17: "then press Next step" stayed up after it)."""
         raise NotImplementedError
 
     def _stimulus_detail(self) -> str:
@@ -697,8 +699,7 @@ class _RatedTrial(QObject):
 
     def _stimulus_due(self) -> None:
         """The cue's lead is over: the experimenter applies the stimulus and says so with Next
-        step. Until 20 Oct 2026 the rating was cued `rating_cue_delay_s` after this moment,
-        whenever the stimulus had really been applied (S; docs/LOG.md N7.F16f).
+        step, and the scale goes up at once (S, 20 Oct 2026; docs/LOG.md N7.F16f, N7.F17a).
 
         "Now: apply" goes up only now, with Next step offered: up at the cue, it was read and
         acted on during the lead, and the press then did nothing (code review of N7.F16f).
@@ -713,18 +714,18 @@ class _RatedTrial(QObject):
         self.experimenter.refresh()
 
     def _on_delivered(self) -> None:
-        # The rating cue is timed from the press, when the stimulus was applied, so the delay
-        # the protocol fixes runs from the stimulus itself.
-        delivered_s = self.session.clock.elapsed_s()
+        """Applied: the participant rates at once. Nothing holds up their answer -- what
+        spaces the painful stimuli is the interval to the next one, timed from this press
+        (`_Series._wait_then_next`; S, 20 Oct 2026: "It should never hold up the
+        participant responding"). Until then the rating was cued 9 s after the stimulus."""
         self._stop_awaiting()
+        self.delivered_elapsed_s = self.session.clock.elapsed_s()
         self.stimulus_delivered_iso = self.session.clock.wall_iso()
         self.session.log("stimulus_delivered", origin="experimenter",
                          detail=self._stimulus_detail())
-        self.experimenter.set_status(self.experimenter.text["instructions"]["delivered"].format(
-            seconds=f"{self.rating_cue_delay_s:g}"
-        ))
-        self.experimenter.refresh()
-        self._after_from(delivered_s, self.rating_cue_delay_s, self._cue_rating)
+        # Built now, from what was applied: a substitution may have been entered meanwhile.
+        self._instruct(self._instruction(APPLIED))
+        self._cue_rating()
 
     def _stop_awaiting(self) -> None:
         if self.awaits_proceed:
@@ -813,7 +814,6 @@ class PinprickTrial(_RatedTrial):
             participant,
             experimenter,
             application.trial_index,
-            float(pinprick["rating_cue_delay_s"]),
             PAIN_SCALE,
             parent,
         )
@@ -831,10 +831,13 @@ class PinprickTrial(_RatedTrial):
     def _instruction(self, key: str) -> str:
         text = self.experimenter.text
         self._filament(self.application.applied_label_g)  # refuses one not held, before the cue
+        # What was applied, once it has been: a substitution entered meanwhile included.
+        label_g = (self.application.applied_label_g if key == APPLIED
+                   else self.application.filament_label_g)
         return instruction(
             self.session.config, f"{key}_filament",
-            filament=self.application.filament_label_g,
-            force_mn=self._filament(self.application.filament_label_g).force_nominal_mn,
+            filament=label_g,
+            force_mn=self._filament(label_g).force_nominal_mn,
             site=self.application.site_index,
             region=text["terms"]["regions"][self.application.region],
         )
@@ -969,7 +972,6 @@ class BrushTrial(_RatedTrial):
             participant,
             experimenter,
             application.trial_index,
-            float(brush["rating_cue_delay_s"]),
             brush["rating_scale"],
             parent,
         )
@@ -1036,8 +1038,13 @@ class _Series(Procedure):
         # prepare it, counting down to the end of the interval (LOG N7.F14c). Checked against
         # the one actually given, which is decided only when the interval ends.
         self._expected: Application | BrushApplication | None = None
+        # The interval separates two stimuli: it runs from the last one's "applied" press, on
+        # the clock's elapsed time, so the participant's rating is inside it rather than in
+        # front of it (S, 20 Oct 2026; LOG N7.F17a). At least `cues.min_rest_s` follows the
+        # rating, whatever is left of it, so the next cue never comes on the rating's heels.
         self._interval_start_s = 0.0
         self._interval_s = 0.0
+        self._min_rest_s = float(self.session.config.study1["cues"]["min_rest_s"])
         # The application is due a warning cue's lead after the interval ends: that is what
         # the countdown counts to. Redrawn only when its whole second changes.
         self._warning_lead_s = float(self.session.config.study1["cues"]["warning_lead_s"])
@@ -1140,6 +1147,8 @@ class _Series(Procedure):
     def interval(self, table: str, trial: _RatedTrial) -> None:
         """The jittered wait after an application, during which it may be discarded."""
         self._set_discardable((table, trial.cue_onset_iso, trial.trial_index))
+        assert trial.delivered_elapsed_s is not None, "a rated application was pressed applied"
+        self._interval_start_s = trial.delivered_elapsed_s
         self._wait_then_next(received=self._received(trial))
 
     def _wait_then_next(self, received: str = "") -> None:
@@ -1150,23 +1159,27 @@ class _Series(Procedure):
         self.session.log("interval", detail=f"{seconds:.2f} s")
 
         def begin() -> None:
-            # Also what a resume lands on, so the stop screen does not outlast the stop.
-            self.participant.show_rest(seconds)
             if received:
                 self.experimenter.set_status(received)
             # The application just rated is done: its prompt comes down, and the next one is
             # shown instead, so the experimenter can prepare it (S, 16 Oct 2026; LOG N7.F14c).
             # Worked out again on every start of the interval: a discard changes it.
             self._expected = self._upcoming()
-            self._interval_start_s = self.session.clock.elapsed_s()
-            self._interval_s = seconds
+            # From the last stimulus, what is left of the interval -- or the shortest rest,
+            # after a slow rating or a resume.
+            wait_s = max(self._min_rest_s,
+                         self.session.clock.remaining_s(self._interval_start_s, seconds))
+            self._interval_s = (self.session.clock.elapsed_s() - self._interval_start_s
+                                + wait_s)
+            # Also what a resume lands on, so the stop screen does not outlast the stop.
+            self.participant.show_rest(wait_s)
             if self._expected is None:
                 self.instruct(BETWEEN_APPLICATIONS if received else BETWEEN_DISCARDED)
             else:
                 self._shown_seconds = None
                 self._show_expected()
                 self._countdown.start()
-            self._after(seconds, self._advance)
+            self._after(wait_s, self._advance)
 
         self.step(begin)
 
@@ -1254,8 +1267,9 @@ class _Series(Procedure):
         status = "discarded" if repeats else "discarded_not_repeated"
         self.experimenter.set_status(self.experimenter.text["status"][status])
         self.experimenter.refresh()
-        # The interval restarts in full, so the repeat is as far from the discarded
-        # application as any application is from the one before it.
+        # A fresh interval, timed from the discarded application's press as every interval is
+        # (SPEC.md 8.3; LOG N7.F17a), so the repeat is as far from the stimulus actually given
+        # as any application is from the one before it -- not from the discard.
         self._wait_then_next()
 
 
@@ -1504,11 +1518,15 @@ class LongProtocol(_Series):
         def begin() -> None:
             self.participant.show_blank()
             self._awaiting_fit = result
+            # Accept and Re-run are live exactly while this waits on them (SPEC.md 11.1); Re-run
+            # only while one is left, and the instruction then does not name it, so the limit is
+            # said before a press rather than after one (reviews of N7.F16, N7.F17e).
+            exhausted = self.run_index - 1 >= self.max_reruns
             # What is due now, in place of the last trial's instruction and site (which this
-            # clears), left up as if another application were wanted.
-            self.experimenter.set_instruction(self.instruction_text("f40_fit_review"))
-            # Accept and Re-run are live exactly while this waits on them (SPEC.md 11.1).
-            self.experimenter.set_actions_enabled(fit_decision=True)
+            # clears).
+            self.experimenter.set_instruction(self.instruction_text(
+                f"f40_fit_review{NO_RERUNS_LEFT}" if exhausted else "f40_fit_review"))
+            self.experimenter.set_actions_enabled(fit_accept=True, fit_rerun=not exhausted)
             self.fit_ready.emit(fit)
 
         self.step(begin)
@@ -1595,21 +1613,10 @@ class LongProtocol(_Series):
         result = self._awaiting_fit
         if result is None or self.rig.interruptions.active is not None:
             return
+        # The bound on the forking path (SPEC.md 11.1): Re-run is not offered past it.
+        assert self.run_index - 1 < self.max_reruns, "a re-run past the limit was offered"
         self._awaiting_fit = None
         self.experimenter.hide_fit_preview()
-        if self.run_index - 1 >= self.max_reruns:
-            # The bound on the forking path: this estimate is the one used (SPEC.md 11.1).
-            self.session.log(
-                "fit_rerun_refused", origin="experimenter", severity="warning",
-                detail=f"run {self.run_index}; limit {self.max_reruns}. {reason}",
-            )
-            self.experimenter.set_warning(
-                self.experimenter.text["dialogs"]["fit_rerun_exhausted"]
-            )
-            self.experimenter.refresh()
-            self._record(result, superseded=False, rerun_reason="")
-            self.finish(result)
-            return
         self._record(result, superseded=True, rerun_reason=reason)
         self.session.fit_preview_reruns += 1
         self.session.log(

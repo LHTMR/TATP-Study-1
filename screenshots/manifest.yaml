@@ -35,8 +35,9 @@ screens:
     N7.D23, N7.F16j): the timeline, the channels as commanded in the side column --
     every channel''s pressure set, channels 2, 3 on -- and the demo controls along
     the foot: who presses for the participant and the experimenter, the clock''s speed,
-    the remote''s buttons, Skip saying there is no wait to skip, Auto-run naming the
-    step under way, and Fast-forward offering the phases to come (en).'
+    the remote''s buttons, Skip saying there is no wait to skip, Auto-run, Fast-forward
+    offering the phases to come, and how the filament series under way differs from
+    a session -- its rests -- in blue beside them (N7.F17d) (en).'
   experimenter_en_demo_controls_garment_changed: 'The same 0.2 s after channel 4 was
     turned on (docs/LOG.md N7.F12f): its row lit and its bar outlined, fading back
     over screens.garment_highlight_s; the remote''s right button held; and a timed
@@ -144,17 +145,19 @@ screens:
     it starts nothing (en).'
   experimenter_en_launcher_session: 'The session dialog as it opens: the data folder
     filled in from config; the session number, both languages and the pattern folder
-    unchosen, with no default; Start disabled until a check passes (en).'
+    unchosen, with no default; Start, always pressable, checks first (LOG N7.F17e)
+    (en).'
   experimenter_en_launcher_session_checked: 'The session dialog after Check: a preflight
-    warning listed in amber, Start enabled because nothing refuses (en).'
+    warning listed in amber, and Start reading "Start despite the warnings" now they
+    have been shown (en).'
   experimenter_en_link_lost: 'The prototype sleeve''s link lost mid-session (docs/LOG.md
     N7.U16): shown disconnected, the warning that it may still be on first in the
     fault line, then the newest fault''s start; the earlier-fault count gives way
     to them. (en)'
-  experimenter_en_long_instruction: 'The longest instruction the session gives, set
-    down the type scale so it fits its region: nothing below it has moved, and the
-    controls are where they always are. It asks for Accept, so Accept and Re-run are
-    offered, as the procedure offers them. (en)'
+  experimenter_en_long_instruction: 'A long instruction: an unusable touch estimate
+    with no re-runs left. At the large size, as every instruction is (LOG N7.F17e);
+    nothing below it has moved, and the one answer offered is the fallback, on a button
+    of its own, as the procedure offers it. (en)'
   experimenter_en_mapping: 'A mapping path: the secondary zone outlined without a
     site, the technique text shown because a filament is used, and Mapping distances
     offered now that a phase has been mapped. (en)'
@@ -239,8 +242,9 @@ screens:
     N7.D23, N7.F16j): the timeline, the channels as commanded in the side column --
     every channel''s pressure set, channels 2, 3 on -- and the demo controls along
     the foot: who presses for the participant and the experimenter, the clock''s speed,
-    the remote''s buttons, Skip saying there is no wait to skip, Auto-run naming the
-    step under way, and Fast-forward offering the phases to come (sv).'
+    the remote''s buttons, Skip saying there is no wait to skip, Auto-run, Fast-forward
+    offering the phases to come, and how the filament series under way differs from
+    a session -- its rests -- in blue beside them (N7.F17d) (sv).'
   experimenter_sv_demo_controls_garment_changed: 'The same 0.2 s after channel 4 was
     turned on (docs/LOG.md N7.F12f): its row lit and its bar outlined, fading back
     over screens.garment_highlight_s; the remote''s right button held; and a timed
@@ -348,17 +352,19 @@ screens:
     it starts nothing (sv).'
   experimenter_sv_launcher_session: 'The session dialog as it opens: the data folder
     filled in from config; the session number, both languages and the pattern folder
-    unchosen, with no default; Start disabled until a check passes (sv).'
+    unchosen, with no default; Start, always pressable, checks first (LOG N7.F17e)
+    (sv).'
   experimenter_sv_launcher_session_checked: 'The session dialog after Check: a preflight
-    warning listed in amber, Start enabled because nothing refuses (sv).'
+    warning listed in amber, and Start reading "Start despite the warnings" now they
+    have been shown (sv).'
   experimenter_sv_link_lost: 'The prototype sleeve''s link lost mid-session (docs/LOG.md
     N7.U16): shown disconnected, the warning that it may still be on first in the
     fault line, then the newest fault''s start; the earlier-fault count gives way
     to them. (sv)'
-  experimenter_sv_long_instruction: 'The longest instruction the session gives, set
-    down the type scale so it fits its region: nothing below it has moved, and the
-    controls are where they always are. It asks for Accept, so Accept and Re-run are
-    offered, as the procedure offers them. (sv)'
+  experimenter_sv_long_instruction: 'A long instruction: an unusable touch estimate
+    with no re-runs left. At the large size, as every instruction is (LOG N7.F17e);
+    nothing below it has moved, and the one answer offered is the fallback, on a button
+    of its own, as the procedure offers it. (sv)'
   experimenter_sv_mapping: 'A mapping path: the secondary zone outlined without a
     site, the technique text shown because a filament is used, and Mapping distances
     offered now that a phase has been mapped. (sv)'

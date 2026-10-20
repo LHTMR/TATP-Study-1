@@ -41,6 +41,9 @@ EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 CLOCK_SPEED = 10.0
 SPIN_TIMEOUT_S = 15.0
 SEED = 3
+# A watched participant's gap between presses: short, so the test is quick, and above zero,
+# which is what makes it hold, settle and tap as a person does (`_tap_towards`).
+WATCHED_PRESS_INTERVAL_S = 0.005
 
 
 @pytest.fixture(scope="module")
@@ -183,10 +186,13 @@ def test_an_application_is_rated_once_and_not_reused(rig):
         virtual.rating_for(PAIN_SCALE)
 
 
-def test_the_adjustment_stops_where_the_anchor_is_felt(rig):
-    """The first anchor from below, by holding the right button and letting go at 10 %."""
+@pytest.mark.parametrize("press_interval_s", [0.0, WATCHED_PRESS_INTERVAL_S])
+def test_the_adjustment_stops_where_the_anchor_is_felt(rig, press_interval_s):
+    """The first anchor from below: unwatched by tapping straight there, watched by holding
+    the right button, feeling it settle and tapping back, as a person does (LOG N7.F17c)."""
     model = _noiseless()
-    _virtual(rig, model=model)
+    virtual = _virtual(rig, model=model)
+    virtual.set_pace(0.0, press_interval_s)
     plan = touchcal.anchor_plans(rig.session.config)[0]
     trial = touchcal.Adjustment(rig.session, rig.participant, rig.experimenter, plan)
     produced = []

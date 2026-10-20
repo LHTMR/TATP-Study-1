@@ -161,6 +161,12 @@ class Interruptions(QObject):
         stopped for an error (`SessionRunner.stop_for_error`)."""
         self._cancel_pending()
 
+    def end(self) -> None:
+        """The session is aborted: whatever stopped it is over, and the end screen replaces the
+        pause (`SessionRunner.abort`)."""
+        self._cancel_pending()
+        self.active = None
+
     def take_over(self, why: str) -> None:
         """The garment to zero and the step in progress abandoned, for a re-calibration chosen
         from the controls (docs/LOG.md N7.F12a1): what a stop does, without the stop screen and

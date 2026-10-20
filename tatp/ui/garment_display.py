@@ -49,11 +49,13 @@ ROW_PADDING_PX = 3
 # The lit row's background at the moment of a change, as an opacity; it fades to nothing.
 HIGHLIGHT_OPACITY = 0.35
 HIGHLIGHT_OUTLINE_PX = 2
-# Between the channel columns: narrow, so five fit the side column with their readings.
+# Between a bar and its reading.
 COLUMN_GAP_PX = 4
+# The narrowest a bar is drawn: still a bar beside the zone diagram.
+MIN_BAR_PX = 50
 # How often a lit row is redrawn while it fades: smooth enough to be seen as a fade.
 FADE_FRAME_S = 0.05
-# A box filled past this share carries its number dark, to stay legible on the fill.
+# A number the fill has covered this much of is drawn dark, to stay legible on the fill.
 DARK_NUMBER_FILL = 0.5
 
 # One channel as commanded: on or off, and its pressure where the driver sets one.
@@ -142,36 +144,34 @@ class GarmentDisplay(QWidget):
         since_s = self._now_s - self._changed_at_s[channel]
         return max(0.0, 1.0 - since_s / self.highlight_s)
 
+
     def reading(self, channel: int) -> str:
-        """A channel's reading under its box: its pressure in whole kPa, so five fit the side
-        column (the data has every decimal), or on or off where the driver sets none. On or
-        off is the box's fill."""
+        """A channel's reading beside its bar: its pressure in whole kPa (the data has every
+        decimal), or on or off where the driver sets none, which the fill shows too."""
         on, kpa = self.states[channel]
         if kpa is None:
             return self.words["channel_on" if on else "channel_off"]
-        return f"{kpa:.0f}"
+        return self.words["channel_pressure"].format(value=f"{kpa:.0f}")
 
     # -- drawing -----------------------------------------------------------------------
-    # One column per channel, as compact as the line of pressures it replaced: a box carrying
-    # the channel's number, filled from the bottom to its pressure against the ceiling (or
-    # whole when on, where the driver sets no pressure), and the reading under it, with the
-    # unit to its left. The boxes carry their numbers, so the channels need no caption.
+    # One row per channel, beside the zone diagram (LOG N7.F17b): a bar carrying the channel's
+    # number, filled from the left to its pressure against the ceiling (or whole when on,
+    # where the driver sets no pressure), and the reading after it.
 
     def _measure(self) -> None:
-        """The rows' heights and the caption column's width -- the widest each can be, so
-        nothing moves as the readings change. Once: the font and words are fixed."""
+        """A row's height and the reading's width -- the widest it can be, so nothing moves
+        as the readings change. Once: the font and words are fixed."""
         metrics = QFontMetrics(self.font())
         self._row_px = metrics.height() + 2 * ROW_PADDING_PX
-        self._caption_px = metrics.horizontalAdvance(self.words["pressure_caption"])
-        widest = [f"{self.ceiling_kpa:.0f}", self.words["channel_on"],
-                  self.words["channel_off"], *(str(c) for c in self.channels)]
-        self._column_px = max(metrics.horizontalAdvance(text) for text in widest) + \
+        widest = [self.words["channel_pressure"].format(value=f"{self.ceiling_kpa:.0f}"),
+                  self.words["channel_on"], self.words["channel_off"]]
+        self._reading_px = max(metrics.horizontalAdvance(text) for text in widest)
+        self._number_px = max(metrics.horizontalAdvance(str(c)) for c in self.channels) + \
             2 * ROW_PADDING_PX
 
     def sizeHint(self) -> QSize:  # noqa: N802 -- Qt's name
-        columns = len(self.channels)
-        width = self._caption_px + columns * self._column_px + (columns + 1) * COLUMN_GAP_PX
-        return QSize(width, 2 * self._row_px)
+        width = self._number_px + MIN_BAR_PX + COLUMN_GAP_PX + self._reading_px
+        return QSize(width, self._row_px * len(self.channels))
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 -- Qt's name
         return self.sizeHint()
@@ -180,41 +180,35 @@ class GarmentDisplay(QWidget):
         row_px = self._row_px
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QColor(SECONDARY))
-        if self.per_channel_pressure:
-            painter.drawText(QRectF(0, row_px, self._caption_px, row_px),
-                             Qt.AlignLeft | Qt.AlignVCenter,
-                             self.words["pressure_caption"])
-        count = len(self.channels)
-        room = self.width() - self._caption_px - (count + 1) * COLUMN_GAP_PX
-        column_px = max(self._column_px, room / count)
+        bar_px = self.width() - self._reading_px - COLUMN_GAP_PX
         # Held at the last command, after a lost link: amber, as uncertain, not as applied.
         on_colour = WARNING_COLOUR if self.link_lost else TARGET_COLOUR
         for index, channel in enumerate(self.channels):
-            x = self._caption_px + COLUMN_GAP_PX + index * (column_px + COLUMN_GAP_PX)
+            top = index * row_px
             on, kpa = self.states[channel]
             lit = self.highlight(channel)
-            box = QRectF(x, ROW_PADDING_PX / 2, column_px, row_px - ROW_PADDING_PX)
+            bar = QRectF(0, top + ROW_PADDING_PX / 2, bar_px, row_px - ROW_PADDING_PX)
             if lit > 0:
                 glow = QColor(FOREGROUND)
                 glow.setAlphaF(lit * HIGHLIGHT_OPACITY)
-                painter.fillRect(box.adjusted(-COLUMN_GAP_PX / 2, -ROW_PADDING_PX / 2,
-                                              COLUMN_GAP_PX / 2, row_px), glow)
+                painter.fillRect(QRectF(0, top, self.width(), row_px), glow)
             # Against the ceiling where the pressure is commanded; on or off fills it or not.
             fraction = (1.0 if on else 0.0) if kpa is None else min(kpa / self.ceiling_kpa, 1.0)
             # A pressure set on a channel that is off is shown, dimmed: set, not applied.
             fill = QColor(on_colour if on else DISABLED)
-            painter.fillRect(box, QColor(BACKGROUND))
-            filled = box.height() * fraction
-            painter.fillRect(QRectF(box.x(), box.bottom() - filled, box.width(), filled), fill)
+            painter.fillRect(bar, QColor(BACKGROUND))
+            painter.fillRect(QRectF(bar.x(), bar.y(), bar.width() * fraction, bar.height()),
+                             fill)
             outline = QColor(FOREGROUND) if lit > 0 else QColor(CONTROL_BORDER)
             painter.setPen(QPen(outline, HIGHLIGHT_OUTLINE_PX if lit > 0 else 1))
             painter.setBrush(Qt.NoBrush)
-            painter.drawRect(box)
-            dark = on and fraction > DARK_NUMBER_FILL
-            painter.setPen(QColor(BACKGROUND if dark else FOREGROUND))
-            painter.drawText(box, Qt.AlignCenter, str(channel))
+            painter.drawRect(bar)
+            # The number sits at the bar's start, over the fill once it reaches past it.
+            number = QRectF(bar.x(), bar.y(), self._number_px, bar.height())
+            covered = on and bar.width() * fraction > self._number_px * DARK_NUMBER_FILL
+            painter.setPen(QColor(BACKGROUND if covered else FOREGROUND))
+            painter.drawText(number, Qt.AlignCenter, str(channel))
             painter.setPen(QColor(FOREGROUND if on else SECONDARY))
-            painter.drawText(QRectF(x, row_px, column_px, row_px), Qt.AlignCenter,
-                             self.reading(channel))
+            painter.drawText(QRectF(bar_px + COLUMN_GAP_PX, top, self._reading_px, row_px),
+                             Qt.AlignRight | Qt.AlignVCenter, self.reading(channel))
         painter.end()

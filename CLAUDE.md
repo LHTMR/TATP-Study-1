@@ -120,6 +120,14 @@ name the research environment, or distinguish one condition from another. **The 
 hidden from the experimenter screen as well** — recorded in the data, never displayed.
 `docs/SPEC.md` §16 has the constraints and the tests that enforce them.
 
+**Blinding leaks through side channels far more often than through text** (N7.D17, N7.B11,
+N7.F14b→F14e, N7.F10c, N7.F16d). Anything perceivable — text, how long something stays up,
+whether a control is enabled or shown, a sound, an order, where the focus goes — is identical
+across conditions, and between catch trials and real ones. A change to timing or control
+state at a touch start or a catch trial is a blinding change: it ships with a test that
+records the experimenter-visible sequence, with times, in all three conditions (and catch
+against real) and requires them equal.
+
 ## Subagents
 
 Use one when the answer needs many files read but only the conclusion matters.
@@ -162,9 +170,11 @@ the right default — downgrade deliberately, not by habit.
   then the **spec-review** agent, both at full strength. Fix what survives, run `make check` on
   the branch, then merge, then run `make check` on `main` (another branch may have merged in
   between). Delete the branch once merged.
-- **Screenshots.** A branch may re-approve the screens it deliberately changed, in the same
-  commit, and names each one in `docs/LOG.md` so S can review them. Re-approving a screen the
-  change did not mean to alter is a bug, not an approval.
+- **Screenshots.** S does not review screens (20 Oct 2026: "I don't need to review screens ...
+  Just stick to the principles and make things better"). A branch re-approves the screens it
+  deliberately changed, in the same commit, after looking at each against
+  `docs/UI_PRINCIPLES.md` itself; it does not list them for S. Re-approving a screen the change
+  did not mean to alter is a bug, not an approval. S's feedback comes from running demos.
 - **Commit at every milestone in `docs/SPEC.md` §18 with `make check` passing**, and commit
   smaller working increments in between.
 - **Never end a session with the repository broken.** If something is half-finished, either
@@ -286,7 +296,7 @@ stream agent:
   stream appending to one table is a guaranteed conflict.
 
 Each stream is reviewed and merged into `main` as in **Committing** above. A stream names every
-screen it re-approved in its final message, and the integrator records them in `docs/LOG.md` §7.
+screen it re-approved in its final message, so the integrator can check them.
 
 ## Working style
 
@@ -294,3 +304,42 @@ screen it re-approved in its final message, and the integrator records them in `
   then widen. Do not build one layer completely before starting the next.
 - Anything in `docs/SPEC.md` §20 that is still unresolved stays a clearly-marked placeholder
   that warns at startup. Never quietly default it — see the two-places rule above.
+- **UI work follows `docs/UI_PRINCIPLES.md`**, which is the one home for how screens and
+  controls behave and for how UI work is checked before it is handed over (§5.13–5.22, §7:
+  walk the session as both roles, realistic simulations, nothing
+  sent to S for approval that the principles decide). Do not restate its rules elsewhere.
+
+## Engineering lessons — what kept going wrong, and the rule that prevents it
+
+From the whole history (269 commits, about 90 of them review fixes, 20 Oct 2026). UI rules
+are in `docs/UI_PRINCIPLES.md`; these are the engineering ones.
+
+1. **Nothing is wired but dead.** Every signal, config key and text key has a consumer in a
+   real session, and a test proves it. A doc or docstring that says something is "recorded" or
+   "logged" has a test that finds the row (N7.F10a: every note lost since Milestone 5; N7.A1,
+   N7.A2, N7.U17; `vas.no_response_warning_s` read by nothing).
+2. **Tests do not depend on wall-clock timing.** Correctness runs on a clock the test steps,
+   or with tolerances stated in timer ticks and the reason written down. A step's timer is
+   anchored to the previous step's start, never to "now, after my write" (N7.U11, N7.U13).
+   A test that passes or fails by timing is a bug; before blaming a change, run it several
+   times on `main` and on the branch — one run decides nothing (N7.U3–U9, N7.F16m).
+3. **Every QObject has a Qt parent or one named owner**; every `singleShot` or connection
+   takes a context object; no lambda on a long-lived signal; tests never leave a window for the
+   garbage collector (N6.30, N7.I3, N7.U9, N7.U18, cc169c8).
+4. **Test through the layer a person uses**: key events marked as the remote's, screen-to-screen
+   transitions in a live window, not only fresh renders and emitted signals. Simulations use
+   the same path (N7.F5, N7.I1, N7.F16a).
+5. **A new or reordered stage ships with resume tests**: a crash before, inside and after it,
+   and a session file written under the previous stage plan (N7.F6d, N7.F16n).
+6. **Each device has one owner and is released on every exit path.** Preflight opens what the
+   session will open. An exception in a Qt slot always surfaces (`stop_on_error`): Qt otherwise
+   swallows it (N7.U5, N7.U6, N7.F10c).
+7. **Platform-dependent tests pin their platform**, and OS-touching code (files, devices,
+   keyboards, DPI) is not done until a numbered lab check in `docs/LOG.md` §2 exists for it.
+8. **Before building a request, trace its consequences** for catch trials, blinding, the
+   research reports and earlier LOG rows on the same key, and write them in one line; a reversed
+   decision marks the old row "superseded by" (N7.F14b→F14e, N7.F16f→F17a).
+9. **Cross-references are checked**: a LOG id cited in code or docs exists (add the row in the
+   same commit), and every config or text key named in SPEC, SOP or DATA_SCHEMA exists.
+10. **A data column or log event never changes meaning in place.** Add a new one, or a schema
+    version in the session file that the validator reads (N7.F17a changed `rating_cue_iso`).

@@ -34,6 +34,8 @@ SPIN_TIMEOUT_S = 10.0
 SLOW_WRITE_S = 0.02
 # One millisecond of real time, which a Qt timer rounds to, in session seconds.
 ROUNDED_MS_S = 0.001 * CLOCK_SPEED
+# Session seconds a test waits to see that nothing happens without the press.
+WAITED_S = 20.0
 
 # The 26 g filament is size 5.46, 255 mN -- the one Bilaga 1 3.6.1 calls "260 mN" (SPEC.md 8.1).
 APPLICATION = Application(
@@ -168,8 +170,8 @@ def test_the_cue_and_rating_cue_times_are_recorded(running):
 
 
 def test_the_rating_waits_for_the_experimenter_to_say_the_filament_is_applied(running):
-    """S, 20 Oct 2026 (LOG N7.F16f): the scale is shown only after the experimenter's press,
-    `rating_cue_delay_s` after it, and the row records when the press came."""
+    """S, 20 Oct 2026 (LOG N7.F16f, N7.F17a): the scale is shown only at the experimenter's
+    press, at once, and the row records when the press came."""
     session, participant, experimenter = running
     trial = PinprickTrial(session, participant, experimenter, APPLICATION)
     trial.start()
@@ -181,50 +183,43 @@ def test_the_rating_waits_for_the_experimenter_to_say_the_filament_is_applied(ru
     assert experimenter.zone.region == APPLICATION.region, "the target stays with it"
     # A stop from here counts the application as delivered, pressed or not (spec review).
     assert trial.stimulus_delivered and trial.stimulus_delivered_iso == ""
-    waited_s = session.clock.elapsed_s() + trial.rating_cue_delay_s * 2
+    waited_s = session.clock.elapsed_s() + WAITED_S
     _spin(lambda: session.clock.elapsed_s() > waited_s)
     assert participant.stack.currentWidget() is not participant.vas, "no scale before the press"
     experimenter.proceed_requested.emit()
     assert trial.stimulus_delivered and not trial.awaits_proceed
-    assert experimenter.status.text() == experimenter.text["instructions"]["delivered"].format(
-        seconds=f"{trial.rating_cue_delay_s:g}")
-    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    assert participant.stack.currentWidget() is participant.vas, "the scale, at once"
+    assert experimenter.status.text() == experimenter.text["instructions"]["await_participant"]
     _press(participant.vas, "pagedown")
     _press(participant.vas, "f5")
     row = _rows(session, "pinprick")[0]
-    assert row["cue_onset_iso"] < row["stimulus_delivered_iso"] < row["rating_cue_iso"]
+    assert row["cue_onset_iso"] < row["stimulus_delivered_iso"] <= row["rating_cue_iso"]
 
 
-def test_a_slow_write_after_the_delivery_press_does_not_delay_the_rating_cue(
+def test_a_slow_write_before_the_stimulus_due_does_not_delay_the_prompt(
     running, monkeypatch
 ):
-    """docs/LOG.md N7.U11: the rating cue is timed from the experimenter's press saying the
-    stimulus is applied, so writing its log row -- 20 ms here, 2 s of session time at this
-    speed -- is not added to the delay after it, and the delay is never shortened either."""
+    """docs/LOG.md N7.U11: the stimulus falls due the cue's lead after the cue onset it is
+    timed from, so writing the cue's log row -- 20 ms here, 2 s of session time at this speed
+    -- is not added to the lead, and the lead is never shortened either."""
     session, participant, experimenter = running
     real_log = session.log
-    prompted_at = []
+    cued_at = []
 
     def slow_log(event, *args, **kwargs):
-        if event == "stimulus_delivered":
-            prompted_at.append(session.clock.elapsed_s())
+        if event == "warning_cue":
+            cued_at.append(session.clock.elapsed_s())
             time.sleep(SLOW_WRITE_S)
         real_log(event, *args, **kwargs)
 
     monkeypatch.setattr(session, "log", slow_log)
-    cued_at = []
-    real_show_vas = participant.show_vas
-    monkeypatch.setattr(participant, "show_vas",
-                        lambda scale: (cued_at.append(session.clock.elapsed_s()),
-                                       real_show_vas(scale)))
     trial = PinprickTrial(session, participant, experimenter, APPLICATION)
     trial.start()
-    _deliver(experimenter, trial)
-    _spin(lambda: cued_at)
-    delay_s = cued_at[0] - prompted_at[0]
-    assert delay_s >= trial.rating_cue_delay_s - ROUNDED_MS_S, "the delay was shortened"
-    assert delay_s < trial.rating_cue_delay_s + SLOW_WRITE_S * CLOCK_SPEED, (
-        "the write after the prompt was added to the delay"
+    _spin(lambda: trial.awaits_proceed)
+    lead_s = session.clock.elapsed_s() - cued_at[0]
+    assert lead_s >= trial.warning_lead_s - ROUNDED_MS_S, "the lead was shortened"
+    assert lead_s < trial.warning_lead_s + SLOW_WRITE_S * CLOCK_SPEED, (
+        "the write after the cue was added to the lead"
     )
     trial.cancel()
 
@@ -317,7 +312,7 @@ def test_a_cancelled_trial_writes_no_row_and_reports_nothing(running):
     trial.finished.connect(done.append)
     trial.start()
     trial.cancel()
-    _spin(lambda: session.clock.elapsed_s() > trial.rating_cue_delay_s * 2)
+    _spin(lambda: session.clock.elapsed_s() > WAITED_S)
 
     assert done == []
     assert not session.files.path("pinprick").exists()

@@ -66,6 +66,9 @@ from tatp.units import MS_PER_S
 # `log` event names (docs/DATA_SCHEMA.md) and an experimenter text key, not wording.
 VAS_TRAINING_SHOWN = "vas_training_shown"
 VAS_TRAINING_EXPLAINED = "vas_training_explained"
+# The suffix of an estimate's instruction once no re-runs are left (touch calibration, the F40
+# preview): the same words without Re-run, which is then not offered (code review of N7.F17e).
+NO_RERUNS_LEFT = "_last"
 VAS_TRAINING_INSTRUCTION = "vas_training"
 # The screen and the experimenter's line before the session's first practice (LOG N7.F14a).
 PRACTICE_INTRO = "practice_intro"
@@ -95,7 +98,8 @@ class Rig(QObject):
         # own, which leaves a self-start prompt still waiting for its press in place (N7.D17).
         self.show_between: Callable[[], None] = lambda: participant.show_message(STANDBY_SCREEN)
         self.interruptions = Interruptions(session, participant, experimenter, self)
-        session.attach_interruptions(lambda: self.interruptions.active)
+        session.attach_interruptions(lambda: self.interruptions.active,
+                                     lambda: self.interruptions.resuming)
         # The remote's presses reach the participant window whichever window is active. The
         # filter is a child of that window, not of the rig: Qt deletes it with the window, and a
         # deleted filter is dropped from the application. As a child of the rig it could
@@ -145,6 +149,14 @@ class Rig(QObject):
         self.root: Procedure | None = None
         self.closing = False
         experimenter.set_proceed_source(self.proceed_awaited)
+        # A participant awaited too long is warned of, and logged (SPEC.md 8.3: never
+        # auto-advanced).
+        experimenter.set_no_response_s(
+            float(session.config.study1["vas"]["no_response_warning_s"]))
+        experimenter.set_note_saved_s(
+            float(session.config.hardware["screens"]["note_saved_shown_s"]))
+        # A bound method, not a lambda holding the session (CLAUDE.md, engineering lesson 3).
+        experimenter.no_response.connect(self._no_response)
         garment = session.garment
         experimenter.set_garment(
             garment.channels(), garment.limits.pressure_ceiling_kpa,
@@ -185,6 +197,9 @@ class Rig(QObject):
     def _advance(self) -> None:
         if self.session.garment.connected:
             self.session.garment.advance()
+
+    def _no_response(self, waited_s: float) -> None:
+        self.session.log("no_response", severity="warning", detail=f"{waited_s:.0f} s")
 
     def _confirmed_without_marker(self) -> None:
         self.session.log("confirm_without_marker", origin="participant")

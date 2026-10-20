@@ -39,10 +39,11 @@ from __future__ import annotations
 
 import math
 import re
+import time
 from collections.abc import Callable, Sequence
 from html import escape
 
-from PySide6.QtCore import QRegularExpression, Qt, QTimer, Signal, SignalInstance
+from PySide6.QtCore import QPoint, QRegularExpression, Qt, QTimer, Signal, SignalInstance
 from PySide6.QtGui import (
     QFontMetrics,
     QGuiApplication,
@@ -68,6 +69,7 @@ from tatp import touchcal_maths as maths
 from tatp.ui.garment_display import GarmentDisplay
 from tatp.ui.timeline import PhaseTimeline
 from tatp.ui.widgets import (
+    DEMO_BANNER_COLOUR,
     DISABLED,
     DISCONNECTED_COLOUR,
     FOREGROUND,
@@ -80,6 +82,7 @@ from tatp.ui.widgets import (
     SIZE_HEADLINE,
     SIZE_LARGE,
     SIZE_SMALL,
+    TARGET_COLOUR,
     WARNING_COLOUR,
     ChoiceDialog,
     FitPlot,
@@ -103,6 +106,8 @@ from tatp.units import MIN_PER_H, MS_PER_S, S_PER_MIN
 # short of.
 MARGIN_PX = 20
 IDENTITY_SEPARATOR = "  ·  "
+# Between a button's label and its key.
+KEY_HINT_SEPARATOR = "  "
 LINE_SEPARATOR = "\n"
 RICH_LINE_BREAK = "<br>"
 # Nothing below the banners may move during a session, because a layout that reflows at the
@@ -113,9 +118,9 @@ RICH_LINE_BREAK = "<br>"
 # for all three, which was a quarter of a laptop screen left empty in almost every session.
 # The interruption line is reserved at one line; a test holds both languages' wording to it.
 ALERT_LINES = 1
-# What to do now has three lines at the headline size. A longer instruction is set at the next
-# size down the scale, and so on, until it fits (UI_PRINCIPLES.md 3.3, 4.3).
-INSTRUCTION_LINES = 3
+# What to do now has four lines at the headline size, so a sentence to read aloud keeps it
+# (review of N7.F16). A longer one is set a size down the scale, until it fits (3.3, 4.3).
+INSTRUCTION_LINES = 4
 INSTRUCTION_SIZES = (SIZE_HEADLINE, SIZE_LARGE, SIZE_BODY, SIZE_SMALL)
 # The phase row's shares: two thirds the timeline, one third the countdown, which steps down
 # the type scale to fit its third (LOG N7.F16h).
@@ -132,8 +137,8 @@ WARNING_STAGES = 1
 SIDE_COLUMN_PX = 300
 FAULT_LINES = 4
 # Fixed, so the diagram does not resize when the pressures or faults appear (LOG N7.U10).
-# 120, from 180, to make room for the channel display on the lab laptop (LOG N7.F16i).
-ZONE_HEIGHT_PX = 120
+# The channel display stands beside it rather than below (LOG N7.F17b), so it can be tall.
+ZONE_HEIGHT_PX = 200
 SUBSTITUTION_FIELD_PX = 300
 DISTANCE_FIELD_PX = 110
 CONTROL_COLUMNS = 4
@@ -252,6 +257,12 @@ class ExperimenterWindow(QWidget):
     skip_calibration_requested = Signal()
     garment_connect_requested = Signal()
     garment_disconnect_requested = Signal()
+    # A step's other answer, offered by the step with its own label (`offer_alternative`):
+    # "They can still hear it", "They could not press the stop", ... (review of N7.F16).
+    alternative_requested = Signal()
+    # The participant has been awaited past `vas.no_response_warning_s`: the seconds, for
+    # the log.
+    no_response = Signal(float)
 
     def __init__(
         self,
@@ -268,15 +279,28 @@ class ExperimenterWindow(QWidget):
         self.setStyleSheet(stylesheet())
 
         # What the running procedure is waiting for, beyond what the view says (SPEC.md 11).
-        self._awaiting = {"rebalance": False, "fit_decision": False, "discard": False,
+        self._awaiting = {"rebalance": False, "fit_accept": False, "fit_rerun": False,
+                          "discard": False,
                           "skip_calibration": False, "substitution": False, "closed": False,
                           "recalibrate_rebalance": False, "recalibrate_restart": False,
                           "recalibration_used": False}
         self._interruption: str | None = None
+        # A step's other answer, while one is offered (`offer_alternative`).
+        self._alternative: str | None = None
+        # The stop rehearsal waiting for its stop (`set_rehearsal`), and a resume under way.
+        self._rehearsing = False
+        # How long the participant has been awaited, and the threshold to say so
+        # (`set_no_response_s`); the warning shown for it, while it is.
+        self._awaited_since_s: float | None = None
+        self._no_response_s: float | None = None
+        self._no_response_shown: str | None = None
+        self._resuming = False
         self._connected = False
         self._mapping_phases: list[str] = []
         self._instruction_text = ""
         self._status_text = ""
+        # The status as set, before any wait is added to it (`_check_response_wait`).
+        self._status_raw = ""
         self._warning_text = ""
         self._warning_stages = 0
         self._reminder_text = ""
@@ -341,7 +365,7 @@ class ExperimenterWindow(QWidget):
         self.fit_preview_banner.setText(banners_text["fit_preview"])
         self.fit_preview_banner.setToolTip(banners_text["fit_preview_detail"])
         # A demonstration (tatp/demo.py): the session runs, and nothing it records is data.
-        self.demo_banner = _banner(REDUCED_CAPABILITY_COLOUR)
+        self.demo_banner = _banner(DEMO_BANNER_COLOUR)
         self.demo_banner.setText(banners_text["demo"])
         # Which open items are not final, by number (SPEC.md 20). Here rather than under the
         # instruction, because like the banners it is settled before the session and does not
@@ -433,7 +457,7 @@ class ExperimenterWindow(QWidget):
         # a step with nowhere to go has no picture to look at; which steps have one is a matter
         # of the procedure, never of the condition (SPEC.md 16).
         self.zone = ZoneDiagram()
-        self.zone.setFixedHeight(ZONE_HEIGHT_PX)
+        self.zone.setFixedSize(self.zone.width_for(ZONE_HEIGHT_PX), ZONE_HEIGHT_PX)
         _reserve(self.zone)
         self.target = label(SIZE_BODY)
         self.target.setAlignment(Qt.AlignHCenter)
@@ -470,20 +494,26 @@ class ExperimenterWindow(QWidget):
         self.skip_button = button(self.text["controls"]["skip_calibration"])
         self.skip_button.clicked.connect(self.skip_calibration_requested.emit)
         self.skip_button.setVisible(False)
-        state = QHBoxLayout()
-        state.addWidget(self.hardware_title)
-        state.addWidget(self.garment)
-        state.addStretch(1)
+        # The garment beside the zone diagram, not under it: the two never compete for
+        # height, so the diagram keeps its size on the lab laptop (LOG N7.F17b).
+        garment_box = QVBoxLayout()
+        garment_box.setSpacing(ITEM_GAP_PX)
+        garment_box.addWidget(self.hardware_title)
+        garment_box.addWidget(self.garment)
+        garment_box.addLayout(self._garment_slot)
+        garment_box.addStretch(1)
+        top = QHBoxLayout()
+        top.setSpacing(ITEM_GAP_PX)
+        top.addWidget(self.zone, 0, Qt.AlignTop)
+        top.addLayout(garment_box, 1)
 
         side = QWidget()
         side.setFixedWidth(SIDE_COLUMN_PX)
         column = QVBoxLayout(side)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(ITEM_GAP_PX)
-        column.addWidget(self.zone)
+        column.addLayout(top)
         column.addWidget(self.target)
-        column.addLayout(state)
-        column.addLayout(self._garment_slot)
         column.addWidget(self.faults)
         column.addStretch(1)
         column.addWidget(self.skip_button)
@@ -503,11 +533,18 @@ class ExperimenterWindow(QWidget):
         # where each one appears and nothing moves when it does (UI_PRINCIPLES.md 3.3, 5.5).
         # A control that does nothing when pressed is not drawn: ten buttons of equal weight,
         # six of them dead, were "a lot for the eyes" (S, 15 Oct 2026 pilot).
-        self.proceed_button = button(controls["proceed"], SIZE_BODY)
-        self.pause_button = button(controls["pause"], SIZE_BODY)
-        self.resume_button = button(controls["resume"], SIZE_BODY)
+        # The keys are on the buttons, so they are learnt by looking (review of N7.F16).
+        keys = self.text["keys"]
+        self.proceed_button = button(self._keyed(controls["proceed"], keys["proceed"]),
+                                     SIZE_BODY)
+        self.pause_button = button(self._keyed(controls["pause"], keys["pause"]), SIZE_BODY)
+        self.resume_button = button(self._keyed(controls["resume"], keys["resume"]), SIZE_BODY)
         self.abort_button = button(controls["abort"], SIZE_BODY)
         self.discard_button = button(controls["discard_repeat"])
+        # A step's other answer, where Next step would otherwise have meant "no": labelled by
+        # the step with what it does (`offer_alternative`; review of N7.F16).
+        self.alternative_button = button("")
+        self.alternative_button.clicked.connect(self.alternative_requested.emit)
         self.rebalance_button = button(controls["rebalance"])
         self.fit_accept_button = button(controls["fit_accept"])
         self.fit_rerun_button = button(controls["fit_rerun"])
@@ -537,11 +574,20 @@ class ExperimenterWindow(QWidget):
         # Space is Next step wherever the focus is in this window, a text field excepted,
         # which types it (S, 20 Oct 2026; LOG N7.F16d). The button is seen to go down, as if
         # clicked. Not a remote key, so the router never forwards it to the participant.
-        self.proceed_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
+        self.proceed_shortcut = QShortcut(QKeySequence(keys["proceed"]), self)
         self.proceed_shortcut.activated.connect(self._proceed_key)
+        # Pause and Resume from the keyboard too, so neither needs the mouse while the
+        # experimenter's hands are on the participant (review of N7.F16). Letters: never a
+        # key the remote sends, so never forwarded to the participant.
+        for key, widget in ((keys["pause"], self.pause_button),
+                            (keys["resume"], self.resume_button)):
+            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.activated.connect(
+                lambda widget=widget: widget.isVisible() and widget.isEnabled()
+                and widget.click())
         self.pause_button.clicked.connect(self.pause_requested.emit)
         self.resume_button.clicked.connect(self.resume_requested.emit)
-        self.discard_button.clicked.connect(self.discard_requested.emit)
+        self.discard_button.clicked.connect(self._discard_clicked)
         self.rebalance_button.clicked.connect(self.rebalance_requested.emit)
         self.fit_accept_button.clicked.connect(self.fit_accepted.emit)
         self.fit_rerun_button.clicked.connect(self.open_rerun_dialog)
@@ -563,7 +609,8 @@ class ExperimenterWindow(QWidget):
                    self.abort_button)
         # A control a later step offers is added here, and wraps onto a row of its own.
         situational = (
-            self.discard_button,
+            # A step's other answer under the way forward, which it is the alternative to.
+            self.alternative_button,
             self.rebalance_button,
             # Re-run before Accept, as in the fit window and every dialog: the choice that
             # goes on sits on the right (UI_PRINCIPLES.md 5.5, same thing in the same place).
@@ -574,6 +621,13 @@ class ExperimenterWindow(QWidget):
             row, column = divmod(index, CONTROL_COLUMNS)
             self.controls.addWidget(widget, row, column)
             _reserve(widget)
+        # Discard is never offered with Accept, so it shares Accept's slot: at the far right,
+        # away from Next step, where a reflexive second press of the way forward cannot reach
+        # it (review of N7.F16; it sat right under Next step).
+        row, column, _, _ = self.controls.getItemPosition(
+            self.controls.indexOf(self.fit_accept_button))
+        self.controls.addWidget(self.discard_button, row, column)
+        _reserve(self.discard_button)
         # The re-calibrations share the slots of their kin rather than add a row the laptop has
         # no room for: Rebalance channels… over Rebalance channels, Restart calibration… over
         # Re-run the procedure (UI_PRINCIPLES.md 5.5). When the procedure offers the kin, which
@@ -594,6 +648,11 @@ class ExperimenterWindow(QWidget):
         controls = self.text["controls"]
         self.note = line_edit()
         self.note.setPlaceholderText(controls["note"])
+        # Interval from `set_note_saved_s`; the window's tests leave it at 0, which restores
+        # the placeholder on the next pass of the event loop.
+        self._note_timer = QTimer(self)
+        self._note_timer.setSingleShot(True)
+        self._note_timer.timeout.connect(lambda: self.note.setPlaceholderText(controls["note"]))
         self.note_button = button(controls["add_note"])
         self.note_button.clicked.connect(self._enter_note)
         self.note.returnPressed.connect(self._enter_note)
@@ -659,9 +718,41 @@ class ExperimenterWindow(QWidget):
         self.set_target(None)
 
     def set_status(self, text: str) -> None:
-        """Whether the response has been received (SPEC.md 11) -- never what it was."""
-        self._status_text = text
+        """Whether the response has been received (SPEC.md 11) -- never what it was.
+
+        While it says the participant is awaited, how long is counted, and past
+        `vas.no_response_warning_s` the wait is shown and warned of, and `no_response` is
+        emitted for the log (review of N7.F16: the setting was read by nothing)."""
+        awaiting = text == self.text["instructions"]["await_participant"]
+        if awaiting and self._status_raw != text:
+            self._awaited_since_s = time.monotonic()
+        elif not awaiting:
+            self._awaited_since_s = None
+            if self._no_response_shown is not None:
+                self.clear_warning(self._no_response_shown)
+                self._no_response_shown = None
+        self._status_text = self._status_raw = text
         self._fit_text()
+
+    def set_no_response_s(self, seconds: float) -> None:
+        self._no_response_s = seconds
+
+    def set_note_saved_s(self, seconds: float) -> None:
+        self._note_timer.setInterval(round(seconds * MS_PER_S))
+
+    def _check_response_wait(self) -> None:
+        if self._awaited_since_s is None or self._no_response_s is None:
+            return
+        waited_s = time.monotonic() - self._awaited_since_s
+        if waited_s < self._no_response_s:
+            return
+        self._status_text = self.text["status"]["awaited_for"].format(
+            status=self.text["instructions"]["await_participant"], time=clock_text(waited_s))
+        if self._no_response_shown is None:
+            self._no_response_shown = self.text["warnings"]["no_response"].format(
+                value=f"{self._no_response_s:g}")
+            self.set_warning(self._no_response_shown)
+            self.no_response.emit(waited_s)
 
     def set_warning(self, text: str) -> None:
         """A warning, under the status in the same region, in the warning colour.
@@ -729,6 +820,8 @@ class ExperimenterWindow(QWidget):
         *,
         rebalance: bool | None = None,
         fit_decision: bool | None = None,
+        fit_accept: bool | None = None,
+        fit_rerun: bool | None = None,
         discard: bool | None = None,
         skip_calibration: bool | None = None,
         substitution: bool | None = None,
@@ -739,7 +832,9 @@ class ExperimenterWindow(QWidget):
     ) -> None:
         """What the running procedure waits for (SPEC.md 9, 11, 11.1). None leaves it as is.
 
-        `rebalance` offers Rebalance channels; `fit_decision` offers Accept and Re-run;
+        `rebalance` offers Rebalance channels; `fit_decision` offers Accept and Re-run, and
+        `fit_accept` or `fit_rerun` one of them where the other would be refused (review of
+        N7.F16: a choice offered and then refused is a dead control);
         `discard` offers Discard and repeat; `skip_calibration` offers Skip calibration, which
         exists only on a pilot rig; `substitution` offers the filament-applied-instead entry,
         while a filament trial listens for it. Each is hidden, in a place kept for it, when not
@@ -760,7 +855,10 @@ class ExperimenterWindow(QWidget):
             "the substitution entry holds unrecorded text: withdraw it with "
             "withdraw_substitution()"
         )
-        for key, value in (("rebalance", rebalance), ("fit_decision", fit_decision),
+        if fit_decision is not None:
+            fit_accept = fit_rerun = fit_decision
+        for key, value in (("rebalance", rebalance), ("fit_accept", fit_accept),
+                           ("fit_rerun", fit_rerun),
                            ("discard", discard), ("skip_calibration", skip_calibration),
                            ("substitution", substitution), ("closed", closed),
                            ("recalibrate_rebalance", recalibrate_rebalance),
@@ -769,6 +867,19 @@ class ExperimenterWindow(QWidget):
             if value is not None:
                 self._awaiting[key] = bool(value)
         self._apply_enabled()
+
+    def offer_alternative(self, label_text: str | None) -> None:
+        """Offer a step's other answer on a button of its own, labelled with what it does;
+        None withdraws it. Next step stays the way forward: it never means "no" (review of
+        N7.F16: in the masking check, the stop rehearsal and an undefined gain it did)."""
+        self._alternative = label_text
+        if label_text is not None:
+            self.alternative_button.setText(label_text)
+        self._apply_enabled()
+
+    @staticmethod
+    def _keyed(text: str, key: str) -> str:
+        return f"{text}{KEY_HINT_SEPARATOR}[{key}]"
 
     def withdraw_substitution(self) -> str:
         """Stop offering the filament-applied-instead entry. Returns what was typed in it and
@@ -799,7 +910,9 @@ class ExperimenterWindow(QWidget):
     # -- the fit preview, SPEC.md 11.1 ---------------------------------------------------
 
     def show_fit_preview(self, fit) -> None:
-        """Open the fit preview on an `F40Fit` or a `FitReady`, and enable Accept and Re-run.
+        """Open the fit preview on an `F40Fit` or a `FitReady`. Which of Accept and Re-run it
+        offers is the procedure's (`set_actions_enabled`): enabled here, both came back on
+        over a procedure that had withheld one (code review of N7.F17e).
 
         Refused unless the view says the preview is enabled: a fit carries the participant's
         ratings, and this is the only place they could reach the lab screen.
@@ -809,7 +922,10 @@ class ExperimenterWindow(QWidget):
                 "a fit was handed to the experimenter window with fit_preview.enabled false"
             )
         self.fit_preview.draw(fit)
-        self.set_actions_enabled(fit_decision=True)
+        # At the window's right, over the side column, where it hides the least of the
+        # instruction -- not centred over it (review of N7.F16).
+        corner = self.mapToGlobal(QPoint(self.width() - MARGIN_PX, MARGIN_PX))
+        self.fit_preview.move(corner.x() - self.fit_preview.width(), corner.y())
         self.fit_preview.show()
         self.fit_preview.raise_()
 
@@ -836,7 +952,7 @@ class ExperimenterWindow(QWidget):
     def rerun_dialog(self) -> ReasonDialog:
         """Ask why the estimate is being re-run (SPEC.md 11.1): the reason is kept with it."""
         controls, dialogs = self.text["controls"], self.text["dialogs"]
-        return ReasonDialog(
+        made = ReasonDialog(
             controls["fit_rerun"],
             dialogs["fit_rerun_reason"],
             "",
@@ -844,6 +960,10 @@ class ExperimenterWindow(QWidget):
             controls["cancel"],
             parent=self,
         )
+        # Enter confirms once a reason is typed, as it saves a note (review of N7.F16). Not
+        # the abort, which ends the session and is confirmed only by a click.
+        made.confirm.setDefault(True)
+        return made
 
     def recalibration_dialog(self, choice: str) -> ChoiceDialog:
         """What the re-calibration does, and why it is chosen, from a fixed list (docs/LOG.md
@@ -851,7 +971,7 @@ class ExperimenterWindow(QWidget):
         controls, dialogs = self.text["controls"], self.text["dialogs"]
         action = {RECALIBRATE_REBALANCE: "rebalance",
                   RECALIBRATE_RESTART: "restart_calibration"}
-        return ChoiceDialog(
+        made = ChoiceDialog(
             controls[f"recalibrate_{choice}"],
             dialogs[f"recalibrate_{choice}"],
             dialogs["recalibration_reason"],
@@ -860,6 +980,10 @@ class ExperimenterWindow(QWidget):
             controls["cancel"],
             parent=self,
         )
+        # One sentence to read with the participant waiting; the whole of what it does on
+        # hover (review of N7.F16: about 90 words).
+        made.message.setToolTip(dialogs[f"recalibrate_{choice}_detail"])
+        return made
 
     def error_dialog(self, message: str) -> MessageDialog:
         dialogs = self.text["dialogs"]
@@ -868,6 +992,10 @@ class ExperimenterWindow(QWidget):
         )
 
     def open_abort_dialog(self) -> ReasonDialog:
+        # Paused first, so the garment is at zero and nothing runs on behind the dialog while
+        # a reason is typed; Cancel leaves the session paused (review of N7.F16).
+        if self._interruption is None and not self._awaiting["closed"]:
+            self.pause_requested.emit()
         dialog = self.abort_dialog()
         dialog.accepted.connect(lambda: self.abort_requested.emit(dialog.reason_text()))
         dialog.open()
@@ -958,9 +1086,32 @@ class ExperimenterWindow(QWidget):
         # so a double press never lands on the step after.
         self._apply_enabled()
 
+    def discard_dialog(self) -> MessageDialog:
+        controls = self.text["controls"]
+        return MessageDialog(controls["discard_repeat"],
+                             self.text["dialogs"]["discard_confirm"],
+                             controls["discard_repeat"], controls["cancel"], parent=self)
+
+    def _discard_clicked(self) -> None:
+        """Asked first: a slip discarded a rating with one click (LOG N7.F17e). Still offered
+        when answered, or nothing is discarded -- the procedure may have moved on meanwhile."""
+        dialog = self.discard_dialog()
+        dialog.accepted.connect(
+            lambda: self._awaiting["discard"] and self.discard_requested.emit())
+        dialog.open()
+
+    def disconnect_dialog(self) -> MessageDialog:
+        controls = self.text["controls"]
+        return MessageDialog(controls["disconnect"], self.text["dialogs"]["disconnect_confirm"],
+                             controls["disconnect"], controls["cancel"], parent=self)
+
     def _garment_clicked(self) -> None:
         if self._connected:
-            self.garment_disconnect_requested.emit()
+            # Asked first, in every phase alike, so the asking says nothing about the touch
+            # (SPEC.md 16): a single click stopped it (review of N7.F16).
+            dialog = self.disconnect_dialog()
+            dialog.accepted.connect(self.garment_disconnect_requested.emit)
+            dialog.open()
         else:
             self.garment_connect_requested.emit()
 
@@ -972,8 +1123,10 @@ class ExperimenterWindow(QWidget):
 
     def confirm_note(self, time_text: str) -> None:
         """The note is in the log. Said in the emptied field, where the eye already is, so
-        nothing on the screen moves (S, 15 Oct 2026 pilot)."""
+        nothing on the screen moves (S, 15 Oct 2026 pilot). Taken back after
+        `note_saved_shown_s`, so it is never left up hours later (review of N7.F16)."""
         self.note.setPlaceholderText(self.text["controls"]["note_saved"].format(time=time_text))
+        self._note_timer.start()
 
     def _enter_substitution(self) -> None:
         filament = self.substitution.text().strip()
@@ -1040,7 +1193,8 @@ class ExperimenterWindow(QWidget):
             text["status"]["elapsed"].format(time=clock_text(view["elapsed_s"]))
         )
         self._draw_countdown(view["next_event"])
-        self._draw_interruption(view["interruption"])
+        self._draw_interruption(view["interruption"], bool(view["resuming"]),
+                                bool(view["hardware"]["link_lost"]))
         self._draw_hardware(view["hardware"], view["phase"])
 
         # By number, so twenty open items still fit the line; the summaries are the tooltip,
@@ -1054,6 +1208,7 @@ class ExperimenterWindow(QWidget):
         )
         self.open_items.setToolTip(LINE_SEPARATOR.join(items))
         self.open_items.setVisible(bool(items))
+        self._check_response_wait()
         self._fit_text()
         self._apply_enabled()
 
@@ -1153,27 +1308,62 @@ class ExperimenterWindow(QWidget):
                     break
             sized(self.countdown, size)
 
-    def _draw_interruption(self, interruption: str | None) -> None:
+    def set_rehearsal(self, rehearsing: bool) -> None:
+        """The stop rehearsal is waiting for its stop (SPEC.md 10.9): a stop then is the one
+        expected, said calmly, with the instruction for it at full strength -- not the alarm
+        of an unexpected stop (review of N7.F16)."""
+        self._rehearsing = rehearsing
+        self.refresh()
+
+    def _draw_interruption(self, interruption: str | None, resuming: bool,
+                           link_lost: bool) -> None:
         assert interruption is None or interruption in INTERRUPTIONS, interruption
+        # The participant is not awaited while the session is stopped or paused: the wait for
+        # their answer starts again at the resume (code review of N7.F17e: it ran on through a
+        # pause, and a resumed trial carried the old start). Real seconds throughout, as a
+        # person's answer takes them at any clock speed.
+        if interruption is not None and self._interruption is None:
+            self._awaited_since_s = None
+            if self._no_response_shown is not None:
+                self.clear_warning(self._no_response_shown)
+                self._no_response_shown = None
+            self._status_text = self._status_raw
+        elif (interruption is None and self._interruption is not None
+              and self._status_raw == self.text["instructions"]["await_participant"]):
+            self._awaited_since_s = time.monotonic()
         self._interruption = interruption
+        self._resuming = resuming
+        status = self.text["status"]
+        expected = self._rehearsing and interruption == EMERGENCY_STOP
         # While interrupted the step on screen is on hold, so it is dimmed and the stop line
-        # is the brightest thing in its place. Colour only: nothing moves (UI_PRINCIPLES.md
-        # 3.3).
-        running = interruption is None
+        # is the brightest thing in its place -- except the rehearsal's expected stop, whose
+        # instruction is the one to follow. Colour only: nothing moves (UI_PRINCIPLES.md 3.3).
+        running = interruption is None or expected
         _restyle(self.instruction, f"color: {FOREGROUND if running else SECONDARY};")
         _restyle(self.status, f"color: {SECONDARY if running else DISABLED};")
         _restyle(self.technique, f"color: {SECONDARY if running else DISABLED};")
-        if interruption is None:
-            self.alert.setText("")
-            self.alert.setStyleSheet("")
-            return
-        # Resume by the label its button carries.
-        self.alert.setText(self.text["status"][f"interrupted_{interruption}"].format(
-            controls=self.text["controls"]
-        ))
-        # The stop is the participant's and is red; a pause is the experimenter's own and amber.
-        colour = DISCONNECTED_COLOUR if interruption == EMERGENCY_STOP else WARNING_COLOUR
-        self.alert.setStyleSheet(emphasis_style(colour))
+        if link_lost:
+            # In the alert row, red, as a stop is: the outputs may still be on (N7.U16), and
+            # small print in the side column was easily missed (review of N7.F16). First, over
+            # a stop's line too, which is when it matters most.
+            text = self.text["hardware"]["link_lost"]
+            style = emphasis_style(DISCONNECTED_COLOUR)
+        elif interruption is not None and resuming:
+            # The resume was pressed and its cue is playing: said, so it is not pressed again.
+            text, style = status["resuming"], emphasis_style(TARGET_COLOUR)
+        elif expected:
+            text = status["rehearsal_stop"].format(controls=self.text["controls"])
+            style = emphasis_style(TARGET_COLOUR)
+        elif interruption is not None:
+            # Resume by the label its button carries. The stop is the participant's and is
+            # red; a pause is the experimenter's own and amber.
+            text = status[f"interrupted_{interruption}"].format(controls=self.text["controls"])
+            colour = DISCONNECTED_COLOUR if interruption == EMERGENCY_STOP else WARNING_COLOUR
+            style = emphasis_style(colour)
+        else:
+            text, style = "", ""
+        self.alert.setText(text)
+        _restyle(self.alert, style)
 
     def _draw_hardware(self, hardware: dict, phase: str) -> None:
         # Connected is the quiet, expected state; disconnected is loud. A hazard state that is
@@ -1215,11 +1405,8 @@ class ExperimenterWindow(QWidget):
         shown = [fault for fault in hardware["faults"] if fault not in self._withheld_faults]
         lines = []
         if hardware["link_lost"]:
-            # First, so the bound can never cut it off: the sleeve's outputs may still be on
-            # (docs/LOG.md N7.U16). It names no channel, so it shows in every phase. It wraps
-            # onto two lines, so the counts give way to leave the newest fault its start; they
-            # stay in the tooltip and the data.
-            lines.append(words["link_lost"])
+            # The warning itself is in the alert row (`_draw_interruption`); here the newest
+            # fault keeps its start, the counts giving way: they stay in the tooltip and data.
             if shown:
                 lines.append(words["fault"].format(value=shown[-1]))
             elif withheld:
@@ -1248,8 +1435,11 @@ class ExperimenterWindow(QWidget):
         """
         running = self._interruption is None
         self.proceed_button.setEnabled(running and self._proceed_awaited())
-        deciding = running and self._awaiting["fit_decision"]
+        accepting = running and self._awaiting["fit_accept"]
+        rerunning = running and self._awaiting["fit_rerun"]
+
         discarding = running and self._awaiting["discard"]
+        offering = running and self._alternative is not None
         rebalancing = running and self._awaiting["rebalance"]
         skipping = self._awaiting["skip_calibration"]
         substituting = self._awaiting["substitution"]
@@ -1261,17 +1451,21 @@ class ExperimenterWindow(QWidget):
         rebalancing_after = (recalibrating and self._awaiting["recalibrate_rebalance"]
                              and not rebalancing)
         restarting_after = (recalibrating and self._awaiting["recalibrate_restart"]
-                            and not deciding)
+                            and not rerunning)
         # (widget, shown, pressable). Skip calibration stays in sight through an
         # interruption, as it was, but cannot be pressed then.
         offered = (
             (self.pause_button, running and open_, running and open_),
             (self.garment_button, open_, open_),
-            (self.resume_button, not running, not running),
+            # Not once closed: an abort ran again on a closed session (code review of N7.F17e).
+            (self.abort_button, open_, open_),
+            (self.resume_button, not running and not self._resuming,
+             not running and not self._resuming),
             (self.discard_button, discarding, discarding),
+            (self.alternative_button, offering, offering),
             (self.rebalance_button, rebalancing, rebalancing),
-            (self.fit_accept_button, deciding, deciding),
-            (self.fit_rerun_button, deciding, deciding),
+            (self.fit_accept_button, accepting, accepting),
+            (self.fit_rerun_button, rerunning, rerunning),
             (self.recalibrate_rebalance_button, rebalancing_after, rebalancing_after),
             (self.recalibrate_restart_button, restarting_after, restarting_after),
             (self.skip_button, skipping, running and skipping),
@@ -1289,8 +1483,10 @@ class ExperimenterWindow(QWidget):
             widget.setVisible(shown)
             widget.setEnabled(pressable)
         self.recalibration_used.setVisible(stopped and self._awaiting["recalibration_used"])
-        self.fit_preview.accept_button.setEnabled(deciding)
-        self.fit_preview.rerun_button.setEnabled(deciding)
+        self.fit_preview.accept_button.setVisible(accepting)
+        self.fit_preview.accept_button.setEnabled(accepting)
+        self.fit_preview.rerun_button.setVisible(rerunning)
+        self.fit_preview.rerun_button.setEnabled(rerunning)
         # Quiet while connected, the expected state; the way forward when it reads Connect.
         # The same size in both, so Skip calibration above it never moves.
         self.garment_button.setText(

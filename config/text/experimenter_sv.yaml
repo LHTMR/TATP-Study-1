@@ -20,6 +20,9 @@ session:
 terms:
   # Värden ur kontrollerade vokabulärer som förekommer inuti strängarna nedan, så att ett värde
   # som programmet håller på engelska -- en arm, en zon -- inte visas oöversatt.
+  anchor_targets:
+    just_noticeable: precis märkbar
+    just_uncomfortable: precis obehaglig
   limbs:
     left: vänster
     right: höger
@@ -121,8 +124,12 @@ instructions:
   # Ett drag på cirka 2 cm, aldrig upprepat: upprepning höjer smärtan (docs/research/RB2).
   # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
   apply_brush: 'Nu: borsta den {region} zonen på plats {site}, ett enda drag på cirka 2 cm, och tryck sedan på {controls[proceed]}.'
-  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
-  delivered: 'Applicerat. Skattningsskalan visas om {seconds} s.'
+  # Efter trycket, medan deltagaren skattar: vad som applicerades, och inget kvar att göra
+  # (LOG N7.F17e).
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  applied_filament: 'Applicerat: filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen.'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  applied_brush: 'Applicerat: penseldraget på plats {site}, den {region} zonen.'
   # DRAFT (LOG N7.F11b8, N7.F14c): written by the build, not ethics-sourced. Det slumpade
   # uppehållet efter en skattning när ingen applicering följer: serien är slut. Svaret
   # rapporteras på statusraden (`received_*`).
@@ -194,7 +201,7 @@ instructions:
     appliceras (den primära zonen). Tryck sedan på {controls[proceed]}.
   # DRAFT (LOG N7.F11b14): written by the build, not ethics-sourced. Före sessionens första
   # smärtmätning, som följs av övningen på smärtskalan.
-  ready_long_first: 'Första smärtmätningarna. Säg till deltagaren: "{say[first_pain]}" Tryck sedan på {controls[proceed]}.'
+  ready_long_first: 'Första smärtmätningarna. Säg: "{say[first_pain]}" Tryck sedan på {controls[proceed]}.'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
   ready_short: '{n} appliceringar med filamentet {filament} g i den {region} zonen. Ha det till hands och tryck sedan på {controls[proceed]}.'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
@@ -232,12 +239,12 @@ instructions:
   # Nästa steg är det som registrerar det.
   masking_check_mask: >-
     Ljudinställning, del 2: plagget är igång och deltagaren höjer bruset för att dölja det.
-    Tryck på {controls[proceed]} bara om deltagaren säger att hen fortfarande hör plagget: det
+    Om deltagaren säger att hen fortfarande hör plagget, tryck på {controls[still_audible]}: det
     registreras då, och bruset stängs av så att du kan erbjuda öronproppar.
   # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced. Samma steg med öronproppar.
   masking_check_mask_earplugs: >-
     Ljudinställning, med öronproppar: deltagaren höjer bruset för att dölja plagget. Tryck på
-    {controls[proceed]} bara om deltagaren säger att hen fortfarande hör det: det registreras
+    {controls[still_audible]} om deltagaren säger att hen fortfarande hör det: det registreras
     då, och sessionen fortsätter registrerad som inte helt maskerad.
   # DRAFT (LOG N7.F11b4): written by the build, not ethics-sourced. Skärmen `settled`, där
   # Nästa steg inte gör något.
@@ -249,8 +256,8 @@ instructions:
   # DRAFT (LOG N7.F11b3): written by the build, not ethics-sourced
   stop_rehearsal: >-
     Övning med stoppknappen: beröringen är igång och deltagaren ombeds trycka på stoppknappen.
-    Vänta på trycket. {controls[proceed]} är bara för en deltagare som inte kan trycka, och det
-    registrerar inget tryck.
+    Vänta på trycket. {controls[no_stop_press]} är bara för en deltagare som inte kan trycka, och
+    det registrerar inget tryck.
   # DRAFT (LOG N7.F11b3): written by the build, not ethics-sourced
   stop_rehearsal_resume: 'Stoppet fungerade. Säg till deltagaren: "{say[stop_works]}" Tryck sedan på {controls[resume]}.'
   # DRAFT (LOG N7.F11b3): written by the build, not ethics-sourced. Efter återupptagandet,
@@ -260,9 +267,8 @@ instructions:
   # från ingen beröring" gäller så länge touch_calibration.adjustments_per_anchor är 1
   # (tests/test_touchcal.py).
   touchcal_bracket: >-
-    Beröringskalibrering, steg 1 av 6: deltagaren ställer in beröringen på mittkanalen, först
-    till precis märkbar, sedan till precis obehaglig. Varje inställning börjar från ingen
-    beröring.
+    Beröringskalibrering, steg 1 av 6: deltagaren ställer in beröringen på mittkanalen till
+    {target} ({index} av {count}). Varje inställning börjar från ingen beröring.
   # DRAFT (LOG N7.F8c): the progress, "x/N answered" (S, 5 Oct 2026).
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_estimation: 'Beröringskalibrering, steg 2 av 6: deltagaren skattar en serie beröringar. {answered}/{total} besvarade.'
@@ -284,26 +290,33 @@ instructions:
   touchcal_fit_review: 'Skattningen i beröringskalibreringen är klar. Tryck på {controls[fit_accept]} eller {controls[fit_rerun]}.'
   # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced
   f40_fit_review: 'Skattningen av filamentkraften (F40) är klar. Tryck på {controls[fit_accept]} eller {controls[fit_rerun]}.'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. The same three once no
+  # re-runs are left, when Re-run is not offered (`NO_RERUNS_LEFT`).
+  touchcal_fit_review_last: 'Skattningen i beröringskalibreringen är klar, och inga omkörningar finns kvar. Tryck på {controls[fit_accept]}.'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  f40_fit_review_last: 'Skattningen av filamentkraften (F40) är klar, och inga omkörningar finns kvar. Tryck på {controls[fit_accept]}.'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  touchcal_stage1_failed_last: 'Skattningen klarade inte kvalitetskontrollen ({value}), och inga omkörningar finns kvar. Tryck på {controls[fit_accept]} för att fortsätta, flaggad.'
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_failed: >-
-    Skattningen i beröringskalibreringen klarade inte kvalitetskontrollen ({value}). Tryck på
-    {controls[fit_rerun]} för att göra om steg 1 och 2, och säg till deltagaren:
-    "{say[rerun]}" Eller tryck på {controls[fit_accept]} för att fortsätta med den flaggad.
+    Skattningen klarade inte kvalitetskontrollen ({value}). Tryck på {controls[fit_rerun]} för
+    att göra om steg 1 och 2 och säg: "{say[rerun]}" Eller tryck på {controls[fit_accept]} för
+    att fortsätta, flaggad.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_unusable: >-
     Skattningen i beröringskalibreringen kan inte användas ({value}). Tryck på
-    {controls[fit_rerun]} för att göra om steg 1 och 2, och säg till deltagaren:
-    "{say[rerun]}" Eller tryck på {controls[abort]}.
+    {controls[fit_rerun]} för att göra om steg 1 och 2 och säg: "{say[rerun]}" Eller tryck på
+    {controls[abort]}.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced. Ingen omkörning erbjuds:
   # gränsen är nådd, och en omkörning nekas.
   touchcal_stage1_exhausted: >-
-    Skattningen i beröringskalibreringen kan inte användas ({value}) och gränsen för antal
-    omkörningar är nådd. Tryck på {controls[fit_accept]} för att fortsätta med en
-    reservlösning som registreras som inte giltig för analys, eller på {controls[abort]}.
+    Skattningen i beröringskalibreringen kan inte användas ({value}) och inga omkörningar
+    finns kvar. Tryck på {controls[fit_fallback]} (registreras som inte giltig för analys),
+    eller på {controls[abort]}.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_gain_undefined: >-
     Kanal {channel} matchades åter vid 0 kPa. Tryck på {controls[rebalance]} för att göra om
-    matchningen, eller på {controls[proceed]} för att fortsätta med kanalen på mittkanalens
+    matchningen, eller på {controls[gain_fallback]} för att fortsätta med kanalen på mittkanalens
     tryck, vilket registreras som inte giltigt för analys.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_uneven: >-
@@ -334,6 +347,11 @@ instructions:
   session_complete: >-
     Sessionen är klar. Alla data är sparade. Ta av plagget och berätta för deltagaren att besöket
     är slut. Tryck på {controls[proceed]} för att stänga programmet.
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. After an abort, the same
+  # ending as a completed session.
+  session_aborted: >-
+    Sessionen är avbruten. Alla data som samlats in är sparade, och plagget är avstängt. Ta av
+    plagget och ta hand om deltagaren. Tryck på {controls[proceed]} för att stänga programmet.
   # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced. Medan deltagaren läser
   # introduktionen till nästa sorts uppgift (`screens.intro_*`), numrerade som stegen.
   touchcal_intro_bracket: 'Beröringskalibrering, steg 1 av 6: deltagaren läser om vad som kommer härnäst.'
@@ -345,10 +363,9 @@ instructions:
   # SPEC.md 15: en session som återupptas under återuppvärmningen ber aldrig om värmen igen.
   # DRAFT (LOG N7.F11b18): written by the build, not ethics-sourced
   rekindle_resumed: >-
-    Sessionen återupptogs under återuppvärmningen. Värmen startades före avbrottet och
-    efterfrågas inte igen; återuppvärmningen räknas därifrån. Tryck på {controls[proceed]} för
-    att bekräfta. Om värmen i själva verket inte gavs, ge den nu och skriv en anteckning.
-    Plagget förblir avstängt tills återuppvärmningen är klar.
+    Sessionen öppnades igen under återuppvärmningen: värmen hade startat och räknas därifrån.
+    Tryck på {controls[proceed]} för att bekräfta. Om den inte gavs, ge den nu och skriv en
+    anteckning. Plagget är avstängt tills återuppvärmningen är klar.
 
 # Vad försöksledaren säger högt till deltagaren, citerat i `instructions` som {say[...]}.
 # Läses på DELTAGARENS språk (`Config.say`), oavsett försöksledarens (LOG N7.F11b19). Ingen får
@@ -377,9 +394,9 @@ say:
   # (UI_PRINCIPLES.md 2.4). Signalen är nu texten "Gör dig redo" (N7.F12g1), inte en cirkel;
   # varje hudtest är ett verkligt stimulus, så det stämmer att något följer.
   first_pain: >-
-    Nu ska jag testa huden med tunna plastfilament och en mjuk pensel. Varje gång står det
-    först på skärmen att du ska göra dig redo, sedan känner du det, sedan visas linjen och du
-    skattar hur smärtsamt det var. Den första linjen är en övning.
+    Nu ska jag testa huden med tunna plastfilament och en mjuk pensel. Varje gång säger
+    skärmen att du ska göra dig redo, du känner det, sedan skattar du på linjen hur smärtsamt
+    det var. Den första linjen är en övning.
   # DRAFT (LOG N7.F11b13): written by the build, not ethics-sourced. {hours} fylls i efteråt.
   intervention: >-
     Nästa del tar ungefär {hours} timmar. Du kommer att känna beröring från plagget, och
@@ -396,6 +413,12 @@ say:
     intensity: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så intensiv.
     pleasantness: Ett märke dubbelt så långt ut på linjen betyder att beröringen kändes dubbelt så behaglig.
 
+# Tangenterna för de vanliga knapparna, visade på knapparna. Tangentnamn som Qt läser dem.
+keys:
+  proceed: Space
+  pause: P
+  resume: R
+
 controls:
   proceed: Nästa steg
   pause: Pausa
@@ -406,7 +429,12 @@ controls:
   note: Tidsstämplad anteckning
   connect: Anslut plagget
   disconnect: Koppla från plagget
-  rebalance: Balansera om kanalerna
+  rebalance: Matcha kanalerna igen
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  still_audible: Det hörs fortfarande
+  no_stop_press: Deltagaren kunde inte trycka på stopp
+  gain_fallback: Fortsätt, kanalen flaggad
+  fit_fallback: Fortsätt med reservvärdet
   # SPEC.md 11.1, visas endast när fit_preview.enabled är på.
   fit_accept: Godkänn den här skattningen
   fit_rerun: Gör om proceduren
@@ -456,6 +484,14 @@ status:
   interrupted_emergency_stop: Deltagaren stoppade; plagget på noll. Ta bort eventuellt stimulus, fråga vad hen behöver, tryck på {controls[resume]}.
   # DRAFT (LOG N7.F11b12): written by the build, not ethics-sourced
   interrupted_pause: Pausad; plagget på noll. Steget som pågick görs om. Tryck på {controls[resume]} för att fortsätta.
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  resuming: Återupptar…
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  awaited_for: '{status} ({time})'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. On each mapping tick.
+  mapping_tick: 'Takt {n} av {max}'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  rehearsal_stop: 'Stoppet fungerade: plagget på noll. Tryck på {controls[resume]} för att visa deltagaren att beröringen kommer tillbaka.'
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Under Återuppta efter ett
   # stopp, i stället för omkalibreringarna när gränsen för en session är nådd. En rad i liten
   # storlek: ett test håller båda språken till det.
@@ -467,6 +503,9 @@ status:
     Senaste försöket kasserat. Gränsen för antal appliceringar är nådd, så det upprepas inte.
 
 warnings:
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. A path that ended at
+  # mapping.max_steps with no change reported.
+  mapping_limit: 'Bana {path} tog slut vid gränsen {max} takter utan att någon förändring rapporterades. Anteckna det om gränsen är oklar.'
   experimenter_changed: >-
     Dessa initialer skiljer sig från tidigare sessioner för denna deltagare. Bilaga 1 3.3 önskar
     samma försöksledare genomgående. Sessionen fortsätter och avvikelsen registreras.
@@ -565,45 +604,46 @@ demo:
     Bara en tidsstyrd väntan på ett schemalagt steg kan hoppas över: capsaicinet, blocken,
     återuppvärmningen, interventionens slut. Den stannar {lead} s innan steget ska göras, så att
     nedräkningen och larmet fortfarande syns.
-  auto_run: 'Kör {step} automatiskt'
-  auto_running: 'Kör {step} automatiskt…'
+  auto_run: Automatisk körning
+  auto_running: 'Automatisk körning: på (klicka för att stoppa)'
+  auto_run_detail: >-
+    Både deltagaren och försöksledaren är simulerade och snabba, och varje tidsstyrd väntan
+    hoppas över, tills du klickar igen; då går var och en tillbaka till vad den var. Inget
+    hoppas över utom väntan: varje mätning görs ändå.
   fast_forward: 'Spola fram till:'
   fast_forward_go: Kör
   fast_forwarding: 'Spolar fram till {phase}…'
   skipped: 'Hoppade över {value} min väntan.'
-  clock: 'Klocka: {speed}× realtid'
+  clock: 'Klocka: {speed}×'
   clock_detail: >-
-    Varje tidsstyrt intervall i sessionen går så här många gånger snabbare än i en riktig
-    session. 1 är realtid, som en deltagare möter den. Väljs när demon startas (Klockans hastighet); ett
-    plagg som bärs går alltid i 1.
+    Varje tidsstyrt intervall i sessionen -- vilopauser, signaler, schemalagda väntetider,
+    nedräkningar -- går så här många gånger snabbare än i en riktig session, för personer och
+    simuleringar lika. Bara handens egen tid (hur länge en knapp hålls) är verklig. 1 är
+    realtid. Väljs när demon startas (Klockans hastighet); ett plagg som bärs går alltid i 1.
   remote: 'Fjärrkontroll:'
   worn_note: 'Plagget bärs: bara personer, ingen automatik eller framspolning.'
   worn_note_detail: 'Någon kan ha plagget på sig: deltagaren och försöksledaren är personer, inte simuleringar, och automatisk körning och framspolning är avstängda.'
-  steps:
-    garment: plaggets påtagning
-    welcome: välkomstskärmen
-    stop_rehearsal: stoppövningen
-    masking_check: maskeringskontrollen
-    touch_calibration: beröringskalibreringen
-    baseline: baslinjeskattningarna
-    mark_zone: markeringen av huden
-    long: filamentserien
-    mapping: områdeskartläggningen
-    short_primary: filamenten i den primära zonen
-    brush_secondary: penseln i den sekundära zonen
-    brush_primary: penseln i den primära zonen
-    sensitisation: värmen
-    apply: capsaicinet
-    remove: borttagningen av capsaicinet
-    start: interventionens början
-    block: 'block {n}'
-    rekindle: återuppvärmningen
-    end: interventionens slut
-    session_end: sessionens slut
+  # Hur en demonstration skiljer sig från en session, sagt där det gäller (LOG N7.F17d).
+  # DRAFT (LOG N7.F17d): written by the build, not ethics-sourced
+  session_differs:
+    rests: 'Demovila: {demo} s (session: {low}–{high} s)'
+    rests_detail: 'En demonstration vilar {demo} s mellan appliceringarna med filament eller pensel. En session väntar {low}–{high} s, räknat från varje applicering.'
+    estimation: 'Demo: {demo} s per beröring (session: {session} s)'
+    estimation_detail: 'På mockplagget ger skattningsserien {demo} s åt varje beröring. En session ger {session} s, så att ett riktigt plagg hinner fyllas och tömmas.'
+    garment: 'Bara demo: kanalerna visas'
+    garment_detail: 'En demonstration visar plaggets kanaler i varje fas. En session döljer dem under interventionen och återuppvärmningen, så att villkoret inte syns.'
+    keyboards: 'Demo: bara R400 räknas när den är ansluten, annars alla tangentbord. En session: bara R400.'
+    simulations: 'Demo: deltagaren och försöksledaren kan simuleras och bytas när som helst. En session: bara personer.'
+    allocation: 'Varje körning blandar villkoren över sessionsnumren, så ett sessionsnummer i en demo säger inget om dess villkor i studien.'
 
 dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.
   abort_reason: Orsak till avbrott
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. Asked the same in every
+  # phase, so the asking says nothing about the touch (SPEC.md 16).
+  disconnect_confirm: Koppla från plagget? Det går till noll först.
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  discard_confirm: Kassera det senaste försöket? Skattningen sparas i data, märkt som kasserad, och försöket görs om om inte gränsen för antal appliceringar är nådd.
   # SPEC.md 15. Båda värdena formateras av sessionen från dess egen text.
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   resume_found: 'En oavslutad session hittades för denna deltagare. Genomfört: {completed}. {since_sensitisation} Återuppta den med den ursprungliga tidsplanen?'
@@ -618,12 +658,17 @@ dialogs:
   # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced
   distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem med Kartläggningsavstånd…, eller tryck på Nästa steg för att avsluta med dem registrerade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
-  fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The re-calibrations, the
-  # same in every condition and wherever they are offered.
-  recalibrate_rebalance: 'Balansera om kanalerna nu? Plagget går till noll och det som pågår avbryts. Deltagaren ställer in var och en av de andra kanalerna mot mittkanalen igen och jämför dem (steg 3 och 4), och sedan kommer frågan om jämnhet, och valet av mönster bara om beröringskalibreringen inte har gjort det ännu; en behaglighetsnivå som redan är inställd behålls. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
+  # same in every condition and wherever they are offered. One line to read with the participant
+  # waiting; the whole of it on hover, as the `_detail` (LOG N7.F17e).
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  recalibrate_rebalance: Balansera om kanalerna nu? Plagget går till noll, steg 3 och 4 körs igen och sessionen fortsätter där den var. Allt som registrerats sparas.
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  recalibrate_restart: Starta om beröringskalibreringen från steg 1 nu? Plagget går till noll och sessionen fortsätter sedan där den var. Allt som registrerats sparas.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
-  recalibrate_restart: 'Starta om beröringskalibreringen nu? Plagget går till noll och det som pågår avbryts. Kalibreringen börjar om från steg 1 som en ny omgång, utan övningen på skattningsskalan och utan valet av mönster om beröringskalibreringen redan har gjort det. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
+  recalibrate_rebalance_detail: 'Balansera om kanalerna nu? Plagget går till noll och det som pågår avbryts. Deltagaren ställer in var och en av de andra kanalerna mot mittkanalen igen och jämför dem (steg 3 och 4), och sedan kommer frågan om jämnhet, och valet av mönster bara om beröringskalibreringen inte har gjort det ännu; en behaglighetsnivå som redan är inställd behålls. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
+  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
+  recalibrate_restart_detail: 'Starta om beröringskalibreringen nu? Plagget går till noll och det som pågår avbryts. Kalibreringen börjar om från steg 1 som en ny omgång, utan övningen på skattningsskalan och utan valet av mönster om beröringskalibreringen redan har gjort det. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
   recalibration_reason: Varför? Registreras tillsammans med valet.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The keys are what the log
@@ -700,11 +745,10 @@ hardware:
   # DRAFT (LOG N7.U6): written by the build, not ethics-sourced. Ovanför det senaste felet: hur
   # många som kom före det. Hela listan finns i verktygstipset och i data.
   faults_earlier: '{value} tidigare (detalj i data)'
-  # Kanalvisningen, en kolumn per kanal så som den styrs (tatp/ui/garment_display.py, LOG
+  # Kanalvisningen, en rad per kanal så som den styrs (tatp/ui/garment_display.py, LOG
   # N7.F16i).
   # DRAFT (LOG N7.F12f, N7.F16i): written by the build, not ethics-sourced
-  channel_caption: Kanal
-  pressure_caption: kPa
+  channel_pressure: '{value} kPa'
   channel_on: på
   channel_off: av
 
@@ -775,6 +819,8 @@ launcher:
   choose: Välj…
   check: Kontrollera
   start: Starta sessionen
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  start_anyway: Starta trots varningarna
   close: Stäng
   # Bredvid Starta sessionen, som den lämnar utan att göra (docs/LOG.md N7.F5).
   cancel: Avbryt

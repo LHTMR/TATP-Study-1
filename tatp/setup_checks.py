@@ -57,6 +57,9 @@ STOP_REHEARSAL_SCREEN = "stop_rehearsal"
 STOP_REHEARSAL_DONE_SCREEN = "stop_rehearsal_done"
 # The experimenter's action, as `ExperimenterChoice` names it.
 PROCEED = "proceed"
+# `controls` keys of the steps' other answers (review of N7.F16).
+STILL_AUDIBLE_CONTROL = "still_audible"
+NO_STOP_PRESS_CONTROL = "no_stop_press"
 
 
 def noise_control(adjustment: dict, audio: dict) -> dict:
@@ -83,8 +86,9 @@ class NoiseAdjustment(Trial):
     is logged, as for the pressure adjustment (SPEC.md 10.3). Finishes with the level set.
 
     The masking step can instead be finished by `report_still_audible`, with None: the
-    participant has said they can still hear the garment, and the experimenter's Next step,
-    which is the procedure's (`MaskingCheck`), reports it (SPEC.md 10.7).
+    participant has said they can still hear the garment, and the experimenter reports it
+    with "They can still hear it", the procedure's other answer (`MaskingCheck`; SPEC.md
+    10.7). Not Next step, which never means "no" (review of N7.F16).
     """
 
     def __init__(self, session, participant, experimenter, screen_key: str):
@@ -225,9 +229,11 @@ class MaskingCheck(Procedure):
         self.attempts += 1
 
         def make() -> NoiseAdjustment:
-            # The report is the procedure's own Next step, set again each time the step runs:
-            # so it is logged `proceed`, and ignored while an interruption is in force.
-            self.on_proceed(self._reported_audible)
+            # The report is a button of its own saying what it means -- not Next step, which
+            # is the way forward everywhere else (review of N7.F16) -- offered again each time
+            # the step runs, and hidden, so ignored, while an interruption is in force.
+            self.experimenter.offer_alternative(
+                self.experimenter.text["controls"][STILL_AUDIBLE_CONTROL])
             trial = NoiseAdjustment(*self._windows(), MASK_LEVEL)
             if self.earplugs_used:
                 trial.instruction = MASK_EARPLUGS_INSTRUCTION
@@ -235,11 +241,22 @@ class MaskingCheck(Procedure):
 
         self.run_trial(make, self._masked)
 
+    def connect_actions(self) -> None:
+        self.experimenter.alternative_requested.connect(self._reported_audible)
+
+    def disconnect_actions(self) -> None:
+        self.experimenter.alternative_requested.disconnect(self._reported_audible)
+        self.experimenter.offer_alternative(None)
+
     def _reported_audible(self) -> None:
+        if (not isinstance(self._trial, NoiseAdjustment) or self._child is not None
+                or self.rig.interruptions.active is not None):
+            return
+        # Logged once, as `masking_reported_audible` (spec review of N7.F17e: a second row).
         self._trial.report_still_audible()
 
     def _masked(self, level_dbfs: float | None) -> None:
-        self.on_proceed(None)
+        self.experimenter.offer_alternative(None)
         if level_dbfs is None:
             self._escalate()
             return
@@ -348,9 +365,16 @@ class AwaitStop(Trial):
     """
 
     def start(self) -> None:
-        self.listen(self.experimenter.proceed_requested, lambda: self.done(False))
+        # On a button saying what it records, not Next step (review of N7.F16).
+        self.listen(self.experimenter.alternative_requested, lambda: self.done(False))
+        self.experimenter.offer_alternative(
+            self.experimenter.text["controls"][NO_STOP_PRESS_CONTROL])
         self.participant.show_message(STOP_REHEARSAL_SCREEN)
         self.instruct("stop_rehearsal")
+
+    def _teardown(self) -> None:
+        super()._teardown()
+        self.experimenter.offer_alternative(None)
 
 
 @dataclass(frozen=True)
@@ -392,6 +416,8 @@ class StopRehearsal(Procedure):
     def _play(self, _) -> None:
         self.session.garment.play_pattern(self.pattern)
         self.awaiting = True
+        # A stop from here is the one expected, and the screen says so calmly.
+        self.experimenter.set_rehearsal(True)
         self.run_trial(lambda: AwaitStop(*self._windows()), self._no_press)
 
     # -- the expected stop -------------------------------------------------------------
@@ -415,8 +441,10 @@ class StopRehearsal(Procedure):
             return
         # The resume is the point, and it is shown (SPEC.md 10.9): `Interruptions` has
         # restored the garment in front of the participant, preceded by the cue. The done
-        # screen follows; an interruption during it repeats it like any other step.
+        # screen follows; an interruption during it repeats it like any other step, and is an
+        # ordinary stop again.
         self.done_shown = True
+        self.experimenter.set_rehearsal(False)
 
         def show() -> None:
             self.participant.show_message(STOP_REHEARSAL_DONE_SCREEN)
@@ -436,7 +464,12 @@ class StopRehearsal(Procedure):
         )
         self._end()
 
+    def cancel(self) -> None:
+        self.experimenter.set_rehearsal(False)
+        super().cancel()
+
     def _end(self) -> None:
+        self.experimenter.set_rehearsal(False)
         self.session.garment.stop()
         self.participant.show_blank()
         self.session.record_stop_rehearsal(self.press_detected)

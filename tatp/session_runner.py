@@ -89,6 +89,7 @@ END_SCREEN = "session_end"
 BASELINE_INTRO_SCREEN = "intro_baseline"
 # An experimenter text key, not wording: the last instruction, once the files are closed.
 SESSION_COMPLETE_INSTRUCTION = "session_complete"
+SESSION_ABORTED_INSTRUCTION = "session_aborted"
 # Controlled vocabularies (docs/DATA_SCHEMA.md), not wording.
 PRIMARY, SECONDARY = pinprick.REGIONS
 SETUP = "setup"
@@ -1284,6 +1285,10 @@ class SessionRunner(Procedure):
         self.completed = True
         self.finish(None)
         self._close_session("")
+        self._await_end(SESSION_COMPLETE_INSTRUCTION)
+
+    def _await_end(self, instruction_key: str) -> None:
+        """The session is closed: say so, and wait for the Next step that ends the program."""
         interruptions = self.rig.interruptions
         self.participant.emergency_stop.disconnect(interruptions.emergency_stop)
         self.experimenter.pause_requested.disconnect(interruptions.pause)
@@ -1292,9 +1297,7 @@ class SessionRunner(Procedure):
         self.experimenter.set_actions_enabled(closed=True)
         # The one Next step after the session closed: it ends the program.
         self.rig.closing = True
-        self.experimenter.set_instruction(
-            self.instruction_text(SESSION_COMPLETE_INSTRUCTION)
-        )
+        self.experimenter.set_instruction(self.instruction_text(instruction_key))
         self.experimenter.set_status("")
         self.experimenter.refresh()
         self._complete_shown_s = self.session.clock.real_elapsed_s()
@@ -1370,22 +1373,28 @@ class SessionRunner(Procedure):
         QApplication.instance().quit()
 
     def abort(self, reason: str) -> None:
-        """The experimenter's abort (SPEC.md 11). Everything collected so far is kept."""
+        """The experimenter's abort (SPEC.md 11). Everything collected so far is kept. Ends as a
+        completed session does, on the end screen and a Next step (LOG N7.F17e): until 20 Oct
+        2026 the program quit at once, and nobody saw that the data were saved.
+
+        Nothing once the session is closed: Abort session is withdrawn then, but a dialog
+        opened before the close can still be confirmed after it (code review of N7.F17e)."""
+        if self.session.closed:
+            return
         self.cancel()
+        self.rig.interruptions.end()
         # Distances still missing are written as missing, without the end-of-session prompt.
         self.ledger.prompted = True
         self.ledger.close()
-        self._close(reason)
+        self._close_session(reason)
+        self.participant.show_message(END_SCREEN)
+        self._await_end(SESSION_ABORTED_INSTRUCTION)
 
     def cancel(self) -> None:
         self._disarm()
         self._clear_alarms()
         self._cancel_delivery()
         super().cancel()
-
-    def _close(self, abort_reason: str) -> None:
-        self._close_session(abort_reason)
-        QApplication.instance().quit()
 
     def _close_session(self, abort_reason: str) -> None:
         self._clear_alarms()

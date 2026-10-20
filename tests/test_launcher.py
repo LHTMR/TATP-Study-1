@@ -372,9 +372,10 @@ def test_the_session_number_and_languages_start_unchosen(app, loaded, tmp_path, 
     dialog = _filled(window, tmp_path)
     getattr(dialog, combo).setCurrentIndex(0)
     assert not dialog.check()
-    assert not dialog.start_button.isEnabled()
     assert fakes.checked == []
     assert dialog.text["launcher"][combo] in dialog.report.text()
+    dialog.start()
+    assert fakes.built == [], "Start checks first, and starts nothing unchosen"
 
 
 def test_a_missing_field_stops_the_check_before_preflight(app, loaded):
@@ -382,15 +383,15 @@ def test_a_missing_field_stops_the_check_before_preflight(app, loaded):
     dialog = LauncherWindow(loaded, fakes.preflight, fakes.build).session_dialog()
     assert not dialog.check()
     assert fakes.checked == []
-    assert not dialog.start_button.isEnabled()
     assert dialog.text["launcher"]["pattern_folder"] in dialog.report.text()
 
 
-def test_a_refusal_keeps_start_disabled(app, loaded, tmp_path):
+def test_a_refusal_starts_nothing(app, loaded, tmp_path):
+    """Start is always pressable (LOG N7.F17e: disabled, it looked broken) and checks first."""
     fakes = Fakes([(REFUSE, "warnings.cloud_sync", "OneDrive")])
     dialog = _filled(LauncherWindow(loaded, fakes.preflight, fakes.build), tmp_path)
+    assert dialog.start_button.isEnabled()
     assert not dialog.check()
-    assert not dialog.start_button.isEnabled()
     assert "OneDrive" in dialog.report.text()
     dialog.start()
     assert fakes.built == [], "a refused session is never built"
@@ -404,12 +405,42 @@ def test_a_warning_is_shown_and_the_session_may_start(app, loaded, tmp_path):
     assert dialog.text["warnings"]["experimenter_changed"] in dialog.report.text()
 
 
+def test_start_shows_warnings_not_yet_seen_before_starting(app, loaded, tmp_path):
+    """Code review of N7.F17e: Start, always pressable, started past warnings nobody saw."""
+    fakes = Fakes([(WARN, "warnings.experimenter_changed", "")])
+    dialog = _filled(LauncherWindow(loaded, fakes.preflight, fakes.build), tmp_path)
+    dialog.start()
+    assert fakes.built == [], "the warnings are shown first"
+    assert dialog.text["warnings"]["experimenter_changed"] in dialog.report.text()
+    assert dialog.start_button.text() == dialog.text["launcher"]["start_anyway"]
+    dialog.participant.setText("08")
+    assert dialog.start_button.text() == dialog.text["launcher"]["start"], "stale again"
+
+
 def test_editing_after_a_check_makes_it_stale(app, loaded, tmp_path):
     fakes = Fakes()
     dialog = _filled(LauncherWindow(loaded, fakes.preflight, fakes.build), tmp_path)
     assert dialog.check()
     dialog.participant.setText("08")
-    assert not dialog.start_button.isEnabled()
+    assert dialog.report.text() == "", "what the check found is not left up for other entries"
+
+
+def test_the_garment_continued_from_on_the_hardware_page_is_the_dialogs(app, loaded):
+    """Chosen on the hardware page, it had to be chosen again (LOG N7.F17e); until the page
+    is continued from, the dialog's garment is unchosen (SPEC.md 6)."""
+    window = LauncherWindow(loaded, Fakes().preflight, Fakes().build)
+    assert window.session_dialog().garment.currentData() is None
+    window.hardware_check_dialog().accept()
+    assert window.session_dialog().garment.currentData() is None, (
+        "a page continued from untouched chose nothing (code review of N7.F17e)")
+    page = window.hardware_check_dialog()
+    last = page.garment_choice.count() - 1
+    chosen = page.garment_choice.itemData(last)
+    page.garment_choice.setCurrentIndex(last)
+    page.garment_choice.activated.emit(last)  # as a person's pick sends it
+    page.accept()
+    assert window.session_dialog().garment.currentData() == chosen
+    assert window.hardware_check_dialog().garment_choice.currentData() == chosen
 
 
 def test_an_unknown_severity_is_an_error_not_a_guess(app, loaded, tmp_path):

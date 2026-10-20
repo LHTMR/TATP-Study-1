@@ -50,7 +50,7 @@ from tatp import pattern_design as pd
 from tatp import schedule
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
-from tatp.demo import OFF, DemoControls
+from tatp.demo import DEMO_GARMENT, OFF, RESTS_DIFFER, DemoControls, demo_rests
 from tatp.devices import ON_SCREEN, check_key, matching_outputs
 from tatp.garment.base import Limits
 from tatp.garment.mock import MockGarment
@@ -227,6 +227,7 @@ def _experimenter_view(**overrides) -> dict:
         "demo": False,
         "next_event": None,
         "interruption": None,
+        "resuming": False,
         "hardware": {"connected": True, "link_lost": False, "faults": [],
                      "channel_pressure_kpa": None, "channels_on": None},
     }
@@ -471,8 +472,8 @@ def _experimenter_states(config: cfg.Config) -> dict:
     instructions = text["instructions"]
     step_mm = f"{float(config.study1['mapping']['step_size_mm']):g}"
     filament = SAMPLE_F40["filament"]
-    apply_filament = cfg.instruction(
-        config, "apply_filament", filament=filament,
+    applied_filament = cfg.instruction(
+        config, "applied_filament", filament=filament,
         force_mn=f"{SAMPLE_F40['filament_mn']:g}", site=SAMPLE_SITE,
         region=text["terms"]["regions"]["primary"],
     )
@@ -483,7 +484,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
     upcoming = {**SAMPLE_BLOCK, "due_in_s": SAMPLE_DUE_IN_S, "overdue": False}
 
     def pinprick(window):
-        window.set_instruction(apply_filament)
+        window.set_instruction(applied_filament)
         window.set_target("primary", SAMPLE_SITE, filament=True)
         window.set_status(instructions["await_participant"])
         # What a filament trial offers while it runs (tatp/pinprick.py `_connect_extra`).
@@ -722,16 +723,16 @@ def _experimenter_states(config: cfg.Config) -> dict:
             instruct("touchcal_match", **SAMPLE_MATCH),
         ),
         "long_instruction": (
-            "The longest instruction the session gives, set down the type scale so it fits "
-            "its region: nothing below it has moved, and the controls are where they always "
-            "are. It asks for Accept, so Accept and Re-run are offered, as the procedure "
-            "offers them.",
+            "A long instruction: an unusable touch estimate with no re-runs left. At the large "
+            "size, as every instruction is (LOG N7.F17e); nothing below it has moved, and the "
+            "one answer offered is the fallback, on a button of its own, as the procedure "
+            "offers it.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: (
                 window.set_instruction(cfg.instruction(
                     config, "touchcal_stage1_exhausted", value=text["terms"]["stage1"]["flat"]
                 )),
-                window.set_actions_enabled(fit_decision=True),
+                window.offer_alternative(text["controls"]["fit_fallback"]),
             ),
         ),
         "touchcal_estimation_skip": (
@@ -787,6 +788,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
              "fit_preview_enabled": True},
             lambda window: (
                 window.set_instruction(cfg.instruction(config, "f40_fit_review")),
+                window.set_actions_enabled(fit_decision=True),
                 window.show_fit_preview(_sample_f40_fit()),
             ),
         ),
@@ -797,6 +799,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
              "fit_preview_enabled": True},
             lambda window: (
                 window.set_instruction(cfg.instruction(config, "touchcal_fit_review")),
+                window.set_actions_enabled(fit_decision=True),
                 window.show_fit_preview(_sample_touch_fit()),
             ),
         ),
@@ -852,6 +855,10 @@ def _session_window(config: cfg.Config, read_view) -> ExperimenterWindow:
     N7.F16h) and the mock garment's channels in its side column (N7.F16i)."""
     window = ExperimenterWindow(config.experimenter_text, read_view)
     window.set_timeline(_session_phases(config))
+    # Next step pressable where the instruction asks for it, as a session's is (UI_PRINCIPLES.md
+    # 5.13, 5.16), not in every picture: there is no procedure here to ask.
+    proceed = config.experimenter_text["controls"]["proceed"]
+    window.set_proceed_source(lambda: proceed in window._instruction_text)
     garment = MockGarment(Limits.from_config(config.hardware), Clock())
     window.set_garment(garment.channels(), garment.limits.pressure_ceiling_kpa,
                        garment.per_channel_pressure,
@@ -967,7 +974,7 @@ class _SampleDemo(QObject):
         self.session = self
         # Drawn as on a worn garment (tatp/demo.py), the mock standing in for it.
         self.worn = worn
-        self.settings = config.study1["demo"]
+        self.settings = demo_rests(config.study1, DEMO_GARMENT)["demo"]
         self.clock = Clock()
         self.garment = MockGarment(Limits.from_config(config.hardware), self.clock)
         self.garment.connect()
@@ -978,7 +985,8 @@ class _SampleDemo(QObject):
             self.garment.set_channel(channel, True)
         self.participant_mode = OFF
         self.experimenter_mode = OFF
-        self.finishing = False
+        self.auto_running = False
+        self.config = config
         self.fast_forward_to = None
         self.phases = _session_phases(config)
         self.phase = SAMPLE_DEMO_PHASE
@@ -991,6 +999,10 @@ class _SampleDemo(QObject):
 
     def skippable_s(self) -> float | None:
         return self._skippable_s
+
+    def differs_now(self) -> str | None:
+        # The filament series under way: its rests are a demonstration's.
+        return RESTS_DIFFER
 
     def next_event(self) -> dict | None:
         upcoming = {"kind": "phase", "label_key": "capsaicin_removal", "block_index": None,
@@ -1076,8 +1088,9 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"the channels as commanded in the side column -- every channel's pressure set, "
         f"channels {', '.join(map(str, SAMPLE_DEMO_CHANNELS_ON))} on -- and the demo controls "
         f"along the foot: who presses for the participant and the experimenter, the clock's "
-        f"speed, the remote's buttons, Skip saying there is no wait to skip, Auto-run naming "
-        f"the step under way, and Fast-forward offering the phases to come ({language}).",
+        f"speed, the remote's buttons, Skip saying there is no wait to skip, Auto-run, "
+        f"Fast-forward offering the phases to come, and how the filament series under way "
+        f"differs from a session -- its rests -- in blue beside them (N7.F17d) ({language}).",
         _grab_checked(window, f"experimenter_{language}_demo_controls"),
     )
     sample.garment.set_channel(SAMPLE_DEMO_CHANGED, True)
@@ -1113,8 +1126,8 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     yield Shot(
         f"experimenter_{language}_launcher_session",
         f"The session dialog as it opens: the data folder filled in from config; the session "
-        f"number, both languages and the pattern folder unchosen, with no default; Start "
-        f"disabled until a check passes ({language}).",
+        f"number, both languages and the pattern folder unchosen, with no default; Start, "
+        f"always pressable, checks first (LOG N7.F17e) ({language}).",
         _grab_dialog(dialog),
     )
     dialog.participant.setText(SAMPLE_PARTICIPANT)
@@ -1130,8 +1143,8 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     dialog.check()
     yield Shot(
         f"experimenter_{language}_launcher_session_checked",
-        f"The session dialog after Check: a preflight warning listed in amber, Start "
-        f"enabled because nothing refuses ({language}).",
+        f"The session dialog after Check: a preflight warning listed in amber, and Start "
+        f"reading \"Start despite the warnings\" now they have been shown ({language}).",
         _grab_dialog(dialog),
     )
     yield Shot(

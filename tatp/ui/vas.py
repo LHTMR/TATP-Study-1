@@ -433,6 +433,11 @@ class VasWidget(QWidget):
         # The training's two steps; both False on a rating.
         self.explaining = False
         self.practising = False
+        # Shown in the practice line's place when ▶ is pressed before the marker is (set by the
+        # participant window): a press that did nothing visible read as a lost press (UI
+        # principles 5.14). Taken back by the first press that moves the marker.
+        self.marker_hint = ""
+        self._hinting = False
 
         self.clock = clock
         # The hold is drawn by this timer; how far it has gone is the state's, from the time.
@@ -485,6 +490,7 @@ class VasWidget(QWidget):
         self.training = training
         self.explaining = False
         self.practising = False
+        self._hinting = False
 
     # -- input -------------------------------------------------------------------------
 
@@ -511,6 +517,9 @@ class VasWidget(QWidget):
         elif action in (Action.DECREASE, Action.INCREASE):
             now_s, regrip = self._placed_press(action, event.timestamp())
             self.state.press(action, now_s, regrip)
+            if self._hinting:
+                self.training = ""
+                self._hinting = False
             # A regrip is already past the hold delay; a fresh press has the delay to wait out.
             self._tick.start(self._tick_ms if regrip else self._delay_ms)
             self.update()
@@ -580,6 +589,11 @@ class VasWidget(QWidget):
     def _confirm(self) -> None:
         response = self.state.confirm()
         if response is None:
+            # A practice has its own line saying the same, so only a rating takes the hint.
+            if not self.training:
+                self.training = self.marker_hint
+                self._hinting = True
+                self.update()
             self.pressed_without_marker.emit()
             return
         self._end_hold()

@@ -69,6 +69,9 @@ PHASES = (
 # The phases in which the garment delivers the condition's own touch. The experimenter view
 # carries no per-channel pressure during them (SPEC.md 16, docs/LOG.md N7.D1).
 CONDITION_PHASES = ("intervention", "rekindle")
+# The session key `rating_cue_at`: the pain scale is cued at the experimenter's delivery press
+# (LOG N7.F17a). A file without the key cued it 9 s after the stimulus.
+RATING_CUE_AT_DELIVERY_PRESS = "delivery_press"
 # What the experimenter's countdown can be counting down to (`Session.set_upcoming`).
 UPCOMING_KINDS = ("block", "phase", "rekindle")
 
@@ -261,6 +264,7 @@ class Session:
         self._upcoming: tuple[str, str, int | None, str | None, float] | None = None
         # Which interruption is in force, read from `Interruptions` once a rig attaches it.
         self._read_interruption: Callable[[], str | None] = lambda: None
+        self._read_resuming: Callable[[], bool] = lambda: False
 
         # SPEC.md 11.1. Off by default; a session run with it on shows the experimenter the
         # participant's ratings and is recorded as unblinded in that respect.
@@ -385,6 +389,8 @@ class Session:
             "demo": self.demo,
             "next_event": self.next_event(),
             "interruption": self._read_interruption(),
+            # A resume's cue is playing: the session goes on in a moment (review of N7.F16).
+            "resuming": self._read_resuming(),
             "hardware": {
                 "connected": self.garment.connected,
                 "link_lost": self.garment.link_lost,
@@ -442,9 +448,12 @@ class Session:
     def clear_upcoming(self) -> None:
         self._upcoming = None
 
-    def attach_interruptions(self, read: Callable[[], str | None]) -> None:
-        """Let the experimenter view say whether a stop or a pause is in force."""
+    def attach_interruptions(self, read: Callable[[], str | None],
+                             resuming: Callable[[], bool]) -> None:
+        """Let the experimenter view say whether a stop or a pause is in force, and whether
+        its resume is under way."""
         self._read_interruption = read
+        self._read_resuming = resuming
 
     # -- logging -----------------------------------------------------------------------
 
@@ -598,6 +607,8 @@ class Session:
             self.log("garment_fault", severity="error", detail=command["detail"])
         elif command["event"] == "disconnect" and command.get("detail") == LINK_LOST:
             self.log("garment_disconnected", severity="error", detail=LINK_LOST)
+            # Heard, not only seen: the outputs may still be on (review of N7.F16).
+            self.audio.experimenter_alert(LINK_LOST)
 
     # -- lifecycle ---------------------------------------------------------------------
 
@@ -786,6 +797,10 @@ class Session:
             "slope_prior_vas_per_log10": self.config.study1["pinprick"][
                 "slope_prior_vas_per_log10"
             ],
+            # What `rating_cue_iso` means in this file, so it is never read the old way
+            # (CLAUDE.md engineering lesson 10): absent before 20 Oct 2026, when it was 9 s
+            # after the stimulus.
+            "rating_cue_at": RATING_CUE_AT_DELIVERY_PRESS,
             "room_temperature_c": room_temperature_c,
             "relative_humidity_pct": relative_humidity_pct,
             # SPEC.md 1.2: the questionnaires are in REDCap, and the software records only

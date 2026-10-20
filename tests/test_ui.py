@@ -8,6 +8,7 @@ up as a failure rather than as a screen that quietly stops updating.
 
 from __future__ import annotations
 
+import string
 import time
 
 import numpy as np
@@ -622,6 +623,38 @@ def test_the_window_fits_the_lab_laptop(app, language, banners):
     assert hint.width() <= LAPTOP_WIDTH_PX and hint.height() <= LAPTOP_HEIGHT_PX, hint
 
 
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_every_instruction_is_read_at_the_large_size_on_the_lab_laptop(app, language):
+    """The instruction steps down the type scale only for a value longer than the sample's,
+    never for its own wording: read-aloud scripts were squeezed to body size (LOG N7.F17e).
+    Each field is filled with eight characters, longer than any filament, site or count."""
+    config = cfg.load(language, language)
+    view = _all_keys()
+    window = screenshots._session_window(config, lambda: view)
+    window.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+    window.show()
+    QApplication.processEvents()
+    label, width = window.instruction, window._left_width()
+    squeezed = []
+    for key, template in config.experimenter_text["instructions"].items():
+        values = {name.split("[")[0]: "XXXXXXXX"
+                  for _, name, _, _ in string.Formatter().parse(template) if name}
+        values = {name: value for name, value in values.items()
+                  if name not in ("controls", "say")}
+        while True:
+            # A quoted `say:` line brings fields of its own, named only when it is filled.
+            try:
+                text = cfg.instruction(config, key, **values)
+                break
+            except KeyError as missing:
+                values[missing.args[0]] = "XXXXXXXX"
+        widgets.sized(label, widgets.SIZE_LARGE)
+        label.setText(text)
+        if label.heightForWidth(width) > label.height():
+            squeezed.append(key)
+    assert squeezed == []
+
+
 def test_no_banner_leaves_no_empty_band(app, session):
     """A laptop screen has no quarter to spare for banners that are not there (S's lab
     review, 24 Sep 2026). The open-items line is in the banner region since the 15 Oct 2026
@@ -680,6 +713,8 @@ def test_the_garment_state_is_shown(experimenter, session):
     assert window.garment_button.text() == controls["disconnect"]
     disconnects = _emitted(window.garment_disconnect_requested)
     window.garment_button.click()
+    assert disconnects == [], "asked first (LOG N7.F17e)"
+    window.findChildren(widgets.MessageDialog)[-1].accept()
     assert disconnects == [()]
 
     held["override"] = {"hardware": _hardware(connected=False)}
@@ -733,6 +768,8 @@ def test_every_action_signal_has_a_control_that_emits_it(drawn):
     ):
         seen = _emitted(signal)
         widget.click()
+        if widget in (window.garment_button, window.discard_button):  # asked first (N7.F17e)
+            window.findChildren(widgets.MessageDialog)[-1].accept()
         assert seen == [()], f"{widget.text()} did not emit"
 
 
@@ -900,7 +937,6 @@ def test_every_warning_the_status_region_carries_fits_it(app, language):
         value=max(text["terms"]["out_of_range"].values(), key=len)
     )
     shown.append(f"{out_of_range} {warnings['application_cap'].format_map(values)}")
-    shown.append(text["dialogs"]["fit_rerun_exhausted"])
     window.set_status(text["instructions"]["await_participant"])
     for filled in shown:
         window.set_warning(filled)
@@ -1276,6 +1312,79 @@ def test_abort_asks_for_confirmation_and_a_reason(drawn):
     assert seen == [("participant withdrew",)], "cancelling aborts nothing"
 
 
+def test_play_before_the_marker_says_what_to_do_until_the_marker_moves(participant):
+    """A press that did nothing visible read as a lost one (LOG N7.F17e)."""
+    vas = participant.vas
+    vas.show_scale("pain", participant.text["vas"]["pain"])
+    assert vas.training == ""
+    _press(vas, "f5")
+    assert vas.training == participant.text["vas_marker_hint"]
+    _press(vas, "pagedown")
+    assert vas.training == "", "gone with the press that moves the marker"
+
+
+def test_abort_is_withdrawn_once_the_session_is_closed(drawn):
+    """Code review of N7.F17e: an aborted session waits on its end screen, and a second abort
+    ran on the closed session."""
+    window, _ = drawn
+    assert _offered(window, window.abort_button)
+    window.set_actions_enabled(closed=True)
+    assert not window.abort_button.isVisibleTo(window) and not window.abort_button.isEnabled()
+
+
+def test_the_participant_is_not_awaited_through_a_pause(drawn):
+    """Code review of N7.F17e: the no-response wait ran on through a pause, and a resumed
+    trial carried the old start."""
+    window, held = drawn
+    window.set_no_response_s(60.0)
+    awaiting = window.text["instructions"]["await_participant"]
+    window.set_status(awaiting)
+    window._awaited_since_s -= 120.0  # two minutes waited
+    held["view"] = _all_keys(interruption="pause")
+    window.refresh()
+    assert window._awaited_since_s is None and window._no_response_shown is None
+    held["view"] = _all_keys()
+    window.set_status(awaiting)  # the repeated trial asks again
+    window.refresh()
+    assert time.monotonic() - window._awaited_since_s < 60.0, "timed afresh from the resume"
+    assert window._no_response_shown is None
+
+
+def test_opening_the_abort_pauses_first(drawn):
+    """LOG N7.F17e: the garment goes to zero while the reason is typed, and nothing runs on
+    behind the dialog. Not a second pause over a stop already in place."""
+    window, held = drawn
+    pauses = _emitted(window.pause_requested)
+    window.open_abort_dialog().reject()
+    assert pauses == [()]
+    held["view"] = _all_keys(interruption="pause")
+    window.refresh()
+    window.open_abort_dialog().reject()
+    assert pauses == [()]
+
+
+def test_the_note_field_asks_for_a_note_again_after_saying_one_was_saved(app, drawn):
+    window, _ = drawn
+    window.set_note_saved_s(0.01)
+    window.confirm_note("12:34:56")
+    assert "12:34:56" in window.note.placeholderText()
+    deadline = time.monotonic() + SPIN_TIMEOUT_S
+    while window.note.placeholderText() != window.text["controls"]["note"]:
+        assert time.monotonic() < deadline, "the saved note's time was left up"
+        QApplication.processEvents()
+
+
+def test_the_rerun_reason_confirms_with_enter_and_the_recalibration_is_brief(drawn):
+    window, _ = drawn
+    assert window.rerun_dialog().confirm.isDefault()
+    for choice in ("rebalance", "restart"):
+        dialog = window.recalibration_dialog(choice)
+        brief = window.text["dialogs"][f"recalibrate_{choice}"]
+        detail = window.text["dialogs"][f"recalibrate_{choice}_detail"]
+        assert dialog.message.text() == brief and dialog.message.toolTip() == detail
+        assert len(brief) < len(detail)
+
+
 def test_a_rerun_carries_its_reason(drawn):
     window, _ = drawn
     window.set_actions_enabled(fit_decision=True)
@@ -1440,18 +1549,19 @@ def test_a_fault_from_the_intervention_stays_withheld_afterwards(drawn):
 
 def test_a_lost_link_is_warned_of_in_the_experimenters_language_first(drawn):
     """docs/LOG.md N7.U16: the outputs may still be on, which the driver's own detail -- the
-    operating system's words -- does not say. The warning leads, so no bound can cut it."""
+    operating system's words -- does not say. In the alert row, red, over even a stop's line
+    (review of N7.F16: in the side column's small print it was missed)."""
     window, held = drawn
     fault = "serial write failed on COM3: WriteFile failed"
-    held["view"] = _all_keys(phase="setup", hardware=_hardware(
+    held["view"] = _all_keys(phase="setup", interruption="emergency_stop", hardware=_hardware(
         connected=False, faults=[fault], link_lost=True))
     window.refresh()
     words = window.text["hardware"]
-    assert window.faults.text().split("\n") == [words["link_lost"],
-                                                words["fault"].format(value=fault)]
+    assert window.alert.text() == words["link_lost"]
+    assert window.faults.text() == words["fault"].format(value=fault)
     held["view"] = _all_keys(phase="setup", hardware=_hardware(faults=[fault]))
     window.refresh()
-    assert words["link_lost"] not in window.faults.text(), "reconnected, it is gone"
+    assert window.alert.text() == "", "reconnected, it is gone"
 
 
 def test_accumulating_faults_do_not_grow_the_side_column(drawn):
@@ -1631,6 +1741,9 @@ def test_the_enabled_preview_draws_the_fit_and_hides_it_again(app, loaded, make_
     window.resize(1280, 800)
     window.show_fit_preview(make_fit())
     preview = window.fit_preview
+    assert not preview.accept_button.isEnabled(), (
+        "what it offers is the procedure's, not the preview's (code review of N7.F17e)")
+    window.set_actions_enabled(fit_decision=True)  # as the procedure offers both
     assert preview.isVisible() and not preview.isModal()
     assert preview.plot.points and preview.plot.line
     assert _offered(window, window.fit_accept_button)

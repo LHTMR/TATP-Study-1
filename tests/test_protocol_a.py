@@ -28,7 +28,7 @@ from tatp.pinprick import (
     ShortProtocol,
     prior_for,
 )
-from tatp.procedure import Rig
+from tatp.procedure import NO_RERUNS_LEFT, Rig
 from tatp.responder import Responder
 from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
@@ -321,20 +321,41 @@ def test_a_stop_before_delivery_repeats_the_same_application(rig):
     assert done[0].applications_total == len(rows)
 
 
-def test_a_resume_in_the_interval_restores_please_wait(rig):
+def test_a_resume_in_the_interval_restores_please_wait(app, loaded, tmp_path):
     """The interval is longer than `cues.please_wait_min_s` (13-17 s), so it says so (LOG
     N7.F14d), and a resume puts that back rather than leaving the stop screen up."""
+    # Ten real seconds, so what is left of it at the resume never depends on the machine's load:
+    # at the test's clock speed 13-17 s is gone in 17 ms, and the interval runs from the
+    # delivery press (LOG N7.F17a).
+    interval_s = 10 * CLOCK_SPEED
+    pinprick = {**loaded.study1["pinprick"], "isi_min_s": interval_s, "isi_max_s": interval_s}
+    rig = _make_rig(loaded, tmp_path, study1={**loaded.study1, "pinprick": pinprick})
     participant, experimenter = rig.participant, rig.experimenter
     please_wait = participant.text["screens"]["please_wait"]
     protocol = _long(rig)
-    done = _start(protocol)
+    _start(protocol)
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
     _answer(participant, 0)  # now in the interval
     assert participant.message.text == please_wait
     participant.emergency_stop.emit()
     experimenter.resume_requested.emit()
     assert participant.message.text == please_wait, "not the stop screen"
-    _drive(protocol, done)
+    protocol.cancel()
+    rig.session.close()
+
+
+def test_a_participant_awaited_too_long_is_warned_of_and_logged(rig):
+    """SPEC.md 8.3: warned and logged, never auto-advanced. Through the rig's own connection,
+    so a broken one fails here (spec review of N7.F17e; CLAUDE.md engineering lesson 1)."""
+    experimenter = rig.experimenter
+    experimenter.set_no_response_s(0.0)
+    experimenter.set_status(experimenter.text["instructions"]["await_participant"])
+    experimenter.refresh()
+    assert experimenter._no_response_shown is not None
+    (row,) = [r for r in _rows(rig.session, "log") if r["event"] == "no_response"]
+    assert row["severity"] == "warning"
+    experimenter.refresh()
+    assert _events(rig.session).count("no_response") == 1, "logged once, not every refresh"
 
 
 def test_a_rest_no_longer_than_please_wait_min_s_is_blank(rig):
@@ -377,22 +398,24 @@ def test_the_interval_shows_the_next_application_counting_down_to_it(app, loaded
         due_s = protocol._interval_s + config.study1["cues"]["warning_lead_s"]
         return math.ceil(rig.session.clock.remaining_s(protocol._interval_start_s, due_s))
 
-    def redrawn() -> tuple[int, str]:
-        # The test clock runs fast, so a second can pass during the redraw itself.
+    def redrawn() -> tuple[int, str, list[str]]:
+        # The test clock runs fast, so seconds can pass during the redraw itself -- as many as
+        # the machine's load makes them: any count from the reading before to the one after.
         before = remaining()
         protocol._show_expected()
-        return before, experimenter.instruction.text()
+        text = experimenter.instruction.text()
+        return before, text, [shown(s) for s in range(remaining(), before + 1)]
 
     try:
-        before, text = redrawn()
-        assert text in (shown(before), shown(remaining())), text
+        before, text, possible = redrawn()
+        assert text in possible, text
         assert experimenter.status.text() == cfg.instruction(
             config, "received_filament", filament=first.applied_label_g,
             site=first.application.site_index,
         )
         rig.session.clock.skip(1.0)
-        after, text = redrawn()
-        assert after < before and text in (shown(after), shown(remaining())), "it counts down"
+        after, text, possible = redrawn()
+        assert after < before and text in possible, "it counts down"
         _spin(lambda: protocol._trial is not None and protocol._trial is not first)
         assert protocol._trial.application == expected, "the one shown is the one given"
         _drive(protocol, done)
@@ -736,16 +759,24 @@ def test_the_fit_preview_rerun_is_bounded(app, loaded, tmp_path):
     protocol = _long(rig)
     fits = []
     protocol.fit_ready.connect(fits.append)
+    protocol.fit_ready.connect(rig.experimenter.show_fit_preview)
     done = _start(protocol)
     while not fits:
         _spin(lambda: fits or (rig.participant.stack.currentWidget() is rig.participant.vas))
         if not fits:
             _answer(rig.participant, _observer(protocol._trial))
-    rig.experimenter.fit_rerun_requested.emit("again")
+    # At the limit Re-run is not offered -- not even by the preview opening over it -- and the
+    # instruction says so before any press (reviews of N7.F16, N7.F17e), not after a refused
+    # one.
+    experimenter = rig.experimenter
+    for rerun in (experimenter.fit_rerun_button, experimenter.fit_preview.rerun_button):
+        assert rerun.isHidden() or not rerun.isEnabled()
+    assert experimenter._instruction_text == cfg.instruction(
+        rig.session.config, f"f40_fit_review{NO_RERUNS_LEFT}")
+    experimenter.fit_accepted.emit()
     assert done and done[0].run_index == 1
     (row,) = _rows(rig.session, "calibration_pinprick")
     assert row["superseded"] == "false"
-    assert "fit_rerun_refused" in _events(rig.session)
     rig.session.close()
 
 

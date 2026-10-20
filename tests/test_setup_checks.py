@@ -68,15 +68,15 @@ def _is_masking_step(trial) -> bool:
 
 
 def _reports_audible(rig, times: int, also=lambda trial: None):
-    """The experimenter's Next step on the first `times` masking steps: the participant has
-    said they can still hear the garment (SPEC.md 10.7)."""
+    """The experimenter's "They can still hear it" on the first `times` masking steps: the
+    participant has said they can still hear the garment (SPEC.md 10.7)."""
     reported = []
 
     def report(trial):
         also(trial)
         if _is_masking_step(trial) and len(reported) < times and trial not in reported:
             reported.append(trial)
-            rig.experimenter.proceed_requested.emit()
+            rig.experimenter.alternative_requested.emit()
 
     return report
 
@@ -192,30 +192,30 @@ def test_still_audible_is_reported_and_earplugs_restart_the_check(rig):
     assert len(_events(session, "masking_threshold")) == 2
 
 
-def test_a_double_clicked_next_step_does_not_record_earplugs_never_fitted(rig):
+def test_a_double_clicked_report_does_not_record_earplugs_never_fitted(rig):
     """Review of 9c84769: the second click of a double click must not be taken as "the
-    earplugs are in". Within the lockout it is ignored, and the earplugs are recorded only
-    by a Next step after it."""
+    earplugs are in". The report is its own button since review of N7.F16, withdrawn once
+    pressed, and the earplugs are recorded only by a Next step after the lockout."""
     session = rig.session
     virtual = Virtual(rig, MaskingCheck(rig))
     after_double = []
 
     def double_click(trial):
         if _is_masking_step(trial) and not after_double:
-            rig.experimenter.proceed_requested.emit()
-            rig.experimenter.proceed_requested.emit()
+            rig.experimenter.alternative_requested.emit()
+            rig.experimenter.alternative_requested.emit()
             after_double.append(len(_events(session, "earplugs_fitted")))
 
     virtual.before_step = double_click
     result = virtual.run()
     assert after_double == [0], "the second click fitted no earplugs"
     assert result.earplugs_used, "the Next step after the lockout did"
-    proceeds = [r for r in _events(session, "proceed") if r["detail"] == "MaskingCheck"]
-    assert proceeds, "the report goes through the procedure's own Next step, and is logged"
+    reports = _events(session, "masking_reported_audible")
+    assert len(reports) == 1, "the second click is no report"
 
 
-def test_a_next_step_during_a_stop_in_the_masking_step_reports_nothing(rig):
-    """The report is the procedure's proceed, so a Next step while interrupted is ignored."""
+def test_a_report_during_a_stop_in_the_masking_step_reports_nothing(rig):
+    """A report while interrupted is ignored."""
     session = rig.session
     virtual = Virtual(rig, MaskingCheck(rig))
     done = []
@@ -224,7 +224,7 @@ def test_a_next_step_during_a_stop_in_the_masking_step_reports_nothing(rig):
         if _is_masking_step(trial) and not done:
             done.append(True)
             press(rig.participant, "period")
-            rig.experimenter.proceed_requested.emit()
+            rig.experimenter.alternative_requested.emit()
 
     virtual.before_step = stop_then_next
     result = virtual.run()
@@ -460,8 +460,9 @@ def test_the_experimenter_can_move_on_without_a_press(rig):
     virtual.press_stop = False
 
     def proceed(trial):
+        # Its own button, "No stop press": Next step never means "no" (review of N7.F16).
         if isinstance(trial, AwaitStop):
-            rig.experimenter.proceed_requested.emit()
+            rig.experimenter.alternative_requested.emit()
 
     virtual.before_step = proceed
     result = virtual.run()

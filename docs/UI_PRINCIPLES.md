@@ -124,6 +124,11 @@ be the brightest object in the participant's field of view.
 3.6 The emergency stop is reachable and identifiable without reading (Bilaga 1 §3.10). Nothing
 is a control unless it can be operated without looking away from the participant.
 
+3.7 **What exists only in a demonstration is violet** (`DEMO_COLOUR`): its banner, its
+controls' labels and chosen buttons, and what it says about how it differs from a session
+(S, 20 Oct 2026). Nothing in a session uses violet, so a screenshot or a glance tells which it
+is. A warning in a demonstration stays a warning's colour.
+
 ## 4. Consistency
 
 4.1 Every user-facing string comes from `config/text/`. No wording in a widget.
@@ -200,6 +205,45 @@ Removing it also removes the failure mode where a participant chooses and then d
 This is a protocol property, so it lives in `docs/SPEC.md` and `docs/DATA_SCHEMA.md`, not only
 here.
 
+### Every screen, every step
+
+From S's demo testing, 15–20 Oct 2026, where these were the problems that kept coming back.
+
+5.13 **A visible control does something now.** If pressing it would do nothing, it is
+disabled or not drawn. A button that silently ignores a press is never left on screen.
+
+5.14 **Every press is acknowledged at once**, on both screens: a pressed look, a moved marker,
+a changed line. A style sheet removes the platform's own pressed state, so every style puts it
+back.
+
+5.15 **Nothing stale survives a step.** Status lines, warnings, targets and instructions are
+cleared or replaced at every step boundary, never left over from the step before.
+
+5.16 **An instruction never asks for an action the software will not yet accept.** "Now:
+press X" appears only when X is live; before that, the screen says what to get ready.
+
+5.17 **Every wait says what it is waiting for and how long** — a countdown or a named reason,
+never a blank pause. **No one waits who need not**: a protocol interval has a purpose (spacing
+painful stimuli, say), and the wait goes where it serves that purpose — usually as information
+to the experimenter, never as a delay in front of the participant's answer.
+
+5.18 **Show what is relevant now; hide the rest.** Clutter is a defect. Blank space is used
+before anything that is already small is shrunk.
+
+5.19 **The session improves, not just the demonstration.** A demo-only change is for what only
+a demo has (simulations, skipping waits). A demonstration says plainly how it differs from a
+session.
+
+5.20 **A control someone may need mid-run can be changed mid-run**, and its label or tooltip
+says what it does.
+
+5.21 **Every window and dialog fits the lab laptop, 1280 × 640**, with its worst-case content
+— every banner, faults, the longest Swedish string — and a test holds it there. Overflowing it
+was the most repeated layout fault (N7.U1, U4a, U10c, F5, F10b, F12a2, F16i).
+
+5.22 **A control that commits or advances survives a double press, a held key's auto-repeat,
+and the focus moving when a control hides** (N7.U5d, U15, F6c, F11c9, F11a10, F16d).
+
 ## 6. How a screen is reviewed
 
 Against §1–5 in order, on the rendered PNG in `screenshots/current/`, in both languages, never
@@ -213,4 +257,22 @@ from the code alone. A finding is graded:
 A finding names the rule it breaks. "This would look better" without a rule behind it is a
 preference, and belongs in the polish grade or nowhere.
 
-A change to any screen is followed by `make shots` and re-approval of its reference image.
+A change to any screen is followed by `make shots` and re-approval of its reference image, by
+the build, against these principles: S does not review screens (20 Oct 2026).
+
+## 7. Before UI work is handed over
+
+Tests check that the code does what it was told, not that a person can use it, and they
+passed every time a problem in §5.13–5.20 reached S. So:
+
+7.1 **Walk the session as the experimenter and as the participant**, step by step, in a
+demonstration, and hold every step to §1–5. Fix what is found; do not hand over a list.
+
+7.2 **Simulations behave like people**: they press repeatedly and hold, judge only by what they
+would feel or see, and overshoot and correct (`sim/responders.py`). A simulation that behaves
+like a careful machine hides the problems a person meets.
+
+7.3 **Tests that depend on timing** are covered by `CLAUDE.md`, Engineering lessons.
+
+7.4 **S is not asked to approve what these principles decide**, screens included. S is asked
+about measurement, blinding and safety (`CLAUDE.md`, Deciding).

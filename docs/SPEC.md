@@ -504,9 +504,12 @@ block, and for primary hyperalgesia at pre-S, post-S and post-I.
 - **Software paces the trials.** The experimenter confirms the **start of the block**, which
   triggers the participant's warning cue. Thereafter the **participant's response** advances to
   the next trial. Within each trial the experimenter presses Next step once the stimulus is
-  applied, and the rating is cued `rating_cue_delay_s` after that press (S, 20 Oct 2026;
+  applied, and the rating scale appears at that press (S, 20 Oct 2026;
   `docs/LOG.md` N7.F16f). The long protocol's applications do the same.
-- **Jittered ISI**, configurable, default 13–17 s (Scheuren et al. 2023).
+- **Jittered ISI**, configurable, default 13–17 s (Scheuren et al. 2023), from one stimulus's
+  "applied" press to the next stimulus's cue, the rating inside it; it spaces the painful
+  stimuli and never delays a rating. The experimenter sees it count down to the next
+  application, and prepares it meanwhile (S, 20 Oct 2026; `docs/LOG.md` N7.F17a).
 - **Site rotates on every application.**
 
 Brush allodynia (primary and secondary) uses the same protocol structure with a soft goat-hair

@@ -607,7 +607,10 @@ From Berquin et al. (2010):
   length for ~1 s, no lateral movement, slow removal, site hidden.
 
 From Scheuren et al. (2023): reposition ~1 cm after each application; ISI 13–17 s; rating cued 9 s
-after the stimulus.
+after the stimulus. **This study departs on the last** (S, 20 Oct 2026; SPEC.md 8.3, docs/LOG.md
+N7.F17a): the scale is cued at the experimenter's press saying the filament is applied, and the
+13–17 s interval, timed from that press, is what spaces the painful stimuli. Session files say
+which (`rating_cue_at`).
 
 ---
 
