@@ -296,36 +296,7 @@ screen it re-approved in its final message, so the integrator can check them.
   then widen. Do not build one layer completely before starting the next.
 - Anything in `docs/SPEC.md` §20 that is still unresolved stays a clearly-marked placeholder
   that warns at startup. Never quietly default it — see the two-places rule above.
-
-## Lessons from S's demo testing — check these before handing over any UI change
-
-The same kinds of problem kept reaching S, one at a time (15–20 Oct 2026). Tests passed every
-time; they test that the code does what it was told, not that a person can use it. So before
-any UI work is called done, **walk the session as the experimenter and as the participant**,
-step by step, and hold every step to these:
-
-1. **A visible control does something now.** If pressing it would do nothing, it is disabled
-   or not drawn. Never leave a button that silently ignores a press.
-2. **Every press is acknowledged at once** — a pressed look, a moved marker, a changed line.
-   A style sheet removes Qt's own pressed state; put it back.
-3. **Nothing stale survives a step.** Status lines, warnings, targets and instructions are
-   cleared or replaced at every step boundary, not left from the step before.
-4. **An instruction never asks for an action the software will not yet accept.** "Now: press
-   X" appears only when X is live; before that, say what to get ready.
-5. **Every wait says what it is waiting for and how long.** A countdown or a named reason, never
-   a blank pause. And **no one waits who need not**: a protocol interval exists for a reason
-   (spacing painful stimuli, say) — find the reason and put the wait where it serves it, usually
-   as information to the experimenter, never as a delay in front of the participant's answer.
-6. **Show what is relevant now; hide the rest.** Clutter is a defect. Use blank space before
-   shrinking anything that is already small.
-7. **Improve the session, not just the demo.** A demo-only fix is a last resort for what only a
-   demo has (simulations, skipping). A demo also says plainly how it differs from a session.
-8. **Controls a person may need mid-run can be changed mid-run** (who presses, speed of play),
-   and say what they do in their own label or tooltip.
-9. **Simulations behave like people**: they press repeatedly and hold, judge only by what they
-   would feel or see, and overshoot and correct. A simulation that behaves like a careful
-   machine hides the problems a person meets.
-10. **A test that passes or fails by timing is a bug.** Before blaming a change, run it several
-    times on both `main` and the branch; one run decides nothing.
-11. **Don't ask S to approve what the principles already decide** — screens included. Ask only
-    about measurement, blinding and safety.
+- **UI work follows `docs/UI_PRINCIPLES.md`**, which is the one home for how screens and
+  controls behave and for how UI work is checked before it is handed over (§5.13–5.20, §7:
+  walk the session as both roles, realistic simulations, no timing-dependent tests, nothing
+  sent to S for approval that the principles decide). Do not restate its rules elsewhere.

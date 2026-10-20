@@ -90,10 +90,15 @@ TICK_S = 0.002
 # How long after the carried-over lockout ends a deferred ▶ is sent, in real milliseconds:
 # a timer can fire a hair early, and a press still inside the lockout would be deferred again.
 LOCKOUT_MARGIN_MS = 1
-# Taps in one look at the screen before looking again; the garment follows a tap at once.
-TAPS_PER_TICK = 60
 # Taps in a row that changed nothing: the end of the adjustable range has been reached.
 END_OF_RANGE_TAPS = 3
+# How an adjustment is being made (`_tap_towards`): held towards the point, waiting to feel
+# the touch settle, or tapped one press at a time.
+HOLDING = "holding"
+SETTLING = "settling"
+TAPPING = "tapping"
+SETTLE_TICKS = 2
+RANGE_END_TICKS = 4
 
 
 class CalibrationSimError(Exception):
@@ -251,9 +256,12 @@ class VirtualParticipant(QObject):
         }
         self._vas_step = float(vas["move_step_pct"])
         self._tap_step_kpa = float(config.hardware["adjustment"]["tap_step_kpa"])
-        # How long the adjustment takes to finish a command the rate limit cut short: its own
-        # tick (tatp/touchcal.py `Adjustment`), in real seconds.
-        self._settle_s = float(config.hardware["adjustment"]["tick_interval_s"])
+        # The adjustment moves the pressure once a tick (tatp/touchcal.py `Adjustment`), so a
+        # touch has settled once it has not changed for SETTLE_TICKS of them, and a hold has
+        # reached the end of the range once it has not moved for RANGE_END_TICKS.
+        tick_s = float(config.hardware["adjustment"]["tick_interval_s"])
+        self._settle_s = SETTLE_TICKS * tick_s
+        self._range_end_s = RANGE_END_TICKS * tick_s
         # The participant reads the prompt, and knows which point of the scale it names.
         touch = config.study1["touch_calibration"]
         self.reference_channel = int(touch["reference_channel"])
@@ -288,8 +296,7 @@ class VirtualParticipant(QObject):
         self._shown_at_s = 0.0
         self._adjust_goal: float | None = None
         self._unchanged_taps = 0
-        # When a tap was last held back by the rate limit, in monotonic seconds; None after.
-        self._held_back_at_s: float | None = None
+        self._reset_seek()
         self._choice_felt = dict.fromkeys(SIDES, MIN_PCT)
         self._timer = QTimer(self)
         self._timer.setInterval(int(round(TICK_S * MS_PER_S)))
@@ -405,6 +412,7 @@ class VirtualParticipant(QObject):
         self._shown_at_s = time.monotonic()
         self._adjust_goal = None
         self._unchanged_taps = 0
+        self._reset_seek()
         window = self.window
         if not (screen is window.choice and window.choice.accepting):
             self._choice_felt = dict.fromkeys(SIDES, MIN_PCT)
@@ -586,42 +594,89 @@ class VirtualParticipant(QObject):
         self._tap_towards(difference)
 
     def _tap_towards(self, difference) -> None:
-        """Tap up while `difference()` is below zero, down while above, then confirm."""
-        if time.monotonic() - self._shown_at_s < TICK_S:
+        """Reach the point where `difference()` -- what is felt, less what is wanted -- is
+        zero, as a person does (S, 20 Oct 2026: "Real participants are likely to press,
+        press repeatedly and press continuously"; LOG N7.F17c):
+
+        1. **Hold** the button towards it, and let go once the touch is felt past it. The
+           garment lags the command under the rate limit, so this overshoots.
+        2. **Wait to feel it settle**: until the pressure has stopped changing for an
+           adjustment tick.
+        3. **Tap back**, one press at a time, feeling each settle, and confirm once a tap
+           carries it across: within one tap of the point.
+
+        Only what is felt is used, never the commanded level: a tap the rate limit holds back
+        is felt arriving over the next looks, as on the arm.
+        """
+        now_s = time.monotonic()
+        if now_s - self._shown_at_s < TICK_S:
             return  # the garment may still be settling from the screen before
-        if (self._held_back_at_s is not None
-                and time.monotonic() - self._held_back_at_s < self._settle_s):
-            # The last tap was held back by the rate limit: felt again once the adjustment has
-            # finished it, or each next look taps on ahead of what the arm feels, and the level
-            # overshoots by however far the garment lags -- which depended on how fast the
-            # looks came (LOG N7.F16 review: 4-8 kPa past a 17 kPa anchor, now and then).
+        felt = difference()
+        pressures = dict(self.garment.pressure_kpa)
+        if self._seek is None:
+            if felt == 0:
+                self.confirm_adjustment()
+                return
+            self._seek = HOLDING
+            self._seek_sign = -1 if felt < 0 else 1
+            self.hold(Action.INCREASE if felt < 0 else Action.DECREASE)
             return
-        self._held_back_at_s = None
-        start = difference()
-        if start == 0:
+        if self._seek == HOLDING:
+            if felt == 0 or (felt < 0) != (self._seek_sign < 0):
+                self._let_go()
+                self._settle(pressures, now_s)
+            elif self._unchanged(pressures):
+                # Held at the end of the range: nothing more to feel.
+                self.confirm_adjustment()
+            return
+        if pressures != self._settling_from:
+            self._settle(pressures, now_s)  # still arriving
+            return
+        if now_s - self._settled_since_s < self._settle_s:
+            return
+        # Settled. A tap that carried it across, or brought it exactly there, ends it.
+        if felt == 0 or (self._seek == TAPPING and (felt < 0) != (self._seek_sign < 0)):
             self.confirm_adjustment()
             return
-        action = Action.INCREASE if start < 0 else Action.DECREASE
-        # Watched, one tap per look, so the pressure is seen to climb.
-        for _ in range(1 if self.press_interval_s > 0 else TAPS_PER_TICK):
-            # The pressure, not the felt difference, says whether a tap moved anything: well
-            # below threshold every pressure is felt as nothing.
-            before = dict(self.garment.pressure_kpa)
-            self.tap(action)
-            after = difference()
-            if (after >= 0) if action is Action.INCREASE else (after <= 0):
-                self.confirm_adjustment()
-                return
-            moved_kpa = max(abs(kpa - before.get(channel, 0.0))
-                            for channel, kpa in self.garment.pressure_kpa.items())
-            self._unchanged_taps = 0 if moved_kpa else self._unchanged_taps + 1
-            if self._unchanged_taps >= END_OF_RANGE_TAPS:
-                self.confirm_adjustment()
-                return
-            if 0 < moved_kpa < self._tap_step_kpa:
-                # The rate limit is holding the garment back: feel it once it has caught up.
-                self._held_back_at_s = time.monotonic()
-                return
+        if self._unchanged_taps >= END_OF_RANGE_TAPS:
+            self.confirm_adjustment()  # the end of the range: taps move nothing
+            return
+        self._seek = TAPPING
+        self._seek_sign = -1 if felt < 0 else 1
+        self._tap_from = pressures
+        self.tap(Action.INCREASE if felt < 0 else Action.DECREASE)
+        self._settle(dict(self.garment.pressure_kpa), now_s)
+
+    def _reset_seek(self) -> None:
+        """A new adjustment: nothing held, nothing settling."""
+        self._seek: str | None = None
+        self._seek_sign = 0
+        self._settling_from: dict | None = None
+        self._settled_since_s = 0.0
+        self._tap_from: dict | None = None
+        self._moved_while_holding = False
+
+    def _settle(self, pressures: dict, now_s: float) -> None:
+        if self._seek == TAPPING and self._tap_from is not None:
+            moved = pressures != self._tap_from
+            self._unchanged_taps = 0 if moved else self._unchanged_taps + 1
+            self._tap_from = None
+        if self._seek == HOLDING:
+            self._seek = SETTLING
+        self._settling_from = pressures
+        self._settled_since_s = now_s
+
+    def _unchanged(self, pressures: dict) -> bool:
+        """While holding: whether the pressure, once it has started to move, has stopped,
+        look to look, for an adjustment tick. Before the hold delay is over it has not
+        started, which is not the end of the range."""
+        if pressures != self._settling_from:
+            self._moved_while_holding = self._settling_from is not None
+            self._settling_from = pressures
+            self._settled_since_s = time.monotonic()
+            return False
+        return (self._moved_while_holding
+                and time.monotonic() - self._settled_since_s >= self._range_end_s)
 
     def confirm_adjustment(self) -> None:
         self._let_go()

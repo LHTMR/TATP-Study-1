@@ -214,6 +214,11 @@ class ZoneDiagram(QWidget):
             assert self.renderer.elementExists(element), f"{ZONES_SVG} has no #{element}"
         self.region: str | None = None
 
+    def width_for(self, height_px: int) -> int:
+        """The width the drawing fills at `height_px`: the diagram keeps its proportions."""
+        box = self.renderer.viewBoxF()
+        return math.ceil(height_px * box.width() / box.height())
+
     def set_region(self, region: str | None) -> None:
         assert region is None or region in ZONE_IDS, f"no zone {region!r}"
         self.region = region

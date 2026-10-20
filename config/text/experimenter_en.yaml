@@ -700,14 +700,13 @@ hardware:
   # DRAFT (LOG N7.U6): written by the build, not ethics-sourced. Above the newest fault: how
   # many came before it. The full list is in the tooltip and the data.
   faults_earlier: '{value} earlier (detail in the data)'
-  # The channel display, a column per channel as commanded (tatp/ui/garment_display.py): in
+  # The channel display, a row per channel as commanded (tatp/ui/garment_display.py): in
   # a session outside the intervention and the rekindle, and in a demonstration throughout.
   # It replaced the line "kPa by channel" and the Demo controls' own display (LOG N7.F16i).
-  # The captions say what its two rows are; the readings are on or off where the garment
+  # Beside the zone diagram (LOG N7.F17b); the readings are on or off where the garment
   # sets no pressure per channel.
   # DRAFT (LOG N7.F12f, N7.F16i): written by the build, not ethics-sourced
-  channel_caption: Ch
-  pressure_caption: kPa
+  channel_pressure: '{value} kPa'
   channel_on: "on"
   channel_off: "off"
 

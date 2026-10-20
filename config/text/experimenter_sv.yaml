@@ -698,11 +698,10 @@ hardware:
   # DRAFT (LOG N7.U6): written by the build, not ethics-sourced. Ovanför det senaste felet: hur
   # många som kom före det. Hela listan finns i verktygstipset och i data.
   faults_earlier: '{value} tidigare (detalj i data)'
-  # Kanalvisningen, en kolumn per kanal så som den styrs (tatp/ui/garment_display.py, LOG
+  # Kanalvisningen, en rad per kanal så som den styrs (tatp/ui/garment_display.py, LOG
   # N7.F16i).
   # DRAFT (LOG N7.F12f, N7.F16i): written by the build, not ethics-sourced
-  channel_caption: Kanal
-  pressure_caption: kPa
+  channel_pressure: '{value} kPa'
   channel_on: på
   channel_off: av
 

@@ -113,9 +113,9 @@ RICH_LINE_BREAK = "<br>"
 # for all three, which was a quarter of a laptop screen left empty in almost every session.
 # The interruption line is reserved at one line; a test holds both languages' wording to it.
 ALERT_LINES = 1
-# What to do now has three lines at the headline size. A longer instruction is set at the next
-# size down the scale, and so on, until it fits (UI_PRINCIPLES.md 3.3, 4.3).
-INSTRUCTION_LINES = 3
+# What to do now has four lines at the headline size, so a sentence to read aloud keeps it
+# (review of N7.F16). A longer one is set a size down the scale, until it fits (3.3, 4.3).
+INSTRUCTION_LINES = 4
 INSTRUCTION_SIZES = (SIZE_HEADLINE, SIZE_LARGE, SIZE_BODY, SIZE_SMALL)
 # The phase row's shares: two thirds the timeline, one third the countdown, which steps down
 # the type scale to fit its third (LOG N7.F16h).
@@ -132,8 +132,8 @@ WARNING_STAGES = 1
 SIDE_COLUMN_PX = 300
 FAULT_LINES = 4
 # Fixed, so the diagram does not resize when the pressures or faults appear (LOG N7.U10).
-# 120, from 180, to make room for the channel display on the lab laptop (LOG N7.F16i).
-ZONE_HEIGHT_PX = 120
+# The channel display stands beside it rather than below (LOG N7.F17b), so it can be tall.
+ZONE_HEIGHT_PX = 200
 SUBSTITUTION_FIELD_PX = 300
 DISTANCE_FIELD_PX = 110
 CONTROL_COLUMNS = 4
@@ -433,7 +433,7 @@ class ExperimenterWindow(QWidget):
         # a step with nowhere to go has no picture to look at; which steps have one is a matter
         # of the procedure, never of the condition (SPEC.md 16).
         self.zone = ZoneDiagram()
-        self.zone.setFixedHeight(ZONE_HEIGHT_PX)
+        self.zone.setFixedSize(self.zone.width_for(ZONE_HEIGHT_PX), ZONE_HEIGHT_PX)
         _reserve(self.zone)
         self.target = label(SIZE_BODY)
         self.target.setAlignment(Qt.AlignHCenter)
@@ -470,20 +470,26 @@ class ExperimenterWindow(QWidget):
         self.skip_button = button(self.text["controls"]["skip_calibration"])
         self.skip_button.clicked.connect(self.skip_calibration_requested.emit)
         self.skip_button.setVisible(False)
-        state = QHBoxLayout()
-        state.addWidget(self.hardware_title)
-        state.addWidget(self.garment)
-        state.addStretch(1)
+        # The garment beside the zone diagram, not under it: the two never compete for
+        # height, so the diagram keeps its size on the lab laptop (LOG N7.F17b).
+        garment_box = QVBoxLayout()
+        garment_box.setSpacing(ITEM_GAP_PX)
+        garment_box.addWidget(self.hardware_title)
+        garment_box.addWidget(self.garment)
+        garment_box.addLayout(self._garment_slot)
+        garment_box.addStretch(1)
+        top = QHBoxLayout()
+        top.setSpacing(ITEM_GAP_PX)
+        top.addWidget(self.zone, 0, Qt.AlignTop)
+        top.addLayout(garment_box, 1)
 
         side = QWidget()
         side.setFixedWidth(SIDE_COLUMN_PX)
         column = QVBoxLayout(side)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(ITEM_GAP_PX)
-        column.addWidget(self.zone)
+        column.addLayout(top)
         column.addWidget(self.target)
-        column.addLayout(state)
-        column.addLayout(self._garment_slot)
         column.addWidget(self.faults)
         column.addStretch(1)
         column.addWidget(self.skip_button)
