@@ -79,7 +79,8 @@ def test_a_pressure_change_lights_the_channel_and_shows_its_value(app, config):
     garment.set_pressure(channel, kpa)
     _poll(display, garment, T0_S + 1)
     assert display.highlight(channel) == 1.0
-    assert display.reading(channel) == f"{kpa:.0f}"
+    words = config.experimenter_text["hardware"]
+    assert display.reading(channel) == words["channel_pressure"].format(value=f"{kpa:.0f}")
     assert display.states[channel] == (False, kpa), "set, not applied: off"
 
 

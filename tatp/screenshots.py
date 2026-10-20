@@ -978,7 +978,8 @@ class _SampleDemo(QObject):
             self.garment.set_channel(channel, True)
         self.participant_mode = OFF
         self.experimenter_mode = OFF
-        self.finishing = False
+        self.auto_running = False
+        self.config = config
         self.fast_forward_to = None
         self.phases = _session_phases(config)
         self.phase = SAMPLE_DEMO_PHASE
@@ -1105,6 +1106,14 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"and the side column's warning that the outputs may still hold it (N7.U16) "
         f"({language}).",
         _grab_checked(window, f"experimenter_{language}_demo_controls_worn_link_lost"),
+    )
+    _, controls = _demo_window(config, _SampleDemo(config))
+    yield Shot(
+        f"experimenter_{language}_demo_differences",
+        f"Demo vs session (docs/LOG.md N7.F17d): every way a demonstration on the mock differs "
+        f"from a session, each with the session's own value, from the configuration "
+        f"({language}).",
+        _grab_dialog(controls.differences_dialog()),
     )
 
     dialog = launcher.session_dialog()

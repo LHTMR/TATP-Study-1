@@ -563,41 +563,37 @@ demo:
     Bara en tidsstyrd väntan på ett schemalagt steg kan hoppas över: capsaicinet, blocken,
     återuppvärmningen, interventionens slut. Den stannar {lead} s innan steget ska göras, så att
     nedräkningen och larmet fortfarande syns.
-  auto_run: 'Kör {step} automatiskt'
-  auto_running: 'Kör {step} automatiskt…'
+  auto_run: Automatisk körning
+  auto_running: 'Automatisk körning: på (klicka för att stoppa)'
+  auto_run_detail: >-
+    Både deltagaren och försöksledaren är simulerade och snabba, och varje tidsstyrd väntan
+    hoppas över, tills du klickar igen; då går var och en tillbaka till vad den var. Inget
+    hoppas över utom väntan: varje mätning görs ändå.
   fast_forward: 'Spola fram till:'
   fast_forward_go: Kör
   fast_forwarding: 'Spolar fram till {phase}…'
   skipped: 'Hoppade över {value} min väntan.'
   clock: 'Klocka: {speed}× realtid'
   clock_detail: >-
-    Varje tidsstyrt intervall i sessionen går så här många gånger snabbare än i en riktig
-    session. 1 är realtid, som en deltagare möter den. Väljs när demon startas (Klockans hastighet); ett
-    plagg som bärs går alltid i 1.
+    Varje tidsstyrt intervall i sessionen -- vilopauser, signaler, schemalagda väntetider,
+    nedräkningar -- går så här många gånger snabbare än i en riktig session, för personer och
+    simuleringar lika. Bara handens egen tid (hur länge en knapp hålls) är verklig. 1 är
+    realtid. Väljs när demon startas (Klockans hastighet); ett plagg som bärs går alltid i 1.
   remote: 'Fjärrkontroll:'
   worn_note: 'Plagget bärs: bara personer, ingen automatik eller framspolning.'
   worn_note_detail: 'Någon kan ha plagget på sig: deltagaren och försöksledaren är personer, inte simuleringar, och automatisk körning och framspolning är avstängda.'
-  steps:
-    garment: plaggets påtagning
-    welcome: välkomstskärmen
-    stop_rehearsal: stoppövningen
-    masking_check: maskeringskontrollen
-    touch_calibration: beröringskalibreringen
-    baseline: baslinjeskattningarna
-    mark_zone: markeringen av huden
-    long: filamentserien
-    mapping: områdeskartläggningen
-    short_primary: filamenten i den primära zonen
-    brush_secondary: penseln i den sekundära zonen
-    brush_primary: penseln i den primära zonen
-    sensitisation: värmen
-    apply: capsaicinet
-    remove: borttagningen av capsaicinet
-    start: interventionens början
-    block: 'block {n}'
-    rekindle: återuppvärmningen
-    end: interventionens slut
-    session_end: sessionens slut
+  differences_button: Demo jämfört med session…
+  differences:
+    intro: 'Den här demonstrationen kör sessionens riktiga kod. Det här skiljer sig från en session:'
+    clock: 'Klocka: {speed}× realtid. Session: realtid.'
+    rests: 'Vila mellan appliceringar med filament eller pensel: {demo} s. Session: {low}–{high} s från varje applicering.'
+    estimation: 'Beröringskalibrering, skattningsserien (mockplagget): {demo} s mellan beröringarna och skalan {demo_settle} s in i varje. Session: {session} s och {session_settle} s, för att ett riktigt plagg ska hinna fyllas.'
+    keyboards: 'Tangentbord: bara R400 räknas när den är ansluten, annars alla tangentbord. Session: bara R400.'
+    garment: 'Plaggets kanaler visas i varje fas. Session: dolda under interventionen och återuppvärmningen, så att villkoret inte syns.'
+    simulations: 'Deltagaren och försöksledaren kan simuleras, och bytas när som helst. Session: bara personer.'
+    skipping: 'Hoppa över, automatisk körning och framspolning finns bara i en demonstration.'
+    allocation: 'Villkoren blandas över sessionsnumren vid varje körning.'
+    data: 'Data hamnar i en egen mapp, märkta som demonstration, och är aldrig studiedata.'
 
 dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.

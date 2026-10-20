@@ -66,7 +66,15 @@ from pathlib import Path
 import shiboken6
 from PySide6.QtCore import QEvent, QObject, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QButtonGroup,
+    QComboBox,
+    QHBoxLayout,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from tatp.clock import Clock
 from tatp.config import REPO_ROOT, Config
@@ -74,7 +82,7 @@ from tatp.devices import KEY_SOURCE_CHANGE
 from tatp.remote_keys import ANY_KEYBOARD, RAW_INPUT, remote_present, with_key_source
 from tatp.responder import Action
 from tatp.session import DRIVERS, with_session_choices
-from tatp.session_runner import BLOCK, SessionRunner
+from tatp.session_runner import SessionRunner
 from tatp.ui.experimenter import clock_text, event_name
 from tatp.ui.garment_display import states_from_status
 from tatp.ui.participant import ParticipantWindow
@@ -90,6 +98,7 @@ from tatp.ui.widgets import (
     SIZE_SMALL,
     TARGET_COLOUR,
     WARNING_COLOUR,
+    MessageDialog,
     button,
     label,
     sized,
@@ -113,6 +122,8 @@ REMOTE_PADDING_PX = 3
 REMOTE_RADIUS_PX = 4
 # Half the outline, so a one-pixel line lands on whole pixels.
 REMOTE_OUTLINE_INSET_PX = 0.5
+# Between the lines of "Demo vs session".
+LIST_SEPARATOR = "\n\n"
 
 
 def real_time_settings(study1: dict, speed: float, scale_timeout: bool = True) -> dict:
@@ -321,6 +332,8 @@ class Demo(QObject):
         # The modes an auto-run or a fast-forward hands back when it ends, by who; empty when
         # neither runs.
         self._before_finish: dict[str, str] = {}
+        # Whether Auto-run is on (`set_auto_run`).
+        self.auto_running = False
         # The phase a fast-forward runs to; None when none runs.
         self.fast_forward_to: str | None = None
         # Its controls, kept here so they live as long as the demonstration (run_session.py).
@@ -422,15 +435,26 @@ class Demo(QObject):
         self.set_participant(FAST)
         self.set_experimenter(FAST)
 
-    def finish_stage(self) -> None:
-        """Auto-run: both simulations fast until the next stage starts, then as they were --
-        the way past a series of repeated measurements (S, 20 Oct 2026; LOG N7.F16j). A timed
-        wait the stage is in is skipped too, since being fast does not shorten it. A stage is
-        finished, never skipped: what later stages need from it comes from the real
-        procedure, not from invented values."""
-        self._speed_up()
-        self.session.log("demo_auto_run", detail=self.runner.stages[self.runner.stage_index].id)
-        self.skip_wait()
+    def set_auto_run(self, on: bool) -> None:
+        """Auto-run on: both simulations fast, and every timed wait skipped as it begins,
+        until it is switched off, when both go back to what they were -- the way past a run of
+        repeated measurements, switched on and off at any moment (S, 20 Oct 2026; LOG
+        N7.F17d). Nothing is skipped but waiting: what later stages need comes from the real
+        procedure, never from invented values."""
+        if on == self.auto_running:
+            return
+        if on:
+            self._speed_up()
+            self.auto_running = True
+            self.session.log("demo_auto_run", detail="on")
+            self._forward_timer.start()
+            self._forward()
+        else:
+            self.auto_running = False
+            self.session.log("demo_auto_run", detail="off")
+            if self.fast_forward_to is None:
+                self._forward_timer.stop()
+                self._hand_back()
 
     def fast_forward(self, phase: str) -> None:
         """Both simulations fast, and every timed wait skipped as it begins, until `phase`
@@ -448,34 +472,27 @@ class Demo(QObject):
         return now in phases and phases.index(now) >= phases.index(self.fast_forward_to)
 
     def _forward(self) -> None:
-        if self.fast_forward_to is None:
-            self._forward_timer.stop()
-        elif self._reached() or self.session.closed:
+        if self.fast_forward_to is not None and (self._reached() or self.session.closed):
             self._end_fast_forward()
-        else:
+        if self.fast_forward_to is None and not self.auto_running:
+            self._forward_timer.stop()
+        elif not self.session.closed:
             self.skip_wait(0.0)
 
     def _end_fast_forward(self) -> None:
         self.fast_forward_to = None
-        self._forward_timer.stop()
-        self._hand_back()
+        if not self.auto_running:
+            self._forward_timer.stop()
+            self._hand_back()
 
     def _hand_back(self) -> None:
         before, self._before_finish = self._before_finish, {}
         for who, mode in before.items():
             self._set(who, mode)
 
-    @property
-    def finishing(self) -> bool:
-        """Whether an auto-run is running the stage now under way."""
-        return bool(self._before_finish) and self.fast_forward_to is None
-
     def _stage_started(self, _stage_id: str) -> None:
-        if self.fast_forward_to is None:
-            self._hand_back()
-        elif self._reached():
+        if self.fast_forward_to is not None and self._reached():
             self._end_fast_forward()
-
     def stop(self) -> None:
         self.participant.stop()
         self.experimenter.stop()
@@ -538,14 +555,69 @@ class _RemoteWatch(QObject):
         return False
 
 
+class ModeSwitch(QWidget):
+    """Who presses for one role: a person, a watchable simulation or a fast one, as three
+    buttons of which one is down. Changeable at any moment (S, 20 Oct 2026; LOG N7.F17d)."""
+
+    def __init__(self, names: dict[str, str], choose, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.group = QButtonGroup(self)
+        self.group.setExclusive(True)
+        self.buttons: dict[str, QPushButton] = {}
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        for mode in MODES:
+            made = button(names[mode])
+            made.setCheckable(True)
+            made.clicked.connect(lambda _checked, mode=mode: choose(mode))
+            self.group.addButton(made)
+            self.buttons[mode] = made
+            row.addWidget(made)
+
+    def show_mode(self, mode: str) -> None:
+        self.buttons[mode].setChecked(True)
+
+    def mode(self) -> str:
+        return next(mode for mode, made in self.buttons.items() if made.isChecked())
+
+
+def differences(text: dict, config: Config, speed: float) -> str:
+    """How this demonstration differs from a session, each line with the session's own value
+    (S, 20 Oct 2026: "The demo should state somewhere what changes are made in the demo and
+    how it is in the real thing"; LOG N7.F17d). From the configuration, so it never drifts
+    from what runs."""
+    words, study1 = text["demo"]["differences"], config.study1
+    demo, pinprick = study1["demo"], study1["pinprick"]
+    touch = study1["touch_calibration"]
+    worn = worn_garment(config.hardware["garment"]["driver"])
+    lines = [
+        words["intro"],
+        words["clock"].format(speed=f"{speed:g}"),
+        words["rests"].format(demo=f"{float(demo['rest_s']):g}",
+                              low=f"{float(pinprick['isi_min_s']):g}",
+                              high=f"{float(pinprick['isi_max_s']):g}"),
+    ]
+    if not worn:
+        lines.append(words["estimation"].format(
+            demo=f"{float(demo['estimation_window_mock_s']):g}",
+            session=f"{float(touch['estimation_window_s']):g}",
+            demo_settle=f"{float(demo['estimation_settle_mock_s']):g}",
+            session_settle=f"{float(touch['estimation_settle_s']):g}"))
+    lines += [words[key] for key in ("keyboards", "garment", "simulations", "skipping",
+                                     "allocation", "data")]
+    return LIST_SEPARATOR.join(lines)
+
+
 class DemoControls(QWidget):
     """The demonstration's controls along the foot of the experimenter window (S, 20 Oct
-    2026; LOG N7.F16j). Experimenter text only.
+    2026; LOG N7.F16j, N7.F17d). Experimenter text only.
 
-    Each says what it would do now, or why it can do nothing: Skip names the wait it would end
-    and how much of it is left; Auto-run names the step it would finish; Fast-forward offers
-    the phases still to come. The clock's speed is said, and explained in its tooltip, and the
-    remote's buttons light as they arrive.
+    Each says what it would do now, or why it can do nothing: who presses for each role,
+    switched at any moment; Skip naming the wait it would end and how much of it is left;
+    Auto-run, on until switched off; Fast-forward to a phase still to come. The clock's speed
+    is said and explained, "Demo vs session" lists every difference with the session's
+    value, and the remote's buttons light as they arrive.
     """
 
     def __init__(self, demo: Demo, text: dict, symbols: dict[Action, str],
@@ -559,18 +631,24 @@ class DemoControls(QWidget):
         self.words = words
         self.setStyleSheet(stylesheet())
 
-        self.participant_mode = self._modes("participant", demo.participant_mode)
-        self.experimenter_mode = self._modes("experimenter", demo.experimenter_mode)
+        self.participant_mode = ModeSwitch(words["modes"],
+                                           lambda mode: self._choose("participant", mode))
+        self.experimenter_mode = ModeSwitch(words["modes"],
+                                            lambda mode: self._choose("experimenter", mode))
         self.skip_button = button("")
         self.skip_button.clicked.connect(self.skip_wait)
-        self.auto_run_button = button("")
-        self.auto_run_button.clicked.connect(self.finish_stage)
+        self.auto_run_button = button(words["auto_run"])
+        self.auto_run_button.setCheckable(True)
+        self.auto_run_button.setToolTip(words["auto_run_detail"])
+        self.auto_run_button.clicked.connect(self.auto_run)
         self.fast_forward = sized(QComboBox(), SIZE_SMALL)
         self.fast_forward_button = button(words["fast_forward_go"])
         self.fast_forward_button.clicked.connect(self.fast_forward_now)
         self.clock = label(SIZE_SMALL, colour=SECONDARY)
         self.clock.setText(words["clock"].format(speed=f"{demo.session.clock.speed:g}"))
         self.clock.setToolTip(words["clock_detail"])
+        self.differences_button = button(words["differences_button"])
+        self.differences_button.clicked.connect(self.show_differences)
         self.remote = RemoteButtons(symbols)
         self.status = label(SIZE_SMALL, colour=SECONDARY)
         self.status.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
@@ -594,8 +672,6 @@ class DemoControls(QWidget):
             who.addWidget(modes)
             who.addSpacing(GROUP_GAP_PX)
         who.addStretch(1)
-        who.addWidget(self.clock)
-        who.addSpacing(GROUP_GAP_PX)
         remote = label(SIZE_SMALL, colour=SECONDARY)
         remote.setText(words["remote"])
         who.addWidget(remote)
@@ -620,6 +696,8 @@ class DemoControls(QWidget):
         actions.addWidget(self.worn_note, 2)
         actions.addSpacing(GROUP_GAP_PX)
         actions.addWidget(self.status, 1)
+        actions.addWidget(self.clock)
+        actions.addWidget(self.differences_button)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(ITEM_GAP_PX)
@@ -640,13 +718,9 @@ class DemoControls(QWidget):
         self.timer.start()
         self.sync()
 
-    def _modes(self, who: str, current: str) -> QComboBox:
-        modes = sized(QComboBox(), SIZE_SMALL)
-        for mode in MODES:
-            modes.addItem(self.words["modes"][mode], mode)
-        modes.setCurrentIndex(MODES.index(current))
-        modes.currentIndexChanged.connect(lambda index: self.demo.choose(who, MODES[index]))
-        return modes
+    def _choose(self, who: str, mode: str) -> None:
+        self.demo.choose(who, mode)
+        self.sync()
 
     def skip_wait(self) -> None:
         skipped_s = self.demo.skip_wait()
@@ -656,8 +730,8 @@ class DemoControls(QWidget):
             )
         self.sync()
 
-    def finish_stage(self) -> None:
-        self.demo.finish_stage()
+    def auto_run(self, on: bool) -> None:
+        self.demo.set_auto_run(on)
         self.sync()
 
     def fast_forward_now(self) -> None:
@@ -666,24 +740,21 @@ class DemoControls(QWidget):
             self.demo.fast_forward(phase)
         self.sync()
 
-    def step_name(self) -> str:
-        """The step under way, as Auto-run names it."""
-        runner = self.demo.runner
-        stage_id = runner.stages[runner.stage_index].id
-        parts = stage_id.split(".")
-        steps = self.words["steps"]
-        if parts[0] == BLOCK:
-            return steps["block"].format(n=parts[1])
-        return steps[parts[-1]]
+    def differences_dialog(self) -> MessageDialog:
+        demo = self.demo
+        return MessageDialog(self.words["differences_button"],
+                             differences(self.text, demo.session.config,
+                                         demo.session.clock.speed),
+                             self.text["dialogs"]["close"], parent=self)
+
+    def show_differences(self) -> None:
+        self.differences_dialog().open()
 
     def sync(self, *_stage_id) -> None:
         """Say what each control would do now (LOG N7.F16j)."""
         demo, words = self.demo, self.words
-        for modes, mode in ((self.participant_mode, demo.participant_mode),
-                            (self.experimenter_mode, demo.experimenter_mode)):
-            modes.blockSignals(True)
-            modes.setCurrentIndex(MODES.index(mode))
-            modes.blockSignals(False)
+        self.participant_mode.show_mode(demo.participant_mode)
+        self.experimenter_mode.show_mode(demo.experimenter_mode)
 
         skippable_s = demo.skippable_s()
         event = demo.session.next_event()
@@ -698,10 +769,10 @@ class DemoControls(QWidget):
         self.skip_button.setEnabled(skippable_s is not None and event is not None)
 
         forwarding = demo.fast_forward_to is not None
-        step = self.step_name()
-        self.auto_run_button.setText(
-            words["auto_running" if demo.finishing else "auto_run"].format(step=step))
-        self.auto_run_button.setEnabled(not demo.worn and not demo.finishing and not forwarding)
+        self.auto_run_button.setChecked(demo.auto_running)
+        self.auto_run_button.setText(words["auto_running" if demo.auto_running
+                                           else "auto_run"])
+        self.auto_run_button.setEnabled(not demo.worn)
 
         phases = demo.runner.phases
         now = FOLDED.get(demo.session.phase, demo.session.phase)

@@ -557,10 +557,14 @@ demo:
     Only a timed wait for a scheduled step can be skipped: the capsaicin, the blocks, the
     rekindle, the intervention's end. It stops {lead} s before the step is due, so its
     countdown and alert are still seen.
-  # Both simulations fast until the step under way ends, then back as they were: the way past
-  # a series of repeated measurements. {step} is from `steps` below.
-  auto_run: 'Auto-run {step}'
-  auto_running: 'Auto-running {step}…'
+  # Both simulations fast and every timed wait skipped, until switched off: the way past a run
+  # of repeated measurements (LOG N7.F17d).
+  auto_run: Auto-run
+  auto_running: 'Auto-run: on (click to stop)'
+  auto_run_detail: >-
+    Both the participant and the experimenter are simulated and fast, and every timed wait is
+    skipped, until you click again; then each goes back to what it was. Nothing is skipped
+    but waiting: every measurement is still made.
   # Both simulations fast and every timed wait skipped until the chosen phase begins.
   fast_forward: 'Fast-forward to:'
   fast_forward_go: Go
@@ -569,35 +573,28 @@ demo:
   # The session clock's speed, set when the demonstration starts.
   clock: 'Clock: {speed}× real time'
   clock_detail: >-
-    Every timed interval of the session runs this many times faster than in a real session. 1
-    is real time, as a participant meets it. Chosen when the demo starts (Clock speed); a worn
-    garment always runs at 1.
+    Every timed interval of the session -- rests, cues, scheduled waits, countdowns -- runs
+    this many times faster than in a real session, for people and simulations alike. Only
+    the hand's own timing (how long a button is held) stays real. 1 is real time. Chosen when
+    the demo starts (Clock speed); a worn garment always runs at 1.
   # The remote's four buttons, lit while held, so a press can be seen to arrive.
   remote: 'Remote:'
   worn_note: 'Worn garment: people only; no auto-run or fast-forward.'
   worn_note_detail: 'Someone may be wearing this garment: the participant and the experimenter are people, not simulations, and auto-run and fast-forward are off.'
-  # The step under way, as Auto-run names it: the last part of the stage's id.
-  steps:
-    garment: the garment fitting
-    welcome: the welcome
-    stop_rehearsal: the stop rehearsal
-    masking_check: the masking check
-    touch_calibration: touch calibration
-    baseline: the baseline ratings
-    mark_zone: the skin marking
-    long: the filament series
-    mapping: the area mapping
-    short_primary: the primary-zone filaments
-    brush_secondary: the secondary-zone brush
-    brush_primary: the primary-zone brush
-    sensitisation: the heat
-    apply: the capsaicin
-    remove: the capsaicin removal
-    start: the intervention's start
-    block: 'block {n}'
-    rekindle: the rekindle
-    end: the intervention's end
-    session_end: the session end
+  # "Demo vs session": how a demonstration differs, each with the session's own value (S, 20
+  # Oct 2026; LOG N7.F17d). Filled from the configuration.
+  differences_button: Demo vs session…
+  differences:
+    intro: 'This demonstration runs the real session code. What differs from a session:'
+    clock: 'Clock: {speed}× real time. Session: real time.'
+    rests: 'Rest between pinprick or brush applications: {demo} s. Session: {low}–{high} s from each application.'
+    estimation: 'Touch calibration, estimation run (mock garment): {demo} s between touches and the scale {demo_settle} s into each. Session: {session} s and {session_settle} s, for a real sleeve to inflate.'
+    keyboards: 'Keyboards: only the R400 counts when it is plugged in, otherwise every keyboard does. Session: the R400 only.'
+    garment: 'The garment channels are shown in every phase. Session: hidden in the intervention and the rekindle, so the condition is not shown.'
+    simulations: 'The participant and the experimenter can be simulated, and switched at any moment. Session: people only.'
+    skipping: 'Skip, Auto-run and Fast-forward exist only in a demonstration.'
+    allocation: 'The conditions are shuffled across session numbers on every run.'
+    data: 'The data go to their own folder, marked as a demonstration, and are never study data.'
 
 dialogs:
   abort_confirm: Abort this session? All data collected so far is kept.

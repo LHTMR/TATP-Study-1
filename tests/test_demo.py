@@ -210,7 +210,7 @@ def test_on_a_real_garment_a_demonstration_is_fully_manual(app, loaded, worn):
         with pytest.raises(DemoError):
             demo.fast_forward(runner.phases[-1])
         with pytest.raises(DemoError):
-            demo.finish_stage()
+            demo.set_auto_run(True)
         for who in ("participant", "experimenter"):
             with pytest.raises(DemoError):
                 demo.choose(who, FAST)
@@ -413,8 +413,8 @@ def test_each_demo_control_says_what_it_would_do_now(app, loaded):
     assert controls.skip_button.text() == words["skip_none"]
     assert not controls.skip_button.isEnabled()
     assert controls.skip_button.toolTip()
-    assert controls.auto_run_button.text() == words["auto_run"].format(
-        step=words["steps"]["garment"])
+    assert controls.auto_run_button.text() == words["auto_run"]
+    assert not controls.auto_run_button.isChecked()
     phases = [controls.fast_forward.itemData(i) for i in range(controls.fast_forward.count())]
     assert phases == runner.phases[1:], "every phase still to come"
     clock = runner.session.clock
@@ -432,7 +432,7 @@ def test_fast_forward_runs_fast_to_the_phase_then_hands_back(app, loaded):
     target = runner.phases[2]
     demo.fast_forward(target)
     assert (demo.participant_mode, demo.experimenter_mode) == (FAST, FAST)
-    assert not demo.finishing, "a fast-forward is not an auto-run"
+    assert not demo.auto_running, "a fast-forward is not an auto-run"
     runner.stage_started.emit("a stage in between")
     assert demo.fast_forward_to == target, "not there yet"
     runner.session.set_phase(target)
@@ -562,14 +562,37 @@ def test_skipping_leaves_the_hands_time_alone(app, loaded):
 # -- who presses ----------------------------------------------------------------------------
 
 
-def test_finish_this_stage_runs_both_fast_then_hands_back(app, loaded):
+def test_auto_run_runs_both_fast_until_switched_off(app, loaded):
+    """S, 20 Oct 2026 (LOG N7.F17d): switched on and off at any moment, across stages."""
     runner, demo = _demo(app, loaded, "--sim-participant", WATCH)
-    demo.finish_stage()
+    controls = demo.controls
+    controls.auto_run_button.click()
+    assert demo.auto_running and controls.auto_run_button.isChecked()
     assert (demo.participant_mode, demo.experimenter_mode) == (FAST, FAST)
-    assert demo.finishing
     runner.stage_started.emit("the next stage")
+    assert demo.auto_running, "on until switched off, whatever stage begins"
+    controls.auto_run_button.click()
+    assert not demo.auto_running
     assert (demo.participant_mode, demo.experimenter_mode) == (WATCH, OFF)
-    assert not demo.finishing
+    _finish(runner, demo)
+
+
+def test_who_presses_switches_at_any_moment(app, loaded):
+    runner, demo = _demo(app, loaded)
+    switch = demo.controls.participant_mode
+    switch.buttons[FAST].click()
+    assert demo.participant_mode == FAST and switch.mode() == FAST
+    switch.buttons[OFF].click()
+    assert demo.participant_mode == OFF
+    _finish(runner, demo)
+
+
+def test_demo_vs_session_names_each_difference_with_the_sessions_value(app, loaded):
+    runner, demo = _demo(app, loaded)
+    shown = demo.controls.differences_dialog().message.text()
+    pinprick = runner.session.config.study1["pinprick"]
+    assert f"{float(pinprick['isi_min_s']):g}" in shown, "the session's own interval"
+    assert f"{float(runner.session.config.study1['demo']['rest_s']):g}" in shown
     _finish(runner, demo)
 
 
@@ -585,12 +608,12 @@ def test_every_change_of_who_presses_is_logged(app, loaded):
     _finish(runner, demo)
 
 
-def test_a_mode_chosen_while_finishing_is_kept_and_the_other_handed_back(app, loaded):
-    """The person who takes the remote mid-finish keeps it; the experimenter still goes back."""
+def test_a_mode_chosen_during_auto_run_is_kept_and_the_other_handed_back(app, loaded):
+    """The person who takes the remote mid-run keeps it; the experimenter still goes back."""
     runner, demo = _demo(app, loaded, "--sim-participant", WATCH)
-    demo.finish_stage()
+    demo.set_auto_run(True)
     demo.choose("participant", OFF)
-    runner.stage_started.emit("the next stage")
+    demo.set_auto_run(False)
     assert (demo.participant_mode, demo.experimenter_mode) == (OFF, OFF)
     _finish(runner, demo)
 

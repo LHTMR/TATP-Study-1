@@ -232,6 +232,13 @@ session.
 5.20 **A control someone may need mid-run can be changed mid-run**, and its label or tooltip
 says what it does.
 
+5.21 **Every window and dialog fits the lab laptop, 1280 × 640**, with its worst-case content
+— every banner, faults, the longest Swedish string — and a test holds it there. Overflowing it
+was the most repeated layout fault (N7.U1, U4a, U10c, F5, F10b, F12a2, F16i).
+
+5.22 **A control that commits or advances survives a double press, a held key's auto-repeat,
+and the focus moving when a control hides** (N7.U5d, U15, F6c, F11c9, F11a10, F16d).
+
 ## 6. How a screen is reviewed
 
 Against §1–5 in order, on the rendered PNG in `screenshots/current/`, in both languages, never
@@ -260,8 +267,7 @@ demonstration, and hold every step to §1–5. Fix what is found; do not hand ov
 would feel or see, and overshoot and correct (`sim/responders.py`). A simulation that behaves
 like a careful machine hides the problems a person meets.
 
-7.3 **A test that passes or fails by timing is a bug.** Before blaming a change, run it several
-times on `main` and on the branch; one run decides nothing.
+7.3 **Tests that depend on timing** are covered by `CLAUDE.md`, Engineering lessons.
 
 7.4 **S is not asked to approve what these principles decide**, screens included. S is asked
 about measurement, blinding and safety (`CLAUDE.md`, Deciding).
