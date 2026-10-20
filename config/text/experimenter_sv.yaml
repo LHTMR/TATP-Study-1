@@ -121,8 +121,6 @@ instructions:
   # Ett drag på cirka 2 cm, aldrig upprepat: upprepning höjer smärtan (docs/research/RB2).
   # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
   apply_brush: 'Nu: borsta den {region} zonen på plats {site}, ett enda drag på cirka 2 cm, och tryck sedan på {controls[proceed]}.'
-  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
-  delivered: 'Applicerat. Skattningsskalan visas om {seconds} s.'
   # DRAFT (LOG N7.F11b8, N7.F14c): written by the build, not ethics-sourced. Det slumpade
   # uppehållet efter en skattning när ingen applicering följer: serien är slut. Svaret
   # rapporteras på statusraden (`received_*`).

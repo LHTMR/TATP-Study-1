@@ -132,18 +132,14 @@ def real_time_settings(study1: dict, speed: float, scale_timeout: bool = True) -
 
 def demo_rests(study1: dict, garment: str) -> dict:
     """`study1` with a demonstration's rests (LOG N7.F14b, N7.F14e, N7.F16g): `demo.rest_s`
-    between pinprick and brush applications and `demo.rating_cue_delay_s` from each one's
-    "applied" press to its scale; and on the mock garment `demo.estimation_window_mock_s` for
-    the touch calibration's estimation window and `demo.estimation_settle_mock_s` before each
-    of its scales. A worn garment keeps the study's window and settle, which cover a real
-    sleeve's ramp and inflation."""
+    between pinprick and brush applications; and on the mock garment
+    `demo.estimation_window_mock_s` for the touch calibration's estimation window and
+    `demo.estimation_settle_mock_s` before each of its scales. A worn garment keeps the
+    study's window and settle, which cover a real sleeve's ramp and inflation."""
     demo = study1["demo"]
     rest_s = float(demo["rest_s"])
-    delay_s = float(demo["rating_cue_delay_s"])
-    pinprick = {**study1["pinprick"], "isi_min_s": rest_s, "isi_max_s": rest_s,
-                "rating_cue_delay_s": delay_s}
-    brush = {**study1["brush"], "isi_min_s": rest_s, "isi_max_s": rest_s,
-             "rating_cue_delay_s": delay_s}
+    pinprick = {**study1["pinprick"], "isi_min_s": rest_s, "isi_max_s": rest_s}
+    brush = {**study1["brush"], "isi_min_s": rest_s, "isi_max_s": rest_s}
     touch = study1["touch_calibration"]
     if not worn_garment(garment):
         touch = {**touch, "estimation_window_s": float(demo["estimation_window_mock_s"]),

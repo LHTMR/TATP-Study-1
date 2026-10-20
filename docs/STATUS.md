@@ -48,8 +48,6 @@ high`, spec-review) with `make check` passing on the merged tree:
 - **Changed S-approved participant wording** (DRAFT): `screens.standby`,
   `audio_setup.find_level`, sv `choices.comparison.question` (N7.F11c6, c8, c11); the new
   `warning_cue` (N7.F12g1).
-- **Screens to review:** about 150 changed or added on 15 Oct (rows N7.F10b–N7.F12), plus the
-  earlier list.
 - **Open items still S's:** L11, L13, L3, L14, L15 (closes with lab check N2.10), L16 (now:
   whether a demo may name its condition, and whether a blinded experimenter may watch a demo's
   intervention with the garment display).

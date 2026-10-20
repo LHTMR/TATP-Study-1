@@ -48,10 +48,6 @@ demo:
   # Oct 2026; LOG N7.F14e). Shorter than the slowest ramp: nothing a demonstration records
   # is data. A demonstration on a worn garment keeps the study's window.
   estimation_window_mock_s: 1.5
-  # The delay from the experimenter's "applied" press to the pain rating scale, for pinprick
-  # and brush alike, in place of the study's 9 s (S, 20 Oct 2026: "I had to wait a long time
-  # ... before the scale appears"; LOG N7.F16g). Long enough to see the scale follow the press.
-  rating_cue_delay_s: 1.0
   # The touch calibration's estimation run, on the mock garment: the stimulus on this long
   # before its intensity scale appears, in place of `touch_calibration.estimation_settle_s`.
   # That 3 s lets a real sleeve finish inflating (R32); the mock has nothing to inflate (LOG
@@ -138,9 +134,10 @@ pinprick:
   expected_offset_steps_between_sessions: 0.0  # pre-S of sessions 2 and 3 starts where the
                                      # previous session's pre-S ended: baseline, both times
                                      # (docs/LOG.md N7.B2, open item LB1)
-  isi_min_s: 13.0                    # Scheuren et al. 2023
+  isi_min_s: 13.0                    # Scheuren et al. 2023. Stimulus to stimulus: from one
+                                     # application's "applied" press to the next one's cue,
+                                     # with the rating inside it (S, 20 Oct 2026; LOG N7.F17a)
   isi_max_s: 17.0
-  rating_cue_delay_s: 9.0            # rating cued 9 s after the stimulus (comparison doc 8)
   short_protocol_n_trials: 5         # median of five ratings (SPEC.md 8.3)
   n_sites: 8                         # site rotates on every application (SPEC.md 8.2)
   ordinal_rho_min: 0.3               # consistency check only; never gates eligibility, and
@@ -153,8 +150,8 @@ brush:
   n_trials: 5                        # same structure as the short protocol (SPEC.md 8.3)
   n_sites: 8
   isi_min_s: 13.0                    # the short protocol's timing, which SPEC.md 8.3 says the
-  isi_max_s: 17.0                    # brush shares; kept separate so either can be tuned
-  rating_cue_delay_s: 9.0            # in piloting without moving the other
+  isi_max_s: 17.0                    # brush shares; kept separate so either can be tuned in
+                                     # piloting without moving the other
   rating_scale: pain                 # the `vas` block each stroke is rated on (docs/LOG.md
                                      # N7.B6)
 
@@ -347,3 +344,7 @@ cues:
   # A rest between two stimuli longer than this shows `screens.please_wait` rather than a
   # blank, so the participant can see that the pause is meant (S, 16 Oct 2026; LOG N7.F14d).
   please_wait_min_s: 1.0
+  # The shortest rest between a pinprick or brush rating and the next cue, when the rating
+  # took up the rest of the interval: a break that reads as one (UI_PRINCIPLES.md 1.10, which
+  # starts it at 0.5 s; LOG N7.F17a).
+  min_rest_s: 0.5

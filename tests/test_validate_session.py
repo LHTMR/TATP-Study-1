@@ -213,21 +213,22 @@ def _timed(loaded, rating_cue_ms: int, delivered_ms: int = 100) -> dict:
                             session={"clock_speed": speed})}
 
 
-def test_the_rating_interval_is_judged_in_session_seconds(loaded):
-    # Applied after the 1 s lead, then the 9 s delay: 900 ms real at 10x, from the press.
-    assert vs.check_rating_cue_interval(_timed(loaded, 1000)) == []
-    assert vs.check_rating_cue_interval(_timed(loaded, 1015)) == [], "a timer 15 ms late"
-    # A slower hand moves the rating cue with it (docs/LOG.md N7.F16f).
-    assert vs.check_rating_cue_interval(_timed(loaded, 1400, delivered_ms=500)) == []
+def test_the_scale_goes_up_at_the_press_judged_in_session_seconds(loaded):
+    # Applied after the 1 s lead (100 ms real at 10x), the scale at once (LOG N7.F17a).
+    assert vs.check_rating_cue_interval(_timed(loaded, 100)) == []
+    assert vs.check_rating_cue_interval(_timed(loaded, 115)) == [], "a timer 15 ms late"
+    # A slower hand moves the rating cue with it.
+    assert vs.check_rating_cue_interval(_timed(loaded, 500, delivered_ms=500)) == []
 
 
 def test_an_application_pressed_before_the_warning_lead_is_over_fails(loaded):
     """Applied during "Get ready": 50 ms real at 10x is half the 1 s lead."""
-    assert vs.check_rating_cue_interval(_timed(loaded, 950, delivered_ms=50))
+    assert vs.check_rating_cue_interval(_timed(loaded, 50, delivered_ms=50))
 
 
-def test_a_rating_interval_off_by_the_configured_delay_fails(loaded):
-    assert vs.check_rating_cue_interval(_timed(loaded, 200))
+def test_a_scale_held_back_after_the_press_fails(loaded):
+    """The old 9 s delay: 900 ms real at 10x after the press."""
+    assert vs.check_rating_cue_interval(_timed(loaded, 1000))
 
 
 def _orders(loaded, *sites):

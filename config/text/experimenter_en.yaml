@@ -119,9 +119,6 @@ instructions:
   # One stroke of about 2 cm, never repeated: repetition raises pain (docs/research/RB2).
   # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
   apply_brush: 'Now: brush the {region} zone at site {site}, one single stroke of about 2 cm, then press {controls[proceed]}.'
-  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced. The status line once the
-  # application is pressed as done: when the participant's rating scale will appear.
-  delivered: 'Applied. The rating scale appears in {seconds} s.'
   # DRAFT (LOG N7.F11b8, N7.F14c): written by the build, not ethics-sourced. The jittered gap
   # after a rating when no application follows it: the series is over. The response is
   # reported on the status line (`received_*`).

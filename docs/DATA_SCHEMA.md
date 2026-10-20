@@ -185,7 +185,8 @@ to, and skips every timed wait on the way, each a `demo_wait_skipped` with no le
 Each pinprick or brush application logs `stimulus_due` when the cue's lead is over and the
 experimenter is asked to apply it, then `stimulus_delivered` (`origin` experimenter) at their
 Next step saying it is applied, which `stimulus_delivered_iso` in its row records and from
-which its rating is cued (docs/LOG.md N7.F16f).
+which its rating is cued at once; the next application's interval runs from it (docs/LOG.md
+N7.F16f, N7.F17a).
 
 `remote_disconnected` (severity `error`) is written when the participant's remote is unplugged
 or its receiver drops out during a session, and `remote_reconnected` (`warning`) when it comes
@@ -323,7 +324,7 @@ One row per monofilament application, both protocols, all phases (§14.2).
 | site_index | int | - | yes | Rotates on every application (§8.2) |
 | cue_onset_iso | iso8601 | - | yes | Visual warning cue onset (§10.5) |
 | stimulus_delivered_iso | iso8601 | - | no | When the experimenter pressed Next step to say the filament had been applied (LOG N7.F16f); empty if the trial ended before the press |
-| rating_cue_iso | iso8601 | - | no | When the rating was cued, `pinprick.rating_cue_delay_s` (9 s, Scheuren et al. 2023) after `stimulus_delivered_iso` |
+| rating_cue_iso | iso8601 | - | no | When the rating was cued: at `stimulus_delivered_iso`, the experimenter's press (LOG N7.F17a). Until 20 Oct 2026, 9 s after the stimulus |
 | rating_percent | float | % | no | VAS response; empty if the trial was discarded before a response |
 | rt_s | float | s | no | From rating cue to confirm |
 | first_press_side | str | - | no | `left` or `right`; sets the marker's first position (§10.2) |
@@ -377,7 +378,7 @@ One row per brush application — allodynia, primary and secondary regions (§8.
 | site_index | int | - | yes | Rotates on every application |
 | cue_onset_iso | iso8601 | - | yes | Visual warning cue onset |
 | stimulus_delivered_iso | iso8601 | - | no | When the experimenter pressed Next step to say the stroke had been made (LOG N7.F16f); empty if the trial ended before the press |
-| rating_cue_iso | iso8601 | - | no | When the rating was cued, `brush.rating_cue_delay_s` after `stimulus_delivered_iso` |
+| rating_cue_iso | iso8601 | - | no | When the rating was cued: at `stimulus_delivered_iso` (LOG N7.F17a) |
 | rating_percent | float | % | no | VAS response, on the scale `brush.rating_scale` names |
 | rt_s | float | s | no | From rating cue to confirm |
 | first_press_side | str | - | no | `left` or `right` |

@@ -900,14 +900,14 @@ def needs_rated_pinprick_rows(runs):
 
 
 def check_rating_cue_interval(runs):
-    """The experimenter's press saying the filament is applied, to the rating cue: the 9 s
-    delay (SPEC.md 8; docs/LOG.md N7.F16f), in session seconds, within TIMING_TOLERANCE_S, on
-    the application the load disturbed least. And never a press before the cue's 1 s lead
-    is over (SPEC.md 10.5)."""
+    """The experimenter's press saying the filament is applied, to the rating cue: none, the
+    scale goes up at the press (SPEC.md 8.3; docs/LOG.md N7.F17a), in session seconds, within
+    TIMING_TOLERANCE_S, on the application the load disturbed least. And never a press
+    before the cue's 1 s lead is over (SPEC.md 10.5)."""
     run = runs[TIMING]
     study = run.config.study1
     lead_s = float(study["cues"]["warning_lead_s"])
-    expected_s = float(study["pinprick"]["rating_cue_delay_s"])
+    expected_s = 0.0
     rated = [row for row in run.rows.get("pinprick", []) if row["rating_cue_iso"]]
     failures = []
     early = [row for row in rated
@@ -930,7 +930,8 @@ def check_rating_cue_interval(runs):
 
 def _isi_deviations(run: Run) -> list[tuple[float, float]]:
     """(drawn, measured - drawn) in session seconds for every jittered interval followed by
-    its next application's cue. The draw is what the protocol logged as `interval`."""
+    its next application's cue. The draw is what the protocol logged as `interval`; it runs
+    from the application's "applied" press, the rating inside it (docs/LOG.md N7.F17a)."""
     events = run.events()
     found = []
     for i, row in enumerate(events):
@@ -940,7 +941,9 @@ def _isi_deviations(run: Run) -> list[tuple[float, float]]:
         cue = next((later for later in events[i + 1:] if later["event"] == "warning_cue"), None)
         if cue is None or not cue["detail"].startswith("trial"):
             continue  # the protocol ended; the next cue is another protocol's
-        found.append((drawn_s, _session_s(run, row["timestamp_iso"], cue["timestamp_iso"])
+        applied = next(earlier for earlier in reversed(events[:i])
+                       if earlier["event"] == "stimulus_delivered")
+        found.append((drawn_s, _session_s(run, applied["timestamp_iso"], cue["timestamp_iso"])
                       - drawn_s))
     return found
 

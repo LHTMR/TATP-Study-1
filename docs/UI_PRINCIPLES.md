@@ -213,4 +213,5 @@ from the code alone. A finding is graded:
 A finding names the rule it breaks. "This would look better" without a rule behind it is a
 preference, and belongs in the polish grade or nowhere.
 
-A change to any screen is followed by `make shots` and re-approval of its reference image.
+A change to any screen is followed by `make shots` and re-approval of its reference image, by
+the build, against these principles: S does not review screens (20 Oct 2026).
