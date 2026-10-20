@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from tatp import touchcal_maths as maths
-from tatp.procedure import Procedure
+from tatp.procedure import NO_RERUNS_LEFT, Procedure
 from tatp.responder import Action
 from tatp.resume import RECALIBRATION_EVENT, RESUME_CHOICE, ResumeState
 from tatp.session import Session
@@ -1743,6 +1743,9 @@ class TouchCalibration(Procedure):
             instruction = "touchcal_stage1_exhausted"
         else:
             instruction = "touchcal_stage1_unusable"
+        if exhausted and (usable or not reasons):
+            # Said, where Re-run is not offered (code review of N7.F17e).
+            instruction = f"{instruction}{NO_RERUNS_LEFT}"
 
         def decided(outcome) -> None:
             name, args = outcome

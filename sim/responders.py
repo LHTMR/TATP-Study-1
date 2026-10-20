@@ -265,6 +265,8 @@ class VirtualParticipant(QObject):
         tick_s = float(config.hardware["adjustment"]["tick_interval_s"])
         self._settle_s = SETTLE_TICKS * tick_s
         self._range_end_s = RANGE_END_TICKS * tick_s
+        # Before which a held button moves nothing (tatp/touchcal.py `AdjustmentState`).
+        self._hold_delay_s = float(config.hardware["adjustment"]["hold_delay_s"])
         # The participant reads the prompt, and knows which point of the scale it names.
         touch = config.study1["touch_calibration"]
         self.reference_channel = int(touch["reference_channel"])
@@ -644,6 +646,13 @@ class VirtualParticipant(QObject):
             return
         if now_s - self._settled_since_s < self._settle_s:
             return
+        if self._tap_from is not None:
+            # Judged once settled, not the instant after the press: a tap the rate limit held
+            # back arrives over the next looks, and is a tap that moved (code review of
+            # N7.F17e).
+            moved = pressures != self._tap_from
+            self._unchanged_taps = 0 if moved else self._unchanged_taps + 1
+            self._tap_from = None
         # Settled. A tap that carried it across, or brought it exactly there, ends it.
         if felt == 0 or (self._seek == TAPPING and (felt < 0) != (self._seek_sign < 0)):
             self.confirm_adjustment()
@@ -703,10 +712,6 @@ class VirtualParticipant(QObject):
         self._moved_while_holding = False
 
     def _settle(self, pressures: dict, now_s: float) -> None:
-        if self._seek == TAPPING and self._tap_from is not None:
-            moved = pressures != self._tap_from
-            self._unchanged_taps = 0 if moved else self._unchanged_taps + 1
-            self._tap_from = None
         if self._seek == HOLDING:
             self._seek = SETTLING
         self._settling_from = pressures
@@ -715,14 +720,17 @@ class VirtualParticipant(QObject):
     def _unchanged(self, pressures: dict) -> bool:
         """While holding: whether the pressure, once it has started to move, has stopped,
         look to look, for an adjustment tick. Before the hold delay is over it has not
-        started, which is not the end of the range."""
+        started, which is not the end of the range -- unless it never starts: a hold begun at
+        the end of the range moves nothing at all (code review of N7.F17e)."""
+        now_s = time.monotonic()
         if pressures != self._settling_from:
             self._moved_while_holding = self._settling_from is not None
             self._settling_from = pressures
-            self._settled_since_s = time.monotonic()
+            self._settled_since_s = now_s
             return False
-        return (self._moved_while_holding
-                and time.monotonic() - self._settled_since_s >= self._range_end_s)
+        if not self._moved_while_holding:
+            return now_s - self._settled_since_s >= self._hold_delay_s + self._range_end_s
+        return now_s - self._settled_since_s >= self._range_end_s
 
     def confirm_adjustment(self) -> None:
         self._let_go()

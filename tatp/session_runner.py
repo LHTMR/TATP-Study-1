@@ -1375,7 +1375,12 @@ class SessionRunner(Procedure):
     def abort(self, reason: str) -> None:
         """The experimenter's abort (SPEC.md 11). Everything collected so far is kept. Ends as a
         completed session does, on the end screen and a Next step (LOG N7.F17e): until 20 Oct
-        2026 the program quit at once, and nobody saw that the data were saved."""
+        2026 the program quit at once, and nobody saw that the data were saved.
+
+        Nothing once the session is closed: Abort session is withdrawn then, but a dialog
+        opened before the close can still be confirmed after it (code review of N7.F17e)."""
+        if self.session.closed:
+            return
         self.cancel()
         self.rig.interruptions.end()
         # Distances still missing are written as missing, without the end-of-session prompt.

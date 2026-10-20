@@ -788,6 +788,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
              "fit_preview_enabled": True},
             lambda window: (
                 window.set_instruction(cfg.instruction(config, "f40_fit_review")),
+                window.set_actions_enabled(fit_decision=True),
                 window.show_fit_preview(_sample_f40_fit()),
             ),
         ),
@@ -798,6 +799,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
              "fit_preview_enabled": True},
             lambda window: (
                 window.set_instruction(cfg.instruction(config, "touchcal_fit_review")),
+                window.set_actions_enabled(fit_decision=True),
                 window.show_fit_preview(_sample_touch_fit()),
             ),
         ),
@@ -1124,8 +1126,8 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     yield Shot(
         f"experimenter_{language}_launcher_session",
         f"The session dialog as it opens: the data folder filled in from config; the session "
-        f"number, both languages and the pattern folder unchosen, with no default; Start "
-        f"disabled until a check passes ({language}).",
+        f"number, both languages and the pattern folder unchosen, with no default; Start, "
+        f"always pressable, checks first (LOG N7.F17e) ({language}).",
         _grab_dialog(dialog),
     )
     dialog.participant.setText(SAMPLE_PARTICIPANT)
@@ -1141,8 +1143,8 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     dialog.check()
     yield Shot(
         f"experimenter_{language}_launcher_session_checked",
-        f"The session dialog after Check: a preflight warning listed in amber, Start "
-        f"enabled because nothing refuses ({language}).",
+        f"The session dialog after Check: a preflight warning listed in amber, and Start "
+        f"reading \"Start despite the warnings\" now they have been shown ({language}).",
         _grab_dialog(dialog),
     )
     yield Shot(

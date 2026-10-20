@@ -286,6 +286,13 @@ instructions:
   touchcal_fit_review: 'The touch-calibration estimate is ready. Press {controls[fit_accept]}, or {controls[fit_rerun]}.'
   # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced
   f40_fit_review: 'The pinprick-force estimate (F40) is ready. Press {controls[fit_accept]}, or {controls[fit_rerun]}.'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. The same three once no
+  # re-runs are left, when Re-run is not offered (`NO_RERUNS_LEFT`).
+  touchcal_fit_review_last: 'The touch-calibration estimate is ready, and no re-runs are left. Press {controls[fit_accept]}.'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  f40_fit_review_last: 'The pinprick-force estimate (F40) is ready, and no re-runs are left. Press {controls[fit_accept]}.'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  touchcal_stage1_failed_last: 'The estimate failed its quality check ({value}), and no re-runs are left. Press {controls[fit_accept]} to go on, flagged.'
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_failed: >-
     The estimate failed its quality check ({value}). Press {controls[fit_rerun]} to repeat
@@ -293,7 +300,7 @@ instructions:
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_unusable: >-
     The touch-calibration estimate cannot be used ({value}). Press {controls[fit_rerun]} to
-    repeat steps 1 and 2, and tell the participant: "{say[rerun]}" Or press {controls[abort]}.
+    repeat steps 1 and 2 and say: "{say[rerun]}" Or press {controls[abort]}.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced. No re-run is offered: the
   # limit is reached, and a re-run is refused.
   touchcal_stage1_exhausted: >-
@@ -663,7 +670,6 @@ dialogs:
   # enters them and the one that finishes without them.
   distances_outstanding: Mapping distances are still missing. Enter them with Mapping distances…, or press Next step to finish with them recorded as missing.
   fit_rerun_reason: Why are you re-running? Recorded with the discarded estimate, which is kept.
-  fit_rerun_exhausted: The re-run limit for this procedure has been reached. This estimate will be used.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The re-calibrations, the
   # same in every condition and wherever they are offered. One line to read with the participant
   # waiting; the whole of it on hover, as the `_detail` (LOG N7.F17e).
@@ -828,6 +834,9 @@ launcher:
   choose: Choose…
   check: Check
   start: Start session
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. Start, once a check has shown
+  # warnings for what is entered: a second press starts.
+  start_anyway: Start despite the warnings
   close: Close
   # Beside Start session, which it leaves without doing (docs/LOG.md N7.F5).
   cancel: Cancel

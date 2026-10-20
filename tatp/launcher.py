@@ -235,6 +235,8 @@ class SessionDialog(QDialog):
         self.demo = demo
         self.findings: list[Finding] = []
         self.checked_config: cfg.Config | None = None
+        # The warnings the last check showed, while nothing has been edited since (`start`).
+        self._warnings_shown: list[str] | None = None
         words = text["launcher"]
         self.title_text = words["demo_title" if demo is not None else "session_title"]
         self.setWindowTitle(self.title_text)
@@ -460,6 +462,8 @@ class SessionDialog(QDialog):
 
     def _stale(self, *_) -> None:
         self.report.clear()
+        self._warnings_shown = None
+        self.start_button.setText(self.text["launcher"]["start"])
 
     # -- what was entered -------------------------------------------------------------
 
@@ -541,6 +545,10 @@ class SessionDialog(QDialog):
             line = formatted(lookup(self.text, key), value)
             (refusals if severity == REFUSE else warnings).append(line)
         self._show(refusals, warnings)
+        # Shown now, so Start may go on despite them (`start`), and says that it would.
+        self._warnings_shown = warnings
+        self.start_button.setText(words["start_anyway" if warnings and not refusals
+                                        else "start"])
         return not refusals
 
     def _show(self, refusals: list[str], warnings: list[str]) -> None:
@@ -586,8 +594,15 @@ class SessionDialog(QDialog):
 
         A dismissed question starts nothing: only an explicit choice decides between resuming
         a session and starting another over it.
+
+        Warnings not yet shown for what is entered are shown, and start nothing: Start then
+        reads "Start despite the warnings". Always pressable since N7.F17e, it had started a
+        session past warnings nobody saw (code review).
         """
+        shown = self._warnings_shown
         if not self.check():
+            return
+        if self._warnings_shown and self._warnings_shown != shown:
             return
         args = self.args()
         offer = [value for _, key, value in self.findings if key == RESUME_KEY]
@@ -790,12 +805,19 @@ class LauncherWindow(QWidget):
         dialog = HardwareCheckDialog(self.text, self.config.hardware, self.choices, parent=self)
         if self.garment is not None:
             dialog.garment_choice.setCurrentIndex(dialog.garment_choice.findData(self.garment))
-        dialog.accepted.connect(lambda: self._keep_hardware(dialog))
+        # Carried only if someone chose it there -- picked it, or connected it -- never the
+        # page's hardware.yaml default left untouched (code review of N7.F17e: a page opened to
+        # test the headphones chose the session's garment).
+        chosen = [self.garment is not None]
+        dialog.garment_choice.activated.connect(lambda *_: chosen.__setitem__(0, True))
+        dialog.connect_button.clicked.connect(lambda: chosen.__setitem__(0, True))
+        dialog.accepted.connect(lambda: self._keep_hardware(dialog, chosen[0]))
         return dialog
 
-    def _keep_hardware(self, dialog: HardwareCheckDialog) -> None:
+    def _keep_hardware(self, dialog: HardwareCheckDialog, garment_chosen: bool) -> None:
         self.choices = dialog.choices()
-        self.garment = dialog.garment_choice.currentData()
+        if garment_chosen:
+            self.garment = dialog.garment_choice.currentData()
 
     def open_hardware_check(self) -> HardwareCheckDialog:
         # Modal to the launcher, so no session can start while the check holds the garment's

@@ -28,7 +28,7 @@ from tatp.pinprick import (
     ShortProtocol,
     prior_for,
 )
-from tatp.procedure import Rig
+from tatp.procedure import NO_RERUNS_LEFT, Rig
 from tatp.responder import Responder
 from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
@@ -745,22 +745,24 @@ def test_the_fit_preview_rerun_is_bounded(app, loaded, tmp_path):
     protocol = _long(rig)
     fits = []
     protocol.fit_ready.connect(fits.append)
+    protocol.fit_ready.connect(rig.experimenter.show_fit_preview)
     done = _start(protocol)
     while not fits:
         _spin(lambda: fits or (rig.participant.stack.currentWidget() is rig.participant.vas))
         if not fits:
             _answer(rig.participant, _observer(protocol._trial))
-    # At the limit Re-run is not offered, and the limit is said before any press (review of
-    # N7.F16), not after a refused one.
+    # At the limit Re-run is not offered -- not even by the preview opening over it -- and the
+    # instruction says so before any press (reviews of N7.F16, N7.F17e), not after a refused
+    # one.
     experimenter = rig.experimenter
-    rerun = experimenter.fit_rerun_button
-    assert rerun.isHidden() or not rerun.isEnabled()
-    assert experimenter._warning_text == experimenter.text["dialogs"]["fit_rerun_exhausted"]
+    for rerun in (experimenter.fit_rerun_button, experimenter.fit_preview.rerun_button):
+        assert rerun.isHidden() or not rerun.isEnabled()
+    assert experimenter._instruction_text == cfg.instruction(
+        rig.session.config, f"f40_fit_review{NO_RERUNS_LEFT}")
     experimenter.fit_accepted.emit()
     assert done and done[0].run_index == 1
     (row,) = _rows(rig.session, "calibration_pinprick")
     assert row["superseded"] == "false"
-    assert experimenter._warning_text == ""
     rig.session.close()
 
 

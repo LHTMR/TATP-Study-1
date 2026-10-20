@@ -54,7 +54,7 @@ from dataclasses import dataclass
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
 from tatp.config import Config, instruction
-from tatp.procedure import Procedure, Rig
+from tatp.procedure import NO_RERUNS_LEFT, Procedure, Rig
 from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
@@ -616,7 +616,6 @@ class _RatedTrial(QObject):
 
         self.cue_onset_iso = ""
         self._apply_text = ""
-        self._applied_text = ""
         self.stimulus_delivered_iso = ""
         # The press, on the clock's elapsed time: the next application is spaced from it.
         self.delivered_elapsed_s: float | None = None
@@ -669,7 +668,6 @@ class _RatedTrial(QObject):
         # naming a filament that is not held stops here rather than half-started.
         instruction = self._instruction(PREPARE)
         self._apply_text = self._instruction(APPLY)
-        self._applied_text = self._instruction(APPLIED)
         self.participant.confirmed.connect(self._on_confirmed)
         self._connect_extra()
 
@@ -725,7 +723,8 @@ class _RatedTrial(QObject):
         self.stimulus_delivered_iso = self.session.clock.wall_iso()
         self.session.log("stimulus_delivered", origin="experimenter",
                          detail=self._stimulus_detail())
-        self._instruct(self._applied_text)
+        # Built now, from what was applied: a substitution may have been entered meanwhile.
+        self._instruct(self._instruction(APPLIED))
         self._cue_rating()
 
     def _stop_awaiting(self) -> None:
@@ -832,10 +831,13 @@ class PinprickTrial(_RatedTrial):
     def _instruction(self, key: str) -> str:
         text = self.experimenter.text
         self._filament(self.application.applied_label_g)  # refuses one not held, before the cue
+        # What was applied, once it has been: a substitution entered meanwhile included.
+        label_g = (self.application.applied_label_g if key == APPLIED
+                   else self.application.filament_label_g)
         return instruction(
             self.session.config, f"{key}_filament",
-            filament=self.application.filament_label_g,
-            force_mn=self._filament(self.application.filament_label_g).force_nominal_mn,
+            filament=label_g,
+            force_mn=self._filament(label_g).force_nominal_mn,
             site=self.application.site_index,
             region=text["terms"]["regions"][self.application.region],
         )
@@ -1515,16 +1517,14 @@ class LongProtocol(_Series):
         def begin() -> None:
             self.participant.show_blank()
             self._awaiting_fit = result
-            # What is due now, in place of the last trial's instruction and site (which this
-            # clears), left up as if another application were wanted.
-            self.experimenter.set_instruction(self.instruction_text("f40_fit_review"))
             # Accept and Re-run are live exactly while this waits on them (SPEC.md 11.1); Re-run
-            # only while one is left, the limit said before a press rather than after one
-            # (review of N7.F16).
+            # only while one is left, and the instruction then does not name it, so the limit is
+            # said before a press rather than after one (reviews of N7.F16, N7.F17e).
             exhausted = self.run_index - 1 >= self.max_reruns
-            if exhausted:
-                self.experimenter.set_warning(
-                    self.experimenter.text["dialogs"]["fit_rerun_exhausted"])
+            # What is due now, in place of the last trial's instruction and site (which this
+            # clears).
+            self.experimenter.set_instruction(self.instruction_text(
+                f"f40_fit_review{NO_RERUNS_LEFT}" if exhausted else "f40_fit_review"))
             self.experimenter.set_actions_enabled(fit_accept=True, fit_rerun=not exhausted)
             self.fit_ready.emit(fit)
 
@@ -1602,10 +1602,8 @@ class LongProtocol(_Series):
         if result is None or self.rig.interruptions.active is not None:
             return
         self._awaiting_fit = None
-        # The decision is taken: the preview closes and its buttons go dead, and the limit's
-        # note goes with them.
+        # The decision is taken: the preview closes and its buttons go dead.
         self.experimenter.hide_fit_preview()
-        self.experimenter.clear_warning(self.experimenter.text["dialogs"]["fit_rerun_exhausted"])
         self.session.log("fit_accepted", origin="experimenter", detail=f"run {self.run_index}")
         self._record(result, superseded=False, rerun_reason="")
         self.finish(result)

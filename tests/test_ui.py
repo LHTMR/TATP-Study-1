@@ -937,7 +937,6 @@ def test_every_warning_the_status_region_carries_fits_it(app, language):
         value=max(text["terms"]["out_of_range"].values(), key=len)
     )
     shown.append(f"{out_of_range} {warnings['application_cap'].format_map(values)}")
-    shown.append(text["dialogs"]["fit_rerun_exhausted"])
     window.set_status(text["instructions"]["await_participant"])
     for filled in shown:
         window.set_warning(filled)
@@ -1322,6 +1321,33 @@ def test_play_before_the_marker_says_what_to_do_until_the_marker_moves(participa
     assert vas.training == participant.text["vas_marker_hint"]
     _press(vas, "pagedown")
     assert vas.training == "", "gone with the press that moves the marker"
+
+
+def test_abort_is_withdrawn_once_the_session_is_closed(drawn):
+    """Code review of N7.F17e: an aborted session waits on its end screen, and a second abort
+    ran on the closed session."""
+    window, _ = drawn
+    assert _offered(window, window.abort_button)
+    window.set_actions_enabled(closed=True)
+    assert not window.abort_button.isVisibleTo(window) and not window.abort_button.isEnabled()
+
+
+def test_the_participant_is_not_awaited_through_a_pause(drawn):
+    """Code review of N7.F17e: the no-response wait ran on through a pause, and a resumed
+    trial carried the old start."""
+    window, held = drawn
+    window.set_no_response_s(60.0)
+    awaiting = window.text["instructions"]["await_participant"]
+    window.set_status(awaiting)
+    window._awaited_since_s -= 120.0  # two minutes waited
+    held["view"] = _all_keys(interruption="pause")
+    window.refresh()
+    assert window._awaited_since_s is None and window._no_response_shown is None
+    held["view"] = _all_keys()
+    window.set_status(awaiting)  # the repeated trial asks again
+    window.refresh()
+    assert time.monotonic() - window._awaited_since_s < 60.0, "timed afresh from the resume"
+    assert window._no_response_shown is None
 
 
 def test_opening_the_abort_pauses_first(drawn):
@@ -1715,6 +1741,9 @@ def test_the_enabled_preview_draws_the_fit_and_hides_it_again(app, loaded, make_
     window.resize(1280, 800)
     window.show_fit_preview(make_fit())
     preview = window.fit_preview
+    assert not preview.accept_button.isEnabled(), (
+        "what it offers is the procedure's, not the preview's (code review of N7.F17e)")
+    window.set_actions_enabled(fit_decision=True)  # as the procedure offers both
     assert preview.isVisible() and not preview.isModal()
     assert preview.plot.points and preview.plot.line
     assert _offered(window, window.fit_accept_button)

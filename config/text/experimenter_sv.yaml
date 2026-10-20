@@ -290,6 +290,13 @@ instructions:
   touchcal_fit_review: 'Skattningen i beröringskalibreringen är klar. Tryck på {controls[fit_accept]} eller {controls[fit_rerun]}.'
   # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced
   f40_fit_review: 'Skattningen av filamentkraften (F40) är klar. Tryck på {controls[fit_accept]} eller {controls[fit_rerun]}.'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. The same three once no
+  # re-runs are left, when Re-run is not offered (`NO_RERUNS_LEFT`).
+  touchcal_fit_review_last: 'Skattningen i beröringskalibreringen är klar, och inga omkörningar finns kvar. Tryck på {controls[fit_accept]}.'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  f40_fit_review_last: 'Skattningen av filamentkraften (F40) är klar, och inga omkörningar finns kvar. Tryck på {controls[fit_accept]}.'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  touchcal_stage1_failed_last: 'Skattningen klarade inte kvalitetskontrollen ({value}), och inga omkörningar finns kvar. Tryck på {controls[fit_accept]} för att fortsätta, flaggad.'
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_failed: >-
     Skattningen klarade inte kvalitetskontrollen ({value}). Tryck på {controls[fit_rerun]} för
@@ -298,8 +305,8 @@ instructions:
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_unusable: >-
     Skattningen i beröringskalibreringen kan inte användas ({value}). Tryck på
-    {controls[fit_rerun]} för att göra om steg 1 och 2, och säg till deltagaren:
-    "{say[rerun]}" Eller tryck på {controls[abort]}.
+    {controls[fit_rerun]} för att göra om steg 1 och 2 och säg: "{say[rerun]}" Eller tryck på
+    {controls[abort]}.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced. Ingen omkörning erbjuds:
   # gränsen är nådd, och en omkörning nekas.
   touchcal_stage1_exhausted: >-
@@ -651,7 +658,6 @@ dialogs:
   # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced
   distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem med Kartläggningsavstånd…, eller tryck på Nästa steg för att avsluta med dem registrerade som saknade.
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
-  fit_rerun_exhausted: Gränsen för antal omkörningar av den här proceduren är nådd. Den här skattningen används.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The re-calibrations, the
   # same in every condition and wherever they are offered. One line to read with the participant
   # waiting; the whole of it on hover, as the `_detail` (LOG N7.F17e).
@@ -813,6 +819,8 @@ launcher:
   choose: Välj…
   check: Kontrollera
   start: Starta sessionen
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  start_anyway: Starta trots varningarna
   close: Stäng
   # Bredvid Starta sessionen, som den lämnar utan att göra (docs/LOG.md N7.F5).
   cancel: Avbryt

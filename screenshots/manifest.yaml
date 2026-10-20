@@ -145,9 +145,11 @@ screens:
     it starts nothing (en).'
   experimenter_en_launcher_session: 'The session dialog as it opens: the data folder
     filled in from config; the session number, both languages and the pattern folder
-    unchosen, with no default; Start disabled until a check passes (en).'
+    unchosen, with no default; Start, always pressable, checks first (LOG N7.F17e)
+    (en).'
   experimenter_en_launcher_session_checked: 'The session dialog after Check: a preflight
-    warning listed in amber, Start enabled because nothing refuses (en).'
+    warning listed in amber, and Start reading "Start despite the warnings" now they
+    have been shown (en).'
   experimenter_en_link_lost: 'The prototype sleeve''s link lost mid-session (docs/LOG.md
     N7.U16): shown disconnected, the warning that it may still be on first in the
     fault line, then the newest fault''s start; the earlier-fault count gives way
@@ -350,9 +352,11 @@ screens:
     it starts nothing (sv).'
   experimenter_sv_launcher_session: 'The session dialog as it opens: the data folder
     filled in from config; the session number, both languages and the pattern folder
-    unchosen, with no default; Start disabled until a check passes (sv).'
+    unchosen, with no default; Start, always pressable, checks first (LOG N7.F17e)
+    (sv).'
   experimenter_sv_launcher_session_checked: 'The session dialog after Check: a preflight
-    warning listed in amber, Start enabled because nothing refuses (sv).'
+    warning listed in amber, and Start reading "Start despite the warnings" now they
+    have been shown (sv).'
   experimenter_sv_link_lost: 'The prototype sleeve''s link lost mid-session (docs/LOG.md
     N7.U16): shown disconnected, the warning that it may still be on first in the
     fault line, then the newest fault''s start; the earlier-fault count gives way

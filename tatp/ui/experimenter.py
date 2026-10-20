@@ -910,7 +910,9 @@ class ExperimenterWindow(QWidget):
     # -- the fit preview, SPEC.md 11.1 ---------------------------------------------------
 
     def show_fit_preview(self, fit) -> None:
-        """Open the fit preview on an `F40Fit` or a `FitReady`, and enable Accept and Re-run.
+        """Open the fit preview on an `F40Fit` or a `FitReady`. Which of Accept and Re-run it
+        offers is the procedure's (`set_actions_enabled`): enabled here, both came back on
+        over a procedure that had withheld one (code review of N7.F17e).
 
         Refused unless the view says the preview is enabled: a fit carries the participant's
         ratings, and this is the only place they could reach the lab screen.
@@ -920,7 +922,6 @@ class ExperimenterWindow(QWidget):
                 "a fit was handed to the experimenter window with fit_preview.enabled false"
             )
         self.fit_preview.draw(fit)
-        self.set_actions_enabled(fit_decision=True)
         # At the window's right, over the side column, where it hides the least of the
         # instruction -- not centred over it (review of N7.F16).
         corner = self.mapToGlobal(QPoint(self.width() - MARGIN_PX, MARGIN_PX))
@@ -1317,6 +1318,19 @@ class ExperimenterWindow(QWidget):
     def _draw_interruption(self, interruption: str | None, resuming: bool,
                            link_lost: bool) -> None:
         assert interruption is None or interruption in INTERRUPTIONS, interruption
+        # The participant is not awaited while the session is stopped or paused: the wait for
+        # their answer starts again at the resume (code review of N7.F17e: it ran on through a
+        # pause, and a resumed trial carried the old start). Real seconds throughout, as a
+        # person's answer takes them at any clock speed.
+        if interruption is not None and self._interruption is None:
+            self._awaited_since_s = None
+            if self._no_response_shown is not None:
+                self.clear_warning(self._no_response_shown)
+                self._no_response_shown = None
+            self._status_text = self._status_raw
+        elif (interruption is None and self._interruption is not None
+              and self._status_raw == self.text["instructions"]["await_participant"]):
+            self._awaited_since_s = time.monotonic()
         self._interruption = interruption
         self._resuming = resuming
         status = self.text["status"]
@@ -1443,6 +1457,8 @@ class ExperimenterWindow(QWidget):
         offered = (
             (self.pause_button, running and open_, running and open_),
             (self.garment_button, open_, open_),
+            # Not once closed: an abort ran again on a closed session (code review of N7.F17e).
+            (self.abort_button, open_, open_),
             (self.resume_button, not running and not self._resuming,
              not running and not self._resuming),
             (self.discard_button, discarding, discarding),
