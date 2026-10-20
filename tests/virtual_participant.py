@@ -16,7 +16,7 @@ import math
 import time
 from collections.abc import Callable
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
 
@@ -64,6 +64,25 @@ def make_rig(config: cfg.Config, clock_speed: float = CLOCK_SPEED) -> Rig:
     participant.resize(1280, 800)
     experimenter = ExperimenterWindow(config.experimenter_text, session.experimenter_view)
     return Rig(session, participant, experimenter)
+
+
+def auto_apply(rig: Rig) -> None:
+    """An experimenter who applies every filament and brush stroke the moment it is asked for
+    and says so with Next step (docs/LOG.md N7.F16f), for tests about something else."""
+    timer = QTimer(rig)
+    timer.setInterval(0)
+
+    def tick() -> None:
+        procedure = rig.root
+        if procedure is None or not procedure.running:
+            return
+        while procedure._child is not None:
+            procedure = procedure._child
+        if getattr(procedure._trial, "awaits_proceed", False):
+            rig.experimenter.proceed_requested.emit()
+
+    timer.timeout.connect(tick)
+    timer.start()
 
 
 def press(widget, name: str) -> None:

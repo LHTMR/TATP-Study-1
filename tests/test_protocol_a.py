@@ -16,6 +16,7 @@ import pytest
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
+from virtual_participant import auto_apply
 
 from tatp import config as cfg
 from tatp.clock import Clock
@@ -70,7 +71,9 @@ def _make_rig(loaded, tmp_path, study1=None, seed=7, trained=True):
     participant = ParticipantWindow(config, Responder(config.hardware), session.clock)
     participant.resize(1280, 800)
     experimenter = ExperimenterWindow(config.experimenter_text, session.experimenter_view)
-    return Rig(session, participant, experimenter)
+    made = Rig(session, participant, experimenter)
+    auto_apply(made)
+    return made
 
 
 @pytest.fixture
@@ -127,10 +130,18 @@ def _drive(procedure, done, respond=_observer, before_answer=None, max_trials=60
     """Answer every rating until the procedure finishes. Returns how many were answered."""
     participant = procedure.participant
     answered = 0
+    def applying() -> bool:
+        return getattr(procedure._trial, "awaits_proceed", False)
+
     while not done:
-        _spin(lambda: done or participant.stack.currentWidget() is participant.vas)
+        _spin(lambda: done or applying()
+              or participant.stack.currentWidget() is participant.vas)
         if done:
             break
+        if applying():
+            # Applied: the experimenter says so, and the rating is cued from it (N7.F16f).
+            procedure.experimenter.proceed_requested.emit()
+            continue
         trial = procedure._trial
         if before_answer is not None:
             before_answer(answered, trial)

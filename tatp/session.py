@@ -396,6 +396,12 @@ class Session:
                 "channel_pressure_kpa": (
                     None if self.phase in CONDITION_PHASES else dict(self.garment.pressure_kpa)
                 ),
+                # Which channels are on, withheld with the pressures, for the channel display
+                # (docs/LOG.md N7.F16i).
+                "channels_on": (
+                    None if self.phase in CONDITION_PHASES
+                    else sorted(self.garment.status()["channels_on"])
+                ),
             },
         }
 

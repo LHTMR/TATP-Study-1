@@ -314,7 +314,8 @@ One row per monofilament application, both protocols, all phases (§14.2).
 | substituted | bool | - | yes | `true` when the applied filament differs from the one the software asked for (§8.2) |
 | site_index | int | - | yes | Rotates on every application (§8.2) |
 | cue_onset_iso | iso8601 | - | yes | Visual warning cue onset (§10.5) |
-| rating_cue_iso | iso8601 | - | no | When the rating was cued, 9 s post-stimulus (Scheuren et al. 2023) |
+| stimulus_delivered_iso | iso8601 | - | no | When the experimenter pressed Next step to say the filament had been applied (LOG N7.F16f); empty if the trial ended before the press |
+| rating_cue_iso | iso8601 | - | no | When the rating was cued, `pinprick.rating_cue_delay_s` (9 s, Scheuren et al. 2023) after `stimulus_delivered_iso` |
 | rating_percent | float | % | no | VAS response; empty if the trial was discarded before a response |
 | rt_s | float | s | no | From rating cue to confirm |
 | first_press_side | str | - | no | `left` or `right`; sets the marker's first position (§10.2) |
@@ -367,7 +368,8 @@ One row per brush application — allodynia, primary and secondary regions (§8.
 | trial_index | int | - | yes | 1-based |
 | site_index | int | - | yes | Rotates on every application |
 | cue_onset_iso | iso8601 | - | yes | Visual warning cue onset |
-| rating_cue_iso | iso8601 | - | no | When the rating was cued, `brush.rating_cue_delay_s` after the stimulus |
+| stimulus_delivered_iso | iso8601 | - | no | When the experimenter pressed Next step to say the stroke had been made (LOG N7.F16f); empty if the trial ended before the press |
+| rating_cue_iso | iso8601 | - | no | When the rating was cued, `brush.rating_cue_delay_s` after `stimulus_delivered_iso` |
 | rating_percent | float | % | no | VAS response, on the scale `brush.rating_scale` names |
 | rt_s | float | s | no | From rating cue to confirm |
 | first_press_side | str | - | no | `left` or `right` |

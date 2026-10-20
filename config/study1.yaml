@@ -48,11 +48,22 @@ demo:
   # Oct 2026; LOG N7.F14e). Shorter than the slowest ramp: nothing a demonstration records
   # is data. A demonstration on a worn garment keeps the study's window.
   estimation_window_mock_s: 1.5
-  # What the garment is commanded to do, channel by channel, in the Demo controls window
-  # (tatp/ui/garment_display.py; N7.F12f): read this often, and a channel that changes is lit
-  # up and fades back over garment_highlight_s, so a watcher's eye is drawn to it.
+  # The delay from the experimenter's "applied" press to the pain rating scale, for pinprick
+  # and brush alike, in place of the study's 9 s (S, 20 Oct 2026: "I had to wait a long time
+  # ... before the scale appears"; LOG N7.F16g). Long enough to see the scale follow the press.
+  rating_cue_delay_s: 1.0
+  # The touch calibration's estimation run, on the mock garment: the stimulus on this long
+  # before its intensity scale appears, in place of `touch_calibration.estimation_settle_s`.
+  # That 3 s lets a real sleeve finish inflating (R32); the mock has nothing to inflate (LOG
+  # N7.F16g). A worn garment keeps the study's.
+  estimation_settle_mock_s: 0.5
+  # What the garment is commanded to do, channel by channel, on the experimenter screen in
+  # every phase (tatp/ui/garment_display.py; N7.F12f, N7.F16i), read from the garment this
+  # often. The lit-up fade is hardware.yaml's screens.garment_highlight_s.
   garment_display_refresh_s: 0.05    # a pattern's on/off steps are seen as they happen
-  garment_highlight_s: 1.0           # long enough to catch from across the room
+  # How often the demonstration's controls redraw what they offer -- the wait a skip would
+  # end, the step an auto-run would finish -- and the remote's buttons as they are pressed.
+  controls_refresh_s: 0.25
 
 fit_preview:
   # SPEC.md 11.1. Shows the experimenter the fitted curve, its quality and the derived values

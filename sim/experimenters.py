@@ -58,7 +58,7 @@ SCENARIO_ENDED = "validator: the scenario's error path is over"
 # Instructions after which the software waits for Next step.
 PROCEED_INSTRUCTIONS = (
     "capsaicin_apply", "capsaicin_remove", "thermode_rekindle", "rekindle_remove",
-    "touchcal_uneven", "earplugs", "ready_long_first",
+    "touchcal_uneven", "earplugs", "ready_long_first", "mark_zone",
     # The intervention's end, told to the participant, and the session complete, whose Next
     # step closes the program (docs/LOG.md N7.F11c9, N7.F11c10).
     "intervention_end", "session_complete",
@@ -232,6 +232,11 @@ class VirtualExperimenter(QObject):
         ):
             window.proceed_requested.emit()
         elif self._mapping_ready.search(instruction):
+            window.proceed_requested.emit()
+        elif (self._apply.fullmatch(instruction) or self._brush.fullmatch(instruction)) and (
+            self.rig.proceed_awaited()
+        ):
+            # Applied, once the cue's lead is over: the rating is cued from this press.
             window.proceed_requested.emit()
         elif self._mapping_path.fullmatch(instruction):
             window.proceed_requested.emit()  # stop at the border

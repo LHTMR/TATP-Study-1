@@ -27,6 +27,7 @@ from sim.responders import (
 from tatp import config as cfg
 from tatp import touchcal
 from tatp.clock import Clock
+from tatp.config import instruction, instruction_template
 from tatp.pinprick import PAIN_SCALE
 from tatp.procedure import Rig
 from tatp.responder import Responder
@@ -284,7 +285,7 @@ def test_each_adjustment_is_held_at_the_ceiling_afresh(rig):
 
 
 def test_the_instruction_template_parses_back_into_its_fields(loaded):
-    template = loaded.experimenter_text["instructions"]["apply_filament"]
+    template = instruction_template(loaded, "apply_filament")
     text = template.format(filament="0.40", force_mn=3.9, site=2, region="primary")
     match = template_pattern(template).fullmatch(text)
     assert match["filament"] == "0.40"
@@ -298,9 +299,9 @@ def test_the_experimenter_applies_the_named_filament_at_every_cue(rig):
     experimenter.start()
     text = rig.experimenter.text
     rig.experimenter.set_instruction(
-        text["instructions"]["apply_filament"].format(
-            filament="26", force_mn=255.0, site=1, region=text["terms"]["regions"]["primary"]
-        )
+        instruction(rig.session.config, "apply_filament",
+                    filament="26", force_mn=255.0, site=1,
+                    region=text["terms"]["regions"]["primary"])
     )
     for applications in (1, 2):
         rig.participant.show_warning_cue()
@@ -317,9 +318,8 @@ def test_the_experimenter_strokes_the_brush_when_asked(rig):
     experimenter.start()
     text = rig.experimenter.text
     rig.experimenter.set_instruction(
-        text["instructions"]["apply_brush"].format(
-            site=1, region=text["terms"]["regions"]["primary"]
-        )
+        instruction(rig.session.config, "apply_brush",
+                    site=1, region=text["terms"]["regions"]["primary"])
     )
     rig.participant.show_warning_cue()
     _spin(lambda: experimenter.applied == ["brush"])
@@ -350,9 +350,9 @@ def test_nothing_is_applied_without_a_cue(rig):
     experimenter.start()
     text = rig.experimenter.text
     rig.experimenter.set_instruction(
-        text["instructions"]["apply_filament"].format(
-            filament="26", force_mn=255.0, site=1, region=text["terms"]["regions"]["primary"]
-        )
+        instruction(rig.session.config, "apply_filament",
+                    filament="26", force_mn=255.0, site=1,
+                    region=text["terms"]["regions"]["primary"])
     )
     deadline = time.monotonic() + 0.1
     _spin(lambda: time.monotonic() > deadline)

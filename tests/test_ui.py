@@ -13,7 +13,7 @@ import time
 import numpy as np
 import pytest
 from PySide6.QtCore import QEvent, QPoint, Qt
-from PySide6.QtGui import QFont, QFontInfo, QFontMetrics, QImage, QKeyEvent
+from PySide6.QtGui import QFont, QFontInfo, QFontMetrics, QImage, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import QApplication, QLabel
 
 from tatp import config as cfg
@@ -367,7 +367,7 @@ def test_the_adjustment_screen_carries_no_wording_of_its_own(participant, sessio
 
 def test_the_preference_screen_carries_no_wording_of_its_own(participant, session):
     controls = session.config.participant_text["participant_controls"]["preference"]
-    participant.show_preference()
+    participant.show_preference(1, 3)
     assert participant.stack.currentWidget() is participant.control
     assert participant.control.target == controls["intro"]
     assert participant.control.labels == {"left": controls["left"], "right": controls["right"]}
@@ -391,7 +391,7 @@ def test_the_preference_screen_reads_the_buttons_as_the_adjustment_does(particip
     pressed, confirmed = [], []
     participant.adjust_pressed.connect(lambda value, _event_ms: pressed.append(value))
     participant.adjust_confirmed.connect(lambda: confirmed.append(True))
-    participant.show_preference()
+    participant.show_preference(1, 3)
     participant.keyPressEvent(QKeyEvent(QEvent.KeyPress, QT_KEYS["pagedown"], Qt.NoModifier))
     assert participant.control.held == {"right"}
     assert pressed == [Action.INCREASE.value]
@@ -613,10 +613,11 @@ def test_a_banner_that_comes_mid_session_is_refused(experimenter, session):
 @pytest.mark.parametrize("banners", [{}, {"reduced_capability_device": True}])
 def test_the_window_fits_the_lab_laptop(app, language, banners):
     """A 1920 x 1080 laptop at 150 % leaves about 1280 x 640 (S's lab review, 24 Sep 2026):
-    with no banner, and with the one a pilot on the prototype sleeve always has."""
-    text = cfg.load(language, language).experimenter_text
+    with no banner, and with the one a pilot on the prototype sleeve always has. As a session
+    sets it up: the timeline, and the channel display shown (LOG N7.F16h, N7.F16i)."""
     view = _all_keys(garment_driver="arduino_mosfet", **banners)
-    window = ExperimenterWindow(text, lambda: view)
+    window = screenshots._session_window(cfg.load(language, language), lambda: view)
+    window.garment_display.setVisible(True)
     hint = window.minimumSizeHint()
     assert hint.width() <= LAPTOP_WIDTH_PX and hint.height() <= LAPTOP_HEIGHT_PX, hint
 
@@ -665,9 +666,10 @@ def test_the_unresolved_open_items_are_on_the_screen(experimenter, session):
     assert not window.open_items.isVisibleTo(window)
 
 
-def _hardware(connected=True, faults=(), pressures=None, link_lost=False):
+def _hardware(connected=True, faults=(), pressures=None, link_lost=False, on=None):
     return {"connected": connected, "link_lost": link_lost, "faults": list(faults),
-            "channel_pressure_kpa": pressures}
+            "channel_pressure_kpa": pressures,
+            "channels_on": None if pressures is None else list(on or [])}
 
 
 def test_the_garment_state_is_shown(experimenter, session):
@@ -868,9 +870,11 @@ def test_a_warning_outlives_the_routine_status_and_one_stage_start(drawn):
     assert warning in window.status.text()
     window.new_stage()
     assert warning in window.status.text()
+    # The status was the stage before's, and went with it (S, 20 Oct 2026; LOG N7.F16c).
+    assert text["instructions"]["response_received"] not in window.status.text()
     window.new_stage()
     assert warning not in window.status.text()
-    assert window.status.text() == text["instructions"]["response_received"]
+    assert window.status.text() == ""
 
 
 @pytest.mark.parametrize("language", ["sv", "en"])
@@ -1057,6 +1061,25 @@ def test_next_step_looks_the_same_whatever_is_awaited(drawn):
         window.set_actions_enabled(**awaited)
         assert window.proceed_button.styleSheet() == style
         assert _offered(window, window.proceed_button)
+
+
+def test_next_step_is_offered_only_while_a_press_would_do_something(drawn):
+    """S, 20 Oct 2026 (LOG N7.F16d): "a lot of the time Next step doesn't do anything". It is
+    pressable exactly while the rig says a go is awaited, and Space presses it."""
+    window, _ = drawn
+    awaited = {"now": False}
+    window.set_proceed_source(lambda: awaited["now"])
+    assert window.proceed_button.isVisibleTo(window)
+    assert not window.proceed_button.isEnabled()
+    seen = _emitted(window.proceed_requested)
+    window._proceed_key()
+    assert seen == []
+    awaited["now"] = True
+    window.refresh()
+    assert _offered(window, window.proceed_button)
+    assert window.proceed_shortcut.key() == QKeySequence(Qt.Key_Space)
+    window.proceed_button.click()
+    assert seen == [()]
 
 
 def test_the_step_on_hold_is_dimmed_while_interrupted(drawn):
@@ -1370,27 +1393,36 @@ def test_the_countdown_is_redrawn_by_its_timer(app, loaded):
     _spin(lambda: ticks["n"] > first)
 
 
-def test_the_hardware_panel_shows_pressure_only_when_given(drawn):
+def _with_channels(window, per_channel_pressure=True):
+    """The channel display, as the rig sets it up (LOG N7.F16i)."""
+    window.set_garment([1, 2, 3], 250.0, per_channel_pressure, 1.0)
+    return window.garment_display
+
+
+def test_the_hardware_panel_shows_the_channels_only_when_given(drawn):
     window, held = drawn
-    held["view"] = _all_keys(hardware=_hardware(pressures={1: 12.0, 2: 30.25}))
+    display = _with_channels(window)
+    held["view"] = _all_keys(hardware=_hardware(pressures={1: 12.0, 2: 30.25}, on=[2]))
     window.refresh()
-    assert window.pressures.isVisibleTo(window)
-    assert "30.2" in window.pressures.text() or "30.3" in window.pressures.text()
+    assert display.isVisibleTo(window)
+    assert display.states[2] == (True, 30.25)
+    assert display.states[1] == (False, 12.0)
 
     held["view"] = _all_keys(hardware=_hardware(pressures=None, faults=["valve 3 stuck"]))
     window.refresh()
-    assert not window.pressures.isVisibleTo(window)
-    assert window.pressures.text() == ""
+    assert not display.isVisibleTo(window)
     assert "valve 3 stuck" in window.faults.text()
 
 
-def test_no_pressure_is_drawn_during_the_intervention_even_if_the_view_leaks_it(drawn):
-    """SPEC.md 16. The view withholds it; the window holds the same line on its own."""
+def test_no_channel_is_drawn_during_the_intervention_even_if_the_view_leaks_it(drawn):
+    """SPEC.md 16. The view withholds them; the window holds the same line on its own."""
     window, held = drawn
+    display = _with_channels(window)
     for phase in ("intervention", "rekindle"):
-        held["view"] = _all_keys(phase=phase, hardware=_hardware(pressures={1: 55.0}))
+        held["view"] = _all_keys(phase=phase, hardware=_hardware(pressures={1: 55.0}, on=[1]))
         window.refresh()
-        assert window.pressures.text() == ""
+        assert not display.isVisibleTo(window)
+        assert display.states[1] == (False, 0.0), "never handed what the view leaked"
 
 
 def test_a_fault_from_the_intervention_stays_withheld_afterwards(drawn):
@@ -1528,7 +1560,9 @@ def rig_trial(app, session, participant):
 
 def test_the_window_never_draws_a_rating(rig_trial):
     """Bilaga 1 3.3. The rating is in the data file; nothing on the lab screen carries it."""
-    window, (participant, done, _) = rig_trial
+    window, (participant, done, trial) = rig_trial
+    _spin(lambda: trial.awaits_proceed)
+    window.proceed_requested.emit()  # applied (docs/LOG.md N7.F16f)
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
     _press(participant.vas, "pagedown")
     for _ in range(RATING_PRESSES):

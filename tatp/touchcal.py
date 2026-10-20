@@ -1022,7 +1022,7 @@ class PreferenceSelection(Trial):
         self._start_s = self.session.clock.real_elapsed_s()
         self.listen(self.participant.adjust_pressed, self._pressed)
         self.listen(self.participant.adjust_confirmed, self._confirmed)
-        self.participant.show_preference()
+        self.participant.show_preference(self.index + 1, len(self.order))
         self._play()
 
     def _play(self) -> None:
@@ -1038,6 +1038,7 @@ class PreferenceSelection(Trial):
         step = -1 if Action(action_value) is Action.DECREASE else 1
         self.index = (self.index + step) % len(self.order)
         self.moves += 1
+        self.participant.show_preference_position(self.index + 1, len(self.order))
         self._play()
 
     def _confirmed(self) -> None:

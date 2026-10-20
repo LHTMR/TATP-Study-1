@@ -874,6 +874,8 @@ def check_timestamps_monotonic(runs):
             cued = row["rating_cue_iso"]
             if cued and _iso(cued) < _iso(row["cue_onset_iso"]):
                 failures.append(f"{run.name}: pinprick rating cued before its warning cue")
+            if cued and not row["stimulus_delivered_iso"]:
+                failures.append(f"{run.name}: pinprick rating cued with no application pressed")
     return failures
 
 
@@ -898,22 +900,32 @@ def needs_rated_pinprick_rows(runs):
 
 
 def check_rating_cue_interval(runs):
-    """Warning cue to rating cue: the 1 s cue lead plus the 9 s delay (SPEC.md 10.5, 8), in
-    session seconds, within TIMING_TOLERANCE_S, on the application the load disturbed least."""
+    """The experimenter's press saying the filament is applied, to the rating cue: the 9 s
+    delay (SPEC.md 8; docs/LOG.md N7.F16f), in session seconds, within TIMING_TOLERANCE_S, on
+    the application the load disturbed least. And never a press before the cue's 1 s lead
+    is over (SPEC.md 10.5)."""
     run = runs[TIMING]
     study = run.config.study1
-    expected_s = (float(study["cues"]["warning_lead_s"])
-                  + float(study["pinprick"]["rating_cue_delay_s"]))
+    lead_s = float(study["cues"]["warning_lead_s"])
+    expected_s = float(study["pinprick"]["rating_cue_delay_s"])
+    rated = [row for row in run.rows.get("pinprick", []) if row["rating_cue_iso"]]
+    failures = []
+    early = [row for row in rated
+             if _session_s(run, row["cue_onset_iso"], row["stimulus_delivered_iso"])
+             < lead_s - TIMING_TOLERANCE_S]
+    if early:
+        failures.append(f"{len(early)} applications pressed as applied before the cue's "
+                        f"{lead_s:g} s lead was over")
     deviations = [
-        _session_s(run, row["cue_onset_iso"], row["rating_cue_iso"]) - expected_s
-        for row in run.rows.get("pinprick", []) if row["rating_cue_iso"]
+        _session_s(run, row["stimulus_delivered_iso"], row["rating_cue_iso"]) - expected_s
+        for row in rated
     ]
     least_s = min(deviations)
     if abs(least_s) > TIMING_TOLERANCE_S:
-        return [f"warning cue to rating cue is {least_s:+.3f} s of session time off its "
-                f"configured {expected_s:g} s at best over {len(deviations)} applications, "
-                f"beyond +/- {TIMING_TOLERANCE_S} s"]
-    return []
+        failures.append(f"applied to rating cue is {least_s:+.3f} s of session time off its "
+                        f"configured {expected_s:g} s at best over {len(deviations)} "
+                        f"applications, beyond +/- {TIMING_TOLERANCE_S} s")
+    return failures
 
 
 def _isi_deviations(run: Run) -> list[tuple[float, float]]:

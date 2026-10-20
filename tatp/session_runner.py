@@ -14,7 +14,8 @@ and skips any later stage it does find.
    the masking check (10.7).
 2. **Touch calibration** (9), then the baseline relaxation and alertness ratings (Bilaga 1
    Table 2).
-3. **Pre-sensitisation** -- the long protocol on the secondary region, the short protocol on the
+3. **Pre-sensitisation** -- the primary zone marked on the skin, then the long protocol on
+   the secondary region, the short protocol on the
    primary region at the fixed 26 g, then brush, secondary and primary (Bilaga 1 Table 1).
 4. **Sensitisation** -- session t=0 is the experimenter's press when the thermode starts.
    **Capsaicin** is prompted when due and timed to its end.
@@ -164,6 +165,9 @@ def stage_layout(schedule: Schedule) -> list[tuple[str, str, Upcoming | None]]:
     # Its own phase is set by the calibration itself.
     add("touch_calibration", SETUP)
     add("touch_calibration.baseline", TOUCH_CALIBRATION)
+    # The skin the heat and the capsaicin will go on, marked before anything is measured
+    # there (S, 20 Oct 2026; docs/LOG.md N7.F16l).
+    add(f"{PRE_S}.mark_zone", PRE_S)
     time_point(PRE_S)
     # t=0 is set by the experimenter's press in this stage, so it begins in pre-S.
     add("sensitisation", PRE_S)
@@ -319,6 +323,13 @@ class SessionRunner(Procedure):
 
         self.stages = self._plan()
         self.stage_index = 0
+        # The session's phases in order, for the experimenter's timeline (LOG N7.F16h): those
+        # the stages begin in, and the rekindle as part of the intervention. The schedule's,
+        # the same in every condition.
+        self.phases = list(dict.fromkeys(
+            stage.phase for stage in self.stages if stage.phase != REKINDLE
+        ))
+        self.experimenter.set_timeline(self.phases)
         # Stages a resumed session found completed (`_resume`); empty for a fresh session.
         self._completed: frozenset[str] = frozenset()
         self._launch: Callable[[], None] | None = None
@@ -448,6 +459,8 @@ class SessionRunner(Procedure):
         phase, measure = stage_id.split(".")
         primary_g = self.pinprick["primary_filament_label_g"]
         return {
+            "mark_zone": lambda: self.await_proceed(self._stage_done,
+                                                    self._standby("mark_zone")),
             "long": lambda: self._long(phase),
             "mapping": self._mapping,
             "short_primary": lambda: self._protocol(
@@ -1268,6 +1281,8 @@ class SessionRunner(Procedure):
         self.experimenter.distances_entered.disconnect(self.ledger.enter)
         self.experimenter.set_mapping_phases([])
         self.experimenter.set_actions_enabled(closed=True)
+        # The one Next step after the session closed: it ends the program.
+        self.rig.closing = True
         self.experimenter.set_instruction(
             self.instruction_text(SESSION_COMPLETE_INSTRUCTION)
         )
@@ -1393,15 +1408,20 @@ class SessionRunner(Procedure):
 
         self.step(begin)
 
+    def skippable_s(self, lead_s: float) -> float | None:
+        """The session seconds `skip_wait(lead_s)` would skip now, or None."""
+        if self.waiting_until_s is None or self._pending is None:
+            return None
+        skipped_s = self.waiting_until_s - lead_s - self.session.clock.t_session_s()
+        return skipped_s if skipped_s > 0 else None
+
     def skip_wait(self, lead_s: float) -> float | None:
         """End the timed wait now running, `lead_s` before what it waits for: a
         demonstration's Skip the wait (tatp/demo.py). Returns the session seconds skipped, or
         None when there is no wait to skip -- a protocol running, or the experimenter's go
         awaited -- or less than `lead_s` of one is left."""
-        if self.waiting_until_s is None or self._pending is None:
-            return None
-        skipped_s = self.waiting_until_s - lead_s - self.session.clock.t_session_s()
-        if skipped_s <= 0:
+        skipped_s = self.skippable_s(lead_s)
+        if skipped_s is None:
             return None
         self.session.clock.skip(skipped_s)
         self.session.garment.skip(skipped_s)

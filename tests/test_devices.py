@@ -8,6 +8,7 @@ import sys
 import pytest
 
 from tatp import config as cfg
+from tatp import demo as demo_module
 from tatp import devices
 from tatp.demo import DEMO_GARMENT, REAL_TIME_SPEED, demo_config
 from tatp.devices import (
@@ -123,14 +124,29 @@ def test_in_the_lab_a_missing_remote_stays_the_remote(lab):
                              devices.Present([(1280, 800)], [], False)) == REMOTE
 
 
-def test_a_demonstration_records_that_every_keyboard_counted(lab):
+def test_a_demonstration_without_the_remote_records_that_every_keyboard_counted(
+        lab, monkeypatch):
     """Spec review: the demonstration's own any_keyboard is in `hardware_changed` too."""
+    monkeypatch.setattr(demo_module, "remote_present", lambda _responder: False)
     loaded = cfg.load("sv", "en")
     config = with_hardware_choices(
         cfg.Config(**{**loaded.__dict__, "hardware": lab}), configured(lab))
     demo = demo_config(config, REAL_TIME_SPEED, DEMO_GARMENT)
     assert demo.hardware["responder"]["key_source"] == ANY_KEYBOARD
     assert demo.hardware["changed_at_launch"].split(";").count(devices.KEY_SOURCE_CHANGE) == 1
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="raw_input is Windows only")
+def test_a_demonstration_with_the_remote_plugged_in_hears_only_the_remote(lab, monkeypatch):
+    """S, 20 Oct 2026 (LOG N7.F16a): with the R400 there, the laptop's keys do not answer for
+    the participant, and the remote answers with another program in front."""
+    monkeypatch.setattr(demo_module, "remote_present", lambda _responder: True)
+    loaded = cfg.load("sv", "en")
+    config = with_hardware_choices(
+        cfg.Config(**{**loaded.__dict__, "hardware": lab}), configured(lab))
+    demo = demo_config(config, REAL_TIME_SPEED, DEMO_GARMENT)
+    assert demo.hardware["responder"]["key_source"] == RAW_INPUT
+    assert devices.KEY_SOURCE_CHANGE not in demo.hardware.get("changed_at_launch", "")
 
 
 def test_off_the_lab_platform_an_unusable_lab_device_gives_way_to_the_default(lab):

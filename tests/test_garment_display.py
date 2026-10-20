@@ -1,6 +1,9 @@
-"""The demonstration's garment display. docs/LOG.md N7.F12f, tatp/ui/garment_display.py.
+"""The experimenter screen's channel display. docs/LOG.md N7.F12f, N7.F16i;
+tatp/ui/garment_display.py.
 
-That it exists only in a demonstration is tests/test_demo.py's.
+What it is handed in a session -- nothing while the condition's touch runs -- is
+tests/test_ui.py's; that a demonstration hands it the garment in every phase is
+tests/test_demo.py's.
 """
 
 from __future__ import annotations
@@ -12,9 +15,9 @@ from tatp import config as cfg
 from tatp.clock import Clock
 from tatp.garment.base import Limits
 from tatp.garment.mock import MockGarment
-from tatp.ui.garment_display import GarmentDisplay
+from tatp.ui.garment_display import GarmentDisplay, states_from_status
 
-# A moment to poll at, in `poll`'s monotonic seconds.
+# A moment to hand the states over at, in monotonic seconds.
 T0_S = 1000.0
 
 
@@ -34,15 +37,22 @@ class _Sleeve(MockGarment):
     per_channel_pressure = False
 
 
+def _poll(display, garment, now_s):
+    """What a demonstration hands the display: the garment as commanded, now."""
+    display.show_states(
+        states_from_status(garment.status(), garment.channels(), bool(garment.connected),
+                           garment.per_channel_pressure),
+        bool(garment.link_lost), now_s,
+    )
+
+
 def _display(config, garment_class=MockGarment):
     garment = garment_class(Limits.from_config(config.hardware), Clock())
     garment.connect()
-    demo = config.study1["demo"]
-    display = GarmentDisplay(garment, config.experimenter_text["demo"],
-                             float(demo["garment_display_refresh_s"]),
-                             float(demo["garment_highlight_s"]))
-    # Never shown, so its timer never runs: polled by hand, at chosen moments.
-    display.poll(T0_S)
+    display = GarmentDisplay(garment.channels(), garment.limits.pressure_ceiling_kpa,
+                             garment.per_channel_pressure, config.experimenter_text["hardware"],
+                             float(config.hardware["screens"]["garment_highlight_s"]))
+    _poll(display, garment, T0_S)
     return display, garment
 
 
@@ -52,12 +62,12 @@ def test_a_channel_that_changes_is_lit_then_fades(app, config):
     first, second = garment.channels()[:2]
     assert all(display.highlight(c) == 0 for c in garment.channels()), "nothing changed yet"
     garment.set_channel(first, True)
-    display.poll(T0_S + 1)
+    _poll(display, garment, T0_S + 1)
     assert display.highlight(first) == 1.0
     assert display.highlight(second) == 0.0
-    display.poll(T0_S + 1 + highlight_s / 2)
+    _poll(display, garment, T0_S + 1 + highlight_s / 2)
     assert display.highlight(first) == pytest.approx(0.5)
-    display.poll(T0_S + 1 + highlight_s)
+    _poll(display, garment, T0_S + 1 + highlight_s)
     assert display.highlight(first) == 0.0
     assert display.states[first][0] is True, "steady, still on"
 
@@ -67,19 +77,18 @@ def test_a_pressure_change_lights_the_channel_and_shows_its_value(app, config):
     channel = garment.channels()[0]
     kpa = garment.limits.pressure_ceiling_kpa / 2
     garment.set_pressure(channel, kpa)
-    display.poll(T0_S + 1)
+    _poll(display, garment, T0_S + 1)
     assert display.highlight(channel) == 1.0
-    words = config.experimenter_text["demo"]
-    assert display.reading(channel) == words["garment_pressure"].format(
-        state=words["garment_off"], value=f"{kpa:.1f}")
+    assert display.reading(channel) == f"{kpa:.0f}"
+    assert display.states[channel] == (False, kpa), "set, not applied: off"
 
 
 def test_a_driver_without_per_channel_pressure_shows_on_and_off_alone(app, config):
     display, garment = _display(config, _Sleeve)
     channel = garment.channels()[0]
     garment.set_channel(channel, True)
-    display.poll(T0_S + 1)
-    assert display.reading(channel) == config.experimenter_text["demo"]["garment_on"]
+    _poll(display, garment, T0_S + 1)
+    assert display.reading(channel) == config.experimenter_text["hardware"]["channel_on"]
     assert display.highlight(channel) == 1.0
 
 
@@ -88,25 +97,26 @@ def test_a_stop_is_seen_as_every_channel_that_was_on_changing(app, config):
     on = garment.channels()[:2]
     for channel in on:
         garment.set_channel(channel, True)
-    display.poll(T0_S + 1)
+    _poll(display, garment, T0_S + 1)
     garment.stop()
-    display.poll(T0_S + 10)
+    _poll(display, garment, T0_S + 10)
     assert [c for c in garment.channels() if display.highlight(c) == 1.0] == list(on)
 
 
-def test_a_lost_link_holds_the_last_command_and_says_so(app, config):
-    """The outputs may still hold their last state (N7.U16): not drawn as switching off."""
+def test_a_lost_link_holds_the_last_command(app, config):
+    """The outputs may still hold their last state (N7.U16): not drawn as switching off. The
+    warning itself is the side column's (`hardware.link_lost`)."""
     display, garment = _display(config)
     on = garment.channels()[0]
     garment.set_channel(on, True)
-    display.poll(T0_S + 1)
+    _poll(display, garment, T0_S + 1)
     before = dict(display.states)
     garment.lost("no reply")
-    display.poll(T0_S + 10)
+    _poll(display, garment, T0_S + 10)
     assert display.states == before
     assert display.states[on][0] is True
+    assert display.link_lost
     assert all(display.highlight(c) == 0 for c in garment.channels())
-    assert display.notice() == config.experimenter_text["demo"]["garment_link_lost"]
 
 
 def test_a_disconnect_shows_every_channel_off(app, config):
@@ -115,35 +125,35 @@ def test_a_disconnect_shows_every_channel_off(app, config):
     on = garment.channels()[0]
     garment.set_pressure(on, garment.limits.pressure_ceiling_kpa / 2)
     garment.set_channel(on, True)
-    display.poll(T0_S + 1)
+    _poll(display, garment, T0_S + 1)
     garment.disconnect()
-    display.poll(T0_S + 10)
+    _poll(display, garment, T0_S + 10)
     assert all(state == (False, 0.0) for state in display.states.values())
-    assert display.notice() == config.experimenter_text["demo"]["garment_not_connected"]
 
 
 def test_it_redraws_only_on_a_change_or_a_fading_highlight(app, config, monkeypatch):
     display, garment = _display(config)
     redraws = []
     monkeypatch.setattr(display, "update", lambda: redraws.append(True))
-    display.poll(T0_S + 1)
+    _poll(display, garment, T0_S + 1)
     assert redraws == [], "steady: nothing to redraw"
     garment.set_channel(garment.channels()[0], True)
-    display.poll(T0_S + 2)
-    display.poll(T0_S + 2 + display.highlight_s / 2)
-    display.poll(T0_S + 2 + display.highlight_s)
+    _poll(display, garment, T0_S + 2)
+    _poll(display, garment, T0_S + 2 + display.highlight_s / 2)
+    _poll(display, garment, T0_S + 2 + display.highlight_s)
     assert len(redraws) == 3, "the change, the fade, and its end"
-    display.poll(T0_S + 3 + display.highlight_s)
+    _poll(display, garment, T0_S + 3 + display.highlight_s)
     assert len(redraws) == 3
 
 
-def test_it_polls_only_while_shown(app, config):
-    display, _ = _display(config)
-    assert not display.timer.isActive()
-    display.show()
-    assert display.timer.isActive()
-    display.hide()
-    assert not display.timer.isActive()
+def test_its_fade_runs_only_while_a_row_is_lit(app, config):
+    display, garment = _display(config)
+    assert not display.fade.isActive()
+    garment.set_channel(garment.channels()[0], True)
+    _poll(display, garment, T0_S + 1)
+    assert display.fade.isActive()
+    _poll(display, garment, T0_S + 1 + display.highlight_s)
+    assert not display.fade.isActive()
 
 
 def test_its_size_holds_whatever_the_readings(app, config):
@@ -153,7 +163,7 @@ def test_its_size_holds_whatever_the_readings(app, config):
     for channel in garment.channels():
         garment.set_pressure(channel, garment.limits.pressure_ceiling_kpa)
         garment.set_channel(channel, True)
+    _poll(display, garment, T0_S + 1)
     garment.disconnect()
-    display.poll(T0_S + 1)
+    _poll(display, garment, T0_S + 2)
     assert display.sizeHint() == before
-    assert not display.connected

@@ -53,7 +53,8 @@ vas:
       - {pct: 0.0, label: completely disagree}
       - {pct: 100.0, label: completely agree}
 
-# DRAFT (LOG N7.F7a): written by the build, not ethics-sourced
+# DRAFT (LOG N7.F7a): written by the build, not ethics-sourced. Its last sentence is S's own
+# (20 Oct 2026, LOG N7.F16b): "This practice is not a rating" read as a contradiction.
 # The VAS training's practice rating (SPEC.md 10.6), one key per trained scale: a scale with a
 # key here is trained, and every key must be a scale. Shown below the scale, which is drawn as
 # it is rated, once the experimenter has explained the anchors and proportionality aloud -- the
@@ -64,7 +65,7 @@ vas:
 training:
   pain: &practice >-
     Practice: move the marker with the two large buttons, both ways, then press ▶. This
-    practice is not a rating.
+    rating is not recorded.
   intensity: *practice
   pleasantness: *practice
 
@@ -222,6 +223,9 @@ participant_controls:
     left: Previous
     right: Next
     confirm: Press ▶ to choose the one you like best.
+    # DRAFT (LOG N7.F16k): written by the build, not ethics-sourced. Between the two buttons:
+    # where the participant is in this session's shuffled list (S, 20 Oct 2026).
+    position: '{position} of {count}'
 
 choices:
   # Two-alternative screens where the buttons are DRAWN and the press itself is the answer

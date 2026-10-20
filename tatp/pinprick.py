@@ -53,7 +53,7 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
-from tatp.config import Config
+from tatp.config import Config, instruction
 from tatp.procedure import Procedure, Rig
 from tatp.session import Session
 from tatp.ui.experimenter import ExperimenterWindow
@@ -612,10 +612,14 @@ class _RatedTrial(QObject):
         )
 
         self.cue_onset_iso = ""
+        self.stimulus_delivered_iso = ""
         self.rating_cue_iso = ""
-        # From `stimulus_due` on, the experimenter has applied the stimulus: an interruption
+        # From the experimenter's press on, the stimulus has been applied: an interruption
         # after it has cost the participant a delivery even though no row is written.
         self.stimulus_delivered = False
+        # From `stimulus_due` until that press: Next step says the stimulus has been applied
+        # (`Rig.proceed_awaited` offers it then).
+        self.awaits_proceed = False
         self._cue_onset_t_session_s: float | None = None
         self._cue_onset_elapsed_s: float | None = None
         self._pending = None
@@ -681,12 +685,33 @@ class _RatedTrial(QObject):
         self._after_from(self._cue_onset_elapsed_s, self.warning_lead_s, self._stimulus_due)
 
     def _stimulus_due(self) -> None:
-        # The rating cue is timed from this moment, when the experimenter is told to apply the
-        # stimulus, not from the cue onset: a late prompt must not shorten the delay after it.
-        stimulus_due_s = self.session.clock.elapsed_s()
-        self.stimulus_delivered = True
+        """The cue's lead is over: the experimenter applies the stimulus and says so with Next
+        step. Until 20 Oct 2026 the rating was cued `rating_cue_delay_s` after this moment,
+        whenever the stimulus had really been applied (S; docs/LOG.md N7.F16f)."""
         self.session.log("stimulus_due", detail=self._stimulus_detail())
-        self._after_from(stimulus_due_s, self.rating_cue_delay_s, self._cue_rating)
+        self.awaits_proceed = True
+        self.experimenter.proceed_requested.connect(self._on_delivered)
+        self.experimenter.refresh()
+
+    def _on_delivered(self) -> None:
+        # The rating cue is timed from the press, when the stimulus was applied, so the delay
+        # the protocol fixes runs from the stimulus itself.
+        delivered_s = self.session.clock.elapsed_s()
+        self._stop_awaiting()
+        self.stimulus_delivered = True
+        self.stimulus_delivered_iso = self.session.clock.wall_iso()
+        self.session.log("stimulus_delivered", origin="experimenter",
+                         detail=self._stimulus_detail())
+        self.experimenter.set_status(self.experimenter.text["instructions"]["delivered"].format(
+            seconds=f"{self.rating_cue_delay_s:g}"
+        ))
+        self.experimenter.refresh()
+        self._after_from(delivered_s, self.rating_cue_delay_s, self._cue_rating)
+
+    def _stop_awaiting(self) -> None:
+        if self.awaits_proceed:
+            self.awaits_proceed = False
+            self.experimenter.proceed_requested.disconnect(self._on_delivered)
 
     def _cue_rating(self) -> None:
         self.rating_cue_iso = self.session.clock.wall_iso()
@@ -748,6 +773,7 @@ class _RatedTrial(QObject):
     def _disconnect(self) -> None:
         self._timer.stop()
         self._pending = None
+        self._stop_awaiting()
         self.participant.confirmed.disconnect(self._on_confirmed)
         self._disconnect_extra()
 
@@ -787,7 +813,8 @@ class PinprickTrial(_RatedTrial):
     def _instruction(self) -> str:
         text = self.experimenter.text
         self._filament(self.application.applied_label_g)  # refuses one not held, before the cue
-        return text["instructions"]["apply_filament"].format(
+        return instruction(
+            self.session.config, "apply_filament",
             filament=self.application.filament_label_g,
             force_mn=self._filament(self.application.filament_label_g).force_nominal_mn,
             site=self.application.site_index,
@@ -895,6 +922,7 @@ class PinprickTrial(_RatedTrial):
             substituted=applied_label != application.filament_label_g,
             site_index=application.site_index,
             cue_onset_iso=self.cue_onset_iso,
+            stimulus_delivered_iso=self.stimulus_delivered_iso,
             rating_cue_iso=self.rating_cue_iso,
             rating_percent=response.rating_percent,
             rt_s=response.rt_s,
@@ -931,7 +959,8 @@ class BrushTrial(_RatedTrial):
 
     def _instruction(self) -> str:
         text = self.experimenter.text
-        return text["instructions"]["apply_brush"].format(
+        return instruction(
+            self.session.config, "apply_brush",
             site=self.application.site_index,
             region=text["terms"]["regions"][self.application.region],
         )
@@ -949,6 +978,7 @@ class BrushTrial(_RatedTrial):
             trial_index=self.application.trial_index,
             site_index=self.application.site_index,
             cue_onset_iso=self.cue_onset_iso,
+            stimulus_delivered_iso=self.stimulus_delivered_iso,
             rating_cue_iso=self.rating_cue_iso,
             rating_percent=response.rating_percent,
             rt_s=response.rt_s,

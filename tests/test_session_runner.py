@@ -153,7 +153,9 @@ class Driver(Virtual):
             return
         trial = self.current()
         if isinstance(trial, (PinprickTrial, BrushTrial)):
-            if window.stack.currentWidget() is window.vas and trial.rating_cue_iso:
+            if trial.awaits_proceed:
+                rig.experimenter.proceed_requested.emit()  # applied
+            elif window.stack.currentWidget() is window.vas and trial.rating_cue_iso:
                 press(window.vas, "pagedown")
                 window.vas.state.percent = self._pain(trial)
                 press(window.vas, "f5")
@@ -525,8 +527,10 @@ def test_the_experimenter_view_has_the_agreed_keys(app, loaded, tmp_path):
     view = runner.session.experimenter_view()
     assert view["next_event"] is None, "nothing is scheduled before t=0"
     assert view["interruption"] is None
-    assert set(view["hardware"]) == {"connected", "link_lost", "faults", "channel_pressure_kpa"}
+    assert set(view["hardware"]) == {"connected", "link_lost", "faults", "channel_pressure_kpa",
+                                     "channels_on"}
     assert isinstance(view["hardware"]["channel_pressure_kpa"], dict)
+    assert isinstance(view["hardware"]["channels_on"], list)
     runner.rig.participant.emergency_stop.emit()
     assert runner.session.experimenter_view()["interruption"] == "emergency_stop"
     runner.session.close()
@@ -576,6 +580,7 @@ def test_nothing_in_the_experimenter_view_differs_between_conditions(app, loaded
         for condition in loaded.study1["design"]["conditions"]
     ]
     assert views[0]["hardware"]["channel_pressure_kpa"] is None
+    assert views[0]["hardware"]["channels_on"] is None
     assert views[0] == views[1] == views[2]
 
 
@@ -619,14 +624,16 @@ def test_a_crash_before_t_zero_reloads_what_was_completed(app, loaded, tmp_path)
     crashed = _crash_after(app, loaded, tmp_path, "touch_calibration.baseline")
     runner = _resumed(loaded, tmp_path, crashed)
     assert not runner.resume.after_t_zero
-    assert runner.resume.in_progress == "pre_sensitisation.long"
+    # The skin marking, which begins pre-sensitisation (LOG N7.F16l).
+    interrupted = "pre_sensitisation.mark_zone"
+    assert runner.resume.in_progress == interrupted
     begun = []
     Driver(runner.rig, runner, stop_when=lambda: begun.append(1) or len(begun) > 1).run()
     events = _events(runner.session)
     started = [r["detail"] for r in events if r["event"] == "stage_started"]
-    assert started[0] == "pre_sensitisation.long", "resumed at the stage that was interrupted"
+    assert started[0] == interrupted, "resumed at the stage that was interrupted"
     redone = [r for r in events if r["event"] == "stage_redone"]
-    assert redone and "pre_sensitisation.long" in redone[0]["detail"]
+    assert redone and interrupted in redone[0]["detail"]
     assert runner.deliveries == crashed.deliveries, "the touch calibration was reloaded"
     values = {r["key"]: r["value"] for r in _rows(runner.session, "session")}
     old = {r["key"]: r["value"] for r in _rows(crashed.session, "session")}
@@ -1579,14 +1586,23 @@ def _experimenter_sequence(app, loaded, tmp_path, condition) -> list[tuple[str, 
 
     runner.experimenter.set_instruction = spy
     moved_on = []
-    runner._deliver(lambda: moved_on.append(session.clock.t_session_s()))
+    # The runner as the rig's root, so whether Next step is offered is read as in a session
+    # (`Rig.proceed_awaited`); what follows the touch start waits for the go, as a block does.
+    runner.rig.root, runner.running = runner, True
+    runner._deliver(lambda: runner.await_proceed(
+        lambda: None, lambda: moved_on.append(session.clock.t_session_s())))
     window = runner.participant
     deadline = time.monotonic() + RUN_TIMEOUT_S
     pressed = False
     self_start = loaded.participant_text["screens"]["self_start"]
+    offered = False
     while not (moved_on and session.clock.t_session_s() > PRESS_AFTER_S + 1):
         assert time.monotonic() < deadline, "the touch start never moved on"
         QApplication.processEvents()
+        # Next step as the window offers it: when it changes, and to what (LOG N7.F16d).
+        if runner.experimenter.proceed_button.isEnabled() != offered:
+            offered = not offered
+            shown.append((f"next step offered: {offered}", session.clock.t_session_s()))
         if (not pressed and session.clock.t_session_s() > PRESS_AFTER_S
                 and window.message.text == self_start):
             press(window, "f5")
@@ -1594,6 +1610,7 @@ def _experimenter_sequence(app, loaded, tmp_path, condition) -> list[tuple[str, 
         time.sleep(0.0005)
     assert (condition == "participant_preferred") == pressed
     assert session.garment.status()["pattern_name"] is not None, "the touch is running"
+    runner.running = False  # never started, so nothing of a start's to undo
     runner.cancel()
     session.close()
     return [*shown, ("moved on", moved_on[0])]
@@ -1623,9 +1640,14 @@ def test_the_touch_start_looks_the_same_to_the_experimenter_in_every_condition(
     ]
     texts = [[text for text, _ in sequence] for sequence in sequences]
     assert texts[0] == texts[1] == texts[2]
+    assert "next step offered: True" in texts[0]
     for sequence in sequences:
         moved_s = sequence[-1][1] - sequence[0][1]
         assert display_s - EARLY_S <= moved_s < display_s + TIMING_TOLERANCE_S
+        # Next step is offered when the session moves on, in every condition: never earlier
+        # or later with the delivery's own timing (LOG N7.F16d).
+        offered_s = next(t for text, t in sequence if text == "next step offered: True")
+        assert offered_s - sequence[0][1] < display_s + TIMING_TOLERANCE_S
 
 
 # -- around and between the tasks (15 Oct 2026 pilot review, LOG N7.F11c) --------------------

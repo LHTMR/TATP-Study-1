@@ -197,13 +197,16 @@ def test_an_empty_pattern_list_does_not_match_every_screen(loaded):
     assert vs.check_screens_showed_nothing_forbidden({vs.NORMAL: run}) == []
 
 
-def _timed(loaded, rating_cue_ms: int) -> dict:
-    """A timing run at the slow speed with one application, its rating cued this many real
-    milliseconds after its warning cue."""
+def _stamp(ms: int) -> str:
+    return f"2026-09-23T10:00:{ms // 1000:02d}.{ms % 1000:03d}"
+
+
+def _timed(loaded, rating_cue_ms: int, delivered_ms: int = 100) -> dict:
+    """A timing run at the slow speed with one application, pressed as applied and its rating
+    cued these many real milliseconds after its warning cue."""
     rows = [
-        _pinprick(cue_onset_iso="2026-09-23T10:00:00.000",
-                  rating_cue_iso=f"2026-09-23T10:00:{rating_cue_ms // 1000:02d}."
-                                 f"{rating_cue_ms % 1000:03d}", trial_index="1")
+        _pinprick(cue_onset_iso=_stamp(0), stimulus_delivered_iso=_stamp(delivered_ms),
+                  rating_cue_iso=_stamp(rating_cue_ms), trial_index="1")
     ]
     speed = str(vs.SLOW_CLOCK_SPEED)
     return {vs.TIMING: _run(loaded, vs.TIMING, rows={"pinprick": rows},
@@ -211,18 +214,20 @@ def _timed(loaded, rating_cue_ms: int) -> dict:
 
 
 def test_the_rating_interval_is_judged_in_session_seconds(loaded):
-    # 1 s lead plus 9 s delay: 10 s of session time, 1000 ms real at 10x.
+    # Applied after the 1 s lead, then the 9 s delay: 900 ms real at 10x, from the press.
     assert vs.check_rating_cue_interval(_timed(loaded, 1000)) == []
     assert vs.check_rating_cue_interval(_timed(loaded, 1015)) == [], "a timer 15 ms late"
+    # A slower hand moves the rating cue with it (docs/LOG.md N7.F16f).
+    assert vs.check_rating_cue_interval(_timed(loaded, 1400, delivered_ms=500)) == []
 
 
-def test_a_missing_half_second_warning_lead_fails(loaded):
-    """The 0.5 s between the cue and the stimulus, left out: 50 ms real at 10x."""
-    assert vs.check_rating_cue_interval(_timed(loaded, 950))
+def test_an_application_pressed_before_the_warning_lead_is_over_fails(loaded):
+    """Applied during "Get ready": 50 ms real at 10x is half the 1 s lead."""
+    assert vs.check_rating_cue_interval(_timed(loaded, 950, delivered_ms=50))
 
 
 def test_a_rating_interval_off_by_the_configured_delay_fails(loaded):
-    assert vs.check_rating_cue_interval(_timed(loaded, 100))
+    assert vs.check_rating_cue_interval(_timed(loaded, 200))
 
 
 def _orders(loaded, *sites):

@@ -62,6 +62,19 @@ terms:
     unreachable: targets outside what the garment can deliver
     empty_window: no pleasantness range left inside the garment's limits
 
+# The timeline across the top (LOG N7.F16h): every phase but the one under way, abbreviated,
+# so all of them fit one line. The one under way is written out, by its name under `phases`.
+# DRAFT (LOG N7.F16h): written by the build, not ethics-sourced
+timeline:
+  setup: Setup
+  touch_calibration: Calib.
+  pre_sensitisation: Pre-S
+  sensitisation: Heat
+  capsaicin: Caps.
+  post_sensitisation: Post-S
+  intervention: Interv.
+  post_intervention: Post-I
+
 phases:
   setup: Setup
   touch_calibration: Touch calibration
@@ -93,11 +106,16 @@ instructions:
     site out of the participant's view.
   # Filaments are named by the gram label printed on them (SPEC.md 8.1), with the force after.
   # "Now:" so the application in progress never reads like the one before (LOG N7.F11b8).
-  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced
-  apply_filament: 'Now: apply the {filament} g filament ({force_mn} mN) at site {site}, {region} zone.'
+  # The press says it has been applied, and the rating is cued from it (S, 20 Oct 2026; LOG
+  # N7.F16f). Next step is offered once the participant's "Get ready" has run its lead.
+  # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
+  apply_filament: 'Now: apply the {filament} g filament ({force_mn} mN) at site {site}, {region} zone, then press {controls[proceed]}.'
   # One stroke of about 2 cm, never repeated: repetition raises pain (docs/research/RB2).
-  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced
-  apply_brush: 'Now: brush the {region} zone at site {site}, one single stroke of about 2 cm.'
+  # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
+  apply_brush: 'Now: brush the {region} zone at site {site}, one single stroke of about 2 cm, then press {controls[proceed]}.'
+  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced. The status line once the
+  # application is pressed as done: when the participant's rating scale will appear.
+  delivered: 'Applied. The rating scale appears in {seconds} s.'
   # DRAFT (LOG N7.F11b8, N7.F14c): written by the build, not ethics-sourced. The jittered gap
   # after a rating when no application follows it: the series is over. The response is
   # reported on the status line (`received_*`).
@@ -162,6 +180,11 @@ instructions:
   ready_long: >-
     Filament series, {region} zone, starting with the {filament} g filament. Have the
     filaments to hand, then press {controls[proceed]}.
+  # DRAFT (LOG N7.F16l): written by the build, not ethics-sourced. At the start of
+  # pre-sensitisation, before anything is measured on that skin (S, 20 Oct 2026).
+  mark_zone: >-
+    Pre-sensitisation. With a skin marker, mark the area where the heat and the capsaicin will
+    be applied (the primary zone). Then press {controls[proceed]}.
   # DRAFT (LOG N7.F11b14): written by the build, not ethics-sourced. Before the session's
   # first pain measure, which is followed by the pain scale's training.
   ready_long_first: 'First pain measures. Tell the participant: "{say[first_pain]}" Then press {controls[proceed]}.'
@@ -409,10 +432,6 @@ controls:
 status:
   connected: Connected
   disconnected: Disconnected
-  channel_pressure: 'Channel {channel}: {value} kPa'
-  # The hardware panel's compact form: every channel on one or two lines.
-  channel_pressures: 'kPa by channel: {value}'
-  channel_pressure_short: '{channel}: {value}'
   elapsed: Session elapsed {time}
   next_event: 'Next: {phase} in {time}'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced. {type} is from
@@ -519,38 +538,63 @@ banners:
     DEMONSTRATION. Nothing recorded here is study data.
 
 demo:
-  # The Demo controls window (tatp/demo.py, LOG N7.D23), beside the experimenter screen.
-  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
-  title: Demo controls
+  # The demonstration's controls, along the foot of the experimenter window (tatp/demo.py; LOG
+  # N7.D23, N7.F16j). Each button says what it would do now, or why it can do nothing.
+  # DRAFT (LOG N7.D23, N7.F16j): written by the build, not ethics-sourced
   participant: 'Participant:'
   experimenter: 'Experimenter:'
   modes:
     "off": A person
     watch: Simulated, watchable
     fast: Simulated, fast
-  skip_wait: Skip the wait
-  finish_stage: Finish this stage
+  # A timed wait for a scheduled step: {what} is the step, {time} what is left to skip.
+  skip_to: 'Skip to {what} ({time})'
+  skip_none: No wait to skip
+  skip_none_detail: >-
+    Only a timed wait for a scheduled step can be skipped: the capsaicin, the blocks, the
+    rekindle, the intervention's end. It stops {lead} s before the step is due, so its
+    countdown and alert are still seen.
+  # Both simulations fast until the step under way ends, then back as they were: the way past
+  # a series of repeated measurements. {step} is from `steps` below.
+  auto_run: 'Auto-run {step}'
+  auto_running: 'Auto-running {step}…'
+  # Both simulations fast and every timed wait skipped until the chosen phase begins.
+  fast_forward: 'Fast-forward to:'
+  fast_forward_go: Go
+  fast_forwarding: 'Fast-forwarding to {phase}…'
   skipped: 'Skipped {value} min of waiting.'
-  nothing_to_skip: Nothing to skip now.
-  finishing: Finishing this stage…
-  # What the garment is commanded to do, channel by channel (tatp/ui/garment_display.py,
-  # LOG N7.F12f).
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_title: The garment, as commanded
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_channel: Channel {channel}
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_on: "on"
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_off: "off"
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_pressure: '{state}, {value} kPa'
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_not_connected: 'Not connected: nothing is commanded.'
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_link_lost: 'Link lost: the outputs may still hold their last state.'
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  worn_note: 'Someone may be wearing this garment: the participant and the experimenter are people, not simulations, and Finish this stage is off.'
+  # The session clock's speed, set when the demonstration starts.
+  clock: 'Clock: {speed}× real time'
+  clock_detail: >-
+    Every timed interval of the session runs this many times faster than in a real session. 1
+    is real time, as a participant meets it. Chosen when the demo starts (Clock speed); a worn
+    garment always runs at 1.
+  # The remote's four buttons, lit while held, so a press can be seen to arrive.
+  remote: 'Remote:'
+  worn_note: 'Worn garment: people only; no auto-run or fast-forward.'
+  worn_note_detail: 'Someone may be wearing this garment: the participant and the experimenter are people, not simulations, and auto-run and fast-forward are off.'
+  # The step under way, as Auto-run names it: the last part of the stage's id.
+  steps:
+    garment: the garment fitting
+    welcome: the welcome
+    stop_rehearsal: the stop rehearsal
+    masking_check: the masking check
+    touch_calibration: touch calibration
+    baseline: the baseline ratings
+    mark_zone: the skin marking
+    long: the filament series
+    mapping: the area mapping
+    short_primary: the primary-zone filaments
+    brush_secondary: the secondary-zone brush
+    brush_primary: the primary-zone brush
+    sensitisation: the heat
+    apply: the capsaicin
+    remove: the capsaicin removal
+    start: the intervention's start
+    block: 'block {n}'
+    rekindle: the rekindle
+    end: the intervention's end
+    session_end: the session end
 
 dialogs:
   abort_confirm: Abort this session? All data collected so far is kept.
@@ -653,6 +697,16 @@ hardware:
   # DRAFT (LOG N7.U6): written by the build, not ethics-sourced. Above the newest fault: how
   # many came before it. The full list is in the tooltip and the data.
   faults_earlier: '{value} earlier (detail in the data)'
+  # The channel display, a column per channel as commanded (tatp/ui/garment_display.py): in
+  # a session outside the intervention and the rekindle, and in a demonstration throughout.
+  # It replaced the line "kPa by channel" and the Demo controls' own display (LOG N7.F16i).
+  # The captions say what its two rows are; the readings are on or off where the garment
+  # sets no pressure per channel.
+  # DRAFT (LOG N7.F12f, N7.F16i): written by the build, not ethics-sourced
+  channel_caption: Ch
+  pressure_caption: kPa
+  channel_on: "on"
+  channel_off: "off"
 
 fit_preview:
   # SPEC.md 11.1. Shown only when fit_preview.enabled is true. The one place a participant's
@@ -703,7 +757,7 @@ launcher:
   # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
   demo_title: Run a demo
   # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
-  demo_speed: Speed (1 is real time)
+  demo_speed: Clock speed (1 is real time; 10 makes every timed wait 10 times shorter)
   # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
   demo_participant: Participant
   # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
