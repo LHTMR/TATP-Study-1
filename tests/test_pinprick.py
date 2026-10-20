@@ -97,6 +97,12 @@ def _rows(session, table):
         return list(csv.DictReader(handle))
 
 
+def _deliver(experimenter, trial):
+    """The experimenter applies the stimulus once asked, and says so with Next step."""
+    _spin(lambda: trial.awaits_proceed)
+    experimenter.proceed_requested.emit()
+
+
 def _run_trial(running, application=APPLICATION, presses=2):
     """Cue, wait for the rating to be asked for, answer it, and return the trial."""
     session, participant, experimenter = running
@@ -107,6 +113,7 @@ def _run_trial(running, application=APPLICATION, presses=2):
     trial.start()
     assert participant.stack.currentWidget() is participant.cue, "the cue precedes the stimulus"
 
+    _deliver(experimenter, trial)
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
     for _ in range(presses):
         _press(participant.vas, "pagedown")
@@ -160,18 +167,46 @@ def test_the_cue_and_rating_cue_times_are_recorded(running):
     assert row["rating_cue_iso"] > row["cue_onset_iso"]
 
 
-def test_a_slow_write_after_the_stimulus_prompt_does_not_delay_the_rating_cue(
+def test_the_rating_waits_for_the_experimenter_to_say_the_filament_is_applied(running):
+    """S, 20 Oct 2026 (LOG N7.F16f): the scale is shown only after the experimenter's press,
+    `rating_cue_delay_s` after it, and the row records when the press came."""
+    session, participant, experimenter = running
+    trial = PinprickTrial(session, participant, experimenter, APPLICATION)
+    trial.start()
+    # Through the cue's lead, what to have ready; "Now: apply" only with Next step offered.
+    prepare = experimenter.instruction.text()
+    assert prepare.startswith(experimenter.text["instructions"]["prepare_filament"][:8])
+    _spin(lambda: trial.awaits_proceed)
+    assert experimenter.instruction.text() != prepare
+    assert experimenter.zone.region == APPLICATION.region, "the target stays with it"
+    # A stop from here counts the application as delivered, pressed or not (spec review).
+    assert trial.stimulus_delivered and trial.stimulus_delivered_iso == ""
+    waited_s = session.clock.elapsed_s() + trial.rating_cue_delay_s * 2
+    _spin(lambda: session.clock.elapsed_s() > waited_s)
+    assert participant.stack.currentWidget() is not participant.vas, "no scale before the press"
+    experimenter.proceed_requested.emit()
+    assert trial.stimulus_delivered and not trial.awaits_proceed
+    assert experimenter.status.text() == experimenter.text["instructions"]["delivered"].format(
+        seconds=f"{trial.rating_cue_delay_s:g}")
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    _press(participant.vas, "pagedown")
+    _press(participant.vas, "f5")
+    row = _rows(session, "pinprick")[0]
+    assert row["cue_onset_iso"] < row["stimulus_delivered_iso"] < row["rating_cue_iso"]
+
+
+def test_a_slow_write_after_the_delivery_press_does_not_delay_the_rating_cue(
     running, monkeypatch
 ):
-    """docs/LOG.md N7.U11: the rating cue is timed from the stimulus prompt, so writing the
-    prompt's log row -- 20 ms here, 2 s of session time at this speed -- is not added to the
-    delay after it, and the delay is never shortened either."""
-    session, participant, _ = running
+    """docs/LOG.md N7.U11: the rating cue is timed from the experimenter's press saying the
+    stimulus is applied, so writing its log row -- 20 ms here, 2 s of session time at this
+    speed -- is not added to the delay after it, and the delay is never shortened either."""
+    session, participant, experimenter = running
     real_log = session.log
     prompted_at = []
 
     def slow_log(event, *args, **kwargs):
-        if event == "stimulus_due":
+        if event == "stimulus_delivered":
             prompted_at.append(session.clock.elapsed_s())
             time.sleep(SLOW_WRITE_S)
         real_log(event, *args, **kwargs)
@@ -182,8 +217,9 @@ def test_a_slow_write_after_the_stimulus_prompt_does_not_delay_the_rating_cue(
     monkeypatch.setattr(participant, "show_vas",
                         lambda scale: (cued_at.append(session.clock.elapsed_s()),
                                        real_show_vas(scale)))
-    trial = PinprickTrial(session, participant, running[2], APPLICATION)
+    trial = PinprickTrial(session, participant, experimenter, APPLICATION)
     trial.start()
+    _deliver(experimenter, trial)
     _spin(lambda: cued_at)
     delay_s = cued_at[0] - prompted_at[0]
     assert delay_s >= trial.rating_cue_delay_s - ROUNDED_MS_S, "the delay was shortened"
@@ -243,7 +279,8 @@ def test_the_sequence_reaches_the_log(running):
     _run_trial(running)
     events = [row["event"] for row in _rows(session, "log")]
     assert events.index("warning_cue") < events.index("stimulus_due")
-    assert events.index("stimulus_due") < events.index("rating_cued")
+    assert events.index("stimulus_due") < events.index("stimulus_delivered")
+    assert events.index("stimulus_delivered") < events.index("rating_cued")
     assert events.index("rating_cued") < events.index("rating_confirmed")
 
 

@@ -173,6 +173,11 @@ screens:
   # (SPEC.md 7.4, 11; docs/LOG.md N6.20). A display rate, not a study timing: the countdown
   # reads the session clock, so a slower tick shows the same times less often, never wrong ones.
   experimenter_refresh_interval_s: 0.5
+  # The experimenter screen's channel display (tatp/ui/garment_display.py): a channel that
+  # changes is lit up and fades back over this long, so the eye is drawn to it from across the
+  # room. Moved here from study1.yaml's demo block when sessions got the display too (LOG
+  # N7.F16i). A display time, not a study timing.
+  garment_highlight_s: 1.0
   # The fonts every screen draws in, committed under fonts/ and installed at startup (S, 23 Sep
   # 2026). Left to the platform, the Mac drew its system font and the lab PC Segoe UI, and
   # headless Windows drew empty boxes -- so the approved screenshots described a screen the lab

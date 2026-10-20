@@ -85,6 +85,9 @@ class Trial(QObject):
         """Connect for the life of this trial only."""
         signal.connect(slot)
         self._connections.append((signal, slot))
+        if signal == self.experimenter.proceed_requested:
+            # Next step is offered while a trial listens for it (`Rig.proceed_awaited`).
+            self.experimenter.refresh()
 
     def forget(self, signal: SignalInstance, slot: Callable) -> None:
         signal.disconnect(slot)

@@ -362,17 +362,26 @@ class _ControlScreen(QWidget):
         self.held: set[str] = set()
         self.pair: tuple[str, str] | None = None
         self.playing: int | None = None
+        # Where in a list the participant is, between the buttons: the preference selection's
+        # "2 of 3" (S, 20 Oct 2026; docs/LOG.md N7.F16k). None draws nothing.
+        self.counter: str | None = None
 
     def present(self, opening: str, controls: dict,
-                pair: tuple[str, str] | None = None) -> None:
+                pair: tuple[str, str] | None = None, counter: str | None = None) -> None:
         """`opening` goes above the buttons; `controls` is one `participant_controls` entry;
-        `pair` names the two alternating touches, on the channel match only."""
+        `pair` names the two alternating touches, on the channel match only; `counter` is
+        drawn between the buttons, on the preference selection only."""
         self.target = opening
         self.labels = {side: controls[side] for side in SIDES}
         self.confirm = controls["confirm"]
         self.held.clear()
         self.pair = pair
         self.playing = None
+        self.counter = counter
+        self.update()
+
+    def set_counter(self, counter: str) -> None:
+        self.counter = counter
         self.update()
 
     def emphasise(self, index: int | None) -> None:
@@ -413,7 +422,21 @@ class _ControlScreen(QWidget):
         draw_prose(painter, box, self.confirm, self.responder)
         if self.pair is not None:
             self._draw_pair(painter)
+        if self.counter is not None:
+            self._draw_counter(painter)
         painter.end()
+
+    def _draw_counter(self, painter: QPainter) -> None:
+        """Centred between the two buttons, at the message size: the participant's
+        place in the list, read at a glance between the two buttons that move it."""
+        left, right = _button_rect(self, SIDES[0]), _button_rect(self, SIDES[1])
+        font = QFont(self.font())
+        font.setPointSize(MESSAGE_POINT_SIZE)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(FOREGROUND)
+        box = QRect(left.right(), left.top(), right.left() - left.right(), left.height())
+        painter.drawText(box, Qt.AlignCenter, self.counter)
 
     def _draw_pair(self, painter: QPainter) -> None:
         left, right = _button_rect(self, SIDES[0]), _button_rect(self, SIDES[1])
@@ -569,6 +592,10 @@ class _ResponseButton(QPushButton):
             f"background-color: {BACKGROUND.name()}; "
             f"border: {BUTTON_LINE_WIDTH_PX}px solid {FOREGROUND.name()}; "
             f"border-radius: {BUTTON_RADIUS_PX}px; }}"
+            # Down while held, as the drawn buttons are (UI_PRINCIPLES.md 5.10): a style sheet
+            # drops the platform's own pressed look (LOG N7.F16e).
+            f"QPushButton:pressed {{ color: {BACKGROUND.name()}; "
+            f"background-color: {FOREGROUND.name()}; }}"
         )
 
         # The press's own stamp and the real time it came, while it is held.
@@ -809,17 +836,29 @@ class ParticipantWindow(QWidget):
         neither."""
         self.control.emphasise(index)
 
-    def show_preference(self) -> None:
+    def show_preference(self, position: int, count: int) -> None:
         """The preference selection (SPEC.md 9 step 6): move between patterns, then choose.
 
         The buttons are read as on the adjustment -- `adjust_pressed` moves between patterns
         and `adjust_confirmed` chooses -- because the shape is the same: a press moves
-        something the participant then commits to (UI_PRINCIPLES.md 5.12). Which pattern is
-        playing is felt, never shown: a name or a number on screen would be a label.
+        something the participant then commits to (UI_PRINCIPLES.md 5.12).
+
+        Which pattern is playing is felt, never named. Its place in this session's list is
+        shown, "2 of 3", so the participant knows how many there are and when they have felt
+        them all (S, 20 Oct 2026; docs/LOG.md N7.F16k). The list is shuffled every session
+        (`touchcal.PreferenceSelection`), so a number is never a pattern's.
         """
         controls = self.text["participant_controls"]["preference"]
-        self.control.present(controls["intro"], controls)
+        self.control.present(controls["intro"], controls,
+                             counter=self._position(position, count))
         self._show(self.control, adjusting=True)
+
+    def show_preference_position(self, position: int, count: int) -> None:
+        self.control.set_counter(self._position(position, count))
+
+    def _position(self, position: int, count: int) -> str:
+        return self.text["participant_controls"]["preference"]["position"].format(
+            position=position, count=count)
 
     def show_choice(self, key: str) -> None:
         """Present `choices.<key>` with both buttons drawn, accepting nothing yet.

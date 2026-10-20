@@ -383,7 +383,7 @@ class Session:
             "reduced_capability_device": not self.garment.per_channel_pressure,
             "fit_preview_enabled": self.fit_preview_enabled,
             "demo": self.demo,
-            "next_event": self._next_event(),
+            "next_event": self.next_event(),
             "interruption": self._read_interruption(),
             "hardware": {
                 "connected": self.garment.connected,
@@ -396,10 +396,17 @@ class Session:
                 "channel_pressure_kpa": (
                     None if self.phase in CONDITION_PHASES else dict(self.garment.pressure_kpa)
                 ),
+                # Which channels are on, withheld with the pressures, for the channel display
+                # (docs/LOG.md N7.F16i).
+                "channels_on": (
+                    None if self.phase in CONDITION_PHASES
+                    else sorted(self.garment.status()["channels_on"])
+                ),
             },
         }
 
-    def _next_event(self) -> dict | None:
+    def next_event(self) -> dict | None:
+        """The scheduled step the countdown names, as the view gives it; None before one."""
         if self._upcoming is None:
             return None
         kind, label_key, block_index, block_type, due_s = self._upcoming

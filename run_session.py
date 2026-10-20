@@ -52,7 +52,7 @@ from tatp.demo import (
 )
 from tatp.devices import configured, settle
 from tatp.procedure import Rig
-from tatp.responder import Responder
+from tatp.responder import Action, Responder
 from tatp.session import (
     DRIVERS,
     Session,
@@ -477,12 +477,15 @@ def demo_session(loaded: cfg.Config, args: argparse.Namespace) -> cfg.Config:
 
 
 def attach_demo(runner: SessionRunner, args: argparse.Namespace) -> Demo:
-    """The simulations and the Demo controls, beside a built demonstration session."""
+    """The simulations, and their controls along the foot of the experimenter window."""
     demo = Demo(runner, args.sim_participant, args.sim_experimenter, runner.session.rng_seed)
+    window, responder = runner.rig.experimenter, runner.rig.participant.responder
     demo.controls = DemoControls(
-        demo, runner.session.config.experimenter_text, parent=runner.rig.experimenter
+        demo, runner.session.config.experimenter_text,
+        {action: responder.symbol_for(action, pointing_at_stop=True) for action in Action},
+        runner.rig.participant,
     )
-    demo.controls.show()
+    window.add_demo_panel(demo.controls)
     return demo
 
 

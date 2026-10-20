@@ -88,6 +88,18 @@ LABEL_GAP_PX = 4
 CHECK_INDICATOR_PX = 14
 
 
+# A style sheet replaces the platform's own button drawing, its pressed look included, so a
+# press showed nothing (S, 20 Oct 2026; LOG N7.F16e): a button that does not visibly go down
+# is pressed again. Pressed is filled in the target colour, and a pressable button under the
+# pointer is outlined in the foreground. Appended to every button style below, since a
+# button's own style sheet outranks the window's.
+PRESS_RULES = (
+    f"QPushButton:hover:!disabled:!pressed {{ border-color: {FOREGROUND}; }}"
+    f"QPushButton:pressed {{ background-color: {TARGET_COLOUR}; color: {BACKGROUND}; "
+    f"border-color: {TARGET_COLOUR}; }}"
+)
+
+
 def stylesheet() -> str:
     """The lab-side look, for a whole window. Labels set their own colour on top of it."""
     return (
@@ -95,6 +107,7 @@ def stylesheet() -> str:
         f"QPushButton {{ background-color: {CONTROL_BACKGROUND}; color: {FOREGROUND}; "
         f"border: 1px solid {CONTROL_BORDER}; padding: {CONTROL_PADDING_PX}px; }}"
         f"QPushButton:disabled {{ color: {DISABLED}; border-color: {CONTROL_BACKGROUND}; }}"
+        f"{PRESS_RULES}"
         # A button that stays down says so: otherwise on and off look the same (N7.F10b).
         f"QPushButton:checked {{ background-color: {TARGET_COLOUR}; color: {BACKGROUND}; }}"
         f"QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {{ "
@@ -165,6 +178,7 @@ def emphasis_button_style(colour: str) -> str:
     return (
         f"QPushButton {{ color: {colour}; font-weight: bold; }}"
         f"QPushButton:disabled {{ color: {DISABLED}; font-weight: normal; }}"
+        f"{PRESS_RULES}"
     )
 
 
@@ -178,6 +192,7 @@ def primary_button_style(point_size: int = SIZE_BODY) -> str:
         f"border: 1px solid {FOREGROUND}; font-size: {point_size}pt; font-weight: bold; }}"
         f"QPushButton:disabled {{ background-color: {CONTROL_BACKGROUND}; color: {DISABLED}; "
         f"border-color: {CONTROL_BACKGROUND}; font-weight: normal; }}"
+        f"{PRESS_RULES}"
     )
 
 

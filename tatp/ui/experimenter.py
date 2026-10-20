@@ -10,7 +10,8 @@ preview is enabled (SPEC.md 11.1).
 Per-trial prompts -- which filament, at which site -- are not session state and are pushed in by
 the protocol module through `set_instruction()`, `set_status()` and `set_target()`. What the
 running procedure is waiting for is pushed in through `set_actions_enabled()`, and which time
-points have a mapping through `set_mapping_phases()`.
+points have a mapping through `set_mapping_phases()`. Whether Next step would do anything is
+asked of the rig (`set_proceed_source`): a yes or no, the same in every condition.
 
 It carries no wording of its own: every string comes from
 `config/text/experimenter_{sv,en}.yaml` (SPEC.md 10.4).
@@ -42,8 +43,16 @@ from collections.abc import Callable, Sequence
 from html import escape
 
 from PySide6.QtCore import QRegularExpression, Qt, QTimer, Signal, SignalInstance
-from PySide6.QtGui import QGuiApplication, QRegularExpressionValidator
+from PySide6.QtGui import (
+    QFontMetrics,
+    QGuiApplication,
+    QKeySequence,
+    QRegularExpressionValidator,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
+    QAbstractButton,
+    QApplication,
     QComboBox,
     QDialog,
     QGridLayout,
@@ -56,6 +65,8 @@ from PySide6.QtWidgets import (
 )
 
 from tatp import touchcal_maths as maths
+from tatp.ui.garment_display import GarmentDisplay
+from tatp.ui.timeline import PhaseTimeline
 from tatp.ui.widgets import (
     DISABLED,
     DISCONNECTED_COLOUR,
@@ -86,7 +97,7 @@ from tatp.ui.widgets import (
     sized,
     stylesheet,
 )
-from tatp.units import MS_PER_S, S_PER_MIN
+from tatp.units import MIN_PER_H, MS_PER_S, S_PER_MIN
 
 # The window's own margin: narrower than the shared one, because height is what this screen is
 # short of.
@@ -94,7 +105,6 @@ MARGIN_PX = 20
 IDENTITY_SEPARATOR = "  ·  "
 LINE_SEPARATOR = "\n"
 RICH_LINE_BREAK = "<br>"
-PRESSURE_SEPARATOR = "   "
 # Nothing below the banners may move during a session, because a layout that reflows at the
 # moment something has gone wrong is a layout that gets misread (UI_PRINCIPLES.md 3.3). Every
 # banner is settled before the session starts -- the text files, the driver, the fit-preview
@@ -107,6 +117,13 @@ ALERT_LINES = 1
 # size down the scale, and so on, until it fits (UI_PRINCIPLES.md 3.3, 4.3).
 INSTRUCTION_LINES = 3
 INSTRUCTION_SIZES = (SIZE_HEADLINE, SIZE_LARGE, SIZE_BODY, SIZE_SMALL)
+# The phase row's shares: two thirds the timeline, one third the countdown, which steps down
+# the type scale to fit its third (LOG N7.F16h).
+TIMELINE_SHARE = 2
+COUNTDOWN_SHARE = 1
+COUNTDOWN_SIZES = (SIZE_LARGE, SIZE_BODY, SIZE_SMALL)
+# How long Next step is shown down after Space presses it: long enough to be seen.
+PRESS_SHOWN_MS = 120
 # The status line under it: two lines of body text, or the small size if that is not enough.
 STATUS_LINES = 2
 STATUS_SIZES = (SIZE_BODY, SIZE_SMALL)
@@ -115,7 +132,8 @@ WARNING_STAGES = 1
 SIDE_COLUMN_PX = 300
 FAULT_LINES = 4
 # Fixed, so the diagram does not resize when the pressures or faults appear (LOG N7.U10).
-ZONE_HEIGHT_PX = 180
+# 120, from 180, to make room for the channel display on the lab laptop (LOG N7.F16i).
+ZONE_HEIGHT_PX = 120
 SUBSTITUTION_FIELD_PX = 300
 DISTANCE_FIELD_PX = 110
 CONTROL_COLUMNS = 4
@@ -125,7 +143,6 @@ FIT_PLOT_HEIGHT_PX = 380
 DISTANCE_PATTERN = r"^-?\d+([.,]\d+)?$"
 DECIMAL_COMMA = ","
 DECIMAL_POINT = "."
-NO_BREAK_SPACE = " "
 ITEM_NUMBER = re.compile(r"^\[([^\]]+)\]")
 
 EMERGENCY_STOP = "emergency_stop"
@@ -146,9 +163,23 @@ class FitPreviewRefused(Exception):
     """A fit was handed over with the preview off. It carries ratings (SPEC.md 11.1)."""
 
 
-def _clock_text(seconds: float) -> str:
+def clock_text(seconds: float) -> str:
+    """mm:ss, and h:mm:ss from an hour: "185:00" read as a typo (review of LOG N7.F16)."""
     minutes, remainder = divmod(int(seconds), int(S_PER_MIN))
+    hours, minutes = divmod(minutes, int(MIN_PER_H))
+    if hours:
+        return f"{hours}:{minutes:02d}:{remainder:02d}"
     return f"{minutes:02d}:{remainder:02d}"
+
+
+def event_name(text: dict, event: dict) -> str:
+    """What a scheduled event is called on the screen: a block by its number and type, which
+    every condition shares, or a phase."""
+    if event["kind"] == BLOCK:
+        block_type = text["terms"]["block_types"][event["block_type"]]
+        return text["status"]["block_label"].format(block=event["block_index"],
+                                                    value=block_type)
+    return text["phases"][event["label_key"]]
 
 
 def _number(value: float | None, spec: str, missing: str) -> str:
@@ -254,6 +285,9 @@ class ExperimenterWindow(QWidget):
         self._withheld_faults: set[str] = set()
         # What `_fit_text` last fitted, so a refresh with nothing new does no layout work.
         self._fitted: tuple | None = None
+        # Whether a press of Next step would do anything now (`set_proceed_source`). Always,
+        # for a window with no session behind it.
+        self._proceed_awaited: Callable[[], bool] = lambda: True
 
         self._build_banners()
         self._build_header()
@@ -280,6 +314,7 @@ class ExperimenterWindow(QWidget):
         layout.addLayout(self.controls)
         layout.addSpacing(ITEM_GAP_PX)
         layout.addLayout(self.entries)
+        self._layout = layout
 
         self.refresh()
 
@@ -339,13 +374,25 @@ class ExperimenterWindow(QWidget):
         self.identity_row.addWidget(self.identity)
         self.identity_row.addStretch(1)
         self.identity_row.addWidget(self.elapsed)
+        # Where the session is up to, phase by phase, the current one named in full (S, 20 Oct
+        # 2026; LOG N7.F16h). In the phase's own place once the session's phases are handed
+        # over (`set_timeline`); until then, the phase in words.
+        self.timeline = PhaseTimeline()
+        self.timeline.setVisible(False)
         self.phase = label(SIZE_LARGE)
         self.countdown = label(SIZE_LARGE, colour=SECONDARY)
         self.phase_row = QHBoxLayout()
         self.phase_row.addWidget(self.phase)
+        # The timeline and the countdown each have a fixed share of the row, whatever the
+        # countdown says, so neither moves when the other changes (UI_PRINCIPLES.md 3.3).
+        self.timeline.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.phase_row.addWidget(self.timeline, TIMELINE_SHARE)
         self.phase_row.addSpacing(GROUP_GAP_PX)
+        self._phase_countdown = self.phase_row.count()
         self.phase_row.addWidget(self.countdown)
-        self.phase_row.addStretch(1)
+        self._phase_stretch = QWidget()
+        self._phase_stretch.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.phase_row.addWidget(self._phase_stretch, 1)
 
         # Reserved whether or not the session is interrupted, so the instruction below it does
         # not move when the stop is pressed (UI_PRINCIPLES.md 3.3).
@@ -394,7 +441,14 @@ class ExperimenterWindow(QWidget):
         self.hardware_title = label(SIZE_SMALL, colour=SECONDARY)
         self.hardware_title.setText(self.text["hardware"]["title"])
         self.garment = label(SIZE_BODY)
-        self.pressures = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
+        # The channels, as commanded (`set_garment`): the same display a demonstration shows,
+        # fed here from the view, which withholds them while the condition's touch runs.
+        self.garment_display: GarmentDisplay | None = None
+        self._garment_slot = QVBoxLayout()
+        self._garment_slot.setContentsMargins(0, 0, 0, 0)
+        # Set by a demonstration, which hands the display the garment's state itself, in every
+        # phase (tatp/demo.py); the view then does not.
+        self.garment_fed_elsewhere = False
         # Bounded, so accumulating faults never move the side column mid-session or push the
         # window off a laptop screen (UI_PRINCIPLES.md 3.3): at most FAULT_LINES lines. The
         # short counts come first and the text is top-aligned, so what a bound cuts is only
@@ -429,7 +483,7 @@ class ExperimenterWindow(QWidget):
         column.addWidget(self.zone)
         column.addWidget(self.target)
         column.addLayout(state)
-        column.addWidget(self.pressures)
+        column.addLayout(self._garment_slot)
         column.addWidget(self.faults)
         column.addStretch(1)
         column.addWidget(self.skip_button)
@@ -468,17 +522,23 @@ class ExperimenterWindow(QWidget):
             controls=controls
         ))
         self.recalibration_used.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        # Next step is the way forward in every step, so it always looks like it. Its look
-        # must not follow whether a step is awaited: at a touch start that could differ by
-        # condition (SPEC.md 16). While the session is interrupted Resume is the way forward,
-        # and it is only shown then.
+        # Next step is the way forward in every step, so it always looks like it. It is
+        # pressable exactly while a press would do something (`set_proceed_source`), which is
+        # the same in every condition: the touch start on this side is a fixed display, never
+        # the delivery's own timing (SPEC.md 16; LOG N7.D17, N7.F16d). While the session is
+        # interrupted Resume is the way forward, and it is only shown then.
         self.proceed_button.setStyleSheet(primary_button_style())
         self.resume_button.setStyleSheet(primary_button_style())
         # The one control that ends the session. Coloured so it is found without reading, and
         # never mistaken for a routine one (UI_PRINCIPLES.md 3.4).
         self.abort_button.setStyleSheet(emphasis_button_style(DISCONNECTED_COLOUR))
 
-        self.proceed_button.clicked.connect(self.proceed_requested.emit)
+        self.proceed_button.clicked.connect(self._proceed_clicked)
+        # Space is Next step wherever the focus is in this window, a text field excepted,
+        # which types it (S, 20 Oct 2026; LOG N7.F16d). The button is seen to go down, as if
+        # clicked. Not a remote key, so the router never forwards it to the participant.
+        self.proceed_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
+        self.proceed_shortcut.activated.connect(self._proceed_key)
         self.pause_button.clicked.connect(self.pause_requested.emit)
         self.resume_button.clicked.connect(self.resume_requested.emit)
         self.discard_button.clicked.connect(self.discard_requested.emit)
@@ -631,8 +691,11 @@ class ExperimenterWindow(QWidget):
         self._fit_text()
 
     def new_stage(self) -> None:
-        """A stage of the session has begun. A warning survives the first stage start after
-        it, because several are raised as a stage ends, and is cleared at the second."""
+        """A stage of the session has begun. The status belonged to the stage before -- its
+        "Response received" was still up as pre-sensitisation began (S, 20 Oct 2026; LOG
+        N7.F16c) -- so it goes. A warning survives the first stage start after it, because
+        several are raised as a stage ends, and is cleared at the second."""
+        self.set_status("")
         if not self._warning_text:
             return
         self._warning_stages += 1
@@ -831,6 +894,70 @@ class ExperimenterWindow(QWidget):
 
     # -- the entries ---------------------------------------------------------------------
 
+    def set_timeline(self, phases: Sequence[str]) -> None:
+        """The session's phases in order, as keys of the experimenter text's `phases`, for the
+        timeline across the top (LOG N7.F16h). The same list in every condition."""
+        names, short = self.text["phases"], self.text["timeline"]
+        self.timeline.set_phases([(phase, short[phase], names[phase]) for phase in phases])
+        # The timeline names the current phase in full, in the phase's own place; the label
+        # keeps its text for whatever reads it.
+        self.phase.setVisible(False)
+        self._phase_stretch.setVisible(False)
+        self.countdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.phase_row.setStretch(self._phase_countdown, COUNTDOWN_SHARE)
+        self.timeline.setVisible(True)
+        self.refresh()
+
+    def set_garment(self, channels: Sequence[int], ceiling_kpa: float,
+                    per_channel_pressure: bool, highlight_s: float) -> None:
+        """The garment's channels, for the channel display in the side column (LOG
+        N7.F16i). Once, before the session starts."""
+        assert self.garment_display is None, "the garment display is set once"
+        self.garment_display = GarmentDisplay(channels, ceiling_kpa, per_channel_pressure,
+                                              self.text["hardware"], highlight_s)
+        self.garment_display.setVisible(False)
+        self._garment_slot.addWidget(self.garment_display)
+        self.refresh()
+
+    def add_demo_panel(self, panel: QWidget) -> None:
+        """A demonstration's controls, along the foot of the window (tatp/demo.py; S, 20 Oct
+        2026: "the demo controls should be integrated into the main window")."""
+        self._layout.addSpacing(ITEM_GAP_PX)
+        self._layout.addWidget(panel)
+
+    def set_proceed_source(self, awaited: Callable[[], bool]) -> None:
+        """Ask `awaited()` whether a press of Next step would do anything now (the rig's
+        `proceed_awaited`). Next step is offered only then: a button that is pressed and does
+        nothing teaches the experimenter to distrust it (S, 20 Oct 2026; UI_PRINCIPLES.md 5.1).
+        It returns only a yes or no, the same in every condition (SPEC.md 16)."""
+        self._proceed_awaited = awaited
+        self._apply_enabled()
+
+    def _proceed_key(self) -> None:
+        """Space. A button or a list that has the focus keeps Space's own meaning -- press
+        it, open it -- so Space on the demo's Skip never launches a step (code review of
+        N7.F16d). Otherwise Next step, at once: an animated click would emit its press about
+        100 ms late, and an application's time is that press (N7.F16f). The button is shown
+        down for a moment, so the press is seen."""
+        focus = QApplication.focusWidget()
+        if isinstance(focus, QAbstractButton) and focus is not self.proceed_button:
+            focus.click()
+            return
+        if isinstance(focus, QComboBox):
+            focus.showPopup()
+            return
+        if not (self.proceed_button.isVisible() and self.proceed_button.isEnabled()):
+            return
+        self.proceed_button.setDown(True)
+        QTimer.singleShot(PRESS_SHOWN_MS, self, lambda: self.proceed_button.setDown(False))
+        self._proceed_clicked()
+
+    def _proceed_clicked(self) -> None:
+        self.proceed_requested.emit()
+        # What the press started has run by now: offered again only if a go is still awaited,
+        # so a double press never lands on the step after.
+        self._apply_enabled()
+
     def _garment_clicked(self) -> None:
         if self._connected:
             self.garment_disconnect_requested.emit()
@@ -908,8 +1035,9 @@ class ExperimenterWindow(QWidget):
             )
         )
         self.phase.setText(text["phases"][view["phase"]])
+        self.timeline.set_current(view["phase"])
         self.elapsed.setText(
-            text["status"]["elapsed"].format(time=_clock_text(view["elapsed_s"]))
+            text["status"]["elapsed"].format(time=clock_text(view["elapsed_s"]))
         )
         self._draw_countdown(view["next_event"])
         self._draw_interruption(view["interruption"])
@@ -985,11 +1113,9 @@ class ExperimenterWindow(QWidget):
             self.countdown.setText("")
             return
         is_block = event["kind"] == BLOCK
+        name = event_name(self.text, event)
         if is_block:
             block_type = self.text["terms"]["block_types"][event["block_type"]]
-            name = status["block_label"].format(block=event["block_index"], value=block_type)
-        else:
-            name = self.text["phases"][event["label_key"]]
         # Due and overdue look different from a countdown and from each other: the first says
         # get ready, the other two say act now, and overdue says it louder
         # (UI_PRINCIPLES.md 3.2).
@@ -1009,11 +1135,23 @@ class ExperimenterWindow(QWidget):
             style = emphasis_style(WARNING_COLOUR)
         else:
             shown = status["next_event"].format(
-                phase=name, time=_clock_text(math.ceil(event["due_in_s"]))
+                phase=name, time=clock_text(math.ceil(event["due_in_s"]))
             )
             style = f"color: {SECONDARY};"
         self.countdown.setText(shown)
         self.countdown.setStyleSheet(style)
+        if self.timeline.isVisibleTo(self):
+            # Its third of the row, at the largest size that holds it on one line. From the
+            # window's width, as the instruction's is: known before the first layout.
+            room = (self.width() - 2 * MARGIN_PX - GROUP_GAP_PX) * COUNTDOWN_SHARE // (
+                TIMELINE_SHARE + COUNTDOWN_SHARE)
+            for size in COUNTDOWN_SIZES:
+                font = self.countdown.font()
+                font.setPointSize(size)
+                font.setBold("bold" in style)
+                if QFontMetrics(font).horizontalAdvance(shown) <= room:
+                    break
+            sized(self.countdown, size)
 
     def _draw_interruption(self, interruption: str | None) -> None:
         assert interruption is None or interruption in INTERRUPTIONS, interruption
@@ -1049,23 +1187,23 @@ class ExperimenterWindow(QWidget):
             if self._connected
             else emphasis_style(DISCONNECTED_COLOUR)
         )
-        # No pressures means no line at all -- never a placeholder that says something is being
-        # withheld, which would itself tell the experimenter the phase matters (SPEC.md 16).
-        pressures = hardware["channel_pressure_kpa"]
-        if pressures is None or phase in BLINDED_PHASES:
-            self.pressures.setText("")
-            self.pressures.setVisible(False)
-        else:
-            # Each reading held together, so a line break never separates a channel from its
-            # pressure.
-            readings = PRESSURE_SEPARATOR.join(
-                status["channel_pressure_short"]
-                .format(channel=channel, value=f"{kpa:.1f}")
-                .replace(" ", NO_BREAK_SPACE)
-                for channel, kpa in sorted(pressures.items())
-            )
-            self.pressures.setText(status["channel_pressures"].format(value=readings))
-            self.pressures.setVisible(bool(pressures))
+        # No channels means no display at all -- never a placeholder that says something is
+        # being withheld, which would itself tell the experimenter the phase matters (SPEC.md
+        # 16). A demonstration feeds the display itself, in every phase (tatp/demo.py).
+        display = self.garment_display
+        if display is not None and not self.garment_fed_elsewhere:
+            pressures = hardware["channel_pressure_kpa"]
+            channels_on = hardware["channels_on"]
+            withheld = pressures is None or channels_on is None or phase in BLINDED_PHASES
+            if not withheld:
+                display.show_states(
+                    {channel: (channel in channels_on,
+                               pressures.get(channel, 0.0) if display.per_channel_pressure
+                               else None)
+                     for channel in display.channels},
+                    bool(hardware["link_lost"]),
+                )
+            display.setVisible(not withheld)
         # That there is a fault is shown; which channel is not, if it arose while the
         # condition's own pattern was running, because the channels in use differ by condition
         # (SPEC.md 16). A fault seen then stays withheld for the rest of the session: showing
@@ -1109,7 +1247,7 @@ class ExperimenterWindow(QWidget):
         press reaches it.
         """
         running = self._interruption is None
-        self.proceed_button.setEnabled(running)
+        self.proceed_button.setEnabled(running and self._proceed_awaited())
         deciding = running and self._awaiting["fit_decision"]
         discarding = running and self._awaiting["discard"]
         rebalancing = running and self._awaiting["rebalance"]

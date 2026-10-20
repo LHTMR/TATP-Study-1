@@ -35,7 +35,6 @@ from tatp.garment.mock import MockGarment
 from tatp.launcher import LauncherWindow
 from tatp.remote_keys import ANY_KEYBOARD
 from tatp.session import DRIVERS, SessionError
-from tatp.ui.garment_display import GarmentDisplay
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 # Real seconds a whole demonstration may take with both simulations fast.
@@ -205,9 +204,11 @@ def test_on_a_real_garment_a_demonstration_is_fully_manual(app, loaded, worn):
         controls = demo.controls
         assert not controls.participant_mode.isEnabled()
         assert not controls.experimenter_mode.isEnabled()
-        assert not controls.finish_button.isEnabled()
-        assert controls.skip_button.isEnabled()
+        assert not controls.auto_run_button.isEnabled()
+        assert not controls.fast_forward_button.isEnabled()
         assert not controls.worn_note.isHidden()
+        with pytest.raises(DemoError):
+            demo.fast_forward(runner.phases[-1])
         with pytest.raises(DemoError):
             demo.finish_stage()
         for who in ("participant", "experimenter"):
@@ -217,8 +218,9 @@ def test_on_a_real_garment_a_demonstration_is_fully_manual(app, loaded, worn):
     finally:
         _finish(runner, demo)
     runner, demo = _demo(app, loaded)
-    assert demo.controls.finish_button.isEnabled() and demo.controls.worn_note.isHidden()
+    assert demo.controls.auto_run_button.isEnabled() and demo.controls.worn_note.isHidden()
     assert demo.controls.experimenter_mode.isEnabled()
+    assert demo.controls.fast_forward_button.isEnabled()
     _finish(runner, demo)
 
 
@@ -362,52 +364,82 @@ def test_run_a_demo_holds_a_real_garment_to_real_time_and_people(app, loaded):
 # -- what the garment is doing, a demonstration's only ----------------------------------------
 
 
-def test_the_garment_display_is_a_demonstrations_only(app, loaded, tmp_path):
-    """SPEC.md 16: a session's experimenter screen withholds channel detail in the
-    intervention and rekindle; the display shows it in every phase, so only a demonstration
-    may have it (S, 15 Oct 2026; open item L16)."""
+def test_only_a_demonstration_shows_the_garment_while_the_condition_runs(app, loaded,
+                                                                         tmp_path):
+    """SPEC.md 16: a session's experimenter screen withholds the channels in the intervention
+    and the rekindle; a demonstration hands its display the garment in every phase (S, 15 Oct
+    2026; open item L16; LOG N7.F16i)."""
     hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
                                             "folder": str(tmp_path / "data")}}
     config = cfg.Config(**{**loaded.__dict__, "hardware": hardware})
     args = run_session.parse_args(["--participant", "01", "--session", "1", "--experimenter",
                                    "SM", "--patterns", str(EXAMPLES)])
     runner = run_session.build(config, args)
-    for window in (runner.rig.experimenter, runner.rig.participant):
-        assert window.findChildren(GarmentDisplay) == []
+    window = runner.rig.experimenter
+    assert not window.garment_fed_elsewhere
+    runner.session.set_phase("intervention")
+    window.refresh()
+    assert not window.garment_display.isVisibleTo(window)
     run_session.shut_down(runner)
 
     runner, demo = _demo(app, loaded)
-    displays = runner.rig.experimenter.findChildren(GarmentDisplay)
-    assert [display.garment for display in displays] == [runner.session.garment]
-    _finish(runner, demo)
-
-
-def test_only_the_demo_controls_build_the_garment_display():
-    """The structural half: nothing a session draws makes one."""
-    builders = sorted(
-        path.relative_to(cfg.REPO_ROOT).as_posix()
-        for folder in ("tatp", "sim", "tools")
-        for path in (cfg.REPO_ROOT / folder).rglob("*.py")
-        if "GarmentDisplay(" in path.read_text(encoding="utf-8")
-        and path.name != "garment_display.py"
-    )
-    assert builders == ["tatp/demo.py"]
-    assert cfg.REPO_ROOT.joinpath("run_session.py").read_text(
-        encoding="utf-8").count("GarmentDisplay") == 0
-
-
-def test_the_demo_controls_show_the_sessions_garment_as_commanded(app, loaded):
-    runner, demo = _demo(app, loaded)
-    display = demo.controls.garment_display
+    window = runner.rig.experimenter
+    assert window.garment_fed_elsewhere
+    runner.session.set_phase("intervention")
+    window.refresh()
     garment = runner.session.garment
     channel = garment.channels()[0]
     garment.set_channel(channel, True)
-    display.poll(display._now_s + 0.01)
-    assert display.states[channel][0] is True
-    assert display.highlight(channel) > 0
-    assert display.timer.isActive(), "polling while the Demo controls are shown"
+    demo._feed_garment()
+    assert window.garment_display.isVisibleTo(window)
+    assert window.garment_display.states[channel][0] is True
+    assert window.garment_display.highlight(channel) > 0
     _finish(runner, demo)
-    assert not display.timer.isActive(), "stopped with the demonstration"
+    assert not demo._garment_timer.isActive(), "stopped with the demonstration"
+
+
+def test_the_demo_controls_are_in_the_experimenter_window(app, loaded):
+    """S, 20 Oct 2026: "the demo controls should be integrated into the main window"."""
+    runner, demo = _demo(app, loaded)
+    assert demo.controls.window() is runner.rig.experimenter
+    assert not demo.controls.isWindow()
+    _finish(runner, demo)
+
+
+def test_each_demo_control_says_what_it_would_do_now(app, loaded):
+    """S, 20 Oct 2026: "Skip buttons should be contextual and informative" (LOG N7.F16j)."""
+    runner, demo = _demo(app, loaded)
+    controls, words = demo.controls, loaded.experimenter_text["demo"]
+    assert controls.skip_button.text() == words["skip_none"]
+    assert not controls.skip_button.isEnabled()
+    assert controls.skip_button.toolTip()
+    assert controls.auto_run_button.text() == words["auto_run"].format(
+        step=words["steps"]["garment"])
+    phases = [controls.fast_forward.itemData(i) for i in range(controls.fast_forward.count())]
+    assert phases == runner.phases[1:], "every phase still to come"
+    clock = runner.session.clock
+    clock.start_session()
+    runner.session.set_upcoming("phase", "capsaicin", 600.0)
+    runner._wait_until(600.0, lambda: None, lambda: None)
+    controls.sync()
+    assert controls.skip_button.isEnabled()
+    assert loaded.experimenter_text["phases"]["capsaicin"] in controls.skip_button.text()
+    _finish(runner, demo)
+
+
+def test_fast_forward_runs_fast_to_the_phase_then_hands_back(app, loaded):
+    runner, demo = _demo(app, loaded, "--sim-participant", WATCH)
+    target = runner.phases[2]
+    demo.fast_forward(target)
+    assert (demo.participant_mode, demo.experimenter_mode) == (FAST, FAST)
+    assert not demo.finishing, "a fast-forward is not an auto-run"
+    runner.stage_started.emit("a stage in between")
+    assert demo.fast_forward_to == target, "not there yet"
+    runner.session.set_phase(target)
+    runner.stage_started.emit("the first stage there")
+    assert demo.fast_forward_to is None
+    assert (demo.participant_mode, demo.experimenter_mode) == (WATCH, OFF)
+    _finish(runner, demo)
 
 
 def test_run_a_session_in_the_launcher_is_never_a_demonstration(app, loaded):

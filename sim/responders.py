@@ -47,8 +47,7 @@ from pathlib import Path
 from types import CodeType
 
 import numpy as np
-from PySide6.QtCore import QEvent, QObject, Qt, QTimer
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtCore import QEvent, QObject, QTimer
 from PySide6.QtWidgets import QApplication, QWidget
 
 from tatp.config import REPO_ROOT, Config
@@ -56,7 +55,7 @@ from tatp.garment.base import GarmentController
 from tatp.pinprick import PAIN_SCALE
 from tatp.responder import Action
 from tatp.touchcal import INTENSITY_SCALE
-from tatp.ui.participant import SIDES, ParticipantWindow
+from tatp.ui.participant import SIDES, ParticipantWindow, remote_key_event
 from tatp.ui.vas import MAX_PCT, MIN_PCT, QT_KEYS
 from tatp.units import MS_PER_S
 
@@ -252,6 +251,9 @@ class VirtualParticipant(QObject):
         }
         self._vas_step = float(vas["move_step_pct"])
         self._tap_step_kpa = float(config.hardware["adjustment"]["tap_step_kpa"])
+        # How long the adjustment takes to finish a command the rate limit cut short: its own
+        # tick (tatp/touchcal.py `Adjustment`), in real seconds.
+        self._settle_s = float(config.hardware["adjustment"]["tick_interval_s"])
         # The participant reads the prompt, and knows which point of the scale it names.
         touch = config.study1["touch_calibration"]
         self.reference_channel = int(touch["reference_channel"])
@@ -286,6 +288,8 @@ class VirtualParticipant(QObject):
         self._shown_at_s = 0.0
         self._adjust_goal: float | None = None
         self._unchanged_taps = 0
+        # When a tap was last held back by the rate limit, in monotonic seconds; None after.
+        self._held_back_at_s: float | None = None
         self._choice_felt = dict.fromkeys(SIDES, MIN_PCT)
         self._timer = QTimer(self)
         self._timer.setInterval(int(round(TICK_S * MS_PER_S)))
@@ -585,6 +589,14 @@ class VirtualParticipant(QObject):
         """Tap up while `difference()` is below zero, down while above, then confirm."""
         if time.monotonic() - self._shown_at_s < TICK_S:
             return  # the garment may still be settling from the screen before
+        if (self._held_back_at_s is not None
+                and time.monotonic() - self._held_back_at_s < self._settle_s):
+            # The last tap was held back by the rate limit: felt again once the adjustment has
+            # finished it, or each next look taps on ahead of what the arm feels, and the level
+            # overshoots by however far the garment lags -- which depended on how fast the
+            # looks came (LOG N7.F16 review: 4-8 kPa past a 17 kPa anchor, now and then).
+            return
+        self._held_back_at_s = None
         start = difference()
         if start == 0:
             self.confirm_adjustment()
@@ -607,7 +619,9 @@ class VirtualParticipant(QObject):
                 self.confirm_adjustment()
                 return
             if 0 < moved_kpa < self._tap_step_kpa:
-                return  # the rate limit is holding the garment back; feel it again next look
+                # The rate limit is holding the garment back: feel it once it has caught up.
+                self._held_back_at_s = time.monotonic()
+                return
 
     def confirm_adjustment(self) -> None:
         self._let_go()
@@ -667,9 +681,11 @@ class VirtualParticipant(QObject):
         # through Qt's delivery exactly as the remote's key does.
         window = self.window
         target = window.vas if window.stack.currentWidget() is window.vas else window
-        event = QKeyEvent(kind, self._keys[action], Qt.NoModifier)
-        event.setTimestamp(stamp_ms)
-        QApplication.sendEvent(target, event)
+        # Marked as the remote's, as its raw reports are: under raw_input the router keeps
+        # every other keyboard's keys from the participant, and a demonstration with the remote
+        # plugged in runs under it (tatp/demo.py `demo_key_source`).
+        QApplication.sendEvent(target, remote_key_event(kind, self._keys[action], False,
+                                                        stamp_ms))
 
 
 # -- adversarial participants, SPEC.md 17.5 ----------------------------------------------

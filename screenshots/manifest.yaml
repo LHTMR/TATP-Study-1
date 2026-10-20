@@ -31,19 +31,21 @@ screens:
     in 04:05'', grey, and nothing to do meanwhile. (en)'
   experimenter_en_demo_banner: The demonstration banner (docs/LOG.md N7.D23), amber
     like the others that say the session runs but what it records is not data. (en)
-  experimenter_en_demo_controls: 'The Demo controls window beside a demonstration
-    (docs/LOG.md N7.D23, N7.F12f): what the garment is commanded to do, steady --
-    every channel''s pressure set, channels 2, 3 on -- then who presses for the participant
-    and the experimenter, changeable at any time, Skip the wait, and Finish this stage
-    (en).'
-  experimenter_en_demo_controls_garment_changed: 'The Demo controls'' garment display
-    0.2 s after channel 4 was turned on (docs/LOG.md N7.F12f): its row lit and its
-    bar outlined, fading back over demo.garment_highlight_s (en).'
-  experimenter_en_demo_controls_worn_link_lost: 'The Demo controls on a worn garment,
-    its link lost (docs/LOG.md N7.F12f): the participant and the experimenter people
-    and Finish this stage off, said in amber; the channels held at their last command
-    in amber, not shown switching off, with the warning that the outputs may still
-    hold it (N7.U16) (en).'
+  experimenter_en_demo_controls: 'A demonstration''s experimenter window (docs/LOG.md
+    N7.D23, N7.F16j): the timeline, the channels as commanded in the side column --
+    every channel''s pressure set, channels 2, 3 on -- and the demo controls along
+    the foot: who presses for the participant and the experimenter, the clock''s speed,
+    the remote''s buttons, Skip saying there is no wait to skip, Auto-run naming the
+    step under way, and Fast-forward offering the phases to come (en).'
+  experimenter_en_demo_controls_garment_changed: 'The same 0.2 s after channel 4 was
+    turned on (docs/LOG.md N7.F12f): its row lit and its bar outlined, fading back
+    over screens.garment_highlight_s; the remote''s right button held; and a timed
+    wait running, which Skip names with what is left of it (en).'
+  experimenter_en_demo_controls_worn_link_lost: 'A demonstration on a worn garment,
+    its link lost (docs/LOG.md N7.F12f): the participant and the experimenter people,
+    and auto-run and fast-forward off, said in amber; the channels held at their last
+    command in amber, not shown switching off, and the side column''s warning that
+    the outputs may still hold it (N7.U16) (en).'
   experimenter_en_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column
@@ -233,19 +235,21 @@ screens:
     in 04:05'', grey, and nothing to do meanwhile. (sv)'
   experimenter_sv_demo_banner: The demonstration banner (docs/LOG.md N7.D23), amber
     like the others that say the session runs but what it records is not data. (sv)
-  experimenter_sv_demo_controls: 'The Demo controls window beside a demonstration
-    (docs/LOG.md N7.D23, N7.F12f): what the garment is commanded to do, steady --
-    every channel''s pressure set, channels 2, 3 on -- then who presses for the participant
-    and the experimenter, changeable at any time, Skip the wait, and Finish this stage
-    (sv).'
-  experimenter_sv_demo_controls_garment_changed: 'The Demo controls'' garment display
-    0.2 s after channel 4 was turned on (docs/LOG.md N7.F12f): its row lit and its
-    bar outlined, fading back over demo.garment_highlight_s (sv).'
-  experimenter_sv_demo_controls_worn_link_lost: 'The Demo controls on a worn garment,
-    its link lost (docs/LOG.md N7.F12f): the participant and the experimenter people
-    and Finish this stage off, said in amber; the channels held at their last command
-    in amber, not shown switching off, with the warning that the outputs may still
-    hold it (N7.U16) (sv).'
+  experimenter_sv_demo_controls: 'A demonstration''s experimenter window (docs/LOG.md
+    N7.D23, N7.F16j): the timeline, the channels as commanded in the side column --
+    every channel''s pressure set, channels 2, 3 on -- and the demo controls along
+    the foot: who presses for the participant and the experimenter, the clock''s speed,
+    the remote''s buttons, Skip saying there is no wait to skip, Auto-run naming the
+    step under way, and Fast-forward offering the phases to come (sv).'
+  experimenter_sv_demo_controls_garment_changed: 'The same 0.2 s after channel 4 was
+    turned on (docs/LOG.md N7.F12f): its row lit and its bar outlined, fading back
+    over screens.garment_highlight_s; the remote''s right button held; and a timed
+    wait running, which Skip names with what is left of it (sv).'
+  experimenter_sv_demo_controls_worn_link_lost: 'A demonstration on a worn garment,
+    its link lost (docs/LOG.md N7.F12f): the participant and the experimenter people,
+    and auto-run and fast-forward off, said in amber; the channels held at their last
+    command in amber, not shown switching off, and the side column''s warning that
+    the outputs may still hold it (N7.U16) (sv).'
   experimenter_sv_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column
@@ -462,7 +466,8 @@ screens:
     Pilot codes and demonstrations only; with the remote the window has no such row
     (en).'
   participant_en_preference: 'The preference selection (SPEC.md 9 step 6): the opening
-    line, both large buttons drawn with their labels, and the confirm sentence, en.'
+    line, both large buttons drawn with their labels, the place in the list between
+    them (LOG N7.F16k), and the confirm sentence, en.'
   participant_en_screen_emergency_stop: The participant text `screens.emergency_stop`,
     centred, en.
   participant_en_screen_intro_baseline: The participant text `screens.intro_baseline`,
@@ -584,7 +589,8 @@ screens:
     Pilot codes and demonstrations only; with the remote the window has no such row
     (sv).'
   participant_sv_preference: 'The preference selection (SPEC.md 9 step 6): the opening
-    line, both large buttons drawn with their labels, and the confirm sentence, sv.'
+    line, both large buttons drawn with their labels, the place in the list between
+    them (LOG N7.F16k), and the confirm sentence, sv.'
   participant_sv_screen_emergency_stop: The participant text `screens.emergency_stop`,
     centred, sv.
   participant_sv_screen_intro_baseline: The participant text `screens.intro_baseline`,

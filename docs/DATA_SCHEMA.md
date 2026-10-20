@@ -176,8 +176,16 @@ as a double tap or a bounce rather than taken as the new screen's (docs/LOG.md N
 A demonstration (`demo` true in the session file, docs/LOG.md N7.D23) logs who presses:
 `demo_simulation`, `detail` `participant: <mode>` or `experimenter: <mode>` (`off` a person,
 `watch` or `fast` a simulation), at the start and at every change, so each response's origin
-can be read back; and each Skip the wait, `demo_wait_skipped`, `detail` the session seconds
-skipped -- `t_session_s` jumps by that much there.
+can be read back; and each Skip, `demo_wait_skipped`, `detail` the session seconds
+skipped -- `t_session_s` jumps by that much there. An Auto-run is `demo_auto_run`, `detail`
+the stage id it runs fast; a Fast-forward is `demo_fast_forward`, `detail` the phase it runs
+to, and skips every timed wait on the way, each a `demo_wait_skipped` with no lead left
+(docs/LOG.md N7.F16j).
+
+Each pinprick or brush application logs `stimulus_due` when the cue's lead is over and the
+experimenter is asked to apply it, then `stimulus_delivered` (`origin` experimenter) at their
+Next step saying it is applied, which `stimulus_delivered_iso` in its row records and from
+which its rating is cued (docs/LOG.md N7.F16f).
 
 `remote_disconnected` (severity `error`) is written when the participant's remote is unplugged
 or its receiver drops out during a session, and `remote_reconnected` (`warning`) when it comes
@@ -314,7 +322,8 @@ One row per monofilament application, both protocols, all phases (§14.2).
 | substituted | bool | - | yes | `true` when the applied filament differs from the one the software asked for (§8.2) |
 | site_index | int | - | yes | Rotates on every application (§8.2) |
 | cue_onset_iso | iso8601 | - | yes | Visual warning cue onset (§10.5) |
-| rating_cue_iso | iso8601 | - | no | When the rating was cued, 9 s post-stimulus (Scheuren et al. 2023) |
+| stimulus_delivered_iso | iso8601 | - | no | When the experimenter pressed Next step to say the filament had been applied (LOG N7.F16f); empty if the trial ended before the press |
+| rating_cue_iso | iso8601 | - | no | When the rating was cued, `pinprick.rating_cue_delay_s` (9 s, Scheuren et al. 2023) after `stimulus_delivered_iso` |
 | rating_percent | float | % | no | VAS response; empty if the trial was discarded before a response |
 | rt_s | float | s | no | From rating cue to confirm |
 | first_press_side | str | - | no | `left` or `right`; sets the marker's first position (§10.2) |
@@ -367,7 +376,8 @@ One row per brush application — allodynia, primary and secondary regions (§8.
 | trial_index | int | - | yes | 1-based |
 | site_index | int | - | yes | Rotates on every application |
 | cue_onset_iso | iso8601 | - | yes | Visual warning cue onset |
-| rating_cue_iso | iso8601 | - | no | When the rating was cued, `brush.rating_cue_delay_s` after the stimulus |
+| stimulus_delivered_iso | iso8601 | - | no | When the experimenter pressed Next step to say the stroke had been made (LOG N7.F16f); empty if the trial ended before the press |
+| rating_cue_iso | iso8601 | - | no | When the rating was cued, `brush.rating_cue_delay_s` after `stimulus_delivered_iso` |
 | rating_percent | float | % | no | VAS response, on the scale `brush.rating_scale` names |
 | rt_s | float | s | no | From rating cue to confirm |
 | first_press_side | str | - | no | `left` or `right` |

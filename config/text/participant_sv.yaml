@@ -54,7 +54,8 @@ vas:
       - {pct: 0.0, label: instämmer inte alls}
       - {pct: 100.0, label: instämmer helt}
 
-# DRAFT (LOG N7.F7a): written by the build, not ethics-sourced
+# DRAFT (LOG N7.F7a, N7.F16b): written by the build, not ethics-sourced. Sista meningen
+# översatt från S:s engelska (20 okt 2026).
 # Övningsskattningen i VAS-övningen (SPEC.md 10.6), en nyckel per övad skala: en skala med en
 # nyckel här övas, och varje nyckel måste vara en skala. Visas under skalan, som ritas som den
 # skattas, när försöksledaren har förklarat etiketterna och proportionaliteten muntligt --
@@ -64,7 +65,7 @@ vas:
 training:
   pain: &practice >-
     Övning: flytta markören med de två stora knapparna, åt båda hållen, och tryck sedan på ▶.
-    Övningen är ingen skattning.
+    Den här skattningen sparas inte.
   intensity: *practice
   pleasantness: *practice
 
@@ -214,6 +215,8 @@ participant_controls:
     left: Föregående
     right: Nästa
     confirm: Tryck på ▶ för att välja den du tycker bäst om.
+    # DRAFT (LOG N7.F16k): written by the build, not ethics-sourced
+    position: '{position} av {count}'
 
 choices:
   # Tvåvalsskärmar där knapparna RITAS ut och trycket i sig är svaret (SPEC.md 10.8,

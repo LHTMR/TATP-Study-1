@@ -63,6 +63,19 @@ terms:
     unreachable: mål utanför vad plagget kan ge
     empty_window: inget behaglighetsintervall kvar inom plaggets gränser
 
+# Tidslinjen överst på skärmen (LOG N7.F16h): varje fas utom den pågående, förkortad, så att
+# alla får plats på en rad. Den pågående står utskriven, med sitt namn under `phases`.
+# DRAFT (LOG N7.F16h): written by the build, not ethics-sourced
+timeline:
+  setup: Förb.
+  touch_calibration: Kalibr.
+  pre_sensitisation: Före S
+  sensitisation: Värme
+  capsaicin: Caps.
+  post_sensitisation: Efter S
+  intervention: Interv.
+  post_intervention: Efter I
+
 phases:
   setup: Förberedelse
   touch_calibration: Beröringskalibrering
@@ -96,11 +109,20 @@ instructions:
     appliceringsstället utom synhåll för deltagaren.
   # Filamenten benämns med gramsiffran som står tryckt på dem (SPEC.md 8.1), kraften efter.
   # "Nu:" så att den pågående appliceringen aldrig ser ut som den förra (LOG N7.F11b8).
-  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced
-  apply_filament: 'Nu: applicera filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen.'
+  # Under deltagarens "Gör dig redo": vad som ska vara redo, och var (LOG N7.F16f).
+  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
+  prepare_filament: 'Gör dig redo: filamentet {filament} g ({force_mn} mN), plats {site}, {region} zonen.'
+  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
+  prepare_brush: 'Gör dig redo: penseln, plats {site}, {region} zonen.'
+  # När förvarningen är slut. Trycket säger att det är applicerat, och skattningen visas
+  # räknat från det (S, 20 okt 2026; LOG N7.F16f).
+  # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
+  apply_filament: 'Nu: applicera filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen, och tryck sedan på {controls[proceed]}.'
   # Ett drag på cirka 2 cm, aldrig upprepat: upprepning höjer smärtan (docs/research/RB2).
-  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced
-  apply_brush: 'Nu: borsta den {region} zonen på plats {site}, ett enda drag på cirka 2 cm.'
+  # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
+  apply_brush: 'Nu: borsta den {region} zonen på plats {site}, ett enda drag på cirka 2 cm, och tryck sedan på {controls[proceed]}.'
+  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
+  delivered: 'Applicerat. Skattningsskalan visas om {seconds} s.'
   # DRAFT (LOG N7.F11b8, N7.F14c): written by the build, not ethics-sourced. Det slumpade
   # uppehållet efter en skattning när ingen applicering följer: serien är slut. Svaret
   # rapporteras på statusraden (`received_*`).
@@ -165,6 +187,11 @@ instructions:
   ready_long: >-
     Filamentserie i den {region} zonen, med början på filamentet {filament} g. Ha filamenten
     till hands och tryck sedan på {controls[proceed]}.
+  # DRAFT (LOG N7.F16l): written by the build, not ethics-sourced. I början av
+  # försensibiliseringen, innan något mäts på den huden (S, 20 okt 2026).
+  mark_zone: >-
+    Före sensitisering. Markera med en hudpenna det område där värmen och capsaicinet ska
+    appliceras (den primära zonen). Tryck sedan på {controls[proceed]}.
   # DRAFT (LOG N7.F11b14): written by the build, not ethics-sourced. Före sessionens första
   # smärtmätning, som följs av övningen på smärtskalan.
   ready_long_first: 'Första smärtmätningarna. Säg till deltagaren: "{say[first_pain]}" Tryck sedan på {controls[proceed]}.'
@@ -411,10 +438,6 @@ controls:
 status:
   connected: Ansluten
   disconnected: Frånkopplad
-  channel_pressure: 'Kanal {channel}: {value} kPa'
-  # Hårdvarupanelens kompakta form: alla kanaler på en eller två rader.
-  channel_pressures: 'kPa per kanal: {value}'
-  channel_pressure_short: '{channel}: {value}'
   elapsed: Förfluten tid {time}
   next_event: 'Nästa: {phase} om {time}'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced. {type} kommer från
@@ -527,37 +550,56 @@ banners:
     DEMONSTRATION. Inget som registreras här är studiedata.
 
 demo:
-  # Fönstret Demostyrning (tatp/demo.py, LOG N7.D23), bredvid försöksledarens skärm.
-  # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
-  title: Demostyrning
+  # Demonstrationens styrning, längs försöksledarfönstrets nederkant (tatp/demo.py; LOG
+  # N7.D23, N7.F16j). Varje knapp säger vad den skulle göra nu, eller varför den inte kan.
+  # DRAFT (LOG N7.D23, N7.F16j): written by the build, not ethics-sourced
   participant: 'Deltagare:'
   experimenter: 'Försöksledare:'
   modes:
     "off": En person
     watch: Simulerad, i lugn takt
     fast: Simulerad, snabb
-  skip_wait: Hoppa över väntan
-  finish_stage: Avsluta detta steg
+  skip_to: 'Hoppa till {what} ({time})'
+  skip_none: Ingen väntan att hoppa över
+  skip_none_detail: >-
+    Bara en tidsstyrd väntan på ett schemalagt steg kan hoppas över: capsaicinet, blocken,
+    återuppvärmningen, interventionens slut. Den stannar {lead} s innan steget ska göras, så att
+    nedräkningen och larmet fortfarande syns.
+  auto_run: 'Kör {step} automatiskt'
+  auto_running: 'Kör {step} automatiskt…'
+  fast_forward: 'Spola fram till:'
+  fast_forward_go: Kör
+  fast_forwarding: 'Spolar fram till {phase}…'
   skipped: 'Hoppade över {value} min väntan.'
-  nothing_to_skip: Inget att hoppa över nu.
-  finishing: Avslutar detta steg…
-  # Vad plagget styrs att göra, kanal för kanal (tatp/ui/garment_display.py, LOG N7.F12f).
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_title: Plagget, så som det styrs
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_channel: Kanal {channel}
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_on: på
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_off: av
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_pressure: '{state}, {value} kPa'
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_not_connected: 'Inte anslutet: inget styrs.'
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  garment_link_lost: 'Förbindelsen bröts: utgångarna kan fortfarande ha sitt senaste läge.'
-  # DRAFT (LOG N7.F12f): written by the build, not ethics-sourced
-  worn_note: 'Någon kan ha plagget på sig: deltagaren och försöksledaren är personer, inte simuleringar, och Avsluta detta steg är avstängt.'
+  clock: 'Klocka: {speed}× realtid'
+  clock_detail: >-
+    Varje tidsstyrt intervall i sessionen går så här många gånger snabbare än i en riktig
+    session. 1 är realtid, som en deltagare möter den. Väljs när demon startas (Klockans hastighet); ett
+    plagg som bärs går alltid i 1.
+  remote: 'Fjärrkontroll:'
+  worn_note: 'Plagget bärs: bara personer, ingen automatik eller framspolning.'
+  worn_note_detail: 'Någon kan ha plagget på sig: deltagaren och försöksledaren är personer, inte simuleringar, och automatisk körning och framspolning är avstängda.'
+  steps:
+    garment: plaggets påtagning
+    welcome: välkomstskärmen
+    stop_rehearsal: stoppövningen
+    masking_check: maskeringskontrollen
+    touch_calibration: beröringskalibreringen
+    baseline: baslinjeskattningarna
+    mark_zone: markeringen av huden
+    long: filamentserien
+    mapping: områdeskartläggningen
+    short_primary: filamenten i den primära zonen
+    brush_secondary: penseln i den sekundära zonen
+    brush_primary: penseln i den primära zonen
+    sensitisation: värmen
+    apply: capsaicinet
+    remove: borttagningen av capsaicinet
+    start: interventionens början
+    block: 'block {n}'
+    rekindle: återuppvärmningen
+    end: interventionens slut
+    session_end: sessionens slut
 
 dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.
@@ -658,6 +700,13 @@ hardware:
   # DRAFT (LOG N7.U6): written by the build, not ethics-sourced. Ovanför det senaste felet: hur
   # många som kom före det. Hela listan finns i verktygstipset och i data.
   faults_earlier: '{value} tidigare (detalj i data)'
+  # Kanalvisningen, en kolumn per kanal så som den styrs (tatp/ui/garment_display.py, LOG
+  # N7.F16i).
+  # DRAFT (LOG N7.F12f, N7.F16i): written by the build, not ethics-sourced
+  channel_caption: Kanal
+  pressure_caption: kPa
+  channel_on: på
+  channel_off: av
 
 fit_preview:
   # SPEC.md 11.1. Visas bara när fit_preview.enabled är på. Det enda stället där deltagarens
@@ -708,7 +757,7 @@ launcher:
   # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
   demo_title: Kör en demo
   # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
-  demo_speed: Hastighet (1 är realtid)
+  demo_speed: Klockans hastighet (1 är realtid; 10 gör varje tidsstyrd väntan 10 gånger kortare)
   # DRAFT (LOG N7.D23): written by the build, not ethics-sourced
   demo_participant: Deltagare
   # DRAFT (LOG N7.D23): written by the build, not ethics-sourced

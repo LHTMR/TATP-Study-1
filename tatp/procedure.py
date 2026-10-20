@@ -140,6 +140,48 @@ class Rig(QObject):
         participant.pressed_before_accepting.connect(self._pressed_before_accepting)
         participant.confirm_carried_over.connect(self._confirm_carried_over)
 
+        # The outermost procedure running on this rig -- the session runner in a session -- and
+        # whether the closed session's last Next step is awaited (`proceed_awaited`).
+        self.root: Procedure | None = None
+        self.closing = False
+        experimenter.set_proceed_source(self.proceed_awaited)
+        garment = session.garment
+        experimenter.set_garment(
+            garment.channels(), garment.limits.pressure_ceiling_kpa,
+            garment.per_channel_pressure,
+            float(session.config.hardware["screens"]["garment_highlight_s"]),
+        )
+
+    def proceed_awaited(self) -> bool:
+        """Whether a press of Next step now would do something (S, 20 Oct 2026; docs/LOG.md
+        N7.F16d): the innermost procedure waits for the go, or its trial listens for it.
+
+        The window offers Next step only then, so a press is never silently dropped. Which
+        steps wait for the go, and when, is the same in every condition: the touch start on
+        the experimenter's side is a fixed display whatever the delivery does (`SessionRunner
+        ._deliver`, N7.D17), which `tests/test_session_runner.py` holds by comparing the
+        sequence across the three conditions (SPEC.md 16)."""
+        if self.closing:
+            return True
+        procedure = self.root
+        if procedure is None or not procedure.running:
+            return False
+        while procedure._child is not None:
+            procedure = procedure._child
+        if procedure._on_go is not None:
+            return True
+        return procedure._trial is not None and self._listens_for_proceed(procedure._trial)
+
+    def _listens_for_proceed(self, trial: QObject) -> bool:
+        # A pinprick or brush application says so itself (`tatp.pinprick._RatedTrial`).
+        if getattr(trial, "awaits_proceed", False):
+            return True
+        connections = getattr(trial, "_connections", ())
+        if any(signal == self.experimenter.proceed_requested for signal, _ in connections):
+            return True
+        children = getattr(trial, "_children", ())
+        return any(self._listens_for_proceed(child) for child in children)
+
     def _advance(self) -> None:
         if self.session.garment.connected:
             self.session.garment.advance()
@@ -185,6 +227,8 @@ class Procedure(QObject):
         if self.running:
             raise RuntimeError(f"{type(self).__name__} is already running")
         self.running = True
+        if self.rig.root is None or not self.rig.root.running:
+            self.rig.root = self
         self.rig.interruptions.interrupted.connect(self._on_interrupted)
         self.rig.interruptions.resumed.connect(self._on_resumed)
         self.experimenter.proceed_requested.connect(self._on_proceed)
@@ -379,6 +423,7 @@ class Procedure(QObject):
         def show() -> None:
             self.participant.show_message(screen)
             self.experimenter.set_instruction(instruction)
+            self.experimenter.set_status("")
             self.experimenter.refresh()
 
         self.run_trial(
@@ -403,15 +448,21 @@ class Procedure(QObject):
         """
 
         def begin() -> None:
+            # Whatever the status said belongs to the step before: a wait for the go is a new
+            # step, and "Response received" left up reads as this one's (LOG N7.F16c).
+            self.experimenter.set_status("")
             if prepare is not None:
                 prepare()
             self._on_go = then
+            # Next step is offered from now (`Rig.proceed_awaited`), not at the next tick.
+            self.experimenter.refresh()
 
         self.step(begin)
 
     def on_proceed(self, then: Callable[[], None] | None) -> None:
         """What the experimenter's next go does, outside a waiting step; None for nothing."""
         self._on_go = then
+        self.experimenter.refresh()
 
     def _on_proceed(self) -> None:
         # A press while interrupted must not launch anything behind the stop screen, and one

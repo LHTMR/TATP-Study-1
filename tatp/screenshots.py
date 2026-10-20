@@ -47,6 +47,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from tatp import config as cfg
 from tatp import pattern_design as pd
+from tatp import schedule
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
 from tatp.demo import OFF, DemoControls
@@ -60,9 +61,11 @@ from tatp.pinprick import F40Fit, LongResult
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source
 from tatp.responder import Action, Responder
 from tatp.resume import offer_wording
+from tatp.session_runner import session_phases
 from tatp.touchcal import MATCH_TARGET, FitReady
 from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
+from tatp.ui.garment_display import states_from_status
 from tatp.ui.participant import ParticipantWindow
 from tools.design_pattern import DesignerWindow
 
@@ -113,8 +116,10 @@ SAMPLE_DUE_IN_S = 245.0
 SAMPLE_DUE_NOW_S = -5.0
 SAMPLE_OVERDUE_S = -420.0
 SAMPLE_HARDWARE = {"connected": True, "link_lost": False, "faults": [],
-                   "channel_pressure_kpa": None}
+                   "channel_pressure_kpa": None, "channels_on": None}
 SAMPLE_PRESSURES_KPA = {1: 38.5, 2: 41.0, 3: 40.0, 4: 39.5, 5: 42.0}
+# The channels on while a channel is matched to the reference: those two (LOG N7.F16i).
+SAMPLE_CHANNELS_ON = [2, 3]
 SAMPLE_FAULT = "channel 4: valve did not report"
 # Unresolved open items as `config.OpenItem.__str__` gives them, "[number] summary".
 SAMPLE_OPEN_ITEMS = ["[L3] audio levels", "[5] patterns"]
@@ -151,6 +156,10 @@ SAMPLE_DEMO_CHANNELS_ON = (2, 3)
 SAMPLE_DEMO_CHANGED = 4
 SAMPLE_DEMO_CHANGED_AGO_S = 0.2
 SAMPLE_DEMO_LOST = "no reply from the device"
+# Where the demonstration in the pictures is: pre-sensitisation's filament series, at its go.
+SAMPLE_DEMO_PHASE = "pre_sensitisation"
+SAMPLE_DEMO_STAGE = "pre_sensitisation.long"
+SAMPLE_DEMO_FILAMENT = "26"
 SAMPLE_RESUME_BLOCKS = ("1", "2", "3", "4")
 SAMPLE_RESUME_AGO_MIN = 72
 SAMPLE_SESSION_NUMBER = 1
@@ -219,7 +228,7 @@ def _experimenter_view(**overrides) -> dict:
         "next_event": None,
         "interruption": None,
         "hardware": {"connected": True, "link_lost": False, "faults": [],
-                     "channel_pressure_kpa": None},
+                     "channel_pressure_kpa": None, "channels_on": None},
     }
     view.update(overrides)
     return view
@@ -265,11 +274,12 @@ def _participant_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             _grab(window),
         )
 
-    window.show_preference()
+    window.show_preference(1, len(config.study1["patterns"]["preference_candidates"]))
     yield Shot(
         f"participant_{language}_preference",
         f"The preference selection (SPEC.md 9 step 6): the opening line, both large buttons "
-        f"drawn with their labels, and the confirm sentence, {language}.",
+        f"drawn with their labels, the place in the list between them (LOG N7.F16k), and the "
+        f"confirm sentence, {language}.",
         _grab(window),
     )
 
@@ -461,12 +471,13 @@ def _experimenter_states(config: cfg.Config) -> dict:
     instructions = text["instructions"]
     step_mm = f"{float(config.study1['mapping']['step_size_mm']):g}"
     filament = SAMPLE_F40["filament"]
-    apply_filament = instructions["apply_filament"].format(
-        filament=filament, force_mn=f"{SAMPLE_F40['filament_mn']:g}", site=SAMPLE_SITE,
+    apply_filament = cfg.instruction(
+        config, "apply_filament", filament=filament,
+        force_mn=f"{SAMPLE_F40['filament_mn']:g}", site=SAMPLE_SITE,
         region=text["terms"]["regions"]["primary"],
     )
-    apply_brush = instructions["apply_brush"].format(
-        site=SAMPLE_SITE, region=text["terms"]["regions"]["secondary"]
+    apply_brush = cfg.instruction(
+        config, "apply_brush", site=SAMPLE_SITE, region=text["terms"]["regions"]["secondary"]
     )
     path = text["terms"]["mapping_paths"][SAMPLE_PATH]
     upcoming = {**SAMPLE_BLOCK, "due_in_s": SAMPLE_DUE_IN_S, "overdue": False}
@@ -696,6 +707,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
             "fault, in red.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA,
+                          "channels_on": SAMPLE_CHANNELS_ON,
                           "faults": [SAMPLE_FAULT]}},
             instruct("touchcal_match", **SAMPLE_MATCH),
         ),
@@ -740,7 +752,8 @@ def _experimenter_states(config: cfg.Config) -> dict:
             "The evenness question answered 'uneven': Rebalance offered beside Next step, "
             "because the procedure waits on either.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
-             "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA}},
+             "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA,
+                          "channels_on": SAMPLE_CHANNELS_ON}},
             lambda window: (
                 window.set_instruction(cfg.instruction(config, "touchcal_uneven")),
                 window.set_actions_enabled(rebalance=True),
@@ -790,11 +803,67 @@ def _experimenter_states(config: cfg.Config) -> dict:
     }
 
 
+def _session_phases(config: cfg.Config) -> list[str]:
+    """The phases on a session's timeline, as `SessionRunner.phases` lists them."""
+    return session_phases(schedule.generate(config.schedule))
+
+
+def _grab_checked(window: QWidget, name: str) -> QPixmap:
+    """`_grab`, refusing a layout that no longer fits the screen: it would grow the grab and
+    pass as a differently-sized picture."""
+    pixmap = _grab(window)
+    assert pixmap.height() == HEIGHT_PX, f"{name} needs {pixmap.height()} px of {HEIGHT_PX}"
+    return pixmap
+
+
+def _demo_window(config: cfg.Config, sample: _SampleDemo, lose: str | None = None):
+    """A demonstration's experimenter window, its channels fed by `sample` as `Demo` feeds
+    them, with the demo controls along its foot."""
+    link_lost = lose is not None
+    hardware = {**SAMPLE_HARDWARE, "connected": not link_lost, "link_lost": link_lost,
+                "faults": [SAMPLE_LINK_FAULT] if link_lost else []}
+    view = _experimenter_view(demo=True, phase=SAMPLE_DEMO_PHASE, elapsed_s=SAMPLE_ELAPSED_S,
+                              garment_connected=not link_lost, hardware=hardware)
+    window = _session_window(config, lambda: view)
+    window.resize(WIDTH_PX, HEIGHT_PX)
+    window.garment_fed_elsewhere = True
+    window.garment_display.show_states(sample.states(), False, 0.0)
+    if lose is not None:
+        # As `Demo` feeds a lost link: the last commanded state held, in amber.
+        sample.garment.lost(lose)
+        window.garment_display.show_states(sample.states(), True, 0.0)
+    window.garment_display.setVisible(True)
+    region = config.experimenter_text["terms"]["regions"]["secondary"]
+    window.set_instruction(cfg.instruction(config, "ready_long", region=region,
+                                           filament=SAMPLE_DEMO_FILAMENT))
+    responder = Responder(config.hardware)
+    controls = DemoControls(
+        sample, config.experimenter_text,
+        {action: responder.symbol_for(action, pointing_at_stop=True) for action in Action},
+    )
+    controls.timer.stop()
+    window.add_demo_panel(controls)
+    window.refresh()
+    return window, controls
+
+
+def _session_window(config: cfg.Config, read_view) -> ExperimenterWindow:
+    """The experimenter window as a session sets it up: the phases on its timeline (LOG
+    N7.F16h) and the mock garment's channels in its side column (N7.F16i)."""
+    window = ExperimenterWindow(config.experimenter_text, read_view)
+    window.set_timeline(_session_phases(config))
+    garment = MockGarment(Limits.from_config(config.hardware), Clock())
+    window.set_garment(garment.channels(), garment.limits.pressure_ceiling_kpa,
+                       garment.per_channel_pressure,
+                       float(config.hardware["screens"]["garment_highlight_s"]))
+    return window
+
+
 def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     text = config.experimenter_text
     for name, (description, overrides, push) in _experimenter_states(config).items():
         view = _experimenter_view(**overrides)
-        window = ExperimenterWindow(text, lambda view=view: view)
+        window = _session_window(config, lambda view=view: view)
         # Sized first, so a long instruction is fitted to the width it will be drawn at.
         window.resize(WIDTH_PX, HEIGHT_PX)
         if push is not None:
@@ -886,19 +955,21 @@ def _grab_dialog(dialog: QWidget) -> QPixmap:
 
 
 class _SampleDemo(QObject):
-    """What the Demo controls draw from, with no session behind it: a person at both places,
-    and a connected mock garment with every channel's pressure set and some channels on."""
+    """What the demo controls draw from, with no session behind it: a person at both places,
+    a connected mock garment with every channel's pressure set and some channels on, the
+    filament series of pre-sensitisation under way, and a skippable wait only when asked."""
 
     stage_started = Signal(str)
 
-    def __init__(self, config: cfg.Config, worn: bool = False):
+    def __init__(self, config: cfg.Config, worn: bool = False, skippable_s=None):
         super().__init__()
         self.runner = self
         self.session = self
         # Drawn as on a worn garment (tatp/demo.py), the mock standing in for it.
         self.worn = worn
         self.settings = config.study1["demo"]
-        self.garment = MockGarment(Limits.from_config(config.hardware), Clock())
+        self.clock = Clock()
+        self.garment = MockGarment(Limits.from_config(config.hardware), self.clock)
         self.garment.connect()
         kpa = self.garment.limits.pressure_ceiling_kpa * SAMPLE_DEMO_PRESSURE_FRACTION
         for channel in self.garment.channels():
@@ -908,9 +979,28 @@ class _SampleDemo(QObject):
         self.participant_mode = OFF
         self.experimenter_mode = OFF
         self.finishing = False
+        self.fast_forward_to = None
+        self.phases = _session_phases(config)
+        self.phase = SAMPLE_DEMO_PHASE
+        self.stages = [type("Stage", (), {"id": SAMPLE_DEMO_STAGE})()]
+        self.stage_index = 0
+        self._skippable_s = skippable_s
 
     def choose(self, who: str, mode: str) -> None:
         setattr(self, f"{who}_mode", mode)
+
+    def skippable_s(self) -> float | None:
+        return self._skippable_s
+
+    def next_event(self) -> dict | None:
+        upcoming = {"kind": "phase", "label_key": "capsaicin_removal", "block_index": None,
+                    "block_type": None, "due_in_s": SAMPLE_DUE_IN_S, "overdue": False}
+        return upcoming if self._skippable_s is not None else None
+
+    def states(self) -> dict:
+        return states_from_status(self.garment.status(), self.garment.channels(),
+                                  bool(self.garment.connected),
+                                  self.garment.per_channel_pressure)
 
 
 def _sample_detectors(screens, ports, remote, outputs) -> Detectors:
@@ -978,41 +1068,43 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"participant and the experimenter ({language}).",
         _grab_dialog(demo),
     )
-    controls = DemoControls(_SampleDemo(config), config.experimenter_text)
-    # Drawn at the moments each shot names: its timer runs only while shown, which a grab
-    # does not do.
-    display = controls.garment_display
+    sample = _SampleDemo(config)
+    window, controls = _demo_window(config, sample)
     yield Shot(
         f"experimenter_{language}_demo_controls",
-        f"The Demo controls window beside a demonstration (docs/LOG.md N7.D23, N7.F12f): what "
-        f"the garment is commanded to do, steady -- every channel's pressure set, channels "
-        f"{', '.join(map(str, SAMPLE_DEMO_CHANNELS_ON))} on -- then who presses for the "
-        f"participant and the experimenter, changeable at any time, Skip the wait, and Finish "
-        f"this stage ({language}).",
-        _grab_dialog(controls),
+        f"A demonstration's experimenter window (docs/LOG.md N7.D23, N7.F16j): the timeline, "
+        f"the channels as commanded in the side column -- every channel's pressure set, "
+        f"channels {', '.join(map(str, SAMPLE_DEMO_CHANNELS_ON))} on -- and the demo controls "
+        f"along the foot: who presses for the participant and the experimenter, the clock's "
+        f"speed, the remote's buttons, Skip saying there is no wait to skip, Auto-run naming "
+        f"the step under way, and Fast-forward offering the phases to come ({language}).",
+        _grab_checked(window, f"experimenter_{language}_demo_controls"),
     )
-    controls.demo.garment.set_channel(SAMPLE_DEMO_CHANGED, True)
+    sample.garment.set_channel(SAMPLE_DEMO_CHANGED, True)
     changed_s = time.monotonic()
-    display.poll(changed_s)
-    display.poll(changed_s + SAMPLE_DEMO_CHANGED_AGO_S)
+    display = window.garment_display
+    display.show_states(sample.states(), False, changed_s)
+    display.show_states(sample.states(), False, changed_s + SAMPLE_DEMO_CHANGED_AGO_S)
+    sample._skippable_s = SAMPLE_DUE_IN_S - float(sample.settings["skip_lead_s"])
+    controls.remote.set_held(Action.INCREASE, True)
+    controls.sync()
     yield Shot(
         f"experimenter_{language}_demo_controls_garment_changed",
-        f"The Demo controls' garment display {SAMPLE_DEMO_CHANGED_AGO_S:g} s after channel "
-        f"{SAMPLE_DEMO_CHANGED} was turned on (docs/LOG.md N7.F12f): its row lit and its bar "
-        f"outlined, fading back over demo.garment_highlight_s ({language}).",
-        _grab_dialog(controls),
+        f"The same {SAMPLE_DEMO_CHANGED_AGO_S:g} s after channel {SAMPLE_DEMO_CHANGED} was "
+        f"turned on (docs/LOG.md N7.F12f): its row lit and its bar outlined, fading back over "
+        f"screens.garment_highlight_s; the remote's right button held; and a timed wait "
+        f"running, which Skip names with what is left of it ({language}).",
+        _grab_checked(window, f"experimenter_{language}_demo_controls_garment_changed"),
     )
-    worn = DemoControls(_SampleDemo(config, worn=True), config.experimenter_text)
-    worn.demo.garment.lost(SAMPLE_DEMO_LOST)
-    worn.garment_display.poll(time.monotonic())
+    window, _ = _demo_window(config, _SampleDemo(config, worn=True), lose=SAMPLE_DEMO_LOST)
     yield Shot(
         f"experimenter_{language}_demo_controls_worn_link_lost",
-        f"The Demo controls on a worn garment, its link lost (docs/LOG.md N7.F12f): the "
-        f"participant and the experimenter people and Finish this stage off, said in amber; "
-        f"the channels held "
-        f"at their last command in amber, not shown switching off, with the warning that the "
-        f"outputs may still hold it (N7.U16) ({language}).",
-        _grab_dialog(worn),
+        f"A demonstration on a worn garment, its link lost (docs/LOG.md N7.F12f): the "
+        f"participant and the experimenter people, and auto-run and fast-forward off, said in "
+        f"amber; the channels held at their last command in amber, not shown switching off, "
+        f"and the side column's warning that the outputs may still hold it (N7.U16) "
+        f"({language}).",
+        _grab_checked(window, f"experimenter_{language}_demo_controls_worn_link_lost"),
     )
 
     dialog = launcher.session_dialog()
