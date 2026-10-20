@@ -187,6 +187,12 @@ fix it on a `pilot/` branch.
    - `tests/test_session_runner.py::test_the_session_ends_on_the_experimenters_last_next_step`
      failed once under parallel load on the Mac and passed 3 of 3 alone (a double press "at
      once" timed in real seconds). Watch for it.
+   - `tests/test_session_runner.py::test_next_step_while_the_touch_comes_back_launches_nothing[participant_preferred]`
+     stalled once in the gate on `main` right after the N7.F17 merge ("the session stalled at
+     PinprickTrial, block.1", after the 90 s run timeout), then passed in the next full run and
+     3 of 3 alone. Not diagnosed. N7.F17a made the scale follow the delivery press with no
+     session-time gap, so a timing interaction with the driver's press is the first suspect;
+     if it recurs, log the participant window's screen and the trial's state at the stall.
 3. **Left open, not blocking:**
    - preflight's sound check can freeze the launcher for up to 8 s (N7.F12e2);
    - the 640 px laptop-height target is exceeded in the pilot case (fine at 1280×800);
