@@ -75,6 +75,11 @@ training:
 # way to tell that nothing was asked of them yet.
 training_listen: Listen to the experimenter.
 
+# DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+# Below a rating scale, where the practice line goes, when ▶ is pressed before the marker has
+# been moved; gone with the first press that moves it. The press did nothing visible before.
+vas_marker_hint: First move the marker with the two large buttons, then press ▶.
+
 # DRAFT (LOG N7.F12g1): written by the build, not ethics-sourced
 # The visual warning cue before every stimulus (SPEC.md 10.5), alone on the screen at the
 # message position, with the tone over the noise. Replaces the filled circle (S, 15 Oct 2026),
@@ -128,9 +133,11 @@ screens:
     That is the end of today's visit.
     Thank you.
     Please wait for the experimenter.
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. "Continues shortly" was
+  # untrue for a long pause and for the earplug exchange (review of N7.F16).
   paused: |-
     Paused.
-    The session continues shortly.
+    Please wait for the experimenter.
   emergency_stop: |-
     Stopped.
     The touch has been switched off.

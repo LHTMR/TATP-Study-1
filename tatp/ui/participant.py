@@ -681,6 +681,7 @@ class ParticipantWindow(QWidget):
         )
         self.cue = _CueScreen(self.text["warning_cue"], responder)
         self.vas = VasWidget(config.study1["vas"], responder, clock)
+        self.vas.marker_hint = self.text["vas_marker_hint"]
         self.vas.confirmed.connect(self.confirmed)
         self.vas.emergency_stop.connect(self.emergency_stop)
         self.vas.pressed_without_marker.connect(self.pressed_without_marker)

@@ -227,6 +227,7 @@ def _experimenter_view(**overrides) -> dict:
         "demo": False,
         "next_event": None,
         "interruption": None,
+        "resuming": False,
         "hardware": {"connected": True, "link_lost": False, "faults": [],
                      "channel_pressure_kpa": None, "channels_on": None},
     }
@@ -471,8 +472,8 @@ def _experimenter_states(config: cfg.Config) -> dict:
     instructions = text["instructions"]
     step_mm = f"{float(config.study1['mapping']['step_size_mm']):g}"
     filament = SAMPLE_F40["filament"]
-    apply_filament = cfg.instruction(
-        config, "apply_filament", filament=filament,
+    applied_filament = cfg.instruction(
+        config, "applied_filament", filament=filament,
         force_mn=f"{SAMPLE_F40['filament_mn']:g}", site=SAMPLE_SITE,
         region=text["terms"]["regions"]["primary"],
     )
@@ -483,7 +484,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
     upcoming = {**SAMPLE_BLOCK, "due_in_s": SAMPLE_DUE_IN_S, "overdue": False}
 
     def pinprick(window):
-        window.set_instruction(apply_filament)
+        window.set_instruction(applied_filament)
         window.set_target("primary", SAMPLE_SITE, filament=True)
         window.set_status(instructions["await_participant"])
         # What a filament trial offers while it runs (tatp/pinprick.py `_connect_extra`).

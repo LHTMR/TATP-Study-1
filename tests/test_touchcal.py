@@ -236,14 +236,17 @@ def test_step_1_runs_as_its_instruction_tells_the_experimenter(loaded, language)
     fraction = float(loaded.study1["touch_calibration"]["start_offset_fraction"])
     assert [p.target_key for p in plans] == ["just_noticeable", "just_uncomfortable"]
     assert all(touchcal.start_pressure_kpa(p, fraction) == 0.0 for p in plans)
-    # The wording names the two anchors as the participant text does.
+    # The wording names each anchor as the participant text does, in the instruction for it
+    # (`terms.anchor_targets`, review of N7.F16).
     text = cfg.load(language, language)
     bracket = text.experimenter_text["instructions"]["touchcal_bracket"]
+    assert "{target}" in bracket
+    targets = text.experimenter_text["terms"]["anchor_targets"]
     anchors = text.participant_text["vas"]["intensity"]["anchors"]
     labels = {anchor["pct"]: anchor["label"] for anchor in anchors}
     for plan in plans:
         label = labels[plan.anchor_percent]
-        assert label in bracket, f"{label!r} is not how {language} touchcal_bracket names it"
+        assert label == targets[plan.target_key], f"{label!r} is not how {language} names it"
 
 
 # -- one adjustment end to end ------------------------------------------------------------

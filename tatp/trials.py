@@ -282,12 +282,16 @@ class ExperimenterChoice(Trial):
         actions: Mapping[str, SignalInstance],
         instruction: str,
         show: Callable[[], None] | None = None,
+        alternative: str | None = None,
         **values: object,
     ):
+        """`alternative` is the `controls` key labelling the other-answer button, where one of
+        `actions` is `alternative_requested` (review of N7.F16)."""
         super().__init__(session, participant, experimenter)
         self.actions = dict(actions)
         self.instruction = instruction
         self.show = show
+        self.alternative = alternative
         self.values = values
 
     def start(self) -> None:
@@ -296,6 +300,9 @@ class ExperimenterChoice(Trial):
         # The window's Rebalance and Accept / Re-run are enabled exactly while a procedure waits
         # on them, which only this trial knows.
         self.experimenter.set_actions_enabled(**self._awaited(True))
+        if self.alternative is not None:
+            self.experimenter.offer_alternative(
+                self.experimenter.text["controls"][self.alternative])
         if self.show is not None:
             self.show()
         self.instruct(self.instruction, **self.values)
@@ -303,15 +310,20 @@ class ExperimenterChoice(Trial):
     def _teardown(self) -> None:
         super()._teardown()
         self.experimenter.set_actions_enabled(**self._awaited(False))
+        if self.alternative is not None:
+            self.experimenter.offer_alternative(None)
 
     def _awaited(self, waiting: bool) -> dict[str, bool]:
+        """Only what this choice listens for is offered: a button that would be refused is
+        not drawn (review of N7.F16)."""
         signals = list(self.actions.values())
         window = self.experimenter
         flags = {}
         if window.rebalance_requested in signals:
             flags["rebalance"] = waiting
         if window.fit_accepted in signals or window.fit_rerun_requested in signals:
-            flags["fit_decision"] = waiting
+            flags["fit_accept"] = waiting and window.fit_accepted in signals
+            flags["fit_rerun"] = waiting and window.fit_rerun_requested in signals
         return flags
 
     def _slot(self, name: str) -> Callable:

@@ -46,6 +46,9 @@ screens:
     and auto-run and fast-forward off, said in amber; the channels held at their last
     command in amber, not shown switching off, and the side column''s warning that
     the outputs may still hold it (N7.U16) (en).'
+  experimenter_en_demo_differences: 'Demo vs session (docs/LOG.md N7.F17d): every
+    way a demonstration on the mock differs from a session, each with the session''s
+    own value, from the configuration (en).'
   experimenter_en_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column
@@ -250,6 +253,9 @@ screens:
     and auto-run and fast-forward off, said in amber; the channels held at their last
     command in amber, not shown switching off, and the side column''s warning that
     the outputs may still hold it (N7.U16) (sv).'
+  experimenter_sv_demo_differences: 'Demo vs session (docs/LOG.md N7.F17d): every
+    way a demonstration on the mock differs from a session, each with the session''s
+    own value, from the configuration (sv).'
   experimenter_sv_designer_grid: 'An example pattern opened on the Grid tab, at the
     lab laptop''s size: the pattern''s fields in two strips across the top; the grid
     across the whole width, one compact row per row interval with its time, one column

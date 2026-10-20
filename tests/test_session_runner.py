@@ -62,6 +62,11 @@ def compressed_schedule(loaded: cfg.Config) -> dict:
         block_spacing_min=1.5, expected_duration_min={"pinprick": 0.5, "touch": 0.5},
     )
     schedule["validation"]["max_session_duration_min"] = 1000.0
+    # Wider than the rekindle's heat, so the block after it is already due when the removal is
+    # awaited however promptly the session runs. Since the scale comes at the delivery press
+    # (LOG N7.F17a) the protocols no longer make every step late, and whether this one was came
+    # down to the machine's load.
+    schedule["validation"]["due_alert_lead_s"] = 120.0
     return schedule
 
 
@@ -462,8 +467,8 @@ def test_the_mapping_areas_are_recorded(finished):
 def test_every_scheduled_step_is_alerted_and_every_alert_logged(finished):
     alerts = [r["detail"] for r in _events(finished.session)
               if r["event"] == "experimenter_alert"]
-    # The compressed grid is shorter than the protocols, so every step here is already late when
-    # it arrives, and the one alert it gets is the overdue one -- once, not a burst.
+    # One alert a step, whether it arrives early (the due one, on its timer), a little late (the
+    # due one, at once) or very late (the overdue one alone) -- never a burst.
     for what in ("block 1", "block 2", "block 3", "block 4", "rekindle", "intervention"):
         assert sum(alert.startswith(what + " ") for alert in alerts) == 1, what
     assert "block 1 overdue" in alerts
@@ -1368,6 +1373,12 @@ def test_abort_marks_the_open_block_and_flags_missing_distances(app, loaded, tmp
     assert [r["aborted"] for r in _rows(session, "blocks")] == ["true"]
     areas = _rows(session, "sh_area")
     assert [r["area_missing"] for r in areas] == ["true"]
+    # Ended as a completed session is, on the end screen and a Next step (LOG N7.F17e), not by
+    # quitting with nobody shown the data were saved.
+    participant = runner.participant
+    assert participant.message.text == participant.text["screens"]["session_end"]
+    assert runner.experimenter._instruction_text == runner.instruction_text("session_aborted")
+    assert runner.rig.closing and runner.rig.proceed_awaited()
 
 
 def test_a_note_is_logged_and_confirmed_with_its_time(app, loaded, tmp_path):

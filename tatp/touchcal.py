@@ -92,6 +92,10 @@ ACCEPT = "accept"
 RERUN = "rerun"
 REBALANCE = "rebalance"
 PROCEED = "proceed"
+# `controls` keys of the other-answer button (review of N7.F16): the fallback after an
+# unusable estimate with no re-runs left, and the flagged channel after an undefined gain.
+FIT_FALLBACK = "fit_fallback"
+GAIN_FALLBACK_CONTROL = "gain_fallback"
 # A re-calibration (docs/LOG.md N7.F12a1): the other path beside `REBALANCE`, the trigger
 # beside `interruption.EMERGENCY_STOP`, what a restarted run's `touchcal_fit.rerun_reason`
 # starts with, and the calibration's steps as the `recalibration` event names the one it
@@ -1544,6 +1548,7 @@ class TouchCalibration(Procedure):
         # A new run has no ratings of its own yet, so nothing to skip on.
         self.experimenter.set_actions_enabled(skip_calibration=False)
         plans = list(anchor_plans(self.session.config, self.run_index))
+        self._anchor_count = len(plans)
         self._introduce(INTRO_BRACKET, lambda: self._anchor(plans))
 
     def _introduce(self, key: str, then: Callable[[], None], readjust: bool = False) -> None:
@@ -1566,10 +1571,11 @@ class TouchCalibration(Procedure):
         def on(_) -> None:
             self.session.garment.set_channel(plan.channel, True)
             self.run_trial(lambda: Adjustment(*self._windows(), plan), adjusted)
-
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touchcal_bracket"]
-        )
+        # Which anchor, so the experimenter can tell the two apart (review of N7.F16).
+        self.experimenter.set_instruction(self.instruction_text(
+            "touchcal_bracket", index=self._anchor_count - len(plans) + 1,
+            count=self._anchor_count,
+            target=self.experimenter.text["terms"]["anchor_targets"][plan.target_key]))
         self.run_trial(lambda: Cue(*self._windows()), on)
 
     def _estimate(self) -> None:
@@ -1740,40 +1746,36 @@ class TouchCalibration(Procedure):
 
         def decided(outcome) -> None:
             name, args = outcome
-            # The fit preview, if open, closes on the decision that ends the wait -- not on a
-            # refused one, which puts the same estimate to the experimenter again.
-            if name == RERUN and exhausted:
-                self.session.log("rerun_refused", severity="warning",
-                                 detail=f"{self.reruns} of {self.max_reruns} re-runs used")
-                if usable:
-                    # "The re-run limit ... has been reached. This estimate will be used."
-                    self.experimenter.set_warning(
-                        self.experimenter.text["dialogs"]["fit_rerun_exhausted"]
-                    )
-                    self.experimenter.hide_fit_preview()
-                    self._accept(reasons, usable)
-                else:
-                    self._decide(usable, reasons)
-            elif name == RERUN:
-                self.experimenter.hide_fit_preview()
+            # Only what is offered below can arrive, so nothing here is refused (review of
+            # N7.F16: a refused press put the same estimate up again with nothing to say why).
+            assert name in actions, f"{name} was not offered"
+            self.experimenter.hide_fit_preview()
+            if name == RERUN:
                 self._rerun(reasons, args[0] if args else "")
-            elif usable or exhausted:
-                self.experimenter.hide_fit_preview()
-                self._accept(reasons, usable)
             else:
-                self.session.log("accept_refused", severity="warning",
-                                 detail="the estimate cannot be used; re-runs remain")
-                self._decide(usable, reasons)
+                self._accept(reasons, usable)
+
+        # Only the choices that will be taken are offered (review of N7.F16): no Accept while
+        # the estimate cannot be used and re-runs remain, no Re-run once they are used up, and
+        # the fallback then on a button that says it is one.
+        window = self.experimenter
+        if usable or not reasons:
+            actions = {ACCEPT: window.fit_accepted}
+            if not exhausted:
+                actions[RERUN] = window.fit_rerun_requested
+            alternative = None
+        elif exhausted:
+            actions, alternative = {ACCEPT: window.alternative_requested}, FIT_FALLBACK
+        else:
+            actions, alternative = {RERUN: window.fit_rerun_requested}, None
 
         self.run_trial(
             lambda: ExperimenterChoice(
                 *self._windows(),
-                {
-                    ACCEPT: self.experimenter.fit_accepted,
-                    RERUN: self.experimenter.fit_rerun_requested,
-                },
+                actions,
                 instruction,
                 show=self.rig.show_between,
+                alternative=alternative,
                 value=value,
             ),
             decided,
@@ -2000,9 +2002,10 @@ class TouchCalibration(Procedure):
             lambda: ExperimenterChoice(
                 *self._windows(),
                 {REBALANCE: self.experimenter.rebalance_requested,
-                 PROCEED: self.experimenter.proceed_requested},
+                 PROCEED: self.experimenter.alternative_requested},
                 "touchcal_gain_undefined",
                 show=self.rig.show_between,
+                alternative=GAIN_FALLBACK_CONTROL,
                 channel=channel,
             ),
             decided,

@@ -73,6 +73,11 @@ training:
 # Under skalan, där övningsraden sedan står, medan försöksledaren förklarar skalan muntligt.
 training_listen: Lyssna på försöksledaren.
 
+# DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+# Below a rating scale, where the practice line goes, when ▶ is pressed before the marker has
+# been moved; gone with the first press that moves it. The press did nothing visible before.
+vas_marker_hint: Flytta först markören med de två stora knapparna, tryck sedan på ▶.
+
 # DRAFT (LOG N7.F12g1): written by the build, not ethics-sourced
 # Den visuella varningssignalen före varje stimulus (SPEC.md 10.5), ensam på skärmen där
 # meddelanden står, med tonen över bruset. Ersätter cirkeln (S, 15 okt 2026), som signalerade
@@ -123,9 +128,10 @@ screens:
     Då är dagens besök slut.
     Tack.
     Vänta kvar tills försöksledaren kommer.
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
   paused: |-
     Pausad.
-    Sessionen fortsätter snart.
+    Vänta på försöksledaren.
   emergency_stop: |-
     Stoppat.
     Beröringen är avstängd.

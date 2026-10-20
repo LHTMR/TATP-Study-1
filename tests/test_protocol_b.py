@@ -268,22 +268,22 @@ def test_a_rerun_takes_down_the_warning_about_the_run_it_discards(rig):
 
 
 def test_an_estimate_that_cannot_be_inverted_cannot_be_accepted(rig):
-    session = rig.session
+    """Accept is not offered for it while re-runs remain (review of N7.F16), rather than
+    refused after a press."""
     procedure = touchcal.TouchCalibration(rig)
     virtual = Virtual(rig, procedure)
-    tries = []
+    offered = []
 
     def decide(trial):
-        tries.append(trial.instruction)
-        return ("accept", ()) if len(tries) == 1 else ("rerun", ("second try",))
+        offered.append((trial.instruction, sorted(trial.actions)))
+        return ("rerun", ("second try",)) if len(offered) == 1 else ("accept", ())
 
     virtual.decide = decide
     virtual.before_step = lambda trial: (
         _flat(rig)(trial) if procedure.run_index == 1 else None
     )
     virtual.run()
-    assert _events(session, "accept_refused")
-    assert tries[:2] == ["touchcal_stage1_unusable", "touchcal_stage1_unusable"]
+    assert offered[0] == ("touchcal_stage1_unusable", ["rerun"])
 
 
 def test_the_fit_preview_puts_even_a_good_fit_to_the_experimenter(app, loaded, tmp_path):
@@ -814,21 +814,22 @@ def test_unusable_and_out_of_reruns_can_only_continue_on_a_recorded_fallback(app
         rig.session.close()
 
 
-def test_a_rerun_refused_at_the_limit_on_an_unusable_estimate_asks_again_truthfully(
-    app, loaded, tmp_path
-):
+def test_an_unusable_estimate_at_the_limit_offers_only_the_fallback(app, loaded, tmp_path):
+    """No re-run is offered once they are used up, and the fallback is on a button of its own
+    that says it is one (review of N7.F16)."""
     preview = {**loaded.study1["fit_preview"], "max_reruns": 0}
     rig = make_rig(make_config(loaded, tmp_path, fit_preview=preview))
     try:
-        answers = iter([("rerun", ("again",)), ("accept", ())])
-        instructions = []
+        offered = []
         procedure = touchcal.TouchCalibration(rig)
         virtual = Virtual(rig, procedure)
-        virtual.decide = lambda trial: instructions.append(trial.instruction) or next(answers)
+        virtual.decide = lambda trial: offered.append(
+            (trial.instruction, sorted(trial.actions), rig.experimenter._alternative)
+        ) or ("accept", ())
         virtual.before_step = _flat(rig)
         virtual.run()
-        assert instructions == ["touchcal_stage1_exhausted"] * 2
-        assert _events(rig.session, "rerun_refused")
+        fallback = rig.experimenter.text["controls"][touchcal.FIT_FALLBACK]
+        assert offered == [("touchcal_stage1_exhausted", ["accept"], fallback)]
     finally:
         rig.session.close()
 

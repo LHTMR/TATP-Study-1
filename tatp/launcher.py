@@ -220,8 +220,10 @@ class SessionDialog(QDialog):
         start: Callable[[cfg.Config, argparse.Namespace], None],
         load: Callable[[str, str], cfg.Config] = cfg.load,
         demo: dict | None = None,
+        garment: str | None = None,
         parent: QWidget | None = None,
     ):
+        """`garment` is the hardware page's, when it was continued from (`LauncherWindow`)."""
         super().__init__(parent)
         self.text = text
         self.environment = environment
@@ -290,6 +292,8 @@ class SessionDialog(QDialog):
         form.addRow("", self.redcap_form)
         if demo is not None:
             self._demo_fields(demo)
+        if garment is not None:
+            self.garment.setCurrentIndex(self.garment.findData(garment))
 
         self.report = label(SIZE_BODY, wrap=True)
         self.check_button = button(words["check"], SIZE_BODY)
@@ -297,7 +301,8 @@ class SessionDialog(QDialog):
         # Cancel, not Close, beside Start session: it leaves without starting (S, first lab
         # run, docs/LOG.md N7.F5).
         self.cancel_button = button(words["cancel"], SIZE_BODY)
-        self.start_button.setEnabled(False)
+        # Start is always pressable, and checks first (`start`): disabled until a separate
+        # Check, it looked broken (LOG N7.F17e). What a check found goes stale with an edit.
         self.check_button.clicked.connect(self.check)
         self.start_button.clicked.connect(self.start)
         self.cancel_button.clicked.connect(self.reject)
@@ -446,7 +451,7 @@ class SessionDialog(QDialog):
         self.form.setRowVisible(self.pattern_folder_hint, not text.strip())
 
     def _stale(self, *_) -> None:
-        self.start_button.setEnabled(False)
+        self.report.clear()
 
     # -- what was entered -------------------------------------------------------------
 
@@ -513,7 +518,6 @@ class SessionDialog(QDialog):
         missing = self.missing()
         if missing:
             self._show([words["missing_field"].format(value=", ".join(missing))], [])
-            self.start_button.setEnabled(False)
             return False
         args = self.args()
         # Kept for Start, so the session is the one checked: a demonstration's configuration
@@ -529,7 +533,6 @@ class SessionDialog(QDialog):
             line = formatted(lookup(self.text, key), value)
             (refusals if severity == REFUSE else warnings).append(line)
         self._show(refusals, warnings)
-        self.start_button.setEnabled(not refusals)
         return not refusals
 
     def _show(self, refusals: list[str], warnings: list[str]) -> None:
@@ -649,6 +652,10 @@ class LauncherWindow(QWidget):
         # The hardware page's choices (docs/LOG.md N7.F12e1), which every session started from
         # here runs with; hardware.yaml's own until the page has been shown.
         self.choices = choices or configured(config.hardware)
+        # The garment the page was left on, which the session dialogs then start on: chosen
+        # there, it had to be chosen again in the dialog (LOG N7.F17e). None until the page is
+        # continued from, so the dialog's garment is still never a default nobody chose.
+        self.garment: str | None = None
         self.text = config.experimenter_text
         self._preflight = preflight
         self._build = build
@@ -702,6 +709,7 @@ class LauncherWindow(QWidget):
             self._start_session,
             load=self.load,
             demo=self.config.study1["demo"] if demo else None,
+            garment=self.garment,
             parent=self,
         )
 
@@ -772,8 +780,14 @@ class LauncherWindow(QWidget):
         """The hardware page, as it was left (docs/LOG.md N7.F12e1). Continue keeps what it
         chose for the sessions started after; Cancel keeps what there was."""
         dialog = HardwareCheckDialog(self.text, self.config.hardware, self.choices, parent=self)
-        dialog.accepted.connect(lambda: setattr(self, "choices", dialog.choices()))
+        if self.garment is not None:
+            dialog.garment_choice.setCurrentIndex(dialog.garment_choice.findData(self.garment))
+        dialog.accepted.connect(lambda: self._keep_hardware(dialog))
         return dialog
+
+    def _keep_hardware(self, dialog: HardwareCheckDialog) -> None:
+        self.choices = dialog.choices()
+        self.garment = dialog.garment_choice.currentData()
 
     def open_hardware_check(self) -> HardwareCheckDialog:
         # Modal to the launcher, so no session can start while the check holds the garment's

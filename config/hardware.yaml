@@ -178,6 +178,9 @@ screens:
   # room. Moved here from study1.yaml's demo block when sessions got the display too (LOG
   # N7.F16i). A display time, not a study timing.
   garment_highlight_s: 1.0
+  # How long "Note saved at …" stays in the empty note field before the field asks for a note
+  # again (LOG N7.F17e): long enough to be seen after Enter, never left up for the next one.
+  note_saved_shown_s: 5.0
   # The fonts every screen draws in, committed under fonts/ and installed at startup (S, 23 Sep
   # 2026). Left to the platform, the Mac drew its system font and the lab PC Segoe UI, and
   # headless Windows drew empty boxes -- so the approved screenshots described a screen the lab

@@ -193,6 +193,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "screens.participant_fullscreen", bool, None, None),
     ("hardware.yaml", "screens.experimenter_refresh_interval_s", NUMBER, 0, None),
     ("hardware.yaml", "screens.garment_highlight_s", NUMBER, 0.1, None),
+    ("hardware.yaml", "screens.note_saved_shown_s", NUMBER, 0.5, None),
     ("hardware.yaml", "screens.font_families[*]", str, None, None),
     ("hardware.yaml", "screens.font_files[*]", str, None, None),
     ("hardware.yaml", "audio.backend", str, None, None),

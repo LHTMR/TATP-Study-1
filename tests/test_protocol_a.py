@@ -321,20 +321,27 @@ def test_a_stop_before_delivery_repeats_the_same_application(rig):
     assert done[0].applications_total == len(rows)
 
 
-def test_a_resume_in_the_interval_restores_please_wait(rig):
+def test_a_resume_in_the_interval_restores_please_wait(app, loaded, tmp_path):
     """The interval is longer than `cues.please_wait_min_s` (13-17 s), so it says so (LOG
     N7.F14d), and a resume puts that back rather than leaving the stop screen up."""
+    # Ten real seconds, so what is left of it at the resume never depends on the machine's load:
+    # at the test's clock speed 13-17 s is gone in 17 ms, and the interval runs from the
+    # delivery press (LOG N7.F17a).
+    interval_s = 10 * CLOCK_SPEED
+    pinprick = {**loaded.study1["pinprick"], "isi_min_s": interval_s, "isi_max_s": interval_s}
+    rig = _make_rig(loaded, tmp_path, study1={**loaded.study1, "pinprick": pinprick})
     participant, experimenter = rig.participant, rig.experimenter
     please_wait = participant.text["screens"]["please_wait"]
     protocol = _long(rig)
-    done = _start(protocol)
+    _start(protocol)
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
     _answer(participant, 0)  # now in the interval
     assert participant.message.text == please_wait
     participant.emergency_stop.emit()
     experimenter.resume_requested.emit()
     assert participant.message.text == please_wait, "not the stop screen"
-    _drive(protocol, done)
+    protocol.cancel()
+    rig.session.close()
 
 
 def test_a_rest_no_longer_than_please_wait_min_s_is_blank(rig):
@@ -741,11 +748,17 @@ def test_the_fit_preview_rerun_is_bounded(app, loaded, tmp_path):
         _spin(lambda: fits or (rig.participant.stack.currentWidget() is rig.participant.vas))
         if not fits:
             _answer(rig.participant, _observer(protocol._trial))
-    rig.experimenter.fit_rerun_requested.emit("again")
+    # At the limit Re-run is not offered, and the limit is said before any press (review of
+    # N7.F16), not after a refused one.
+    experimenter = rig.experimenter
+    rerun = experimenter.fit_rerun_button
+    assert rerun.isHidden() or not rerun.isEnabled()
+    assert experimenter._warning_text == experimenter.text["dialogs"]["fit_rerun_exhausted"]
+    experimenter.fit_accepted.emit()
     assert done and done[0].run_index == 1
     (row,) = _rows(rig.session, "calibration_pinprick")
     assert row["superseded"] == "false"
-    assert "fit_rerun_refused" in _events(rig.session)
+    assert experimenter._warning_text == ""
     rig.session.close()
 
 

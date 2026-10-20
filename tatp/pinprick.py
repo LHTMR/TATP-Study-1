@@ -66,6 +66,7 @@ PAIN_SCALE = "pain"
 # experimenter text: through the cue's lead, and once the stimulus is due (LOG N7.F16f).
 PREPARE = "prepare"
 APPLY = "apply"
+APPLIED = "applied"
 
 # Controlled vocabularies of the data files (docs/DATA_SCHEMA.md), not wording.
 LONG = "long"
@@ -615,6 +616,7 @@ class _RatedTrial(QObject):
 
         self.cue_onset_iso = ""
         self._apply_text = ""
+        self._applied_text = ""
         self.stimulus_delivered_iso = ""
         # The press, on the clock's elapsed time: the next application is spaced from it.
         self.delivered_elapsed_s: float | None = None
@@ -640,7 +642,8 @@ class _RatedTrial(QObject):
     # -- hooks -------------------------------------------------------------------------
 
     def _instruction(self, key: str) -> str:
-        """`PREPARE` through the cue's lead, `APPLY` once the stimulus is due."""
+        """`PREPARE` through the cue's lead, `APPLY` once the stimulus is due, `APPLIED` once
+        the press says it was (review of N7.F17: "then press Next step" stayed up after it)."""
         raise NotImplementedError
 
     def _stimulus_detail(self) -> str:
@@ -666,6 +669,7 @@ class _RatedTrial(QObject):
         # naming a filament that is not held stops here rather than half-started.
         instruction = self._instruction(PREPARE)
         self._apply_text = self._instruction(APPLY)
+        self._applied_text = self._instruction(APPLIED)
         self.participant.confirmed.connect(self._on_confirmed)
         self._connect_extra()
 
@@ -721,6 +725,7 @@ class _RatedTrial(QObject):
         self.stimulus_delivered_iso = self.session.clock.wall_iso()
         self.session.log("stimulus_delivered", origin="experimenter",
                          detail=self._stimulus_detail())
+        self._instruct(self._applied_text)
         self._cue_rating()
 
     def _stop_awaiting(self) -> None:
@@ -1513,8 +1518,14 @@ class LongProtocol(_Series):
             # What is due now, in place of the last trial's instruction and site (which this
             # clears), left up as if another application were wanted.
             self.experimenter.set_instruction(self.instruction_text("f40_fit_review"))
-            # Accept and Re-run are live exactly while this waits on them (SPEC.md 11.1).
-            self.experimenter.set_actions_enabled(fit_decision=True)
+            # Accept and Re-run are live exactly while this waits on them (SPEC.md 11.1); Re-run
+            # only while one is left, the limit said before a press rather than after one
+            # (review of N7.F16).
+            exhausted = self.run_index - 1 >= self.max_reruns
+            if exhausted:
+                self.experimenter.set_warning(
+                    self.experimenter.text["dialogs"]["fit_rerun_exhausted"])
+            self.experimenter.set_actions_enabled(fit_accept=True, fit_rerun=not exhausted)
             self.fit_ready.emit(fit)
 
         self.step(begin)
@@ -1591,8 +1602,10 @@ class LongProtocol(_Series):
         if result is None or self.rig.interruptions.active is not None:
             return
         self._awaiting_fit = None
-        # The decision is taken: the preview closes and its buttons go dead.
+        # The decision is taken: the preview closes and its buttons go dead, and the limit's
+        # note goes with them.
         self.experimenter.hide_fit_preview()
+        self.experimenter.clear_warning(self.experimenter.text["dialogs"]["fit_rerun_exhausted"])
         self.session.log("fit_accepted", origin="experimenter", detail=f"run {self.run_index}")
         self._record(result, superseded=False, rerun_reason="")
         self.finish(result)
@@ -1601,21 +1614,10 @@ class LongProtocol(_Series):
         result = self._awaiting_fit
         if result is None or self.rig.interruptions.active is not None:
             return
+        # The bound on the forking path (SPEC.md 11.1): Re-run is not offered past it.
+        assert self.run_index - 1 < self.max_reruns, "a re-run past the limit was offered"
         self._awaiting_fit = None
         self.experimenter.hide_fit_preview()
-        if self.run_index - 1 >= self.max_reruns:
-            # The bound on the forking path: this estimate is the one used (SPEC.md 11.1).
-            self.session.log(
-                "fit_rerun_refused", origin="experimenter", severity="warning",
-                detail=f"run {self.run_index}; limit {self.max_reruns}. {reason}",
-            )
-            self.experimenter.set_warning(
-                self.experimenter.text["dialogs"]["fit_rerun_exhausted"]
-            )
-            self.experimenter.refresh()
-            self._record(result, superseded=False, rerun_reason="")
-            self.finish(result)
-            return
         self._record(result, superseded=True, rerun_reason=reason)
         self.session.fit_preview_reruns += 1
         self.session.log(

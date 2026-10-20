@@ -261,6 +261,7 @@ class Session:
         self._upcoming: tuple[str, str, int | None, str | None, float] | None = None
         # Which interruption is in force, read from `Interruptions` once a rig attaches it.
         self._read_interruption: Callable[[], str | None] = lambda: None
+        self._read_resuming: Callable[[], bool] = lambda: False
 
         # SPEC.md 11.1. Off by default; a session run with it on shows the experimenter the
         # participant's ratings and is recorded as unblinded in that respect.
@@ -385,6 +386,8 @@ class Session:
             "demo": self.demo,
             "next_event": self.next_event(),
             "interruption": self._read_interruption(),
+            # A resume's cue is playing: the session goes on in a moment (review of N7.F16).
+            "resuming": self._read_resuming(),
             "hardware": {
                 "connected": self.garment.connected,
                 "link_lost": self.garment.link_lost,
@@ -442,9 +445,12 @@ class Session:
     def clear_upcoming(self) -> None:
         self._upcoming = None
 
-    def attach_interruptions(self, read: Callable[[], str | None]) -> None:
-        """Let the experimenter view say whether a stop or a pause is in force."""
+    def attach_interruptions(self, read: Callable[[], str | None],
+                             resuming: Callable[[], bool]) -> None:
+        """Let the experimenter view say whether a stop or a pause is in force, and whether
+        its resume is under way."""
         self._read_interruption = read
+        self._read_resuming = resuming
 
     # -- logging -----------------------------------------------------------------------
 
@@ -598,6 +604,8 @@ class Session:
             self.log("garment_fault", severity="error", detail=command["detail"])
         elif command["event"] == "disconnect" and command.get("detail") == LINK_LOST:
             self.log("garment_disconnected", severity="error", detail=LINK_LOST)
+            # Heard, not only seen: the outputs may still be on (review of N7.F16).
+            self.audio.experimenter_alert(LINK_LOST)
 
     # -- lifecycle ---------------------------------------------------------------------
 

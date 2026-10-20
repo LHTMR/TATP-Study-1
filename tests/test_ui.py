@@ -680,6 +680,8 @@ def test_the_garment_state_is_shown(experimenter, session):
     assert window.garment_button.text() == controls["disconnect"]
     disconnects = _emitted(window.garment_disconnect_requested)
     window.garment_button.click()
+    assert disconnects == [], "asked first (LOG N7.F17e)"
+    window.findChildren(widgets.MessageDialog)[-1].accept()
     assert disconnects == [()]
 
     held["override"] = {"hardware": _hardware(connected=False)}
@@ -733,6 +735,8 @@ def test_every_action_signal_has_a_control_that_emits_it(drawn):
     ):
         seen = _emitted(signal)
         widget.click()
+        if widget is window.garment_button:  # asked first (LOG N7.F17e)
+            window.findChildren(widgets.MessageDialog)[-1].accept()
         assert seen == [()], f"{widget.text()} did not emit"
 
 
@@ -1276,6 +1280,52 @@ def test_abort_asks_for_confirmation_and_a_reason(drawn):
     assert seen == [("participant withdrew",)], "cancelling aborts nothing"
 
 
+def test_play_before_the_marker_says_what_to_do_until_the_marker_moves(participant):
+    """A press that did nothing visible read as a lost one (LOG N7.F17e)."""
+    vas = participant.vas
+    vas.show_scale("pain", participant.text["vas"]["pain"])
+    assert vas.training == ""
+    _press(vas, "f5")
+    assert vas.training == participant.text["vas_marker_hint"]
+    _press(vas, "pagedown")
+    assert vas.training == "", "gone with the press that moves the marker"
+
+
+def test_opening_the_abort_pauses_first(drawn):
+    """LOG N7.F17e: the garment goes to zero while the reason is typed, and nothing runs on
+    behind the dialog. Not a second pause over a stop already in place."""
+    window, held = drawn
+    pauses = _emitted(window.pause_requested)
+    window.open_abort_dialog().reject()
+    assert pauses == [()]
+    held["view"] = _all_keys(interruption="pause")
+    window.refresh()
+    window.open_abort_dialog().reject()
+    assert pauses == [()]
+
+
+def test_the_note_field_asks_for_a_note_again_after_saying_one_was_saved(app, drawn):
+    window, _ = drawn
+    window.set_note_saved_s(0.01)
+    window.confirm_note("12:34:56")
+    assert "12:34:56" in window.note.placeholderText()
+    deadline = time.monotonic() + SPIN_TIMEOUT_S
+    while window.note.placeholderText() != window.text["controls"]["note"]:
+        assert time.monotonic() < deadline, "the saved note's time was left up"
+        QApplication.processEvents()
+
+
+def test_the_rerun_reason_confirms_with_enter_and_the_recalibration_is_brief(drawn):
+    window, _ = drawn
+    assert window.rerun_dialog().confirm.isDefault()
+    for choice in ("rebalance", "restart"):
+        dialog = window.recalibration_dialog(choice)
+        brief = window.text["dialogs"][f"recalibrate_{choice}"]
+        detail = window.text["dialogs"][f"recalibrate_{choice}_detail"]
+        assert dialog.message.text() == brief and dialog.message.toolTip() == detail
+        assert len(brief) < len(detail)
+
+
 def test_a_rerun_carries_its_reason(drawn):
     window, _ = drawn
     window.set_actions_enabled(fit_decision=True)
@@ -1440,18 +1490,19 @@ def test_a_fault_from_the_intervention_stays_withheld_afterwards(drawn):
 
 def test_a_lost_link_is_warned_of_in_the_experimenters_language_first(drawn):
     """docs/LOG.md N7.U16: the outputs may still be on, which the driver's own detail -- the
-    operating system's words -- does not say. The warning leads, so no bound can cut it."""
+    operating system's words -- does not say. In the alert row, red, over even a stop's line
+    (review of N7.F16: in the side column's small print it was missed)."""
     window, held = drawn
     fault = "serial write failed on COM3: WriteFile failed"
-    held["view"] = _all_keys(phase="setup", hardware=_hardware(
+    held["view"] = _all_keys(phase="setup", interruption="emergency_stop", hardware=_hardware(
         connected=False, faults=[fault], link_lost=True))
     window.refresh()
     words = window.text["hardware"]
-    assert window.faults.text().split("\n") == [words["link_lost"],
-                                                words["fault"].format(value=fault)]
+    assert window.alert.text() == words["link_lost"]
+    assert window.faults.text() == words["fault"].format(value=fault)
     held["view"] = _all_keys(phase="setup", hardware=_hardware(faults=[fault]))
     window.refresh()
-    assert words["link_lost"] not in window.faults.text(), "reconnected, it is gone"
+    assert window.alert.text() == "", "reconnected, it is gone"
 
 
 def test_accumulating_faults_do_not_grow_the_side_column(drawn):
