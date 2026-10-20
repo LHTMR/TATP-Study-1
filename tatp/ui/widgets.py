@@ -52,6 +52,11 @@ DISCONNECTED_COLOUR = "#e0453f"
 # Where the current stimulus goes, on the zone diagram. A colour no warning uses, so a
 # highlighted zone never reads as an alarm.
 TARGET_COLOUR = "#4fa3e0"
+# Whatever exists only in a demonstration -- its banner, its controls, how it differs from a
+# session -- in a colour of its own, so it is never taken for part of a session (S, 20 Oct
+# 2026; UI_PRINCIPLES.md 3.7). Violet: no warning, state or target uses it.
+DEMO_COLOUR = "#b48cf0"
+DEMO_BANNER_COLOUR = "#5a3d8a"
 
 # One scale, four steps, each meaning a level rather than a screen's local preference
 # (UI_PRINCIPLES.md 4.3).

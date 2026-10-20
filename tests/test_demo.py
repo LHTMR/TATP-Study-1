@@ -22,8 +22,10 @@ from tatp.demo import (
     ALLOCATION_NAME,
     DEMO_GARMENT,
     FAST,
+    GARMENT_DIFFERS,
     OFF,
     REAL_TIME_SPEED,
+    RESTS_DIFFER,
     WATCH,
     DemoError,
     check_person,
@@ -587,12 +589,29 @@ def test_who_presses_switches_at_any_moment(app, loaded):
     _finish(runner, demo)
 
 
-def test_demo_vs_session_names_each_difference_with_the_sessions_value(app, loaded):
-    runner, demo = _demo(app, loaded)
-    shown = demo.controls.differences_dialog().message.text()
-    pinprick = runner.session.config.study1["pinprick"]
-    assert f"{float(pinprick['isi_min_s']):g}" in shown, "the session's own interval"
-    assert f"{float(runner.session.config.study1['demo']['rest_s']):g}" in shown
+def test_how_a_demo_differs_is_said_where_and_while_it_applies(app, loaded):
+    """S, 20 Oct 2026: "not one info dump but embedded where relevant" (LOG N7.F17d)."""
+    runner, demo = _demo(app, loaded, "--demo-speed", FULL_RUN_SPEED)
+    controls, words = demo.controls, loaded.experimenter_text["demo"]["session_differs"]
+    assert demo.differs_now() is None, "setup runs as a session's does"
+    assert controls.differs_now.text() == ""
+    assert controls.remote.toolTip() == words["keyboards"]
+    runner.start()
+    demo.set_auto_run(True)
+    deadline = time.monotonic() + FULL_RUN_TIMEOUT_S
+    while demo.differs_now() != RESTS_DIFFER:
+        assert time.monotonic() < deadline, (
+            f"no pinprick series was reached: {runner.stages[runner.stage_index].id}")
+        QApplication.processEvents()
+    controls.sync()
+    shown = controls.differs_now.text()
+    pinprick = loaded.study1["pinprick"]
+    assert f"{float(pinprick['isi_min_s']):g}–{float(pinprick['isi_max_s']):g}" in shown, (
+        "the session's own interval, not the demo's")
+    assert f"{float(loaded.study1['demo']['rest_s']):g} s" in shown
+    demo.set_auto_run(False)
+    runner.session.set_phase("intervention")
+    assert demo.differs_now() in (RESTS_DIFFER, GARMENT_DIFFERS)
     _finish(runner, demo)
 
 

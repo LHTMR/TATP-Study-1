@@ -90,6 +90,7 @@ from tatp.session import (
 from tatp.session_runner import stop_on_error
 from tatp.ui.application import application, scale_screens
 from tatp.ui.widgets import (
+    DEMO_COLOUR,
     DISCONNECTED_COLOUR,
     GROUP_GAP_PX,
     ITEM_GAP_PX,
@@ -359,6 +360,12 @@ class SessionDialog(QDialog):
         words = self.text["launcher"]
         self.participant.setText(demo["participant_code"])
         self.participant.setReadOnly(True)
+        # Under the session number, where it would otherwise be read as the study's (LOG
+        # N7.F17d: how a demo differs is said where it applies).
+        allocation = label(SIZE_SMALL, wrap=True, colour=DEMO_COLOUR)
+        allocation.setText(self.text["demo"]["session_differs"]["allocation"])
+        self.form.insertRow(self.form.getWidgetPosition(self.session_number)[0] + 1, "",
+                            allocation)
         self.data_folder.setText(str(resolved(demo["data_folder"])))
         self.data_folder.setReadOnly(True)
         self.pattern_folder.setText(str(resolved(demo["pattern_folder"])))
@@ -379,7 +386,8 @@ class SessionDialog(QDialog):
         for key, widget in (("demo_speed", self.demo_speed),
                             ("demo_participant", self.sim_participant),
                             ("demo_experimenter", self.sim_experimenter)):
-            caption = label(SIZE_SMALL, colour=SECONDARY)
+            # Demonstration-only, in its colour (UI_PRINCIPLES.md 3.7).
+            caption = label(SIZE_SMALL, colour=DEMO_COLOUR)
             caption.setText(words[key])
             self.form.addRow(caption, widget)
         self.demo_speed.valueChanged.connect(self._stale)

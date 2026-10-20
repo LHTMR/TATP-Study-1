@@ -96,7 +96,10 @@ from tatp.demo import real_time_settings  # noqa: E402
 from tatp.pinprick import PAIN_SCALE, prior_for  # noqa: E402
 from tatp.procedure import VAS_TRAINING_EXPLAINED  # noqa: E402
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source  # noqa: E402
-from tatp.resume import VAS_TRAINING_CONFIRMED  # noqa: E402
+from tatp.resume import (
+    STAGE_COMPLETED,  # noqa: E402
+    VAS_TRAINING_CONFIRMED,  # noqa: E402
+)
 from tatp.trials import VAS_PRACTICE_RATING  # noqa: E402
 from tatp.ui.application import application  # noqa: E402
 from tatp.units import MS_PER_S, S_PER_MIN  # noqa: E402
@@ -340,10 +343,22 @@ def run_one(scenario: Scenario, folder: Path, loaded: cfg.Config) -> Run:
     runner = run_session.build(config, args, lambda _open: scenario.resumes is not None)
     rig, session = runner.rig, runner.session
     participant = scenario.participant(rig.participant, session.garment, config, scenario.seed)
+    # The stages completed so far, noted as each is logged. Read back from the log file on
+    # every look the simulated experimenter took, it was half of every run's time.
+    completed: set[str] = set()
+    log = session.log
+
+    def noting_log(event: str, origin: str = "software", severity: str = "info",
+                   detail: str = "") -> str:
+        if event == STAGE_COMPLETED:
+            completed.add(detail)
+        return log(event, origin, severity, detail)
+
+    session.log = noting_log
 
     def ended() -> bool:
         if scenario.ends_after_stage is not None:
-            return scenario.ends_after_stage in _completed_now(session)
+            return scenario.ends_after_stage in completed
         if scenario.ends_after_adjustments is not None:
             return participant.adjustments_seen >= scenario.ends_after_adjustments
         if scenario.ends_after_pinprick is not None:
@@ -429,15 +444,6 @@ def run_one(scenario: Scenario, folder: Path, loaded: cfg.Config) -> Run:
         made_object.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
     return made
-
-
-def _completed_now(session) -> set[str]:
-    path = session.files.path("log")
-    if not path.exists():
-        return set()
-    with path.open(encoding="utf-8", newline="") as handle:
-        return {row["detail"] for row in csv.DictReader(handle)
-                if row["event"] == "stage_completed"}
 
 
 def _read_run(scenario, config, session, runner, participant, experimenter, errors) -> Run:

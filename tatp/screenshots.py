@@ -50,7 +50,7 @@ from tatp import pattern_design as pd
 from tatp import schedule
 from tatp import touchcal_maths as maths
 from tatp.clock import Clock
-from tatp.demo import OFF, DemoControls
+from tatp.demo import DEMO_GARMENT, OFF, RESTS_DIFFER, DemoControls, demo_rests
 from tatp.devices import ON_SCREEN, check_key, matching_outputs
 from tatp.garment.base import Limits
 from tatp.garment.mock import MockGarment
@@ -723,16 +723,16 @@ def _experimenter_states(config: cfg.Config) -> dict:
             instruct("touchcal_match", **SAMPLE_MATCH),
         ),
         "long_instruction": (
-            "The longest instruction the session gives, set down the type scale so it fits "
-            "its region: nothing below it has moved, and the controls are where they always "
-            "are. It asks for Accept, so Accept and Re-run are offered, as the procedure "
-            "offers them.",
+            "A long instruction: an unusable touch estimate with no re-runs left. At the large "
+            "size, as every instruction is (LOG N7.F17e); nothing below it has moved, and the "
+            "one answer offered is the fallback, on a button of its own, as the procedure "
+            "offers it.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: (
                 window.set_instruction(cfg.instruction(
                     config, "touchcal_stage1_exhausted", value=text["terms"]["stage1"]["flat"]
                 )),
-                window.set_actions_enabled(fit_decision=True),
+                window.offer_alternative(text["controls"]["fit_fallback"]),
             ),
         ),
         "touchcal_estimation_skip": (
@@ -853,6 +853,10 @@ def _session_window(config: cfg.Config, read_view) -> ExperimenterWindow:
     N7.F16h) and the mock garment's channels in its side column (N7.F16i)."""
     window = ExperimenterWindow(config.experimenter_text, read_view)
     window.set_timeline(_session_phases(config))
+    # Next step pressable where the instruction asks for it, as a session's is (UI_PRINCIPLES.md
+    # 5.13, 5.16), not in every picture: there is no procedure here to ask.
+    proceed = config.experimenter_text["controls"]["proceed"]
+    window.set_proceed_source(lambda: proceed in window._instruction_text)
     garment = MockGarment(Limits.from_config(config.hardware), Clock())
     window.set_garment(garment.channels(), garment.limits.pressure_ceiling_kpa,
                        garment.per_channel_pressure,
@@ -968,7 +972,7 @@ class _SampleDemo(QObject):
         self.session = self
         # Drawn as on a worn garment (tatp/demo.py), the mock standing in for it.
         self.worn = worn
-        self.settings = config.study1["demo"]
+        self.settings = demo_rests(config.study1, DEMO_GARMENT)["demo"]
         self.clock = Clock()
         self.garment = MockGarment(Limits.from_config(config.hardware), self.clock)
         self.garment.connect()
@@ -993,6 +997,10 @@ class _SampleDemo(QObject):
 
     def skippable_s(self) -> float | None:
         return self._skippable_s
+
+    def differs_now(self) -> str | None:
+        # The filament series under way: its rests are a demonstration's.
+        return RESTS_DIFFER
 
     def next_event(self) -> dict | None:
         upcoming = {"kind": "phase", "label_key": "capsaicin_removal", "block_index": None,
@@ -1078,8 +1086,9 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"the channels as commanded in the side column -- every channel's pressure set, "
         f"channels {', '.join(map(str, SAMPLE_DEMO_CHANNELS_ON))} on -- and the demo controls "
         f"along the foot: who presses for the participant and the experimenter, the clock's "
-        f"speed, the remote's buttons, Skip saying there is no wait to skip, Auto-run naming "
-        f"the step under way, and Fast-forward offering the phases to come ({language}).",
+        f"speed, the remote's buttons, Skip saying there is no wait to skip, Auto-run, "
+        f"Fast-forward offering the phases to come, and how the filament series under way "
+        f"differs from a session -- its rests -- in blue beside them (N7.F17d) ({language}).",
         _grab_checked(window, f"experimenter_{language}_demo_controls"),
     )
     sample.garment.set_channel(SAMPLE_DEMO_CHANGED, True)
@@ -1107,14 +1116,6 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"and the side column's warning that the outputs may still hold it (N7.U16) "
         f"({language}).",
         _grab_checked(window, f"experimenter_{language}_demo_controls_worn_link_lost"),
-    )
-    _, controls = _demo_window(config, _SampleDemo(config))
-    yield Shot(
-        f"experimenter_{language}_demo_differences",
-        f"Demo vs session (docs/LOG.md N7.F17d): every way a demonstration on the mock differs "
-        f"from a session, each with the session's own value, from the configuration "
-        f"({language}).",
-        _grab_dialog(controls.differences_dialog()),
     )
 
     dialog = launcher.session_dialog()

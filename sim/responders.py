@@ -92,6 +92,9 @@ TICK_S = 0.002
 LOCKOUT_MARGIN_MS = 1
 # Taps in a row that changed nothing: the end of the adjustable range has been reached.
 END_OF_RANGE_TAPS = 3
+# Unwatched (the validator, a fast simulation): taps in one look before looking again; the
+# garment follows a tap at once unless the rate limit holds it back (`_tap_fast`).
+TAPS_PER_TICK = 60
 # How an adjustment is being made (`_tap_towards`): held towards the point, waiting to feel
 # the touch settle, or tapped one press at a time.
 HOLDING = "holding"
@@ -607,7 +610,14 @@ class VirtualParticipant(QObject):
 
         Only what is felt is used, never the commanded level: a tap the rate limit holds back
         is felt arriving over the next looks, as on the arm.
+
+        Watched only. A hold moves at the adjustment's real-time tick, so unwatched -- the
+        validator, a fast simulation -- it made every adjustment take real seconds, and the
+        validator three times as long; unwatched it taps straight there (`_tap_fast`).
         """
+        if self.press_interval_s == 0:
+            self._tap_fast(difference)
+            return
         now_s = time.monotonic()
         if now_s - self._shown_at_s < TICK_S:
             return  # the garment may still be settling from the screen before
@@ -647,10 +657,46 @@ class VirtualParticipant(QObject):
         self.tap(Action.INCREASE if felt < 0 else Action.DECREASE)
         self._settle(dict(self.garment.pressure_kpa), now_s)
 
+    def _tap_fast(self, difference) -> None:
+        """Tap up while `difference()` is below zero, down while above, then confirm."""
+        if time.monotonic() - self._shown_at_s < TICK_S:
+            return  # the garment may still be settling from the screen before
+        if (self._held_back_at_s is not None
+                and time.monotonic() - self._held_back_at_s < self._settle_s):
+            # The last tap was held back by the rate limit: felt again once the adjustment has
+            # finished it, or each next look taps on ahead of what the arm feels (N7.F16m).
+            return
+        self._held_back_at_s = None
+        start = difference()
+        if start == 0:
+            self.confirm_adjustment()
+            return
+        action = Action.INCREASE if start < 0 else Action.DECREASE
+        for _ in range(TAPS_PER_TICK):
+            # The pressure, not the felt difference, says whether a tap moved anything: well
+            # below threshold every pressure is felt as nothing.
+            before = dict(self.garment.pressure_kpa)
+            self.tap(action)
+            after = difference()
+            if (after >= 0) if action is Action.INCREASE else (after <= 0):
+                self.confirm_adjustment()
+                return
+            moved_kpa = max(abs(kpa - before.get(channel, 0.0))
+                            for channel, kpa in self.garment.pressure_kpa.items())
+            self._unchanged_taps = 0 if moved_kpa else self._unchanged_taps + 1
+            if self._unchanged_taps >= END_OF_RANGE_TAPS:
+                self.confirm_adjustment()
+                return
+            if 0 < moved_kpa < self._tap_step_kpa:
+                # The rate limit is holding the garment back: feel it once it has caught up.
+                self._held_back_at_s = time.monotonic()
+                return
+
     def _reset_seek(self) -> None:
         """A new adjustment: nothing held, nothing settling."""
         self._seek: str | None = None
         self._seek_sign = 0
+        self._held_back_at_s: float | None = None
         self._settling_from: dict | None = None
         self._settled_since_s = 0.0
         self._tap_from: dict | None = None

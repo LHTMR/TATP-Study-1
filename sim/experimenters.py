@@ -63,7 +63,7 @@ PROCEED_INSTRUCTIONS = (
     "touchcal_uneven", "earplugs", "ready_long_first", "mark_zone",
     # The intervention's end, told to the participant, and the session complete, whose Next
     # step closes the program (docs/LOG.md N7.F11c9, N7.F11c10).
-    "intervention_end", "session_complete",
+    "intervention_end", "session_complete", "session_aborted",
 )
 # Templated instructions after which the software waits for Next step: the ready line of each
 # kind of series and block, and the VAS training -- the anchors and proportionality explained
@@ -221,9 +221,10 @@ class VirtualExperimenter(QObject):
             if label.text():
                 self.seen_text.add(label.text())
 
-        if self.aborted or not self.acts:
+        if not self.acts:
             return
-        if self.abort_when is not None and self.abort_when():
+        # Aborted, it goes on only to the Next step that closes the program (LOG N7.F17e).
+        if not self.aborted and self.abort_when is not None and self.abort_when():
             self.aborted = True
             window.abort_requested.emit(SCENARIO_ENDED)
             return

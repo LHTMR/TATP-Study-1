@@ -384,22 +384,24 @@ def test_the_interval_shows_the_next_application_counting_down_to_it(app, loaded
         due_s = protocol._interval_s + config.study1["cues"]["warning_lead_s"]
         return math.ceil(rig.session.clock.remaining_s(protocol._interval_start_s, due_s))
 
-    def redrawn() -> tuple[int, str]:
-        # The test clock runs fast, so a second can pass during the redraw itself.
+    def redrawn() -> tuple[int, str, list[str]]:
+        # The test clock runs fast, so seconds can pass during the redraw itself -- as many as
+        # the machine's load makes them: any count from the reading before to the one after.
         before = remaining()
         protocol._show_expected()
-        return before, experimenter.instruction.text()
+        text = experimenter.instruction.text()
+        return before, text, [shown(s) for s in range(remaining(), before + 1)]
 
     try:
-        before, text = redrawn()
-        assert text in (shown(before), shown(remaining())), text
+        before, text, possible = redrawn()
+        assert text in possible, text
         assert experimenter.status.text() == cfg.instruction(
             config, "received_filament", filament=first.applied_label_g,
             site=first.application.site_index,
         )
         rig.session.clock.skip(1.0)
-        after, text = redrawn()
-        assert after < before and text in (shown(after), shown(remaining())), "it counts down"
+        after, text, possible = redrawn()
+        assert after < before and text in possible, "it counts down"
         _spin(lambda: protocol._trial is not None and protocol._trial is not first)
         assert protocol._trial.application == expected, "the one shown is the one given"
         _drive(protocol, done)

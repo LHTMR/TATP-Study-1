@@ -79,26 +79,27 @@ from PySide6.QtWidgets import (
 from tatp.clock import Clock
 from tatp.config import REPO_ROOT, Config
 from tatp.devices import KEY_SOURCE_CHANGE
+from tatp.pinprick import _Series
 from tatp.remote_keys import ANY_KEYBOARD, RAW_INPUT, remote_present, with_key_source
 from tatp.responder import Action
 from tatp.session import DRIVERS, with_session_choices
 from tatp.session_runner import SessionRunner
-from tatp.ui.experimenter import clock_text, event_name
+from tatp.touchcal import EstimationPresentation
+from tatp.ui.experimenter import BLINDED_PHASES, clock_text, event_name
 from tatp.ui.garment_display import states_from_status
 from tatp.ui.participant import ParticipantWindow
 from tatp.ui.timeline import FOLDED
 from tatp.ui.widgets import (
     BACKGROUND,
     CONTROL_BORDER,
+    DEMO_BANNER_COLOUR,
+    DEMO_COLOUR,
     FOREGROUND,
     GROUP_GAP_PX,
     ITEM_GAP_PX,
-    SECONDARY,
     SIZE_BODY,
     SIZE_SMALL,
-    TARGET_COLOUR,
     WARNING_COLOUR,
-    MessageDialog,
     button,
     label,
     sized,
@@ -122,8 +123,12 @@ REMOTE_PADDING_PX = 3
 REMOTE_RADIUS_PX = 4
 # Half the outline, so a one-pixel line lands on whole pixels.
 REMOTE_OUTLINE_INSET_PX = 0.5
-# Between the lines of "Demo vs session".
-LIST_SEPARATOR = "\n\n"
+# `demo.session_differs` keys for what the step under way does differently (`differs_now`).
+ESTIMATION_DIFFERS = "estimation"
+RESTS_DIFFER = "rests"
+GARMENT_DIFFERS = "garment"
+# The suffix of the whole explanation of each, shown on hover.
+DETAIL = "_detail"
 
 
 def real_time_settings(study1: dict, speed: float, scale_timeout: bool = True) -> dict:
@@ -152,10 +157,16 @@ def demo_rests(study1: dict, garment: str) -> dict:
     pinprick = {**study1["pinprick"], "isi_min_s": rest_s, "isi_max_s": rest_s}
     brush = {**study1["brush"], "isi_min_s": rest_s, "isi_max_s": rest_s}
     touch = study1["touch_calibration"]
+    # What a session would have run instead, which the demo controls say beside each
+    # (`session_differs`).
+    session = {"isi_min_s": float(study1["pinprick"]["isi_min_s"]),
+               "isi_max_s": float(study1["pinprick"]["isi_max_s"]),
+               "estimation_window_s": float(touch["estimation_window_s"])}
     if not worn_garment(garment):
         touch = {**touch, "estimation_window_s": float(demo["estimation_window_mock_s"]),
                  "estimation_settle_s": float(demo["estimation_settle_mock_s"])}
-    return {**study1, "touch_calibration": touch, "pinprick": pinprick, "brush": brush}
+    return {**study1, "touch_calibration": touch, "pinprick": pinprick, "brush": brush,
+            "demo": {**demo, "session": session}}
 
 
 def resolved(path: str) -> Path:
@@ -346,6 +357,9 @@ class Demo(QObject):
         # often enough that a pattern's steps are seen as they happen (N7.F12f, N7.F16i).
         self._display = rig.experimenter.garment_display
         rig.experimenter.garment_fed_elsewhere = True
+        self._display.setToolTip(session_differs(
+            self.session.config.experimenter_text, self.settings
+        )[f"{GARMENT_DIFFERS}{DETAIL}"])
         self._garment_timer = QTimer(self)
         self._garment_timer.setInterval(
             int(round(float(self.settings["garment_display_refresh_s"]) * MS_PER_S))
@@ -371,6 +385,21 @@ class Demo(QObject):
             bool(garment.link_lost),
         )
         self._display.setVisible(True)
+
+    def differs_now(self) -> str | None:
+        """Which of `session_differs` the step under way shows, or None where it runs as a
+        session would: the estimation run's window on the mock, a pinprick or brush series'
+        rests, the channel display through the phases a session hides it in."""
+        procedure = self.runner
+        while procedure._child is not None:
+            procedure = procedure._child
+        if isinstance(procedure._trial, EstimationPresentation) and not self.worn:
+            return ESTIMATION_DIFFERS
+        if isinstance(procedure, _Series):
+            return RESTS_DIFFER
+        if self.session.phase in BLINDED_PHASES:
+            return GARMENT_DIFFERS
+        return None
 
     def set_participant(self, mode: str) -> None:
         check_person(self.garment_name, "participant", mode)
@@ -528,7 +557,7 @@ class RemoteButtons(QWidget):
             box = QRectF(index * (self._box_px + ITEM_GAP_PX), 0, self._box_px, self._box_px)
             down = action in self.held
             painter.setPen(QPen(QColor(FOREGROUND if down else CONTROL_BORDER), 1))
-            painter.setBrush(QColor(TARGET_COLOUR if down else BACKGROUND))
+            painter.setBrush(QColor(DEMO_COLOUR if down else BACKGROUND))
             inset = REMOTE_OUTLINE_INSET_PX
             painter.drawRoundedRect(box.adjusted(inset, inset, -inset, -inset),
                                     REMOTE_RADIUS_PX,
@@ -582,31 +611,20 @@ class ModeSwitch(QWidget):
         return next(mode for mode, made in self.buttons.items() if made.isChecked())
 
 
-def differences(text: dict, config: Config, speed: float) -> str:
-    """How this demonstration differs from a session, each line with the session's own value
-    (S, 20 Oct 2026: "The demo should state somewhere what changes are made in the demo and
-    how it is in the real thing"; LOG N7.F17d). From the configuration, so it never drifts
-    from what runs."""
-    words, study1 = text["demo"]["differences"], config.study1
-    demo, pinprick = study1["demo"], study1["pinprick"]
-    touch = study1["touch_calibration"]
-    worn = worn_garment(config.hardware["garment"]["driver"])
-    lines = [
-        words["intro"],
-        words["clock"].format(speed=f"{speed:g}"),
-        words["rests"].format(demo=f"{float(demo['rest_s']):g}",
-                              low=f"{float(pinprick['isi_min_s']):g}",
-                              high=f"{float(pinprick['isi_max_s']):g}"),
-    ]
-    if not worn:
-        lines.append(words["estimation"].format(
-            demo=f"{float(demo['estimation_window_mock_s']):g}",
-            session=f"{float(touch['estimation_window_s']):g}",
-            demo_settle=f"{float(demo['estimation_settle_mock_s']):g}",
-            session_settle=f"{float(touch['estimation_settle_s']):g}"))
-    lines += [words[key] for key in ("keyboards", "garment", "simulations", "skipping",
-                                     "allocation", "data")]
-    return LIST_SEPARATOR.join(lines)
+def session_differs(text: dict, demo: dict) -> dict[str, str]:
+    """How this demonstration differs from a session, each with the session's own value, by
+    where it is shown (S, 20 Oct 2026: "The demo should state somewhere what changes are made
+    in the demo and how it is in the real thing", then "not one info dump but embedded where
+    relevant"; LOG N7.F17d). `demo` is the demonstration's `study1.demo`, which carries the
+    session's values (`demo_rests`), so neither side drifts from what runs."""
+    session = demo["session"]
+    values = {"demo": f"{float(demo['rest_s']):g}", "low": f"{session['isi_min_s']:g}",
+              "high": f"{session['isi_max_s']:g}"}
+    estimation = {"demo": f"{float(demo['estimation_window_mock_s']):g}",
+                  "session": f"{session['estimation_window_s']:g}"}
+    # Each panel line is short, its `_detail` the whole of it on hover.
+    return {key: line.format(**(estimation if key.startswith(ESTIMATION_DIFFERS) else values))
+            for key, line in text["demo"]["session_differs"].items()}
 
 
 class DemoControls(QWidget):
@@ -616,8 +634,9 @@ class DemoControls(QWidget):
     Each says what it would do now, or why it can do nothing: who presses for each role,
     switched at any moment; Skip naming the wait it would end and how much of it is left;
     Auto-run, on until switched off; Fast-forward to a phase still to come. The clock's speed
-    is said and explained, "Demo vs session" lists every difference with the session's
-    value, and the remote's buttons light as they arrive.
+    is said and explained, and the remote's buttons light as they arrive. How the demo differs
+    from a session is said where it applies: the step under way's timing or garment display
+    on the panel while it runs, the rest on the controls they concern (`session_differs`).
     """
 
     def __init__(self, demo: Demo, text: dict, symbols: dict[Action, str],
@@ -629,7 +648,9 @@ class DemoControls(QWidget):
         self.text = text
         words = text["demo"]
         self.words = words
-        self.setStyleSheet(stylesheet())
+        # Its chosen buttons in the demonstration's own colour (UI_PRINCIPLES.md 3.7).
+        self.setStyleSheet(stylesheet() + f"QPushButton:checked {{ background-color: "
+                                          f"{DEMO_BANNER_COLOUR}; color: {FOREGROUND}; }}")
 
         self.participant_mode = ModeSwitch(words["modes"],
                                            lambda mode: self._choose("participant", mode))
@@ -644,14 +665,17 @@ class DemoControls(QWidget):
         self.fast_forward = sized(QComboBox(), SIZE_SMALL)
         self.fast_forward_button = button(words["fast_forward_go"])
         self.fast_forward_button.clicked.connect(self.fast_forward_now)
-        self.clock = label(SIZE_SMALL, colour=SECONDARY)
+        self.clock = label(SIZE_SMALL, colour=DEMO_COLOUR)
         self.clock.setText(words["clock"].format(speed=f"{demo.session.clock.speed:g}"))
         self.clock.setToolTip(words["clock_detail"])
-        self.differences_button = button(words["differences_button"])
-        self.differences_button.clicked.connect(self.show_differences)
+        self.differs = session_differs(text, demo.settings)
         self.remote = RemoteButtons(symbols)
-        self.status = label(SIZE_SMALL, colour=SECONDARY)
+        self.status = label(SIZE_SMALL, colour=DEMO_COLOUR)
         self.status.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        # How the step under way differs from a session, while it does (`_differs_now`); the
+        # whole line in the tooltip, as the row may cut it.
+        self.differs_now = label(SIZE_SMALL, colour=DEMO_COLOUR)
+        self.differs_now.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         # On a worn garment the participant and the experimenter are people, and so neither
         # auto-run nor fast-forward, which make both simulations fast, is offered
         # (`check_person`). Fixed for the demonstration, so the note is there from the start
@@ -666,14 +690,18 @@ class DemoControls(QWidget):
         who.setSpacing(ITEM_GAP_PX)
         for key, modes in (("participant", self.participant_mode),
                            ("experimenter", self.experimenter_mode)):
-            caption = label(SIZE_SMALL, colour=SECONDARY)
+            caption = label(SIZE_SMALL, colour=DEMO_COLOUR)
             caption.setText(words[key])
+            caption.setToolTip(self.differs["simulations"])
+            modes.setToolTip(self.differs["simulations"])
             who.addWidget(caption)
             who.addWidget(modes)
             who.addSpacing(GROUP_GAP_PX)
         who.addStretch(1)
-        remote = label(SIZE_SMALL, colour=SECONDARY)
+        remote = label(SIZE_SMALL, colour=DEMO_COLOUR)
         remote.setText(words["remote"])
+        remote.setToolTip(self.differs["keyboards"])
+        self.remote.setToolTip(self.differs["keyboards"])
         who.addWidget(remote)
         who.addWidget(self.remote)
         actions = QHBoxLayout()
@@ -681,7 +709,7 @@ class DemoControls(QWidget):
         actions.addWidget(self.skip_button)
         actions.addWidget(self.auto_run_button)
         actions.addSpacing(GROUP_GAP_PX)
-        forward = label(SIZE_SMALL, colour=SECONDARY)
+        forward = label(SIZE_SMALL, colour=DEMO_COLOUR)
         forward.setText(words["fast_forward"])
         actions.addWidget(forward)
         actions.addWidget(self.fast_forward)
@@ -696,8 +724,8 @@ class DemoControls(QWidget):
         actions.addWidget(self.worn_note, 2)
         actions.addSpacing(GROUP_GAP_PX)
         actions.addWidget(self.status, 1)
+        actions.addWidget(self.differs_now, 2)
         actions.addWidget(self.clock)
-        actions.addWidget(self.differences_button)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(ITEM_GAP_PX)
@@ -740,21 +768,17 @@ class DemoControls(QWidget):
             self.demo.fast_forward(phase)
         self.sync()
 
-    def differences_dialog(self) -> MessageDialog:
-        demo = self.demo
-        return MessageDialog(self.words["differences_button"],
-                             differences(self.text, demo.session.config,
-                                         demo.session.clock.speed),
-                             self.text["dialogs"]["close"], parent=self)
-
-    def show_differences(self) -> None:
-        self.differences_dialog().open()
-
     def sync(self, *_stage_id) -> None:
         """Say what each control would do now (LOG N7.F16j)."""
         demo, words = self.demo, self.words
         self.participant_mode.show_mode(demo.participant_mode)
         self.experimenter_mode.show_mode(demo.experimenter_mode)
+        # Said there and then, not listed apart (S, 20 Oct 2026).
+        key = demo.differs_now()
+        differs = "" if key is None else self.differs[key]
+        if differs != self.differs_now.text():
+            self.differs_now.setText(differs)
+            self.differs_now.setToolTip("" if key is None else self.differs[f"{key}{DETAIL}"])
 
         skippable_s = demo.skippable_s()
         event = demo.session.next_event()

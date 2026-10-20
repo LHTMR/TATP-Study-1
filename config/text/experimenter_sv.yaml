@@ -201,7 +201,7 @@ instructions:
     appliceras (den primära zonen). Tryck sedan på {controls[proceed]}.
   # DRAFT (LOG N7.F11b14): written by the build, not ethics-sourced. Före sessionens första
   # smärtmätning, som följs av övningen på smärtskalan.
-  ready_long_first: 'Första smärtmätningarna. Säg till deltagaren: "{say[first_pain]}" Tryck sedan på {controls[proceed]}.'
+  ready_long_first: 'Första smärtmätningarna. Säg: "{say[first_pain]}" Tryck sedan på {controls[proceed]}.'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
   ready_short: '{n} appliceringar med filamentet {filament} g i den {region} zonen. Ha det till hands och tryck sedan på {controls[proceed]}.'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
@@ -292,9 +292,9 @@ instructions:
   f40_fit_review: 'Skattningen av filamentkraften (F40) är klar. Tryck på {controls[fit_accept]} eller {controls[fit_rerun]}.'
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_failed: >-
-    Skattningen i beröringskalibreringen klarade inte kvalitetskontrollen ({value}). Tryck på
-    {controls[fit_rerun]} för att göra om steg 1 och 2, och säg till deltagaren:
-    "{say[rerun]}" Eller tryck på {controls[fit_accept]} för att fortsätta med den flaggad.
+    Skattningen klarade inte kvalitetskontrollen ({value}). Tryck på {controls[fit_rerun]} för
+    att göra om steg 1 och 2 och säg: "{say[rerun]}" Eller tryck på {controls[fit_accept]} för
+    att fortsätta, flaggad.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_stage1_unusable: >-
     Skattningen i beröringskalibreringen kan inte användas ({value}). Tryck på
@@ -303,9 +303,9 @@ instructions:
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced. Ingen omkörning erbjuds:
   # gränsen är nådd, och en omkörning nekas.
   touchcal_stage1_exhausted: >-
-    Skattningen i beröringskalibreringen kan inte användas ({value}) och gränsen för antal
-    omkörningar är nådd. Tryck på {controls[fit_fallback]} för att fortsätta med en
-    reservlösning som registreras som inte giltig för analys, eller på {controls[abort]}.
+    Skattningen i beröringskalibreringen kan inte användas ({value}) och inga omkörningar
+    finns kvar. Tryck på {controls[fit_fallback]} (registreras som inte giltig för analys),
+    eller på {controls[abort]}.
   # DRAFT (LOG N7.F11b6): written by the build, not ethics-sourced
   touchcal_gain_undefined: >-
     Kanal {channel} matchades åter vid 0 kPa. Tryck på {controls[rebalance]} för att göra om
@@ -356,10 +356,9 @@ instructions:
   # SPEC.md 15: en session som återupptas under återuppvärmningen ber aldrig om värmen igen.
   # DRAFT (LOG N7.F11b18): written by the build, not ethics-sourced
   rekindle_resumed: >-
-    Sessionen återupptogs under återuppvärmningen. Värmen startades före avbrottet och
-    efterfrågas inte igen; återuppvärmningen räknas därifrån. Tryck på {controls[proceed]} för
-    att bekräfta. Om värmen i själva verket inte gavs, ge den nu och skriv en anteckning.
-    Plagget förblir avstängt tills återuppvärmningen är klar.
+    Sessionen öppnades igen under återuppvärmningen: värmen hade startat och räknas därifrån.
+    Tryck på {controls[proceed]} för att bekräfta. Om den inte gavs, ge den nu och skriv en
+    anteckning. Plagget är avstängt tills återuppvärmningen är klar.
 
 # Vad försöksledaren säger högt till deltagaren, citerat i `instructions` som {say[...]}.
 # Läses på DELTAGARENS språk (`Config.say`), oavsett försöksledarens (LOG N7.F11b19). Ingen får
@@ -388,9 +387,9 @@ say:
   # (UI_PRINCIPLES.md 2.4). Signalen är nu texten "Gör dig redo" (N7.F12g1), inte en cirkel;
   # varje hudtest är ett verkligt stimulus, så det stämmer att något följer.
   first_pain: >-
-    Nu ska jag testa huden med tunna plastfilament och en mjuk pensel. Varje gång står det
-    först på skärmen att du ska göra dig redo, sedan känner du det, sedan visas linjen och du
-    skattar hur smärtsamt det var. Den första linjen är en övning.
+    Nu ska jag testa huden med tunna plastfilament och en mjuk pensel. Varje gång säger
+    skärmen att du ska göra dig redo, du känner det, sedan skattar du på linjen hur smärtsamt
+    det var. Den första linjen är en övning.
   # DRAFT (LOG N7.F11b13): written by the build, not ethics-sourced. {hours} fylls i efteråt.
   intervention: >-
     Nästa del tar ungefär {hours} timmar. Du kommer att känna beröring från plagget, och
@@ -482,6 +481,8 @@ status:
   resuming: Återupptar…
   # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
   awaited_for: '{status} ({time})'
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. On each mapping tick.
+  mapping_tick: 'Takt {n} av {max}'
   # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
   rehearsal_stop: 'Stoppet fungerade: plagget på noll. Tryck på {controls[resume]} för att visa deltagaren att beröringen kommer tillbaka.'
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Under Återuppta efter ett
@@ -495,6 +496,9 @@ status:
     Senaste försöket kasserat. Gränsen för antal appliceringar är nådd, så det upprepas inte.
 
 warnings:
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. A path that ended at
+  # mapping.max_steps with no change reported.
+  mapping_limit: 'Bana {path} tog slut vid gränsen {max} takter utan att någon förändring rapporterades. Anteckna det om gränsen är oklar.'
   experimenter_changed: >-
     Dessa initialer skiljer sig från tidigare sessioner för denna deltagare. Bilaga 1 3.3 önskar
     samma försöksledare genomgående. Sessionen fortsätter och avvikelsen registreras.
@@ -603,7 +607,7 @@ demo:
   fast_forward_go: Kör
   fast_forwarding: 'Spolar fram till {phase}…'
   skipped: 'Hoppade över {value} min väntan.'
-  clock: 'Klocka: {speed}× realtid'
+  clock: 'Klocka: {speed}×'
   clock_detail: >-
     Varje tidsstyrt intervall i sessionen -- vilopauser, signaler, schemalagda väntetider,
     nedräkningar -- går så här många gånger snabbare än i en riktig session, för personer och
@@ -612,18 +616,18 @@ demo:
   remote: 'Fjärrkontroll:'
   worn_note: 'Plagget bärs: bara personer, ingen automatik eller framspolning.'
   worn_note_detail: 'Någon kan ha plagget på sig: deltagaren och försöksledaren är personer, inte simuleringar, och automatisk körning och framspolning är avstängda.'
-  differences_button: Demo jämfört med session…
-  differences:
-    intro: 'Den här demonstrationen kör sessionens riktiga kod. Det här skiljer sig från en session:'
-    clock: 'Klocka: {speed}× realtid. Session: realtid.'
-    rests: 'Vila mellan appliceringar med filament eller pensel: {demo} s. Session: {low}–{high} s från varje applicering.'
-    estimation: 'Beröringskalibrering, skattningsserien (mockplagget): {demo} s mellan beröringarna och skalan {demo_settle} s in i varje. Session: {session} s och {session_settle} s, för att ett riktigt plagg ska hinna fyllas.'
-    keyboards: 'Tangentbord: bara R400 räknas när den är ansluten, annars alla tangentbord. Session: bara R400.'
-    garment: 'Plaggets kanaler visas i varje fas. Session: dolda under interventionen och återuppvärmningen, så att villkoret inte syns.'
-    simulations: 'Deltagaren och försöksledaren kan simuleras, och bytas när som helst. Session: bara personer.'
-    skipping: 'Hoppa över, automatisk körning och framspolning finns bara i en demonstration.'
-    allocation: 'Villkoren blandas över sessionsnumren vid varje körning.'
-    data: 'Data hamnar i en egen mapp, märkta som demonstration, och är aldrig studiedata.'
+  # Hur en demonstration skiljer sig från en session, sagt där det gäller (LOG N7.F17d).
+  # DRAFT (LOG N7.F17d): written by the build, not ethics-sourced
+  session_differs:
+    rests: 'Demovila: {demo} s (session: {low}–{high} s)'
+    rests_detail: 'En demonstration vilar {demo} s mellan appliceringarna med filament eller pensel. En session väntar {low}–{high} s, räknat från varje applicering.'
+    estimation: 'Demo: {demo} s per beröring (session: {session} s)'
+    estimation_detail: 'På mockplagget ger skattningsserien {demo} s åt varje beröring. En session ger {session} s, så att ett riktigt plagg hinner fyllas och tömmas.'
+    garment: 'Bara demo: kanalerna visas'
+    garment_detail: 'En demonstration visar plaggets kanaler i varje fas. En session döljer dem under interventionen och återuppvärmningen, så att villkoret inte syns.'
+    keyboards: 'Demo: bara R400 räknas när den är ansluten, annars alla tangentbord. En session: bara R400.'
+    simulations: 'Demo: deltagaren och försöksledaren kan simuleras och bytas när som helst. En session: bara personer.'
+    allocation: 'Varje körning blandar villkoren över sessionsnumren, så ett sessionsnummer i en demo säger inget om dess villkor i studien.'
 
 dialogs:
   abort_confirm: Avbryta sessionen? All data som samlats in hittills sparas.
@@ -631,6 +635,8 @@ dialogs:
   # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. Asked the same in every
   # phase, so the asking says nothing about the touch (SPEC.md 16).
   disconnect_confirm: Koppla från plagget? Det går till noll först.
+  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
+  discard_confirm: Kassera det senaste försöket? Skattningen sparas i data, märkt som kasserad, och försöket görs om om inte gränsen för antal appliceringar är nådd.
   # SPEC.md 15. Båda värdena formateras av sessionen från dess egen text.
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   resume_found: 'En oavslutad session hittades för denna deltagare. Genomfört: {completed}. {since_sensitisation} Återuppta den med den ursprungliga tidsplanen?'

@@ -8,6 +8,7 @@ up as a failure rather than as a screen that quietly stops updating.
 
 from __future__ import annotations
 
+import string
 import time
 
 import numpy as np
@@ -622,6 +623,38 @@ def test_the_window_fits_the_lab_laptop(app, language, banners):
     assert hint.width() <= LAPTOP_WIDTH_PX and hint.height() <= LAPTOP_HEIGHT_PX, hint
 
 
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_every_instruction_is_read_at_the_large_size_on_the_lab_laptop(app, language):
+    """The instruction steps down the type scale only for a value longer than the sample's,
+    never for its own wording: read-aloud scripts were squeezed to body size (LOG N7.F17e).
+    Each field is filled with eight characters, longer than any filament, site or count."""
+    config = cfg.load(language, language)
+    view = _all_keys()
+    window = screenshots._session_window(config, lambda: view)
+    window.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+    window.show()
+    QApplication.processEvents()
+    label, width = window.instruction, window._left_width()
+    squeezed = []
+    for key, template in config.experimenter_text["instructions"].items():
+        values = {name.split("[")[0]: "XXXXXXXX"
+                  for _, name, _, _ in string.Formatter().parse(template) if name}
+        values = {name: value for name, value in values.items()
+                  if name not in ("controls", "say")}
+        while True:
+            # A quoted `say:` line brings fields of its own, named only when it is filled.
+            try:
+                text = cfg.instruction(config, key, **values)
+                break
+            except KeyError as missing:
+                values[missing.args[0]] = "XXXXXXXX"
+        widgets.sized(label, widgets.SIZE_LARGE)
+        label.setText(text)
+        if label.heightForWidth(width) > label.height():
+            squeezed.append(key)
+    assert squeezed == []
+
+
 def test_no_banner_leaves_no_empty_band(app, session):
     """A laptop screen has no quarter to spare for banners that are not there (S's lab
     review, 24 Sep 2026). The open-items line is in the banner region since the 15 Oct 2026
@@ -735,7 +768,7 @@ def test_every_action_signal_has_a_control_that_emits_it(drawn):
     ):
         seen = _emitted(signal)
         widget.click()
-        if widget is window.garment_button:  # asked first (LOG N7.F17e)
+        if widget in (window.garment_button, window.discard_button):  # asked first (N7.F17e)
             window.findChildren(widgets.MessageDialog)[-1].accept()
         assert seen == [()], f"{widget.text()} did not emit"
 

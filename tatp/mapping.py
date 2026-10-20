@@ -393,13 +393,25 @@ class AreaMapping(Procedure):
         # SPEC.md 10.5: timestamp every cue onset.
         self.session.log("pacing_cue", detail=f"{self._detail()}, cue {self.cue}")
         self.pacing_cue.emit(self.path, self.cue)
+        # How far along the path is, so the end at the limit is no surprise (LOG N7.F17e).
+        self.experimenter.set_status(self.experimenter.text["status"]["mapping_tick"].format(
+            n=self.cue, max=self.max_steps))
+        self.experimenter.refresh()
         next_s = self.session.clock.remaining_s(
             self._first_cue_s, self.cue * self.step_interval_s
         )
         if self.cue >= self.max_steps:
-            self._after(next_s, lambda: self._end_path("cue limit reached"))
+            self._after(next_s, self._reached_limit)
         else:
             self._after(next_s, self._pace)
+
+    def _reached_limit(self) -> None:
+        """No change reported within `max_steps` ticks: the path ends, and the experimenter is
+        told, since the next path's instruction would otherwise replace it without a word
+        (LOG N7.F17e)."""
+        self.experimenter.set_warning(self.experimenter.text["warnings"]["mapping_limit"].format(
+            path=self.ledger.path_name(self.path), max=self.max_steps))
+        self._end_path("cue limit reached")
 
     def _stop_path(self) -> None:
         self._end_path("stopped by the experimenter")

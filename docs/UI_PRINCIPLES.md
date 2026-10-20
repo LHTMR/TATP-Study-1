@@ -124,6 +124,11 @@ be the brightest object in the participant's field of view.
 3.6 The emergency stop is reachable and identifiable without reading (Bilaga 1 §3.10). Nothing
 is a control unless it can be operated without looking away from the participant.
 
+3.7 **What exists only in a demonstration is violet** (`DEMO_COLOUR`): its banner, its
+controls' labels and chosen buttons, and what it says about how it differs from a session
+(S, 20 Oct 2026). Nothing in a session uses violet, so a screenshot or a glance tells which it
+is. A warning in a demonstration stays a warning's colour.
+
 ## 4. Consistency
 
 4.1 Every user-facing string comes from `config/text/`. No wording in a widget.

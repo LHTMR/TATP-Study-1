@@ -69,6 +69,7 @@ from tatp import touchcal_maths as maths
 from tatp.ui.garment_display import GarmentDisplay
 from tatp.ui.timeline import PhaseTimeline
 from tatp.ui.widgets import (
+    DEMO_BANNER_COLOUR,
     DISABLED,
     DISCONNECTED_COLOUR,
     FOREGROUND,
@@ -364,7 +365,7 @@ class ExperimenterWindow(QWidget):
         self.fit_preview_banner.setText(banners_text["fit_preview"])
         self.fit_preview_banner.setToolTip(banners_text["fit_preview_detail"])
         # A demonstration (tatp/demo.py): the session runs, and nothing it records is data.
-        self.demo_banner = _banner(REDUCED_CAPABILITY_COLOUR)
+        self.demo_banner = _banner(DEMO_BANNER_COLOUR)
         self.demo_banner.setText(banners_text["demo"])
         # Which open items are not final, by number (SPEC.md 20). Here rather than under the
         # instruction, because like the banners it is settled before the session and does not
@@ -586,7 +587,7 @@ class ExperimenterWindow(QWidget):
                 and widget.click())
         self.pause_button.clicked.connect(self.pause_requested.emit)
         self.resume_button.clicked.connect(self.resume_requested.emit)
-        self.discard_button.clicked.connect(self.discard_requested.emit)
+        self.discard_button.clicked.connect(self._discard_clicked)
         self.rebalance_button.clicked.connect(self.rebalance_requested.emit)
         self.fit_accept_button.clicked.connect(self.fit_accepted.emit)
         self.fit_rerun_button.clicked.connect(self.open_rerun_dialog)
@@ -1083,6 +1084,20 @@ class ExperimenterWindow(QWidget):
         # What the press started has run by now: offered again only if a go is still awaited,
         # so a double press never lands on the step after.
         self._apply_enabled()
+
+    def discard_dialog(self) -> MessageDialog:
+        controls = self.text["controls"]
+        return MessageDialog(controls["discard_repeat"],
+                             self.text["dialogs"]["discard_confirm"],
+                             controls["discard_repeat"], controls["cancel"], parent=self)
+
+    def _discard_clicked(self) -> None:
+        """Asked first: a slip discarded a rating with one click (LOG N7.F17e). Still offered
+        when answered, or nothing is discarded -- the procedure may have moved on meanwhile."""
+        dialog = self.discard_dialog()
+        dialog.accepted.connect(
+            lambda: self._awaiting["discard"] and self.discard_requested.emit())
+        dialog.open()
 
     def disconnect_dialog(self) -> MessageDialog:
         controls = self.text["controls"]

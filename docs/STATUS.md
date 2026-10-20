@@ -103,7 +103,11 @@ validator checks, 224 screens), in sessions and demonstrations alike:
   end screen; disconnect asks; the note's "saved at" goes; Enter in the re-run dialog; short
   re-calibration dialogs; Start always pressable; the hardware page's garment carried over; a
   hint for ▶ before the marker; Space/P/R; no-response warning; link lost in red in the alert
-  row; "Resuming…"; the rehearsal's expected stop; which anchor; "Applied: …" after the press.
+  row; "Resuming…"; the rehearsal's expected stop; which anchor; "Applied: …" after the press;
+  every instruction at the large size (tested); mapping's tick count and step-limit warning;
+  Discard asks first.
+- How a demo differs from a session is said where it applies, not in a list; everything only a
+  demo has is violet (N7.F17d, UI_PRINCIPLES.md 3.7).
 - `CLAUDE.md` "Engineering lessons" and `docs/UI_PRINCIPLES.md` §5.13–5.22 and §7, from the
   whole history (S's request); S does not review screens, the build re-approves them.
 
@@ -114,10 +118,7 @@ validator checks, 224 screens), in sessions and demonstrations alike:
 ### 0. Finish `pilot/ux-batch-2`
 
 Review (`/code-review high`, spec-review), fix, `make check`, merge `--no-ff`, `make check` on
-`main`, delete the branch. Left from the walk-through, not yet done: long read-aloud scripts in
-the four-line instruction; mapping's tick count and a warning when a path ends at the step
-limit; Discard with no confirm; Next step drawn pressable in the screenshot samples where a
-session would grey it.
+`main`, delete the branch.
 
 ### 1. Test the code in demo mode — the priority (S, 20 Oct; LOG N7.F15a)
 
