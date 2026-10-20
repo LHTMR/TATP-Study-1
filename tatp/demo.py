@@ -77,6 +77,7 @@ from tatp.session import DRIVERS, with_session_choices
 from tatp.session_runner import BLOCK, SessionRunner
 from tatp.ui.experimenter import clock_text, event_name
 from tatp.ui.garment_display import states_from_status
+from tatp.ui.participant import ParticipantWindow
 from tatp.ui.timeline import FOLDED
 from tatp.ui.widgets import (
     BACKGROUND,
@@ -552,7 +553,9 @@ class DemoControls(QWidget):
     """
 
     def __init__(self, demo: Demo, text: dict, symbols: dict[Action, str],
-                 parent: QWidget | None = None):
+                 participant: ParticipantWindow | None = None, parent: QWidget | None = None):
+        """`participant` is the window whose remote presses light `symbols`; none in a
+        picture of the controls."""
         super().__init__(parent)
         self.demo = demo
         self.text = text
@@ -627,7 +630,8 @@ class DemoControls(QWidget):
         layout.addLayout(who)
         layout.addLayout(actions)
 
-        participant = demo.runner.rig.participant if hasattr(demo.runner, "rig") else None
+        # Whether the status line says a fast-forward is running, which `sync` takes down.
+        self._forwarding_shown = False
         if participant is not None:
             watch = _RemoteWatch(participant, self.remote, self)
             participant.installEventFilter(watch)
@@ -686,7 +690,7 @@ class DemoControls(QWidget):
             modes.blockSignals(False)
 
         skippable_s = demo.skippable_s()
-        event = demo.session.experimenter_view()["next_event"]
+        event = demo.session.next_event()
         if skippable_s is not None and event is not None:
             self.skip_button.setText(words["skip_to"].format(
                 what=event_name(self.text, event), time=clock_text(skippable_s)))
@@ -714,5 +718,6 @@ class DemoControls(QWidget):
         if forwarding:
             self.status.setText(words["fast_forwarding"].format(
                 phase=self.text["phases"][demo.fast_forward_to]))
-        elif self.status.text().startswith(words["fast_forwarding"].split("{")[0]):
+        elif self._forwarding_shown:
             self.status.clear()
+        self._forwarding_shown = forwarding

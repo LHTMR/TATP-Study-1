@@ -3,9 +3,11 @@
 The normal experimenter runs a whole session from the experimenter screen, and only from it:
 
 - **It applies what the screen asks for, once per warning cue.** At each cue it reads the
-  instruction, parses it against the `apply_filament` or `apply_brush` wording it was formatted
-  from, and touches the virtual participant: the filament's force -- the weighed one where the
-  set has been weighed, since that is what the filament presses with -- or the brush. Reading
+  instruction -- the "Get ready" line -- parses it against the `prepare_filament` or
+  `prepare_brush` wording it was formatted from, and touches the virtual participant: the
+  filament's force -- the weighed one where the set has been weighed, since that is what the
+  filament presses with -- or the brush. Once "Now: apply" is up with Next step offered, it
+  presses Next step (docs/LOG.md N7.F16f). Reading
   the screen rather than the protocol is the point: a prompt that named the wrong filament
   would be applied wrongly here, as it would be in the lab. The cue is noticed as it goes up
   (`warning_cue_shown`), not by looking now and then: at the validator's speed a cue is on
@@ -107,6 +109,9 @@ class VirtualExperimenter(QObject):
 
         self._apply = template("apply_filament")
         self._brush = template("apply_brush")
+        # What is up at the cue: what to have ready (LOG N7.F16f).
+        self._prepare = template("prepare_filament")
+        self._prepare_brush = template("prepare_brush")
         self._mapping_ready = template("mapping_ready")
         self._mapping_path = template("mapping_path")
         self._proceed_templates = [template(key) for key in PROCEED_TEMPLATES]
@@ -184,12 +189,12 @@ class VirtualExperimenter(QObject):
 
     def _apply_at_cue(self) -> None:
         instruction = self.rig.experimenter.instruction.text()
-        match = self._apply.fullmatch(instruction)
+        match = self._prepare.fullmatch(instruction)
         if match is not None:
             label = match["filament"]
             self.applied.append(label)
             self.participant.feel_filament(self._forces[label])
-        elif self._brush.fullmatch(instruction) is not None:
+        elif self._prepare_brush.fullmatch(instruction) is not None:
             self.applied.append("brush")
             self.participant.feel_brush()
 

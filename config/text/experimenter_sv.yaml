@@ -109,8 +109,13 @@ instructions:
     appliceringsstället utom synhåll för deltagaren.
   # Filamenten benämns med gramsiffran som står tryckt på dem (SPEC.md 8.1), kraften efter.
   # "Nu:" så att den pågående appliceringen aldrig ser ut som den förra (LOG N7.F11b8).
-  # Trycket säger att det är applicerat, och skattningen visas räknat från det (S, 20 okt 2026;
-  # LOG N7.F16f).
+  # Under deltagarens "Gör dig redo": vad som ska vara redo, och var (LOG N7.F16f).
+  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
+  prepare_filament: 'Gör dig redo: filamentet {filament} g ({force_mn} mN), plats {site}, {region} zonen.'
+  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
+  prepare_brush: 'Gör dig redo: penseln, plats {site}, {region} zonen.'
+  # När förvarningen är slut. Trycket säger att det är applicerat, och skattningen visas
+  # räknat från det (S, 20 okt 2026; LOG N7.F16f).
   # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
   apply_filament: 'Nu: applicera filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen, och tryck sedan på {controls[proceed]}.'
   # Ett drag på cirka 2 cm, aldrig upprepat: upprepning höjer smärtan (docs/research/RB2).

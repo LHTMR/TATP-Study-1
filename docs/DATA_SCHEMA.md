@@ -176,8 +176,16 @@ as a double tap or a bounce rather than taken as the new screen's (docs/LOG.md N
 A demonstration (`demo` true in the session file, docs/LOG.md N7.D23) logs who presses:
 `demo_simulation`, `detail` `participant: <mode>` or `experimenter: <mode>` (`off` a person,
 `watch` or `fast` a simulation), at the start and at every change, so each response's origin
-can be read back; and each Skip the wait, `demo_wait_skipped`, `detail` the session seconds
-skipped -- `t_session_s` jumps by that much there.
+can be read back; and each Skip, `demo_wait_skipped`, `detail` the session seconds
+skipped -- `t_session_s` jumps by that much there. An Auto-run is `demo_auto_run`, `detail`
+the stage id it runs fast; a Fast-forward is `demo_fast_forward`, `detail` the phase it runs
+to, and skips every timed wait on the way, each a `demo_wait_skipped` with no lead left
+(docs/LOG.md N7.F16j).
+
+Each pinprick or brush application logs `stimulus_due` when the cue's lead is over and the
+experimenter is asked to apply it, then `stimulus_delivered` (`origin` experimenter) at their
+Next step saying it is applied, which `stimulus_delivered_iso` in its row records and from
+which its rating is cued (docs/LOG.md N7.F16f).
 
 `remote_disconnected` (severity `error`) is written when the participant's remote is unplugged
 or its receiver drops out during a session, and `remote_reconnected` (`warning`) when it comes

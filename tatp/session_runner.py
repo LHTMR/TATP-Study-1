@@ -115,6 +115,8 @@ CAPSAICIN_REMOVAL = "capsaicin_removal"
 REKINDLE_END = "rekindle_end"
 # Keys in the experimenter text's `instructions`, not wording.
 READY_TOUCH_BLOCK = "ready_touch_block"
+# The stage that marks the skin before pre-sensitisation's measures (docs/LOG.md N7.F16l).
+MARK_ZONE_STAGE = f"{PRE_S}.mark_zone"
 FIRST_SESSION = 1
 
 
@@ -136,6 +138,15 @@ class Stage:
     phase: str
     begin: Callable[[], None]
     upcoming: Upcoming | None = None
+
+
+def session_phases(schedule: Schedule) -> list[str]:
+    """The session's phases in order, for the experimenter's timeline (docs/LOG.md N7.F16h):
+    those the stages begin in, the rekindle drawn as part of the intervention. The schedule's,
+    the same in every condition."""
+    return list(dict.fromkeys(
+        phase for _, phase, _ in stage_layout(schedule) if phase != REKINDLE
+    ))
 
 
 def stage_layout(schedule: Schedule) -> list[tuple[str, str, Upcoming | None]]:
@@ -167,7 +178,7 @@ def stage_layout(schedule: Schedule) -> list[tuple[str, str, Upcoming | None]]:
     add("touch_calibration.baseline", TOUCH_CALIBRATION)
     # The skin the heat and the capsaicin will go on, marked before anything is measured
     # there (S, 20 Oct 2026; docs/LOG.md N7.F16l).
-    add(f"{PRE_S}.mark_zone", PRE_S)
+    add(MARK_ZONE_STAGE, PRE_S)
     time_point(PRE_S)
     # t=0 is set by the experimenter's press in this stage, so it begins in pre-S.
     add("sensitisation", PRE_S)
@@ -326,9 +337,7 @@ class SessionRunner(Procedure):
         # The session's phases in order, for the experimenter's timeline (LOG N7.F16h): those
         # the stages begin in, and the rekindle as part of the intervention. The schedule's,
         # the same in every condition.
-        self.phases = list(dict.fromkeys(
-            stage.phase for stage in self.stages if stage.phase != REKINDLE
-        ))
+        self.phases = session_phases(self.session.schedule)
         self.experimenter.set_timeline(self.phases)
         # Stages a resumed session found completed (`_resume`); empty for a fresh session.
         self._completed: frozenset[str] = frozenset()
@@ -1520,7 +1529,14 @@ class SessionRunner(Procedure):
         """SPEC.md 15, before t=0 as after it (docs/LOG.md N7.D16): what was completed is
         reloaded, not redone, and the session goes on from the first stage that was not."""
         state = self.resume
-        done = state.completed_stages
+        done = list(state.completed_stages)
+        # The skin marking was added on 20 Oct 2026 (N7.F16l). A session that went past it --
+        # one written before it existed, above all -- has the skin marked already, and resumed
+        # there would be sent back to pre-sensitisation after t=0 (spec review).
+        ids = [stage.id for stage in self.stages]
+        mark = ids.index(MARK_ZONE_STAGE)
+        if MARK_ZONE_STAGE not in done and any(ids.index(s) > mark for s in done if s in ids):
+            done.append(MARK_ZONE_STAGE)
         self._completed = frozenset(done)
         self.session.log(
             "session_resumed", severity="warning",

@@ -483,6 +483,7 @@ def attach_demo(runner: SessionRunner, args: argparse.Namespace) -> Demo:
     demo.controls = DemoControls(
         demo, runner.session.config.experimenter_text,
         {action: responder.symbol_for(action, pointing_at_stop=True) for action in Action},
+        runner.rig.participant,
     )
     window.add_demo_panel(demo.controls)
     return demo

@@ -503,7 +503,9 @@ block, and for primary hyperalgesia at pre-S, post-S and post-I.
 
 - **Software paces the trials.** The experimenter confirms the **start of the block**, which
   triggers the participant's warning cue. Thereafter the **participant's response** advances to
-  the next trial.
+  the next trial. Within each trial the experimenter presses Next step once the stimulus is
+  applied, and the rating is cued `rating_cue_delay_s` after that press (S, 20 Oct 2026;
+  `docs/LOG.md` N7.F16f). The long protocol's applications do the same.
 - **Jittered ISI**, configurable, default 13–17 s (Scheuren et al. 2023).
 - **Site rotates on every application.**
 

@@ -61,7 +61,7 @@ from tatp.pinprick import F40Fit, LongResult
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source
 from tatp.responder import Action, Responder
 from tatp.resume import offer_wording
-from tatp.session_runner import REKINDLE, stage_layout
+from tatp.session_runner import session_phases
 from tatp.touchcal import MATCH_TARGET, FitReady
 from tatp.ui.application import application
 from tatp.ui.experimenter import ExperimenterWindow
@@ -805,9 +805,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
 
 def _session_phases(config: cfg.Config) -> list[str]:
     """The phases on a session's timeline, as `SessionRunner.phases` lists them."""
-    phases = [phase for _, phase, _ in stage_layout(schedule.generate(config.schedule))
-              if phase != REKINDLE]
-    return list(dict.fromkeys(phases))
+    return session_phases(schedule.generate(config.schedule))
 
 
 def _grab_checked(window: QWidget, name: str) -> QPixmap:
@@ -994,10 +992,10 @@ class _SampleDemo(QObject):
     def skippable_s(self) -> float | None:
         return self._skippable_s
 
-    def experimenter_view(self) -> dict:
+    def next_event(self) -> dict | None:
         upcoming = {"kind": "phase", "label_key": "capsaicin_removal", "block_index": None,
                     "block_type": None, "due_in_s": SAMPLE_DUE_IN_S, "overdue": False}
-        return {"next_event": upcoming if self._skippable_s is not None else None}
+        return upcoming if self._skippable_s is not None else None
 
     def states(self) -> dict:
         return states_from_status(self.garment.status(), self.garment.channels(),

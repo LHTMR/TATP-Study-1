@@ -62,6 +62,10 @@ from tatp.units import MS_PER_S
 
 # The `vas` block this protocol presents. A config key, not wording.
 PAIN_SCALE = "pain"
+# The two instructions of an application, `{key}_filament` and `{key}_brush` in the
+# experimenter text: through the cue's lead, and once the stimulus is due (LOG N7.F16f).
+PREPARE = "prepare"
+APPLY = "apply"
 
 # Controlled vocabularies of the data files (docs/DATA_SCHEMA.md), not wording.
 LONG = "long"
@@ -612,10 +616,12 @@ class _RatedTrial(QObject):
         )
 
         self.cue_onset_iso = ""
+        self._apply_text = ""
         self.stimulus_delivered_iso = ""
         self.rating_cue_iso = ""
-        # From the experimenter's press on, the stimulus has been applied: an interruption
-        # after it has cost the participant a delivery even though no row is written.
+        # From `stimulus_due` on, the experimenter may have applied the stimulus: an
+        # interruption after it has cost the participant a delivery even though no row is
+        # written.
         self.stimulus_delivered = False
         # From `stimulus_due` until that press: Next step says the stimulus has been applied
         # (`Rig.proceed_awaited` offers it then).
@@ -633,7 +639,8 @@ class _RatedTrial(QObject):
 
     # -- hooks -------------------------------------------------------------------------
 
-    def _instruction(self) -> str:
+    def _instruction(self, key: str) -> str:
+        """`PREPARE` through the cue's lead, `APPLY` once the stimulus is due."""
         raise NotImplementedError
 
     def _stimulus_detail(self) -> str:
@@ -657,7 +664,8 @@ class _RatedTrial(QObject):
         """Show the warning cue and prompt the experimenter. SPEC.md 10.5."""
         # Everything that can fail happens before anything is shown or connected, so a trial
         # naming a filament that is not held stops here rather than half-started.
-        instruction = self._instruction()
+        instruction = self._instruction(PREPARE)
+        self._apply_text = self._instruction(APPLY)
         self.participant.confirmed.connect(self._on_confirmed)
         self._connect_extra()
 
@@ -668,7 +676,13 @@ class _RatedTrial(QObject):
         self.participant.show_warning_cue()
         self.session.log("warning_cue", detail=f"trial {self.trial_index}")
 
-        self.experimenter.set_instruction(instruction)
+        self._instruct(instruction)
+        self.experimenter.set_status("")
+        self.experimenter.refresh()
+        self._after_from(self._cue_onset_elapsed_s, self.warning_duration_s, self._end_cue)
+
+    def _instruct(self, text: str) -> None:
+        self.experimenter.set_instruction(text)
         # The zone diagram marks where this stimulus goes (SPEC.md 11), and a filament brings
         # the monofilament technique with it.
         self.experimenter.set_target(
@@ -676,9 +690,6 @@ class _RatedTrial(QObject):
             self.application.site_index,
             filament=isinstance(self.application, Application),
         )
-        self.experimenter.set_status("")
-        self.experimenter.refresh()
-        self._after_from(self._cue_onset_elapsed_s, self.warning_duration_s, self._end_cue)
 
     def _end_cue(self) -> None:
         self.participant.show_blank()
@@ -687,10 +698,18 @@ class _RatedTrial(QObject):
     def _stimulus_due(self) -> None:
         """The cue's lead is over: the experimenter applies the stimulus and says so with Next
         step. Until 20 Oct 2026 the rating was cued `rating_cue_delay_s` after this moment,
-        whenever the stimulus had really been applied (S; docs/LOG.md N7.F16f)."""
+        whenever the stimulus had really been applied (S; docs/LOG.md N7.F16f).
+
+        "Now: apply" goes up only now, with Next step offered: up at the cue, it was read and
+        acted on during the lead, and the press then did nothing (code review of N7.F16f).
+        From here a stop counts the stimulus as applied, as it always has: the experimenter
+        may have applied it and not yet pressed, and a pain-driven stop is likeliest just
+        then (spec review); the press times the rating, not the delivery count."""
         self.session.log("stimulus_due", detail=self._stimulus_detail())
+        self.stimulus_delivered = True
         self.awaits_proceed = True
         self.experimenter.proceed_requested.connect(self._on_delivered)
+        self._instruct(self._apply_text)
         self.experimenter.refresh()
 
     def _on_delivered(self) -> None:
@@ -698,7 +717,6 @@ class _RatedTrial(QObject):
         # the protocol fixes runs from the stimulus itself.
         delivered_s = self.session.clock.elapsed_s()
         self._stop_awaiting()
-        self.stimulus_delivered = True
         self.stimulus_delivered_iso = self.session.clock.wall_iso()
         self.session.log("stimulus_delivered", origin="experimenter",
                          detail=self._stimulus_detail())
@@ -810,11 +828,11 @@ class PinprickTrial(_RatedTrial):
     def _filament(self, label_g: str) -> Filament:
         return self.filaments[ladder_index(self.filaments, label_g)]
 
-    def _instruction(self) -> str:
+    def _instruction(self, key: str) -> str:
         text = self.experimenter.text
         self._filament(self.application.applied_label_g)  # refuses one not held, before the cue
         return instruction(
-            self.session.config, "apply_filament",
+            self.session.config, f"{key}_filament",
             filament=self.application.filament_label_g,
             force_mn=self._filament(self.application.filament_label_g).force_nominal_mn,
             site=self.application.site_index,
@@ -957,10 +975,10 @@ class BrushTrial(_RatedTrial):
         )
         self.application = application
 
-    def _instruction(self) -> str:
+    def _instruction(self, key: str) -> str:
         text = self.experimenter.text
         return instruction(
-            self.session.config, "apply_brush",
+            self.session.config, f"{key}_brush",
             site=self.application.site_index,
             region=text["terms"]["regions"][self.application.region],
         )

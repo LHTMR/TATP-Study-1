@@ -51,6 +51,8 @@ from PySide6.QtGui import (
     QShortcut,
 )
 from PySide6.QtWidgets import (
+    QAbstractButton,
+    QApplication,
     QComboBox,
     QDialog,
     QGridLayout,
@@ -120,6 +122,8 @@ INSTRUCTION_SIZES = (SIZE_HEADLINE, SIZE_LARGE, SIZE_BODY, SIZE_SMALL)
 TIMELINE_SHARE = 2
 COUNTDOWN_SHARE = 1
 COUNTDOWN_SIZES = (SIZE_LARGE, SIZE_BODY, SIZE_SMALL)
+# How long Next step is shown down after Space presses it: long enough to be seen.
+PRESS_SHOWN_MS = 120
 # The status line under it: two lines of body text, or the small size if that is not enough.
 STATUS_LINES = 2
 STATUS_SIZES = (SIZE_BODY, SIZE_SMALL)
@@ -930,8 +934,23 @@ class ExperimenterWindow(QWidget):
         self._apply_enabled()
 
     def _proceed_key(self) -> None:
-        if self.proceed_button.isVisible() and self.proceed_button.isEnabled():
-            self.proceed_button.animateClick()
+        """Space. A button or a list that has the focus keeps Space's own meaning -- press
+        it, open it -- so Space on the demo's Skip never launches a step (code review of
+        N7.F16d). Otherwise Next step, at once: an animated click would emit its press about
+        100 ms late, and an application's time is that press (N7.F16f). The button is shown
+        down for a moment, so the press is seen."""
+        focus = QApplication.focusWidget()
+        if isinstance(focus, QAbstractButton) and focus is not self.proceed_button:
+            focus.click()
+            return
+        if isinstance(focus, QComboBox):
+            focus.showPopup()
+            return
+        if not (self.proceed_button.isVisible() and self.proceed_button.isEnabled()):
+            return
+        self.proceed_button.setDown(True)
+        QTimer.singleShot(PRESS_SHOWN_MS, self, lambda: self.proceed_button.setDown(False))
+        self._proceed_clicked()
 
     def _proceed_clicked(self) -> None:
         self.proceed_requested.emit()

@@ -106,8 +106,14 @@ instructions:
     site out of the participant's view.
   # Filaments are named by the gram label printed on them (SPEC.md 8.1), with the force after.
   # "Now:" so the application in progress never reads like the one before (LOG N7.F11b8).
-  # The press says it has been applied, and the rating is cued from it (S, 20 Oct 2026; LOG
-  # N7.F16f). Next step is offered once the participant's "Get ready" has run its lead.
+  # Through the participant's "Get ready": what to have ready, and where (LOG N7.F16f). Not
+  # yet "Now:", since Next step is not offered until the cue's lead is over.
+  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
+  prepare_filament: 'Get ready: the {filament} g filament ({force_mn} mN), site {site}, {region} zone.'
+  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
+  prepare_brush: 'Get ready: the brush, site {site}, {region} zone.'
+  # Once the cue's lead is over. The press says it has been applied, and the rating is cued
+  # from it (S, 20 Oct 2026; LOG N7.F16f).
   # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
   apply_filament: 'Now: apply the {filament} g filament ({force_mn} mN) at site {site}, {region} zone, then press {controls[proceed]}.'
   # One stroke of about 2 cm, never repeated: repetition raises pain (docs/research/RB2).

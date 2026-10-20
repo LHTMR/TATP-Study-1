@@ -299,7 +299,7 @@ def test_the_experimenter_applies_the_named_filament_at_every_cue(rig):
     experimenter.start()
     text = rig.experimenter.text
     rig.experimenter.set_instruction(
-        instruction(rig.session.config, "apply_filament",
+        instruction(rig.session.config, "prepare_filament",
                     filament="26", force_mn=255.0, site=1,
                     region=text["terms"]["regions"]["primary"])
     )
@@ -318,7 +318,7 @@ def test_the_experimenter_strokes_the_brush_when_asked(rig):
     experimenter.start()
     text = rig.experimenter.text
     rig.experimenter.set_instruction(
-        instruction(rig.session.config, "apply_brush",
+        instruction(rig.session.config, "prepare_brush",
                     site=1, region=text["terms"]["regions"]["primary"])
     )
     rig.participant.show_warning_cue()
@@ -350,7 +350,7 @@ def test_nothing_is_applied_without_a_cue(rig):
     experimenter.start()
     text = rig.experimenter.text
     rig.experimenter.set_instruction(
-        instruction(rig.session.config, "apply_filament",
+        instruction(rig.session.config, "prepare_filament",
                     filament="26", force_mn=255.0, site=1,
                     region=text["terms"]["regions"]["primary"])
     )

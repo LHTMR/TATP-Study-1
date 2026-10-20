@@ -619,6 +619,27 @@ def test_an_open_session_is_found_and_a_closed_one_is_not(app, loaded, tmp_path)
     assert resumption.find_open_session(folder, "01", 1) is None
 
 
+def test_a_session_from_before_the_skin_marking_resumes_where_it_stopped(app, loaded,
+                                                                         tmp_path):
+    """Spec review of N7.F16l: a log written before `pre_sensitisation.mark_zone` existed has
+    no row completing it. Resumed, it goes on from where it crashed -- not back to marking the
+    skin, which it is past."""
+    crashed = _crash_after(app, loaded, tmp_path, "pre_sensitisation.long")
+    log = crashed.session.files.path("log")
+    lines = log.read_text(encoding="utf-8").splitlines(keepends=True)
+    old = [line for line in lines
+           if not ("stage_completed" in line and session_runner.MARK_ZONE_STAGE in line)]
+    assert len(old) == len(lines) - 1, "the marking's completion, as an old build never wrote"
+    log.write_text("".join(old), encoding="utf-8")
+    runner = _resumed(loaded, tmp_path, crashed)
+    begun = []
+    Driver(runner.rig, runner, stop_when=lambda: begun.append(1) or len(begun) > 1).run()
+    started = [r["detail"] for r in _events(runner.session) if r["event"] == "stage_started"]
+    assert started[0] == "pre_sensitisation.short_primary"
+    runner.cancel()
+    runner.session.close()
+
+
 def test_a_crash_before_t_zero_reloads_what_was_completed(app, loaded, tmp_path):
     """SPEC.md 15: calibrations are reloaded, not redone -- before t=0 as after it."""
     crashed = _crash_after(app, loaded, tmp_path, "touch_calibration.baseline")
@@ -1647,7 +1668,8 @@ def test_the_touch_start_looks_the_same_to_the_experimenter_in_every_condition(
         # Next step is offered when the session moves on, in every condition: never earlier
         # or later with the delivery's own timing (LOG N7.F16d).
         offered_s = next(t for text, t in sequence if text == "next step offered: True")
-        assert offered_s - sequence[0][1] < display_s + TIMING_TOLERANCE_S
+        offered_after_s = offered_s - sequence[0][1]
+        assert display_s - EARLY_S <= offered_after_s < display_s + TIMING_TOLERANCE_S
 
 
 # -- around and between the tasks (15 Oct 2026 pilot review, LOG N7.F11c) --------------------

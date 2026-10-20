@@ -173,8 +173,14 @@ def test_the_rating_waits_for_the_experimenter_to_say_the_filament_is_applied(ru
     session, participant, experimenter = running
     trial = PinprickTrial(session, participant, experimenter, APPLICATION)
     trial.start()
+    # Through the cue's lead, what to have ready; "Now: apply" only with Next step offered.
+    prepare = experimenter.instruction.text()
+    assert prepare.startswith(experimenter.text["instructions"]["prepare_filament"][:8])
     _spin(lambda: trial.awaits_proceed)
-    assert not trial.stimulus_delivered
+    assert experimenter.instruction.text() != prepare
+    assert experimenter.zone.region == APPLICATION.region, "the target stays with it"
+    # A stop from here counts the application as delivered, pressed or not (spec review).
+    assert trial.stimulus_delivered and trial.stimulus_delivered_iso == ""
     waited_s = session.clock.elapsed_s() + trial.rating_cue_delay_s * 2
     _spin(lambda: session.clock.elapsed_s() > waited_s)
     assert participant.stack.currentWidget() is not participant.vas, "no scale before the press"
