@@ -1,7 +1,8 @@
 # STATUS
 
 **Last updated:** 20 October 2026 (on the lab PC).
-**Milestone:** 6 (pilotable), in progress, in lab piloting.
+**Milestone:** 6 (pilotable), in progress. **Priority: testing the code in demo mode** (S,
+20 Oct). The real valve garment is not built yet, so everything that needs it is parked.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
 back (`CLAUDE.md`, Committing). `pilot/rests-and-welcome` is merged and deleted, here and on
 `origin`. **`pilot/swedish-docs` is parked
@@ -61,7 +62,7 @@ high`, spec-review) with `make check` passing on the merged tree:
   14 ms, so Defender does not by itself explain the lab PC's whole-demo stall.
 - That stall is nonetheless gone: the whole-demo test passed in 10 of 10 parallel copies, twice
   (it failed in 1–2 of 10 before). Its cause on the lab PC is unexplained; if it returns, look
-  there first (step 3 below).
+  there first (section 3, item 2, below).
 
 **S's requests of 16 Oct are in `main`** (N7.F14a–e, merged 20 Oct; `/code-review high` and
 spec-review done, one finding kept, see N7.F14c): the welcome says only that a touch comes
@@ -77,7 +78,51 @@ screens (`welcome`, `practice_intro`, `please_wait`, en and sv) approved there.
 
 ## Next steps
 
-1. **Make `make check` pass on a Mac** (all pre-existing, none caused by the change above):
+### 1. Test the code in demo mode — the priority (S, 20 Oct; LOG N7.F15a)
+
+```
+conda run -n tatp-study-1 python run_session.py --demo --sim-participant watch --session 1 --experimenter SM --garment mock
+```
+
+On the lab PC or S's MacBook, with no hardware. A demo runs every stage and screen, and the
+session plan, through the real code (N7.D23). It only finishes stages early, never skips
+them. What it changes: rests 0.5 s (N7.F14b), the estimation window 1.5 s on the mock
+(N7.F14e), "Skip the wait" and a faster clock (mock only), the example patterns, and any
+keyboard counting as the remote. So it tests the flow, the screens and the data, but not real
+stimuli, real timing or the R400. Record what turns up in LOG and fix it on a `pilot/` branch.
+
+1. **Walk a whole session as both people, in English and Swedish:** welcome, the new
+   `practice_intro`, the introductions before each touch-calibration task, the read-aloud
+   lines, standby, "Please wait", the intervention end and the session end.
+2. **A note and its confirmation.**
+3. **Re-calibration** in calibration and in the intervention: the flow only (N7.F12a).
+4. **Skip calibration:** offered after 3 estimation ratings (`pilot_skip_min_ratings`);
+   calibration ends with sensible fallbacks (N7.F8b).
+5. **Touch calibration's estimation run:** "Get ready" and "Please wait" through the 1.5 s
+   window, with nothing before a catch trial that sets it apart (N7.F14e).
+6. **The interval countdown's wording** ("Next: … Deliver in N s", N7.F14c). With 0.5 s rests
+   this checks the wording only. Whether it helps needs real intervals (section 2).
+7. **"Finish this stage" and "Skip the wait"** at each stage.
+8. **On S's MacBook:** the participant window stepping aside for a dialog (N7.F12e5). The
+   rest of the MacBook hand check passed on 16 Oct.
+
+### 2. Lab checks that need lab hardware but not the real sleeve (after section 1)
+
+- **R400, in a non-demo session (`raw_input`):** hold acceleration (N7.F7b); tap-step size in
+  the log (N2.9); remote routing to the participant window (N7.I1); **L15, the seven steps of
+  lab check N2.10** (LOG §2).
+- **The HP participant monitor at 1.5 scaling** (N7.U10(d)).
+- **Sound:** the device on the hardware page; alerts not audible over the noise (L3, L13).
+- **The interval countdown with real 13–17 s intervals:** does it help the experimenter
+  (N7.F14c)?
+- **The prototype sleeve:** Skip calibration on it, and a first feel of the estimation
+  window and re-calibration. The real sleeve's ramps decide (section 5).
+- **A rehearsal** with a stand-in participant, the R400 and the divider.
+- The 16 Oct screens on the lab PC are covered by section 1.
+
+### 3. Software, alongside
+
+1. **Make `make check` pass on a Mac.** All of these failures predate N7.F14:
    - lint: conda-forge's osx `ruff` 0.17 has no Python module, so `python -m ruff` fails; the
      Makefile could call `ruff check .`;
    - two tests assume the lab platform without pinning it:
@@ -85,47 +130,46 @@ screens (`welcome`, `practice_intro`, `please_wait`, en and sv) approved there.
      `test_hardware_check.py::test_a_device_that_cannot_play_at_the_configured_settings_says_why`
      (`stand_in`, which N7.F12e5 says is right off `lab_platform`);
    - six font-metric tests (`test_ui.py` interruption line 29 px > 28 px, `test_vas.py` ×4) and
-     218 of 220 screenshots differ, because the references and metrics come from the lab PC.
-   - The STATUS demo command lacked `--session` and `--experimenter`; it is
-     `python run_session.py --demo --sim-participant watch --session 1 --experimenter SM --garment mock`.
-2. **On S's MacBook, by hand:** S ran the hardware page and a demo into touch calibration on
-   16 Oct: the hardware page, the shared participant window on top, sound, keys and Spaces
-   all fine. Not yet seen: the participant window stepping aside for a dialog. The conda
-   shell function is broken in the Claude app's shell there; `Makefile.local` points `make`
-   at `/Users/sarmc72/miniconda3/bin/conda`.
-3. **Left open from the review of N7.F13a:** at the validator's 1000× clock the pattern timer is
-   always due and can still starve every other timer, including the validator's own 120 s
-   guard, on a slow enough machine; a floor on timer intervals in wall time, or a guard outside
-   the Qt loop, would turn a hang into a failure. A batch only partly written before a write
-   error is retried whole, leaving a broken line (pre-existing, no row lost).
-   `tests/test_session_runner.py::test_the_session_ends_on_the_experimenters_last_next_step`
-   failed once under parallel load on the Mac and passed 3 of 3 alone (a double press "at
-   once" timed in real seconds); watch for it.
-4. **Re-run the lab session with the new screens**, starting at the hardware page: the sound
-   device, a note and its confirmation, walk a session as both people (intros, read-aloud
-   lines, the session end), try a re-calibration in calibration and in the intervention; and
-   the 5 Oct checks still open (R400 hold acceleration N7.F7b, the touch-calibration pause R32,
-   Skip calibration, the HP at 1.5, remote routing N7.I1, alerts over the noise, N2.9).
-   **From N7.F14:** check on the sleeve that the 4.5 s estimation window is enough for it to
-   deflate and reach the next pressure (the window must cover the slowest ramp, 4.22 s at the
-   current rate limit, open item L2); and whether the interval's countdown helps the
-   experimenter.
-5. **L15: the lab check N2.10** (seven steps in LOG).
-6. **Update `SOP.md` for the 15 and 16 Oct screens** (hardware page, re-calibration, intros, standby,
-   read-aloud lines, about 45 quoted texts), then `SOP.sv.md` on `pilot/swedish-docs` to match,
-   when S says the screens have settled.
-7. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
-8. **The adversarial review** (spec-review, §17.6) over the whole build before Milestone 6.
-9. **Left open, not blocking:** preflight's sound check can freeze the launcher up to 8 s
-   (N7.F12e2); the 640 px laptop-height target is exceeded in the pilot case (fine at
-   1280×800); the emergency stop does not stop the white noise; the hold-acceleration integral
-   is duplicated (N7.F7b); the screenshot tolerance hides glyph-sized changes;
-   `--approve-matching` keeps only the last pattern.
+     218 of 220 screenshots differ, because the references and metrics come from the lab PC;
+   - the conda shell function is broken in the Claude app's shell on the MacBook, so
+     `Makefile.local` points `make` at `/Users/sarmc72/miniconda3/bin/conda`.
+2. **Left open from the review of N7.F13a:**
+   - At the validator's 1000× clock the pattern timer is always due. On a slow enough machine
+     it can still starve every other timer, including the validator's own 120 s guard. A
+     wall-time floor on timer intervals, or a guard outside the Qt loop, would turn a hang into
+     a failure.
+   - A batch only partly written before a write error is retried whole, leaving a broken line
+     (pre-existing, no row lost).
+   - `tests/test_session_runner.py::test_the_session_ends_on_the_experimenters_last_next_step`
+     failed once under parallel load on the Mac and passed 3 of 3 alone (a double press "at
+     once" timed in real seconds). Watch for it.
+3. **Left open, not blocking:**
+   - preflight's sound check can freeze the launcher for up to 8 s (N7.F12e2);
+   - the 640 px laptop-height target is exceeded in the pilot case (fine at 1280×800);
+   - the emergency stop does not stop the white noise;
+   - the hold-acceleration integral is duplicated (N7.F7b);
+   - the screenshot tolerance hides glyph-sized changes;
+   - `--approve-matching` keeps only the last pattern.
+
+### 4. When the screens have settled
+
+1. **Update `SOP.md` for the 15 and 16 Oct screens** (hardware page, re-calibration, intros,
+   standby, read-aloud lines, about 45 quoted texts), then `SOP.sv.md` on
+   `pilot/swedish-docs` to match.
+2. **Freeze the screenshots** (`make shots ARGS="--freeze"`) once S has reviewed them.
+3. **The adversarial review** (spec-review, §17.6) over the whole build before Milestone 6.
 
 ---
 
-## Later
+## 5. Parked until the real valve garment exists (S, 20 Oct)
 
-- **Hardware bring-up for the valve garment (§18.2):** `arduino_valves.py` (open item 14);
-  the rate limit (L2) and the inflation rates (item 3); `HARDWARE_BRINGUP.md`, starting from
-  `tools/garment_bits.py` and N7.H2.
+- **Is the 4.5 s estimation window long enough** for the sleeve to deflate and reach the next
+  pressure (N7.F14e)? The window must cover the slowest ramp, which is 4.22 s at the current
+  rate limit (open item L2).
+- **Do the estimation window and re-calibration pressures feel right** with real ramps?
+- **Open items that wait on it:** 2 (pressure resolution), 3 (inflation rates), 5 (the real
+  patterns), 8 (touch adjustment duration, mostly), 13 (channel overlap), 14 (valve-controller
+  protocol), L2 (rate limit, deflation) and L11 (stop-rehearsal pressure). They still print at
+  startup.
+- **Hardware bring-up (§18.2):** `arduino_valves.py` (item 14) and `HARDWARE_BRINGUP.md`,
+  starting from `tools/garment_bits.py` and N7.H2.
