@@ -126,6 +126,12 @@ screens:
   standby: |-
     Rest for now.
     The experimenter will tell you what comes next.
+  # DRAFT (LOG N7.F18k): written by the build, not ethics-sourced. The same rest between the
+  # intervention's blocks, where the screen, not the experimenter, brings what comes next (S,
+  # 21 Oct 2026). Identical in every condition.
+  standby_intervention: |-
+    Rest for now.
+    The screen will show you what comes next.
   # S's wording, 16 Oct 2026 (LOG N7.F14d). A rest between two stimuli longer than
   # `cues.please_wait_min_s`, so the pause reads as meant rather than as a fault.
   please_wait: Please wait.

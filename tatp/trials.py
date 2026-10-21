@@ -19,14 +19,25 @@ from PySide6.QtCore import QObject, QTimer, Signal, SignalInstance
 from tatp.config import instruction
 from tatp.resume import VAS_TRAINING_CONFIRMED
 from tatp.session import Session
-from tatp.ui.experimenter import ExperimenterWindow
+from tatp.ui.experimenter import NOW, WAIT, ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 
 # An experimenter text key, not wording.
 VAS_TRAINING_WAIT_INSTRUCTION = "vas_training_wait"
+# How an instruction quotes a sentence for the experimenter to say aloud (`Config.say`).
+SAY_FIELD = "{say["
 # A `log` event name (docs/DATA_SCHEMA.md), not wording.
 VAS_PRACTICE_RATING = "vas_practice_rating"
 
+
+
+def spoken_instruction(session: Session, key: str, **values: object) -> str:
+    """`instructions.<key>`, filled. One with a sentence for the experimenter to say aloud
+    silences the masking noise while it is up, and any other lets it back (S, 21 Oct 2026;
+    `tatp.audio.NoiseGate`): every instruction comes through here."""
+    raw = session.config.experimenter_text["instructions"][key]
+    session.noise.say(SAY_FIELD in raw)
+    return instruction(session.config, key, **values)
 
 class Trial(QObject):
     """The shared machinery. A subclass implements `start()`."""
@@ -113,9 +124,11 @@ class Trial(QObject):
         method, self._pending = self._pending, None
         method()
 
-    def instruct(self, key: str, **values: object) -> None:
-        """What the experimenter should do now (SPEC.md 11), from the experimenter text."""
-        self.experimenter.set_instruction(instruction(self.session.config, key, **values))
+    def instruct(self, key: str, heading: str, **values: object) -> None:
+        """What the experimenter should do now (SPEC.md 11), from the experimenter text, under
+        `heading` (`tatp.ui.experimenter.HEADINGS`)."""
+        self.experimenter.set_instruction(spoken_instruction(self.session, key, **values),
+                                          heading)
         self.experimenter.refresh()
 
     # -- the cue and the ramp ----------------------------------------------------------
@@ -247,7 +260,7 @@ class VasTraining(Trial):
     def start(self) -> None:
         self.listen(self.participant.vas_training_confirmed, self._confirmed)
         self.participant.show_vas_training(self.scale, accepting=True)
-        self.instruct(VAS_TRAINING_WAIT_INSTRUCTION)
+        self.instruct(VAS_TRAINING_WAIT_INSTRUCTION, WAIT)
 
     def _confirmed(self, response) -> None:
         self.session.log(
@@ -305,7 +318,7 @@ class ExperimenterChoice(Trial):
                 self.experimenter.text["controls"][self.alternative])
         if self.show is not None:
             self.show()
-        self.instruct(self.instruction, **self.values)
+        self.instruct(self.instruction, NOW, **self.values)
 
     def _teardown(self) -> None:
         super()._teardown()

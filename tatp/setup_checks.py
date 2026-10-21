@@ -34,6 +34,7 @@ from tatp.procedure import Procedure
 from tatp.responder import Action
 from tatp.touchcal import AdjustmentState, PressTiming
 from tatp.trials import Cue, ExperimenterChoice, MessageConfirm, Ramp, Trial
+from tatp.ui.experimenter import NOW, WAIT
 from tatp.units import MS_PER_S
 
 # Keys in the participant text file.
@@ -118,7 +119,8 @@ class NoiseAdjustment(Trial):
         self.listen(self.participant.adjust_released, self._released)
         self.listen(self.participant.adjust_confirmed, self._confirmed)
         self.participant.show_level_adjustment(self.screen_key)
-        self.instruct(self.instruction)
+        # The participant sets the level; the experimenter watches.
+        self.instruct(self.instruction, WAIT)
         self._tick.start()
 
     def _now(self) -> float:
@@ -300,7 +302,7 @@ class MaskingCheck(Procedure):
             # A Next step this soon after the report is the same click again -- a double
             # click -- not "the earplugs are in", which takes longer than this to be true.
             self.participant.show_message(PAUSED_SCREEN)
-            self.experimenter.set_instruction(self.instruction_text(EARPLUGS))
+            self.experimenter.set_instruction(self.instruction_text(EARPLUGS), NOW)
             self.experimenter.refresh()
             self._after(self.earplugs_lockout_s, self._offer_earplugs)
 
@@ -345,7 +347,7 @@ class MaskingCheck(Procedure):
         def show() -> None:
             self.participant.show_audio_setup(SETTLED)
             # Next step does nothing here, so the instruction that offered it is replaced.
-            self.instruct(MASKING_DONE)
+            self.instruct(MASKING_DONE, WAIT)
 
         self.run_trial(
             lambda: MessageConfirm(*self._windows(), show, SETTLED),
@@ -370,7 +372,7 @@ class AwaitStop(Trial):
         self.experimenter.offer_alternative(
             self.experimenter.text["controls"][NO_STOP_PRESS_CONTROL])
         self.participant.show_message(STOP_REHEARSAL_SCREEN)
-        self.instruct("stop_rehearsal")
+        self.instruct("stop_rehearsal", WAIT)
 
     def _teardown(self) -> None:
         super()._teardown()
@@ -432,7 +434,7 @@ class StopRehearsal(Procedure):
             self.awaiting = False
             self.press_detected = True
             self.session.log("stop_rehearsal_press_detected", origin="participant")
-            self.instruct("stop_rehearsal_resume")
+            self.instruct("stop_rehearsal_resume", NOW)
 
     def on_resumed(self) -> None:
         if not self.press_detected or self.done_shown:
@@ -449,7 +451,7 @@ class StopRehearsal(Procedure):
         def show() -> None:
             self.participant.show_message(STOP_REHEARSAL_DONE_SCREEN)
             # The Resume this instruction asked for has been pressed.
-            self.instruct(STOP_REHEARSAL_DONE_INSTRUCTION)
+            self.instruct(STOP_REHEARSAL_DONE_INSTRUCTION, WAIT)
 
         self.run_trial(
             lambda: MessageConfirm(*self._windows(), show, STOP_REHEARSAL_DONE_SCREEN),

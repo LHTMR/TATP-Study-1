@@ -28,7 +28,8 @@ def loaded():
 
 @pytest.fixture
 def config(loaded, tmp_path):
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "data"),
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data"),
                                             "cloud_sync_markers": []}}
     return cfg.Config(**{**loaded.__dict__, "hardware": hardware})
 

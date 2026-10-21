@@ -14,7 +14,7 @@ import math
 from collections.abc import Sequence
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -73,9 +73,38 @@ CONTROL_PADDING_PX = 6
 SCREEN_FILL_FRACTION = 0.92
 
 ZONES_SVG = REPO_ROOT / "assets" / "hyperalgesia_zones.svg"
-# The ids the zone diagram carries for each region (assets/hyperalgesia_zones.svg).
+# The ids the zone diagram carries for each region, and each region's numbered sites
+# (assets/hyperalgesia_zones.svg).
 ZONE_IDS = {"primary": "primary", "secondary": "secondary"}
+SITE_ID = "{region}_site_{site}"
+# The part of the figure shown, if the figure names one.
+VIEW_ID = "view"
 TARGET_LINE_PX = 5
+# The current site, drawn this many times its marker's radius, and the others' outline.
+SITE_TARGET_SCALE = 2.2
+SITE_LINE_PX = 1.5
+# The current site's number, as a fraction of its filled marker's diameter.
+SITE_NUMBER_SCALE = 0.7
+# The mapping paths (study1.yaml mapping.path_ids) as arrows toward the zone's centre, each
+# along its anatomical direction in the figure's own coordinates, a right hand's dorsum with
+# the fingers up: distal up, proximal down, lateral to the thumb (left), medial away from it.
+PATH_DIRECTIONS = {"proximal": (0.0, 1.0), "lateral": (-1.0, 0.0), "distal": (0.0, -1.0),
+                   "medial": (1.0, 0.0)}
+# An arrow starts this far outside the secondary zone and ends this far inside it, as
+# fractions of the zone's half-width in its direction.
+PATH_OUTSIDE = 0.3
+PATH_INSIDE = 0.25
+PATH_LINE_PX = 2
+PATH_TARGET_LINE_PX = 5
+ARROW_HEAD_PX = 9
+ARROW_HEAD_TARGET_SCALE = 1.5
+# Label sizes in the figure's own units, so they scale with it.
+ZONE_LABEL_UNITS = 15
+CAPTION_UNITS = 11
+# Where the labels sit, in the figure's units: the secondary zone's under it, the caption at
+# the foot.
+SH_LABEL_BELOW_UNITS = 16
+CAPTION_FROM_FOOT_UNITS = 10
 
 # The fit plot's own geometry.
 PLOT_MARGIN_LEFT_PX = 44
@@ -205,29 +234,66 @@ def primary_button_style(point_size: int = SIZE_BODY) -> str:
 
 
 class ZoneDiagram(QWidget):
-    """`assets/hyperalgesia_zones.svg`, with the current stimulus's zone outlined.
+    """`assets/hyperalgesia_zones.svg`, with where the current stimulus goes marked: its zone
+    outlined and, for a filament or the brush, every site of the zone with the current one
+    filled (S, 21 Oct 2026: "The diagram should show the sites, rather than writing the site
+    number"); for the area mapping, the four paths with the current one drawn heavy.
 
-    The diagram is a placeholder line drawing (SPEC.md 11). What the layout depends on is only
-    that it carries an element per region, named by `ZONE_IDS`, so a proper figure drops in.
+    The figure is a right hand; `set_mirrored` draws a left one. Its labels are drawn here, so
+    they are never mirrored. `words` is the experimenter text's `zones`, `path_words` its
+    `terms.mapping_paths_short`.
+
+    The diagram is a placeholder line drawing (SPEC.md 11, open item 11). What the layout
+    depends on is only that it carries the ids `ZONE_IDS` and `SITE_ID` name, so a proper
+    figure drops in.
     """
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, words: dict, path_words: dict, parent: QWidget | None = None):
         super().__init__(parent)
+        self.words = words
+        self.path_words = path_words
         self.renderer = QSvgRenderer(str(ZONES_SVG))
         assert self.renderer.isValid(), f"{ZONES_SVG} is not a valid SVG"
+        if self.renderer.elementExists(VIEW_ID):
+            self.renderer.setViewBox(self.renderer.boundsOnElement(VIEW_ID))
         for element in ZONE_IDS.values():
             assert self.renderer.elementExists(element), f"{ZONES_SVG} has no #{element}"
+        assert set(path_words) == set(PATH_DIRECTIONS), (
+            f"terms.mapping_paths_short names {sorted(path_words)}; the diagram draws "
+            f"{sorted(PATH_DIRECTIONS)}"
+        )
         self.region: str | None = None
+        self.site: int | None = None
+        self.path: str | None = None
+        self.mirrored = False
 
     def width_for(self, height_px: int) -> int:
         """The width the drawing fills at `height_px`: the diagram keeps its proportions."""
         box = self.renderer.viewBoxF()
         return math.ceil(height_px * box.width() / box.height())
 
-    def set_region(self, region: str | None) -> None:
+    def sites(self, region: str) -> int:
+        """How many numbered sites the figure has for `region`."""
+        count = 0
+        while self.renderer.elementExists(SITE_ID.format(region=region, site=count + 1)):
+            count += 1
+        return count
+
+    def set_target(self, region: str | None, site: int | None = None,
+                   path: str | None = None) -> None:
+        """Mark `region`, its `site` if one, or the mapping's `path` if one; None clears."""
         assert region is None or region in ZONE_IDS, f"no zone {region!r}"
-        self.region = region
+        assert site is None or (region is not None and 1 <= site <= self.sites(region)), (
+            f"{ZONES_SVG} has no site {site} in the {region} zone"
+        )
+        assert path is None or path in PATH_DIRECTIONS, f"no mapping path {path!r}"
+        self.region, self.site, self.path = region, site, path
         self.update()
+
+    def set_mirrored(self, mirrored: bool) -> None:
+        if mirrored != self.mirrored:
+            self.mirrored = mirrored
+            self.update()
 
     def _drawing_rect(self) -> QRectF:
         box = self.renderer.viewBoxF()
@@ -237,28 +303,131 @@ class ZoneDiagram(QWidget):
             (self.width() - width) / 2, (self.height() - height) / 2, width, height
         )
 
-    def paintEvent(self, event) -> None:
+    def _point(self, drawing: QRectF, x: float, y: float) -> QPointF:
+        """A point of the figure on the widget, mirrored with it."""
+        box = self.renderer.viewBoxF()
+        scale = drawing.width() / box.width()
+        across = (x - box.x()) * scale
+        if self.mirrored:
+            across = drawing.width() - across
+        return QPointF(drawing.x() + across, drawing.y() + (y - box.y()) * scale)
+
+    def _rect(self, drawing: QRectF, element: str) -> QRectF:
+        bounds = self.renderer.boundsOnElement(element)
+        return QRectF(self._point(drawing, bounds.left(), bounds.top()),
+                      self._point(drawing, bounds.right(), bounds.bottom())).normalized()
+
+    def paintEvent(self, event) -> None:  # noqa: N802 -- Qt's name
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         drawing = self._drawing_rect()
-        self.renderer.render(painter, drawing)
-        if self.region is None:
-            return
         box = self.renderer.viewBoxF()
         scale = drawing.width() / box.width()
-        bounds = self.renderer.boundsOnElement(ZONE_IDS[self.region])
-        target = QRectF(
-            drawing.x() + (bounds.x() - box.x()) * scale,
-            drawing.y() + (bounds.y() - box.y()) * scale,
-            bounds.width() * scale,
-            bounds.height() * scale,
-        )
-        painter.setPen(QPen(QColor(TARGET_COLOUR), TARGET_LINE_PX))
-        painter.setBrush(Qt.NoBrush)
-        if self.region == "secondary":
-            painter.drawEllipse(target)
-        else:
-            painter.drawRect(target)
+        painter.save()
+        if self.mirrored:
+            painter.translate(drawing.x() * 2 + drawing.width(), 0)
+            painter.scale(-1, 1)
+        self.renderer.render(painter, drawing)
+        painter.restore()
+        self._draw_labels(painter, drawing, scale)
+        if self.region is not None:
+            zone = self._rect(drawing, ZONE_IDS[self.region])
+            painter.setPen(QPen(QColor(TARGET_COLOUR), TARGET_LINE_PX))
+            painter.setBrush(Qt.NoBrush)
+            if self.region == "secondary":
+                painter.drawEllipse(zone)
+            else:
+                painter.drawRect(zone)
+            if self.path is None:
+                self._draw_sites(painter, drawing, scale)
+        if self.path is not None:
+            self._draw_paths(painter, drawing, scale)
+        painter.end()
+
+    def _draw_labels(self, painter: QPainter, drawing: QRectF, scale: float) -> None:
+        font = painter.font()
+        font.setPixelSize(max(1, round(ZONE_LABEL_UNITS * scale)))
+        painter.setFont(font)
+        painter.setPen(QColor(FOREGROUND))
+        primary = self._rect(drawing, ZONE_IDS["primary"])
+        painter.drawText(primary, Qt.AlignCenter, self.words["primary"])
+        secondary = self._rect(drawing, ZONE_IDS["secondary"])
+        below = QRectF(secondary.left(), secondary.bottom(), secondary.width(),
+                       SH_LABEL_BELOW_UNITS * scale * 2)
+        painter.drawText(below, Qt.AlignHCenter | Qt.AlignTop, self.words["secondary"])
+        font.setPixelSize(max(1, round(CAPTION_UNITS * scale)))
+        painter.setFont(font)
+        painter.setPen(QColor(SECONDARY))
+        foot = QRectF(drawing.left(), drawing.bottom() - CAPTION_FROM_FOOT_UNITS * scale * 2,
+                      drawing.width(), CAPTION_FROM_FOOT_UNITS * scale * 2)
+        painter.drawText(foot, Qt.AlignCenter, self.words["caption"])
+
+    def _draw_sites(self, painter: QPainter, drawing: QRectF, scale: float) -> None:
+        """Every site of the zone, the current one filled and numbered."""
+        for site in range(1, self.sites(self.region) + 1):
+            marker = self._rect(drawing, SITE_ID.format(region=self.region, site=site))
+            if site != self.site:
+                painter.setPen(QPen(QColor(TARGET_COLOUR), SITE_LINE_PX))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawEllipse(marker)
+                continue
+            centre = marker.center()
+            radius = marker.width() / 2 * SITE_TARGET_SCALE
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(TARGET_COLOUR))
+            painter.drawEllipse(centre, radius, radius)
+            font = painter.font()
+            font.setPixelSize(max(1, round(2 * radius * SITE_NUMBER_SCALE)))
+            font.setBold(True)
+            painter.setFont(font)
+            painter.setPen(QColor(BACKGROUND))
+            painter.drawText(QRectF(centre.x() - radius, centre.y() - radius,
+                                    2 * radius, 2 * radius), Qt.AlignCenter, str(site))
+            font.setBold(False)
+            painter.setFont(font)
+
+    def _draw_paths(self, painter: QPainter, drawing: QRectF, scale: float) -> None:
+        """The four mapping paths, from outside the secondary zone toward its centre, each
+        labelled; the one being walked heavy, in the target colour."""
+        bounds = self.renderer.boundsOnElement(ZONE_IDS["secondary"])
+        centre_x, centre_y = bounds.center().x(), bounds.center().y()
+        half = {(1.0, 0.0): bounds.width() / 2, (0.0, 1.0): bounds.height() / 2}
+        font = painter.font()
+        font.setPixelSize(max(1, round(CAPTION_UNITS * scale)))
+        painter.setFont(font)
+        metrics = QFontMetrics(font)
+        for path, (dx, dy) in PATH_DIRECTIONS.items():
+            extent = half[(abs(dx), abs(dy))]
+            start = self._point(drawing, centre_x + dx * extent * (1 + PATH_OUTSIDE),
+                                centre_y + dy * extent * (1 + PATH_OUTSIDE))
+            end = self._point(drawing, centre_x + dx * extent * (1 - PATH_INSIDE),
+                              centre_y + dy * extent * (1 - PATH_INSIDE))
+            now = path == self.path
+            colour = QColor(TARGET_COLOUR if now else SECONDARY)
+            painter.setPen(QPen(colour, PATH_TARGET_LINE_PX if now else PATH_LINE_PX))
+            painter.drawLine(start, end)
+            # The head, pointing inward.
+            length = math.hypot(end.x() - start.x(), end.y() - start.y())
+            ux, uy = (end.x() - start.x()) / length, (end.y() - start.y()) / length
+            head = ARROW_HEAD_PX * (ARROW_HEAD_TARGET_SCALE if now else 1)
+            painter.setBrush(colour)
+            painter.setPen(Qt.NoPen)
+            painter.drawPolygon([end,
+                                 QPointF(end.x() - head * ux - head * uy / 2,
+                                         end.y() - head * uy + head * ux / 2),
+                                 QPointF(end.x() - head * ux + head * uy / 2,
+                                         end.y() - head * uy - head * ux / 2)])
+            # Beside the arrow's tail, toward the zone's centre line, so it stays in the view.
+            word = self.path_words[path]
+            width, height = metrics.horizontalAdvance(word), metrics.height()
+            across = (abs(uy) * (width / 2 + ARROW_HEAD_PX), abs(ux) * height)
+            label = QRectF(start.x() + across[0] - width / 2, start.y() + across[1]
+                           - height / 2, width, height)
+            # Kept inside the drawing, which shows only part of the figure.
+            label.moveLeft(min(max(label.left(), drawing.left()), drawing.right() - width))
+            label.moveTop(min(max(label.top(), drawing.top()), drawing.bottom() - height))
+            painter.setPen(colour)
+            painter.drawText(label, Qt.AlignCenter, word)
 
 
 # -- the fit plot, SPEC.md 11.1 -----------------------------------------------------------
@@ -505,6 +674,62 @@ class ChoiceDialog(QDialog):
     def choice(self) -> str:
         """The chosen option's key, or "" before one is chosen."""
         return next((key for key, option in self.options.items() if option.isChecked()), "")
+
+
+class ActionChoiceDialog(ChoiceDialog):
+    """`ChoiceDialog` with a choice of what to do before the reason: the re-calibration, one
+    control for both of its paths (S, 21 Oct 2026). Each action is a button that stays down
+    when chosen, with what it does under it in full; one offered alone is chosen already.
+    Confirm needs both an action and a reason."""
+
+    def __init__(
+        self,
+        title: str,
+        message: str,
+        action_label: str,
+        actions: dict[str, str],
+        details: dict[str, str],
+        reason_label: str,
+        reasons: dict[str, str],
+        confirm: str,
+        cancel: str,
+        parent: QWidget | None = None,
+    ):
+        super().__init__(title, message, reason_label, reasons, confirm, cancel, parent)
+        assert actions, "an action dialog with nothing to choose"
+        self.action_label = label(SIZE_SMALL, colour=SECONDARY)
+        self.action_label.setText(action_label)
+        self.action_group = QButtonGroup(self)
+        self.action_group.setExclusive(True)
+        self.actions: dict[str, QPushButton] = {}
+        column = QVBoxLayout()
+        for key, wording in actions.items():
+            option = button(wording, SIZE_BODY)
+            option.setCheckable(True)
+            self.action_group.addButton(option)
+            self.actions[key] = option
+            detail = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
+            detail.setText(details[key])
+            column.addWidget(option)
+            column.addWidget(detail)
+        if len(actions) == 1:
+            next(iter(self.actions.values())).setChecked(True)
+        self.action_group.buttonToggled.connect(self._enable)
+        self.group.buttonToggled.disconnect()
+        self.group.buttonToggled.connect(self._enable)
+        layout = self.layout()
+        # What, then why: before the reason's caption, each inserted ahead of the last.
+        at = layout.indexOf(self.reason_label)
+        layout.insertSpacing(at, GROUP_GAP_PX)
+        layout.insertLayout(at, column)
+        layout.insertWidget(at, self.action_label)
+
+    def _enable(self, *_) -> None:
+        self.confirm.setEnabled(bool(self.action()) and bool(self.choice()))
+
+    def action(self) -> str:
+        """The chosen action's key, or "" before one is chosen."""
+        return next((key for key, option in self.actions.items() if option.isChecked()), "")
 
 
 class MessageDialog(QDialog):

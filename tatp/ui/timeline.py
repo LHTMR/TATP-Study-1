@@ -45,15 +45,16 @@ AFTER = ("session_end",)
 
 class PhaseTimeline(QWidget):
     """`set_phases` with (key, short label, full name) in session order; `set_current(key)`
-    marks one."""
+    marks one. `current_size` is the current one's type size: the phases' row is at the large
+    size, and the row of the phase's own steps under it a size down (S, 21 Oct 2026)."""
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, current_size: int = SIZE_LARGE, parent: QWidget | None = None):
         super().__init__(parent)
         sized(self, SIZE_SMALL)
         self.phases: list[tuple[str, str, str]] = []
         self.current: str | None = None
         self._current_font = QFont(self.font())
-        self._current_font.setPointSize(SIZE_LARGE)
+        self._current_font.setPointSize(current_size)
         self._current_font.setBold(True)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setFixedHeight(
@@ -86,7 +87,8 @@ class PhaseTimeline(QWidget):
         if current is None or current >= count:
             return [room / count] * count
         full = QFontMetrics(self._current_font).horizontalAdvance(self.phases[current][2])
-        own = min(max(room / count, full + 2 * SEGMENT_PADDING_PX), room / 2)
+        # A pixel over the name, so it is never elided by the rounding of its own width.
+        own = min(max(room / count, full + 2 * SEGMENT_PADDING_PX + 1), room / 2)
         rest = (room - own) / (count - 1) if count > 1 else 0.0
         return [own if position == current else rest for position in range(count)]
 
@@ -119,7 +121,11 @@ class PhaseTimeline(QWidget):
             painter.setFont(font)
             painter.setPen(QColor(BACKGROUND if now else FOREGROUND if done else SECONDARY))
             inner = box.adjusted(SEGMENT_PADDING_PX, 0, -SEGMENT_PADDING_PX, 0)
-            shown = QFontMetrics(font).elidedText(full if now else short, Qt.ElideRight,
-                                                  int(inner.width()))
+            # The current one in full where it fits, else by its short label, which is a name
+            # too: "Post-interventi..." was neither (S, 21 Oct 2026).
+            metrics = QFontMetrics(font)
+            room_px = int(inner.width())
+            name = full if now and metrics.horizontalAdvance(full) <= room_px else short
+            shown = metrics.elidedText(name, Qt.ElideRight, room_px)
             painter.drawText(inner, Qt.AlignCenter, shown)
         painter.end()

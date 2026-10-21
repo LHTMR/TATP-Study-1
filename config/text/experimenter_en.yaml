@@ -36,6 +36,13 @@ terms:
     lateral: lateral
     distal: distal
     medial: medial
+  # DRAFT (LOG N7.F18f): written by the build, not ethics-sourced. The distances box's column
+  # heads, and the paths' labels on the mapping diagram.
+  mapping_paths_short:
+    proximal: Prox.
+    lateral: Lat.
+    distal: Dist.
+    medial: Med.
   # Filled into warnings.out_of_range (SPEC.md 8.2).
   # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced. Shortened so the warning
   # fits the status region.
@@ -97,6 +104,62 @@ phases:
   # DRAFT (LOG N7.F11b10): written by the build, not ethics-sourced
   rekindle_end: End of the rekindle heat
 
+# The steps of each phase, by `session_runner.stage_key`: in full in Jump to and for the step
+# under way in the row under the phases, and short for the others there (S, 21 Oct 2026). The
+# schedule's, the same in every condition. {block} and {type} are a block's number and kind.
+# DRAFT (LOG N7.F18d): written by the build, not ethics-sourced
+stages:
+  garment: Garment fitting
+  welcome: Welcome
+  stop_rehearsal: Stop rehearsal
+  masking_check: Audio setup
+  touch_calibration: Touch calibration
+  baseline: Baseline ratings
+  mark_zone: Mark the primary zone
+  long: Filament series, secondary zone
+  mapping: Area mapping
+  short_primary: Filaments, primary zone
+  brush_secondary: Brush, secondary zone
+  brush_primary: Brush, primary zone
+  sensitisation: Heat (time zero)
+  capsaicin_apply: Capsaicin on
+  capsaicin_remove: Capsaicin off
+  intervention_start: Intervention start
+  block: 'Block {block} ({type})'
+  rekindle: Rekindle
+  intervention_end: Intervention end
+  session_end: Session end
+stages_short:
+  garment: Garment
+  welcome: Welcome
+  stop_rehearsal: Stop
+  masking_check: Audio
+  touch_calibration: Calibration
+  baseline: Baseline
+  mark_zone: Mark
+  long: Series SH
+  mapping: Mapping
+  short_primary: PH
+  brush_secondary: Brush SH
+  brush_primary: Brush PH
+  sensitisation: Heat
+  capsaicin_apply: Caps. on
+  capsaicin_remove: Caps. off
+  intervention_start: Start
+  block: 'B{block}'
+  rekindle: Rekindle
+  intervention_end: End
+  session_end: End
+
+# Over what to do now, so the experimenter knows at a glance whether to act, get ready or wait
+# (S, 21 Oct 2026). `wait_for` adds the time left of a timed wait.
+# DRAFT (LOG N7.F18d): written by the build, not ethics-sourced
+headings:
+  now: Now
+  prepare: Prepare
+  wait: Wait
+  wait_for: 'Wait · {time}'
+
 instructions:
   # SPEC.md 11: what to do now, alongside the zone diagram.
   #
@@ -108,50 +171,57 @@ instructions:
     Approach perpendicular from about 3 cm. Bend the filament to about three-quarters of its
     extended length, hold for about 1 s, no lateral movement, then remove slowly. Keep the
     site out of the participant's view.
-  # Filaments are named by the gram label printed on them (SPEC.md 8.1), with the force after.
-  # "Now:" so the application in progress never reads like the one before (LOG N7.F11b8).
-  # Through the participant's "Get ready": what to have ready, and where (LOG N7.F16f). Not
-  # yet "Now:", since Next step is not offered until the cue's lead is over.
-  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
-  prepare_filament: 'Get ready: the {filament} g filament ({force_mn} mN), site {site}, {region} zone.'
-  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
-  prepare_brush: 'Get ready: the brush, site {site}, {region} zone.'
-  # Once the cue's lead is over. The press says it has been applied, and the rating is cued
-  # from it (S, 20 Oct 2026; LOG N7.F16f).
-  # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
-  apply_filament: 'Now: apply the {filament} g filament ({force_mn} mN) at site {site}, {region} zone, then press {controls[proceed]}.'
+  # Filaments are named by the gram label printed on them (SPEC.md 8.1). Where it goes is the
+  # zone diagram beside the instruction, which marks the site (S, 21 Oct 2026: "The diagram
+  # should show the sites, rather than writing the site number"); the force is in the data.
+  # Under "Prepare" through the participant's "Get ready" (LOG N7.F16f): Next is not offered
+  # until the cue's lead is over.
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  prepare_filament: 'Get ready: the {filament} g filament, as shown.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  prepare_brush: 'Get ready: the brush, as shown.'
+  # Under "Now", once the cue's lead is over. The press says it has been applied, and the
+  # rating is cued from it (S, 20 Oct 2026; LOG N7.F16f). S's wording, 21 Oct 2026.
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  apply_filament: 'Apply the {filament} g filament as shown, then press {controls[proceed]}.'
   # One stroke of about 2 cm, never repeated: repetition raises pain (docs/research/RB2).
-  # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
-  apply_brush: 'Now: brush the {region} zone at site {site}, one single stroke of about 2 cm, then press {controls[proceed]}.'
-  # After the press, while the participant rates: what was applied, and nothing still to do
-  # (LOG N7.F17e; "then press" stayed up after the press).
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
-  applied_filament: 'Applied: the {filament} g filament ({force_mn} mN) at site {site}, {region} zone.'
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
-  applied_brush: 'Applied: the brush stroke at site {site}, {region} zone.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  apply_brush: 'Brush once as shown, a single stroke of about 2 cm, then press {controls[proceed]}.'
+  # Under "Prepare", while the participant rates: the next application, so it is ready when
+  # the interval ends (S, 21 Oct 2026). In the long protocol's search the next filament
+  # depends on the rating, so both it could be are named; never what the rating was.
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  rating_next_filament: 'The participant is rating. Coming up: the {filament} g filament, as shown.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  rating_next_either: 'The participant is rating. Coming up: the {lighter} g or the {heavier} g filament, depending on the rating.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  rating_next_brush: 'The participant is rating. Coming up: the brush, as shown.'
+  # Under "Wait": the series may end with this rating, or what comes next depends on it.
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  rating_next_open: 'The participant is rating. What comes next depends on the rating.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. The series' last.
+  rating_last: 'The participant is rating the last application of this series.'
   # DRAFT (LOG N7.F11b8, N7.F14c): written by the build, not ethics-sourced. The jittered gap
   # after a rating when no application follows it: the series is over. The response is
   # reported on the status line (`received_*`).
-  between_applications: 'Wait: the next step will appear here.'
+  between_applications: 'The series is done. The next step will appear here.'
   # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced. The same gap after a
   # discard, which the status reports, when no application follows it.
-  between_applications_discarded: 'Discarded. Wait: the next step will appear here.'
-  # DRAFT (LOG N7.F14c): written by the build, not ethics-sourced; "Deliver in" is S's. The
-  # gap before an application, so the experimenter can prepare it (S, 16 Oct 2026): what
-  # comes next, counting down in whole seconds to its warning cue.
-  next_filament: 'Next: the {filament} g filament ({force_mn} mN) at site {site}, {region} zone. Deliver in {seconds} s.'
-  next_brush: 'Next: the brush at site {site}, {region} zone. Deliver in {seconds} s.'
+  between_applications_discarded: 'Discarded. The next step will appear here.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. The gap before an
+  # application, under "Wait" with the time left until it is due (S, 16 and 21 Oct 2026).
+  next_filament: 'Coming up: the {filament} g filament, as shown.'
+  next_brush: 'Coming up: the brush, as shown.'
   # DRAFT (LOG N7.F14c): written by the build, not ethics-sourced. The status line through
   # that gap: the application just rated, never its rating (Bilaga 3a: the experimenter does
   # not see the participant's ratings).
-  received_filament: 'Response received: {filament} g at site {site}.'
-  received_brush: 'Response received: brush at site {site}.'
+  received_filament: 'Response received: {filament} g.'
+  received_brush: 'Response received: brush.'
   # DRAFT (LOG N7.F11b11): written by the build, not ethics-sourced. {step} is
   # mapping.step_size_mm.
   mapping_path: 'Path {path}: move the filament {step} mm inward on each tick. When the participant reports a change, press {controls[proceed]} and mark the border on the skin.'
   # Read aloud before the first path: `say.mapping`.
   mapping_script: 'Say aloud: "{say[mapping]}"'
-  mapping_distances: Measure each border from the centre of the primary zone, and enter the four distances in mm whenever convenient. This never blocks the session.
   # DRAFT (LOG N7.F12g2): written by the build, not ethics-sourced. Nothing about the warning
   # cue: it is now words ("Get ready"), which explain themselves the first time they appear, so
   # the sentence the circle needed (N7.F11b1) is gone.
@@ -188,11 +258,12 @@ instructions:
   # DRAFT (LOG N7.F11b10): written by the build, not ethics-sourced
   rekindle_remove: Remove the thermode, then press {controls[proceed]}. The garment's touch starts again.
   # SPEC.md 7.4, 8.3: the software times, the experimenter launches. One per kind of series,
-  # saying what is about to be applied (LOG N7.F11b7). {n} is the configured count.
-  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
+  # saying what is about to be applied (LOG N7.F11b7), with the zone on the diagram beside it
+  # and the count in the progress (S, 21 Oct 2026).
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   ready_long: >-
-    Filament series, {region} zone, starting with the {filament} g filament. Have the
-    filaments to hand, then press {controls[proceed]}.
+    Prepare the filaments for a series, starting with the {filament} g. Press
+    {controls[proceed]} when ready.
   # DRAFT (LOG N7.F16l): written by the build, not ethics-sourced. At the start of
   # pre-sensitisation, before anything is measured on that skin (S, 20 Oct 2026).
   mark_zone: >-
@@ -201,10 +272,11 @@ instructions:
   # DRAFT (LOG N7.F11b14): written by the build, not ethics-sourced. Before the session's
   # first pain measure, which is followed by the pain scale's training.
   ready_long_first: 'First pain measures. Say: "{say[first_pain]}" Then press {controls[proceed]}.'
-  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
-  ready_short: '{n} applications of the {filament} g filament, {region} zone. Have it to hand, then press {controls[proceed]}.'
-  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
-  ready_brush: '{n} brush strokes, {region} zone. Have the brush to hand, then press {controls[proceed]}.'
+  # S's wording, 21 Oct 2026 ("Have it to hand" did not say what).
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  ready_short: 'Prepare to apply the {filament} g filament. Press {controls[proceed]} when ready.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  ready_brush: 'Prepare to apply the brush. Press {controls[proceed]} when ready.'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced. An intervention pinprick
   # block: {ready} is `ready_short`.
   ready_pinprick_block: 'Pinprick block {block}: {ready}'
@@ -322,8 +394,9 @@ instructions:
   touch_start: The garment's touch is starting.
   # The session sequencer (SPEC.md 2, 7.4). The software times and the experimenter launches;
   # none of these names a condition, a pattern or anything about the touch that differs.
-  # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced
-  waiting: Nothing to do until the next step. The countdown above shows when it is due.
+  # DRAFT (LOG N7.F18d): written by the build, not ethics-sourced. Under "Wait", with the
+  # time left beside it.
+  waiting: Nothing to do until the next step.
   # DRAFT (LOG N7.F11b18): written by the build, not ethics-sourced
   capsaicin_remove: Remove the capsaicin, then press {controls[proceed]} to begin the post-sensitisation measures.
   # DRAFT (LOG N7.F11b13): written by the build, not ethics-sourced. Identical in every
@@ -339,16 +412,19 @@ instructions:
   intervention_end: >-
     The intervention has ended; the garment is off. Tell the participant: "{say[intervention_end]}"
     Then press {controls[proceed]}.
-  # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced. The last instruction, once
-  # the session is closed and every file written; Next step closes the program.
+  # DRAFT (LOG N7.F18l): written by the build, not ethics-sourced. The last instruction, once
+  # the session is closed and every file written; the way forward then reads
+  # {controls[finish]} and closes the program. What was saved and how to upload it are under
+  # it (`data_check`; S, 21 Oct 2026).
   session_complete: >-
-    Session complete. All data is saved. Remove the garment and tell the participant the visit
-    is over. Press {controls[proceed]} to close the program.
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. After an abort, the same
+    Session complete; all data is saved. Remove the garment and tell the participant the visit
+    is over. Then check and upload the data as below, and press {controls[finish]}.
+  # DRAFT (LOG N7.F18l): written by the build, not ethics-sourced. After an abort, the same
   # ending as a completed session.
   session_aborted: >-
-    Session aborted. All data collected is saved, and the garment is off. Remove the garment and
-    see to the participant. Press {controls[proceed]} to close the program.
+    Session aborted; all data collected is saved, and the garment is off. Remove the garment
+    and see to the participant. Then check and upload the data as below, and press
+    {controls[finish]}.
   # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced. While the participant reads
   # the introduction to the next kind of task in touch calibration (participant
   # `screens.intro_*`), one whole line each, numbered as the step instructions are.
@@ -365,6 +441,11 @@ instructions:
     The session was reopened in the rekindle: the heat had started and is timed from then. Press
     {controls[proceed]} to confirm. If it was not applied, apply it now and add a note. The
     garment stays off until the rekindle ends.
+  # DRAFT (LOG N7.F18f): written by the build, not ethics-sourced. Says which are missing, and
+  # which wait for a confirmation (S, 21 Oct 2026); {missing} joins `distances_missing` lines.
+  distances_outstanding: >-
+    Mapping distances still missing: {missing}. Enter them in the box on the right, or press
+    {controls[proceed]} to finish with them recorded as missing.
 
 # What the experimenter says aloud to the participant, quoted inside `instructions` as
 # {say[...]}. Loaded in the PARTICIPANT's language (`Config.say`), whatever the experimenter's
@@ -423,7 +504,11 @@ keys:
   resume: R
 
 controls:
-  proceed: Next step
+  # S, 21 Oct 2026: "Next step can just be called next".
+  proceed: Next
+  # DRAFT (LOG N7.F18l): written by the build, not ethics-sourced. The way forward once the
+  # session is closed: it ends the program (S, 21 Oct 2026).
+  finish: Finish session
   pause: Pause
   resume: Resume
   discard_repeat: Discard and repeat last trial
@@ -447,24 +532,27 @@ controls:
   # DRAFT (LOG N7.F8b): written by the build. Shown only with the mock or prototype garment,
   # after a few touch-calibration ratings; ends the calibration, recorded as skipped.
   skip_calibration: Skip calibration
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Re-calibration, while
-  # touch is calibrated or delivered and beside Resume after a stop; each opens a dialog
-  # asking why.
-  recalibrate_rebalance: Rebalance channels…
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
-  recalibrate_restart: Restart calibration…
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Confirms the restart's dialog.
-  restart_calibration: Restart calibration
+  # DRAFT (LOG N7.F18i): written by the build, not ethics-sourced. Re-calibration, while
+  # touch is calibrated or delivered and beside Resume after a stop: one control, whose dialog
+  # asks what to repeat and why (S, 21 Oct 2026).
+  recalibrate: Re-calibrate…
+  recalibrate_confirm: Re-calibrate
   # The free-text entries (SPEC.md 8.2, 8.4, 11). None of them ever blocks the session.
   add_note: Add note
   # DRAFT (LOG N7.F10a): written by the build, not ethics-sourced. Shown in the emptied note
   # field once the note is written to the log.
   note_saved: 'Note saved at {time}. Type another here.'
-  substitution: Filament applied instead (g)
-  record_substitution: Record filament
-  distances: 'Mapping distances (mm), measured from the centre of the primary zone:'
-  enter_distances: Enter distances
-  open_distances: Mapping distances…
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. A choice of the set's
+  # filaments, not free text (S, 21 Oct 2026). {filament} is a gram label.
+  substitution: 'Filament applied instead:'
+  substitution_none: '—'
+  substitution_option: '{filament} g'
+  record_substitution: Record
+  # DRAFT (LOG N7.F18f): written by the build, not ethics-sourced. The mapping distances box
+  # on the right of the window, a row per mapped time point (S, 21 Oct 2026).
+  distances_title: Distances (mm)
+  distances_hint: Mapping distances in mm, from the centre of the primary zone. Type each, then press Enter.
+  enter_distances: Save
   cancel: Cancel
 
 status:
@@ -472,14 +560,21 @@ status:
   disconnected: Disconnected
   elapsed: Session elapsed {time}
   next_event: 'Next: {phase} in {time}'
-  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced. {type} is from
+  # DRAFT (LOG N7.F18h): written by the build, not ethics-sourced. Within the due alert's lead,
+  # calmly; then due; and once it is late, how late, beside the session clock -- red only past
+  # the overdue alert's margin (S, 21 Oct 2026: "OVERDUE" was alarming). {type} is from
   # terms.block_types, the same in every condition.
-  block_due: Block {block} ({type}) is due.
-  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
-  block_overdue: Block {block} ({type}) is OVERDUE.
-  # A scheduled phase change or the rekindle, due and overdue, as for a block.
-  event_due: '{phase} is due.'
-  event_overdue: '{phase} is OVERDUE.'
+  block_due_soon: 'Block {block} ({type}) due in {time}'
+  block_due: Block {block} ({type}) is due now.
+  # A scheduled phase change or the rekindle, as for a block.
+  event_due_soon: '{phase} due in {time}'
+  event_due: '{phase} is due now.'
+  behind_schedule: 'Behind schedule +{time}'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. Beside the heading while a
+  # series runs: the applications given of a fixed count, or so far in the filament series,
+  # whose length the ratings decide (S, 21 Oct 2026).
+  progress: '{done}/{total}'
+  progress_open: '{done} given'
   # Filled into next_event's {phase} when the next event is a block.
   block_label: block {block} ({value})
   # Shown for as long as the session is interrupted (SPEC.md 13). One line at body size: a test
@@ -523,21 +618,17 @@ warnings:
   open_items: 'Unresolved configuration placeholders: {value}'
   # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced. Short enough to share the
   # status region with `application_cap` (tests/test_ui.py).
-  out_of_range: >-
-    The filament set ran out ({value}), as it often does: the end filament is used, flagged.
+  out_of_range: 'The filament set ran out ({value}); the end filament is used, flagged.'
   # DRAFT (LOG N7.F11b16): written by the build, not ethics-sourced
-  application_cap: The {value}-application limit was reached; the best estimate is used and flagged.
-  substitution_unknown: No filament labelled {filament} g is held. The substitution was not recorded.
-  substitution_not_lower: >-
-    The {filament} g filament is not lighter than the one asked for. It is recorded as applied.
-  # DRAFT (LOG N7.F11b20): written by the build, not ethics-sourced. A filament typed in the
-  # substitution entry and never recorded when its trial ended; {controls[...]} is a button.
-  substitution_not_recorded: >-
-    "{value}" was typed as the filament applied but not recorded, so the trial keeps the one
-    asked for. If it was applied, add a note or press {controls[discard_repeat]}.
-  distance_implausible: >-
-    Path {path}: {value} mm is outside the plausible range. Enter the same value again to
-    confirm it, or enter the corrected value.
+  application_cap: The {value}-application limit was reached; the best estimate is used, flagged.
+  # Beside the filament-applied-instead choice, until the next application starts (S, 21 Oct
+  # 2026). The choice lists the set's filaments, so none can be unknown.
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  substitution_recorded: 'Recorded: the {filament} g filament was applied instead.'
+  substitution_not_lower: 'Recorded, but the {filament} g is not lighter than the one asked for.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. A filament chosen and never
+  # recorded when its trial ended.
+  substitution_not_recorded: '{value} g was chosen but never recorded: the trial keeps the one asked for.'
   catch_trials_felt: >-
     More than the allowed share of zero-pressure catch trials were reported as felt ({value}).
   schedule: 'Schedule warning, block {block}: {value}'
@@ -545,10 +636,10 @@ warnings:
   # SPEC.md 10.7 step 4. Raising the noise has not helped, so the remedy is physical.
   # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. Reworded 5 Oct 2026: the
   # experimenter now reports this, so it no longer says the noise cannot be raised further.
+  # Shortened 21 Oct 2026 (LOG N7.F18d): the status line is narrower beside the distances.
   masking_failed: >-
-    The participant can still hear the garment. Offer earplugs under the headphones. The noise
-    has stopped so you can talk, and the check will start again from the beginning once they
-    are fitted.
+    They can still hear the garment: offer earplugs under the headphones. The noise is off so
+    you can talk; the check starts again once they are in.
   masking_failed_after_earplugs: >-
     Still audible with earplugs. The session will continue and is recorded as not fully masked.
   # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. SPEC.md 10.7 step 3: the
@@ -594,17 +685,11 @@ demo:
   # DRAFT (LOG N7.D23, N7.F16j): written by the build, not ethics-sourced
   participant: 'Participant:'
   experimenter: 'Experimenter:'
+  # Who presses for each role (S, 21 Oct 2026: "manual", "auto, watchable", "auto, fast").
   modes:
-    "off": A person
-    watch: Simulated, watchable
-    fast: Simulated, fast
-  # A timed wait for a scheduled step: {what} is the step, {time} what is left to skip.
-  skip_to: 'Skip to {what} ({time})'
-  skip_none: No wait to skip
-  skip_none_detail: >-
-    Only a timed wait for a scheduled step can be skipped: the capsaicin, the blocks, the
-    rekindle, the intervention's end. It stops {lead} s before the step is due, so its
-    countdown and alert are still seen.
+    "off": Manual
+    watch: Auto, watchable
+    fast: Auto, fast
   # Both simulations fast and every timed wait skipped, until switched off: the way past a run
   # of repeated measurements (LOG N7.F17d).
   auto_run: Auto-run
@@ -613,11 +698,22 @@ demo:
     Both the participant and the experimenter are simulated and fast, and every timed wait is
     skipped, until you click again; then each goes back to what it was. Nothing is skipped
     but waiting: every measurement is still made.
-  # Both simulations fast and every timed wait skipped until the chosen phase begins.
-  fast_forward: 'Fast-forward to:'
-  fast_forward_go: Go
-  fast_forwarding: 'Fast-forwarding to {phase}…'
-  skipped: 'Skipped {value} min of waiting.'
+  # DRAFT (LOG N7.F18b): written by the build, not ethics-sourced. Straight to any phase or
+  # step, back or forward, with who presses left as it is (S, 21 Oct 2026). Each entry is
+  # `stages.<id>` under its phase's name.
+  jump: 'Jump to:'
+  jump_go: Go
+  jump_entry: '{phase}: {stage}'
+  jump_detail: >-
+    Goes straight to the chosen step, without running the steps in between, and leaves who
+    presses as it is. A step jumped back to runs again; everything it recorded before is kept,
+    and the log says which rows came after the jump. A value a skipped step would have
+    measured -- the touch calibration, a pinprick estimate -- comes from the configured
+    fallback, flagged in the log.
+  # DRAFT (LOG N7.F18b): written by the build, not ethics-sourced. A step that cannot be jumped
+  # to on a worn garment, beside its name in the list.
+  jump_needs_calibration: '{entry} (needs the touch calibration first)'
+  jumped: 'Jumped to {stage}.'
   # The session clock's speed, set when the demonstration starts.
   clock: 'Clock: {speed}×'
   clock_detail: >-
@@ -627,8 +723,8 @@ demo:
     the demo starts (Clock speed); a worn garment always runs at 1.
   # The remote's four buttons, lit while held, so a press can be seen to arrive.
   remote: 'Remote:'
-  worn_note: 'Worn garment: people only; no auto-run or fast-forward.'
-  worn_note_detail: 'Someone may be wearing this garment: the participant and the experimenter are people, not simulations, and auto-run and fast-forward are off.'
+  worn_note: 'Worn garment: people only; no auto-run.'
+  worn_note_detail: 'Someone may be wearing this garment: the participant and the experimenter are people, not simulations, and auto-run is off. Jump to still works, but not past the touch calibration before it has run.'
   # How a demonstration differs from a session, each with the session's own value, said where
   # it applies (S, 20 Oct 2026: "not one info dump but embedded where relevant"; LOG N7.F17d):
   # `rests`, `estimation` and `garment` on the demo panel while that step runs (`garment` also
@@ -666,21 +762,22 @@ dialogs:
   resume_since_sensitisation: 'Sensitisation began {hours} h {minutes} min ago.'
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   resume_not_sensitised: Sensitisation had not begun.
-  # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced. Names the button that
-  # enters them and the one that finishes without them.
-  distances_outstanding: Mapping distances are still missing. Enter them with Mapping distances…, or press Next step to finish with them recorded as missing.
+  distances_missing: '{phase}: {paths}'
+  distances_missing_all: all four
+  distance_to_confirm: '{path} (to confirm)'
   fit_rerun_reason: Why are you re-running? Recorded with the discarded estimate, which is kept.
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The re-calibrations, the
-  # same in every condition and wherever they are offered. One line to read with the participant
-  # waiting; the whole of it on hover, as the `_detail` (LOG N7.F17e).
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
-  recalibrate_rebalance: Rebalance the channels now? The garment goes to zero, steps 3 and 4 are run again, and the session goes on from where it was. Everything recorded is kept.
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
-  recalibrate_restart: Restart the touch calibration from step 1 now? The garment goes to zero and the session goes on from where it was afterwards. Everything recorded is kept.
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
-  recalibrate_rebalance_detail: 'Rebalance the channels now? The garment goes to zero and what is in progress stops. The participant sets each of the other channels against the middle channel again and compares them (steps 3 and 4), then the evenness check, and the pattern choice only if the touch calibration has not made it yet; a pleasantness level already set is kept. The session then goes on from where it was, at the new levels; scheduled steps keep their times. Everything recorded so far is kept.'
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
-  recalibrate_restart_detail: 'Restart the touch calibration now? The garment goes to zero and what is in progress stops. The calibration starts again from step 1 as a new run, without the rating-scale training, and without the pattern choice if the touch calibration has made it. The session then goes on from where it was, at the new levels; scheduled steps keep their times. Everything recorded so far is kept.'
+  # DRAFT (LOG N7.F18i): written by the build, not ethics-sourced. The re-calibration, the same
+  # in every condition and wherever it is offered: what to repeat, each saying which steps it
+  # runs again, then why (S, 21 Oct 2026: "the different options (which parts to repeat) should
+  # be clearer"). Only what can be taken now is offered.
+  recalibrate: The garment goes to zero and what is in progress stops. Afterwards the session goes on from where it was, at the new levels; scheduled steps keep their times. Everything recorded is kept.
+  recalibrate_what: What to repeat
+  recalibrate_choices:
+    rebalance: Rebalance the channels
+    restart: Restart the calibration
+  recalibrate_choices_detail:
+    rebalance: 'Steps 3 and 4 again: each channel matched and compared with the middle one, then the evenness check. The pleasantness level is kept.'
+    restart: 'Every step from step 1, as a new run. The rating-scale training and a pattern choice already made are not repeated.'
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
   recalibration_reason: Why? Recorded with the choice.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The keys are what the log
@@ -702,6 +799,34 @@ dialogs:
   # Buttons of the resume question.
   resume_yes: Resume the session
   resume_no: Start a new session
+
+# The mapping distances box's own line, under its fields (S, 21 Oct 2026: messages beside what
+# was entered, not in the middle of the screen). {phase} is the time point's `timeline` name.
+# DRAFT (LOG N7.F18f): written by the build, not ethics-sourced
+distances:
+  # The unit, in each empty field.
+  unit: mm
+  recorded: 'Recorded, {phase}: {values}.'
+  corrected: 'Corrected, {phase}: {values}.'
+  value: '{path} {value} mm'
+  # The lower bound is half the thermode's width (study1.yaml mapping): a border nearer the
+  # centre would be inside the primary zone (S's wording, 21 Oct 2026).
+  inside_primary: '{value} mm is inside the primary zone: measure from its centre. Enter it again to keep it.'
+  too_far: '{value} mm is further than a border can be: check it. Enter it again to keep it.'
+
+# The session-complete page, under its instruction (S, 21 Oct 2026: prompt to check and upload
+# the data, and say how). The upload steps are SOP.md 14.2's.
+# DRAFT (LOG N7.F18l): written by the build, not ethics-sourced
+data_check:
+  saved: 'Saved: {files} files in {folder}.'
+  missing: 'Recorded as missing: {value}.'
+  none_missing: Nothing is recorded as missing.
+  upload: >-
+    Upload (SOP 14.2): copy every file with P{code}_S{session}_ in its name into
+    {upload_folder}; copy, do not move. If a file is already there, choose Skip, never
+    Replace, and tell S. Then check that 01_raw has the same files, with the same names and
+    sizes. Never delete this computer's copy.
+  demo: 'A demonstration: its data stays in {folder} and is never uploaded.'
 
 preflight:
   # What the launcher checks before a session starts (SPEC.md 11, 15, 17.5). A refusal stops
@@ -740,9 +865,12 @@ preflight:
   hardware_changed: 'This session runs on hardware other than the lab setup ({value}). The session file records it.'
 
 zones:
-  # Beside the zone diagram (SPEC.md 11): where the current stimulus goes.
-  target: '{region} zone, site {site}'
-  target_region: '{region} zone'
+  # On the zone diagram beside the instruction (SPEC.md 11), drawn rather than part of the
+  # figure, so a right hand's mirrored drawing keeps them readable (S, 21 Oct 2026).
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  primary: PH
+  secondary: SH
+  caption: placeholder, not to scale
 
 hardware:
   # The hardware panel (SPEC.md 11, 12.1). Per-channel pressure is left out entirely while the
@@ -760,8 +888,8 @@ hardware:
   # The channel display, a row per channel as commanded (tatp/ui/garment_display.py): in
   # a session outside the intervention and the rekindle, and in a demonstration throughout.
   # It replaced the line "kPa by channel" and the Demo controls' own display (LOG N7.F16i).
-  # Beside the zone diagram (LOG N7.F17b); the readings are on or off where the garment
-  # sets no pressure per channel.
+  # In the garment group on the right (S, 21 Oct 2026); the readings are on or off where the
+  # garment sets no pressure per channel.
   # DRAFT (LOG N7.F12f, N7.F16i): written by the build, not ethics-sourced
   channel_pressure: '{value} kPa'
   channel_on: "on"

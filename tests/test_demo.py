@@ -1,8 +1,8 @@
 """Demonstration sessions. docs/LOG.md N7.D23, tatp/demo.py.
 
 What a demonstration changes is tested here: that it is quarantined and recorded as one, that
-either simulation can run it, Skip the wait, Finish this stage, and the watchable pace. That the
-session itself is the real one is the rest of the suite's, and the validator's.
+either simulation can run it, Auto-run and the waits it skips, Jump to, and the watchable pace.
+That the session itself is the real one is the rest of the suite's, and the validator's.
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ from tatp.garment.mock import MockGarment
 from tatp.launcher import LauncherWindow
 from tatp.remote_keys import ANY_KEYBOARD
 from tatp.session import DRIVERS, SessionError
+from tatp.ui.experimenter import NOW
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 # Real seconds a whole demonstration may take with both simulations fast.
@@ -207,10 +208,7 @@ def test_on_a_real_garment_a_demonstration_is_fully_manual(app, loaded, worn):
         assert not controls.participant_mode.isEnabled()
         assert not controls.experimenter_mode.isEnabled()
         assert not controls.auto_run_button.isEnabled()
-        assert not controls.fast_forward_button.isEnabled()
         assert not controls.worn_note.isHidden()
-        with pytest.raises(DemoError):
-            demo.fast_forward(runner.phases[-1])
         with pytest.raises(DemoError):
             demo.set_auto_run(True)
         for who in ("participant", "experimenter"):
@@ -222,7 +220,7 @@ def test_on_a_real_garment_a_demonstration_is_fully_manual(app, loaded, worn):
     runner, demo = _demo(app, loaded)
     assert demo.controls.auto_run_button.isEnabled() and demo.controls.worn_note.isHidden()
     assert demo.controls.experimenter_mode.isEnabled()
-    assert demo.controls.fast_forward_button.isEnabled()
+    assert demo.controls.jump_button.isEnabled()
     _finish(runner, demo)
 
 
@@ -409,39 +407,140 @@ def test_the_demo_controls_are_in_the_experimenter_window(app, loaded):
 
 
 def test_each_demo_control_says_what_it_would_do_now(app, loaded):
-    """S, 20 Oct 2026: "Skip buttons should be contextual and informative" (LOG N7.F16j)."""
+    """S, 20 Oct 2026: "Skip buttons should be contextual and informative" (LOG N7.F16j); S,
+    21 Oct 2026: who presses is manual or auto, and Jump to lists every step in order."""
     runner, demo = _demo(app, loaded)
-    controls, words = demo.controls, loaded.experimenter_text["demo"]
-    assert controls.skip_button.text() == words["skip_none"]
-    assert not controls.skip_button.isEnabled()
-    assert controls.skip_button.toolTip()
+    controls, text = demo.controls, loaded.experimenter_text
+    words = text["demo"]
     assert controls.auto_run_button.text() == words["auto_run"]
     assert not controls.auto_run_button.isChecked()
-    phases = [controls.fast_forward.itemData(i) for i in range(controls.fast_forward.count())]
-    assert phases == runner.phases[1:], "every phase still to come"
-    clock = runner.session.clock
-    clock.start_session()
-    runner.session.set_upcoming("phase", "capsaicin", 600.0)
-    runner._wait_until(600.0, lambda: None, lambda: None)
-    controls.sync()
-    assert controls.skip_button.isEnabled()
-    assert loaded.experimenter_text["phases"]["capsaicin"] in controls.skip_button.text()
+    assert [controls.participant_mode.buttons[mode].text() for mode in (OFF, WATCH, FAST)] == [
+        words["modes"][mode] for mode in (OFF, WATCH, FAST)]
+    stages = [controls.jump_list.itemData(i) for i in range(controls.jump_list.count())]
+    assert stages == [stage.id for stage in runner.stages], "every step, in session order"
+    assert controls.jump_list.currentData() == runner.stages[1].id, "the next step, at first"
+    assert controls.jump_list.itemText(0).startswith(text["phases"]["setup"])
+    assert controls.jump_button.toolTip() == words["jump_detail"]
     _finish(runner, demo)
 
 
-def test_fast_forward_runs_fast_to_the_phase_then_hands_back(app, loaded):
+def test_jump_to_follows_the_session_until_a_step_is_picked(app, loaded):
+    runner, demo = _demo(app, loaded)
+    runner.start()
+    try:
+        controls = demo.controls
+        _jump(runner, demo, "pre_sensitisation.long")
+        controls.sync()
+        assert controls.jump_list.currentData() == "pre_sensitisation.short_primary"
+        controls.jump_list.setCurrentIndex(controls.jump_list.findData("block.3"))
+        controls.jump_list.activated.emit(controls.jump_list.currentIndex())
+        ids = [stage.id for stage in runner.stages]
+        runner._run_stage(ids.index("pre_sensitisation.brush_primary"))
+        controls.sync()
+        assert controls.jump_list.currentData() == "block.3", "a pick is kept"
+    finally:
+        _finish(runner, demo)
+
+
+def _jump(runner, demo, stage_id: str) -> None:
+    demo.controls.jump_list.setCurrentIndex(demo.controls.jump_list.findData(stage_id))
+    demo.controls.jump_button.click()
+
+
+def _stage(runner) -> str:
+    return runner.stages[runner.stage_index].id
+
+
+def test_jump_to_goes_straight_to_a_step_without_running_those_between(app, loaded):
+    """S, 21 Oct 2026: "it should actually skip, not fast forward, it should not switch to
+    auto mode automatically, just skip to the stage and keep manual/auto as it was"."""
     runner, demo = _demo(app, loaded, "--sim-participant", WATCH)
-    target = runner.phases[2]
-    demo.fast_forward(target)
-    assert (demo.participant_mode, demo.experimenter_mode) == (FAST, FAST)
-    assert not demo.auto_running, "a fast-forward is not an auto-run"
-    runner.stage_started.emit("a stage in between")
-    assert demo.fast_forward_to == target, "not there yet"
-    runner.session.set_phase(target)
-    runner.stage_started.emit("the first stage there")
-    assert demo.fast_forward_to is None
-    assert (demo.participant_mode, demo.experimenter_mode) == (WATCH, OFF)
-    _finish(runner, demo)
+    runner.start()
+    try:
+        session = runner.session
+        _jump(runner, demo, "post_sensitisation.long")
+        assert _stage(runner) == "post_sensitisation.long"
+        assert (demo.participant_mode, demo.experimenter_mode) == (WATCH, OFF)
+        events = _events(session)
+        started = [e["detail"] for e in events if e["event"] == "stage_started"]
+        assert started == ["setup.garment", "post_sensitisation.long"], "nothing between ran"
+        jumps = [e["detail"] for e in events if e["event"] == "demo_jump"]
+        assert jumps == ["from setup.garment to post_sensitisation.long"]
+        # Session time where the step would begin: the capsaicin's removal, the scheduled
+        # step before it, so the intervention's countdown reads as it would.
+        removal = next(s.upcoming.due_s for s in runner.stages if s.id == "capsaicin.remove")
+        assert session.clock.session_started
+        assert session.clock.t_session_s() >= removal
+        # Its prior: the pre-sensitisation estimate it would start from was jumped past.
+        fallbacks = [e["detail"] for e in events if e["event"] == "demo_jump_fallback"]
+        assert len(fallbacks) == 1 and "pre_sensitisation" in fallbacks[0]
+    finally:
+        _finish(runner, demo)
+
+
+def test_jump_to_goes_back_and_runs_the_step_again(app, loaded):
+    runner, demo = _demo(app, loaded)
+    runner.start()
+    try:
+        _jump(runner, demo, "setup.stop_rehearsal")
+        _jump(runner, demo, "setup.welcome")
+        assert _stage(runner) == "setup.welcome"
+        jumps = [e["detail"] for e in _events(runner.session) if e["event"] == "demo_jump"]
+        assert jumps[-1].endswith("run again, its earlier rows stand")
+    finally:
+        _finish(runner, demo)
+
+
+def test_jump_to_the_intervention_starts_the_touch_on_fallback_levels(app, loaded):
+    """On the mock: a calibration that never ran stands in, recorded as skipped and not valid
+    for analysis, and the touch scales count as trained."""
+    runner, demo = _demo(app, loaded)
+    runner.start()
+    try:
+        session = runner.session
+        _jump(runner, demo, "block.1")
+        events = _events(session)
+        names = [e["event"] for e in events]
+        assert "touchcal_skipped" in names and "demo_jump_fallback" in names
+        assert runner.deliveries is not None and runner._touch_on
+        assert session.noise.wanted, "the noise masks the touch"
+        assert not session.vas_training_due("intensity")
+        # The touch's start, then the block itself.
+        assert session.phase == "intervention"
+    finally:
+        _finish(runner, demo)
+
+
+def test_jump_to_never_moves_session_time_back(app, loaded):
+    runner, demo = _demo(app, loaded)
+    runner.start()
+    try:
+        clock = runner.session.clock
+        _jump(runner, demo, "post_intervention.long")
+        later_s = clock.t_session_s()
+        _jump(runner, demo, "pre_sensitisation.long")
+        assert clock.t_session_s() >= later_s
+        assert not runner._touch_on, "the touch is off before the intervention"
+    finally:
+        _finish(runner, demo)
+
+
+def test_on_a_worn_garment_the_touch_waits_for_a_real_calibration(app, loaded, worn):
+    """A calibration that never ran sets pressures no one has felt: never on a garment that
+    may be worn. Its steps are listed, greyed, saying why."""
+    runner, demo = _demo(app, loaded, "--garment", worn)
+    runner.start()
+    try:
+        assert not runner.jumpable("block.1")
+        assert runner.jumpable("intervention.start")
+        assert runner.jumpable("post_intervention.long")
+        controls = demo.controls
+        index = controls.jump_list.findData("block.1")
+        assert not controls.jump_list.model().item(index).isEnabled()
+        needs = loaded.experimenter_text["demo"]["jump_needs_calibration"].split("{entry}")[1]
+        assert controls.jump_list.itemText(index).endswith(needs)
+    finally:
+        _finish(runner, demo)
 
 
 def test_run_a_session_in_the_launcher_is_never_a_demonstration(app, loaded):
@@ -662,7 +761,7 @@ def test_a_watchable_experimenter_reads_the_instruction_before_pressing(app, loa
     pressed = []
     experimenter.proceed_requested.connect(lambda: pressed.append(True))
     # Any instruction that waits on Next step.
-    experimenter.set_instruction(cfg.instruction(runner.session.config, "rekindle_remove"))
+    experimenter.set_instruction(cfg.instruction(runner.session.config, "rekindle_remove"), NOW)
     demo.experimenter._tick()
     assert pressed == [], "still reading"
     demo.experimenter.reaction_s = 0.0
@@ -676,7 +775,7 @@ def test_a_person_at_the_experimenter_screen_is_not_pressed_for(app, loaded):
     experimenter = runner.rig.experimenter
     pressed = []
     experimenter.proceed_requested.connect(lambda: pressed.append(True))
-    experimenter.set_instruction(cfg.instruction(runner.session.config, "rekindle_remove"))
+    experimenter.set_instruction(cfg.instruction(runner.session.config, "rekindle_remove"), NOW)
     demo.experimenter._tick()
     assert pressed == []
     _finish(runner, demo)

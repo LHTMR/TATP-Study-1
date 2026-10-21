@@ -36,6 +36,13 @@ terms:
     lateral: lateral
     distal: distal
     medial: medial
+  # DRAFT (LOG N7.F18f): written by the build, not ethics-sourced. Kolumnrubrikerna i rutan
+  # för avstånden, och banornas etiketter i kartläggningens diagram.
+  mapping_paths_short:
+    proximal: Prox.
+    lateral: Lat.
+    distal: Dist.
+    medial: Med.
   # Fylls i warnings.out_of_range (SPEC.md 8.2).
   # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced. Förkortade så att
   # varningen ryms på statusraden.
@@ -98,6 +105,60 @@ phases:
   # DRAFT (LOG N7.F11b10): written by the build, not ethics-sourced
   rekindle_end: Slut på återuppvärmningen
 
+# Stegen i varje fas, efter `session_runner.stage_key`: utskrivna i Hoppa till och för det
+# pågående steget i raden under faserna, korta för de andra där (S, 21 okt 2026).
+# DRAFT (LOG N7.F18d): written by the build, not ethics-sourced
+stages:
+  garment: Plagget på
+  welcome: Välkommen
+  stop_rehearsal: Övning med stoppknappen
+  masking_check: Ljudinställning
+  touch_calibration: Beröringskalibrering
+  baseline: Utgångsskattningar
+  mark_zone: Markera den primära zonen
+  long: Filamentserie, sekundära zonen
+  mapping: Kartläggning
+  short_primary: Filament, primära zonen
+  brush_secondary: Pensel, sekundära zonen
+  brush_primary: Pensel, primära zonen
+  sensitisation: Värme (tid noll)
+  capsaicin_apply: Capsaicin på
+  capsaicin_remove: Capsaicin av
+  intervention_start: Interventionens start
+  block: 'Block {block} ({type})'
+  rekindle: Återuppvärmning
+  intervention_end: Interventionens slut
+  session_end: Sessionens slut
+stages_short:
+  garment: Plagg
+  welcome: Välkommen
+  stop_rehearsal: Stopp
+  masking_check: Ljud
+  touch_calibration: Kalibrering
+  baseline: Utgång
+  mark_zone: Markera
+  long: Serie SH
+  mapping: Kartl.
+  short_primary: PH
+  brush_secondary: Pensel SH
+  brush_primary: Pensel PH
+  sensitisation: Värme
+  capsaicin_apply: Caps. på
+  capsaicin_remove: Caps. av
+  intervention_start: Start
+  block: 'B{block}'
+  rekindle: Återuppv.
+  intervention_end: Slut
+  session_end: Slut
+
+# Över vad som ska göras nu (S, 21 okt 2026).
+# DRAFT (LOG N7.F18d): written by the build, not ethics-sourced
+headings:
+  now: Nu
+  prepare: Förbered
+  wait: Vänta
+  wait_for: 'Vänta · {time}'
+
 instructions:
   # SPEC.md 11: vad som ska göras nu, bredvid zondiagrammet.
   #
@@ -110,49 +171,53 @@ instructions:
     Applicera vinkelrätt från cirka 3 cm. Böj filamentet till ungefär tre fjärdedelar av dess
     utsträckta längd, håll kvar i cirka 1 s, ingen sidorörelse, lyft sedan långsamt. Håll
     appliceringsstället utom synhåll för deltagaren.
-  # Filamenten benämns med gramsiffran som står tryckt på dem (SPEC.md 8.1), kraften efter.
-  # "Nu:" så att den pågående appliceringen aldrig ser ut som den förra (LOG N7.F11b8).
-  # Under deltagarens "Gör dig redo": vad som ska vara redo, och var (LOG N7.F16f).
-  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
-  prepare_filament: 'Gör dig redo: filamentet {filament} g ({force_mn} mN), plats {site}, {region} zonen.'
-  # DRAFT (LOG N7.F16f): written by the build, not ethics-sourced
-  prepare_brush: 'Gör dig redo: penseln, plats {site}, {region} zonen.'
-  # När förvarningen är slut. Trycket säger att det är applicerat, och skattningen visas
-  # räknat från det (S, 20 okt 2026; LOG N7.F16f).
-  # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
-  apply_filament: 'Nu: applicera filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen, och tryck sedan på {controls[proceed]}.'
+  # Filamenten benämns med gramsiffran som står tryckt på dem (SPEC.md 8.1). Var det ska är
+  # zondiagrammet bredvid instruktionen, som markerar platsen (S, 21 okt 2026); kraften står i
+  # data. Under "Förbered" medan deltagaren ser "Gör dig redo" (LOG N7.F16f).
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  prepare_filament: 'Gör dig redo: filamentet {filament} g, som visas.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  prepare_brush: 'Gör dig redo: penseln, som visas.'
+  # Under "Nu", när förvarningen är slut. Trycket säger att det är applicerat, och skattningen
+  # visas räknat från det (S, 20 okt 2026; LOG N7.F16f). S:s lydelse, 21 okt 2026.
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  apply_filament: 'Applicera filamentet {filament} g som visas och tryck sedan på {controls[proceed]}.'
   # Ett drag på cirka 2 cm, aldrig upprepat: upprepning höjer smärtan (docs/research/RB2).
-  # DRAFT (LOG N7.F11b8, N7.F16f): written by the build, not ethics-sourced
-  apply_brush: 'Nu: borsta den {region} zonen på plats {site}, ett enda drag på cirka 2 cm, och tryck sedan på {controls[proceed]}.'
-  # Efter trycket, medan deltagaren skattar: vad som applicerades, och inget kvar att göra
-  # (LOG N7.F17e).
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
-  applied_filament: 'Applicerat: filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen.'
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
-  applied_brush: 'Applicerat: penseldraget på plats {site}, den {region} zonen.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  apply_brush: 'Borsta en gång som visas, ett enda drag på cirka 2 cm, och tryck sedan på {controls[proceed]}.'
+  # Under "Förbered", medan deltagaren skattar: nästa applicering, så att den är redo när
+  # uppehållet är slut (S, 21 okt 2026). Aldrig vad skattningen blev.
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  rating_next_filament: 'Deltagaren skattar. Härnäst: filamentet {filament} g, som visas.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  rating_next_either: 'Deltagaren skattar. Härnäst: filamentet {lighter} g eller {heavier} g, beroende på skattningen.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  rating_next_brush: 'Deltagaren skattar. Härnäst: penseln, som visas.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  rating_next_open: 'Deltagaren skattar. Vad som kommer härnäst beror på skattningen.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  rating_last: 'Deltagaren skattar seriens sista applicering.'
   # DRAFT (LOG N7.F11b8, N7.F14c): written by the build, not ethics-sourced. Det slumpade
   # uppehållet efter en skattning när ingen applicering följer: serien är slut. Svaret
   # rapporteras på statusraden (`received_*`).
-  between_applications: 'Vänta: nästa steg visas här.'
+  between_applications: 'Serien är klar. Det som kommer härnäst visas här.'
   # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced. Samma uppehåll efter en
   # kassering, som statusraden rapporterar, när ingen applicering följer.
-  between_applications_discarded: 'Kasserat. Vänta: nästa steg visas här.'
-  # DRAFT (LOG N7.F14c): written by the build, not ethics-sourced; "Deliver in" är S:s.
-  # Uppehållet före en applicering, så att försöksledaren kan förbereda den (S, 16 okt 2026):
-  # vad som kommer härnäst, med nedräkning i hela sekunder till varningssignalen.
-  next_filament: 'Nästa: filamentet {filament} g ({force_mn} mN) på plats {site}, {region} zonen. Applicera om {seconds} s.'
-  next_brush: 'Nästa: penseln på plats {site}, {region} zonen. Applicera om {seconds} s.'
+  between_applications_discarded: 'Kasserat. Det som kommer härnäst visas här.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. Uppehållet före en
+  # applicering, under "Vänta" med tiden som är kvar (S, 16 och 21 okt 2026).
+  next_filament: 'Härnäst: filamentet {filament} g, som visas.'
+  next_brush: 'Härnäst: penseln, som visas.'
   # DRAFT (LOG N7.F14c): written by the build, not ethics-sourced. Statusraden under det
   # uppehållet: appliceringen som just skattades, aldrig skattningen (Bilaga 3a:
   # försöksledaren ser inte deltagarens skattningar).
-  received_filament: 'Svar mottaget: {filament} g på plats {site}.'
-  received_brush: 'Svar mottaget: penseln på plats {site}.'
+  received_filament: 'Svar mottaget: {filament} g.'
+  received_brush: 'Svar mottaget: penseln.'
   # DRAFT (LOG N7.F11b11): written by the build, not ethics-sourced. {step} är
   # mapping.step_size_mm.
   mapping_path: 'Bana {path}: flytta filamentet {step} mm inåt vid varje taktsignal. Tryck på {controls[proceed]} när deltagaren säger till att känslan förändras, och markera gränsen på huden.'
   # Läses högt före första banan: `say.mapping`.
   mapping_script: 'Säg högt: "{say[mapping]}"'
-  mapping_distances: Mät varje gräns från mitten av den primära zonen och skriv in de fyra avstånden i mm när det passar. Detta avbryter aldrig sessionen.
   # DRAFT (LOG N7.F12g2): written by the build, not ethics-sourced. Inget om varningssignalen:
   # den är nu ord ("Gör dig redo"), som förklarar sig själva första gången de visas, så meningen
   # som cirkeln behövde (N7.F11b1) är borta.
@@ -189,11 +254,12 @@ instructions:
   # DRAFT (LOG N7.F11b10): written by the build, not ethics-sourced
   rekindle_remove: Ta bort termoden och tryck sedan på {controls[proceed]}. Plaggets beröring startar igen.
   # SPEC.md 7.4, 8.3: programmet tar tid, försöksledaren startar. En per sorts serie, och den
-  # säger vad som snart ska appliceras (LOG N7.F11b7). {n} är det konfigurerade antalet.
-  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
+  # säger vad som snart ska appliceras (LOG N7.F11b7), med zonen i diagrammet bredvid och
+  # antalet i förloppet (S, 21 okt 2026).
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   ready_long: >-
-    Filamentserie i den {region} zonen, med början på filamentet {filament} g. Ha filamenten
-    till hands och tryck sedan på {controls[proceed]}.
+    Förbered filamenten för en serie, med början på {filament} g. Tryck på {controls[proceed]}
+    när du är redo.
   # DRAFT (LOG N7.F16l): written by the build, not ethics-sourced. I början av
   # försensibiliseringen, innan något mäts på den huden (S, 20 okt 2026).
   mark_zone: >-
@@ -202,10 +268,11 @@ instructions:
   # DRAFT (LOG N7.F11b14): written by the build, not ethics-sourced. Före sessionens första
   # smärtmätning, som följs av övningen på smärtskalan.
   ready_long_first: 'Första smärtmätningarna. Säg: "{say[first_pain]}" Tryck sedan på {controls[proceed]}.'
-  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
-  ready_short: '{n} appliceringar med filamentet {filament} g i den {region} zonen. Ha det till hands och tryck sedan på {controls[proceed]}.'
-  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
-  ready_brush: '{n} penseldrag i den {region} zonen. Ha penseln till hands och tryck sedan på {controls[proceed]}.'
+  # S:s lydelse, 21 okt 2026.
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  ready_short: 'Förbered att applicera filamentet {filament} g. Tryck på {controls[proceed]} när du är redo.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  ready_brush: 'Förbered att applicera penseln. Tryck på {controls[proceed]} när du är redo.'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced. Ett filamentblock under
   # interventionen: {ready} är `ready_short`.
   ready_pinprick_block: 'Filamentblock {block}: {ready}'
@@ -328,8 +395,9 @@ instructions:
   touch_start: Plaggets beröring startar.
   # Sessionsförloppet (SPEC.md 2, 7.4). Programmet tar tid och försöksledaren startar; ingen
   # av dessa nämner en betingelse, ett mönster eller något med beröringen som skiljer sig.
-  # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced
-  waiting: Inget att göra förrän nästa steg. Nedräkningen ovan visar när det är dags.
+  # DRAFT (LOG N7.F18d): written by the build, not ethics-sourced. Under "Vänta", med tiden
+  # som är kvar bredvid.
+  waiting: Inget att göra förrän nästa steg.
   # DRAFT (LOG N7.F11b18): written by the build, not ethics-sourced
   capsaicin_remove: Ta bort capsaicinet och tryck sedan på {controls[proceed]} för att börja mätningarna efter sensitiseringen.
   # DRAFT (LOG N7.F11b13): written by the build, not ethics-sourced. Densamma i alla
@@ -343,15 +411,17 @@ instructions:
   intervention_end: >-
     Interventionen är slut och plagget är avstängt. Säg till deltagaren: "{say[intervention_end]}"
     Tryck sedan på {controls[proceed]}.
-  # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced
+  # DRAFT (LOG N7.F18l): written by the build, not ethics-sourced. Vad som sparades och hur det
+  # laddas upp står under (`data_check`; S, 21 okt 2026).
   session_complete: >-
-    Sessionen är klar. Alla data är sparade. Ta av plagget och berätta för deltagaren att besöket
-    är slut. Tryck på {controls[proceed]} för att stänga programmet.
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. After an abort, the same
-  # ending as a completed session.
+    Sessionen är klar; alla data är sparade. Ta av plagget och berätta för deltagaren att
+    besöket är slut. Kontrollera sedan data och ladda upp dem enligt nedan, och tryck på
+    {controls[finish]}.
+  # DRAFT (LOG N7.F18l): written by the build, not ethics-sourced. Efter ett avbrott.
   session_aborted: >-
-    Sessionen är avbruten. Alla data som samlats in är sparade, och plagget är avstängt. Ta av
-    plagget och ta hand om deltagaren. Tryck på {controls[proceed]} för att stänga programmet.
+    Sessionen är avbruten; alla data som samlats in är sparade, och plagget är avstängt. Ta av
+    plagget och ta hand om deltagaren. Kontrollera sedan data och ladda upp dem enligt nedan,
+    och tryck på {controls[finish]}.
   # DRAFT (LOG N7.F11c1): written by the build, not ethics-sourced. Medan deltagaren läser
   # introduktionen till nästa sorts uppgift (`screens.intro_*`), numrerade som stegen.
   touchcal_intro_bracket: 'Beröringskalibrering, steg 1 av 6: deltagaren läser om vad som kommer härnäst.'
@@ -366,6 +436,10 @@ instructions:
     Sessionen öppnades igen under återuppvärmningen: värmen hade startat och räknas därifrån.
     Tryck på {controls[proceed]} för att bekräfta. Om den inte gavs, ge den nu och skriv en
     anteckning. Plagget är avstängt tills återuppvärmningen är klar.
+  # DRAFT (LOG N7.F18f): written by the build, not ethics-sourced
+  distances_outstanding: >-
+    Kartläggningsavstånd saknas fortfarande: {missing}. Skriv in dem i rutan till höger, eller
+    tryck på {controls[proceed]} för att avsluta med dem registrerade som saknade.
 
 # Vad försöksledaren säger högt till deltagaren, citerat i `instructions` som {say[...]}.
 # Läses på DELTAGARENS språk (`Config.say`), oavsett försöksledarens (LOG N7.F11b19). Ingen får
@@ -420,7 +494,10 @@ keys:
   resume: R
 
 controls:
-  proceed: Nästa steg
+  # S, 21 okt 2026.
+  proceed: Nästa
+  # DRAFT (LOG N7.F18l): written by the build, not ethics-sourced
+  finish: Avsluta sessionen
   pause: Pausa
   resume: Återuppta
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
@@ -441,24 +518,26 @@ controls:
   # DRAFT (LOG N7.F8b): written by the build. Shown only with the mock or prototype garment,
   # after a few touch-calibration ratings; ends the calibration, recorded as skipped.
   skip_calibration: Hoppa över kalibreringen
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Re-calibration, while
-  # touch is calibrated or delivered and beside Resume after a stop; each opens a dialog
-  # asking why.
-  recalibrate_rebalance: Balansera om kanalerna…
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
-  recalibrate_restart: Starta om kalibreringen…
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. Confirms the restart's dialog.
-  restart_calibration: Starta om kalibreringen
+  # DRAFT (LOG N7.F18i): written by the build, not ethics-sourced. En knapp, vars dialog
+  # frågar vad som ska göras om och varför (S, 21 okt 2026).
+  recalibrate: Kalibrera om…
+  recalibrate_confirm: Kalibrera om
   # Fritextfälten (SPEC.md 8.2, 8.4, 11). Inget av dem avbryter någonsin sessionen.
   add_note: Lägg till anteckning
   # DRAFT (LOG N7.F10a): written by the build, not ethics-sourced. Shown in the emptied note
   # field once the note is written to the log.
   note_saved: 'Anteckningen sparades {time}. Skriv en ny här.'
-  substitution: Filament använt i stället (g)
-  record_substitution: Registrera filament
-  distances: 'Kartläggningsavstånd (mm), mätta från mitten av den primära zonen:'
-  enter_distances: Registrera avstånd
-  open_distances: Kartläggningsavstånd…
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. Ett val bland
+  # uppsättningens filament, inte fritext (S, 21 okt 2026).
+  substitution: 'Filament använt i stället:'
+  substitution_none: '—'
+  substitution_option: '{filament} g'
+  record_substitution: Registrera
+  # DRAFT (LOG N7.F18f): written by the build, not ethics-sourced. Rutan för
+  # kartläggningsavstånden till höger, en rad per kartlagd tidpunkt (S, 21 okt 2026).
+  distances_title: Avstånd (mm)
+  distances_hint: Kartläggningsavstånd i mm, från mitten av den primära zonen. Skriv in vart och ett och tryck på Enter.
+  enter_distances: Spara
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced. Inte "Avbryt": bredvid
   # "Avbryt sessionen" skulle de två knapparna börja med samma ord.
   cancel: Tillbaka
@@ -468,14 +547,19 @@ status:
   disconnected: Frånkopplad
   elapsed: Förfluten tid {time}
   next_event: 'Nästa: {phase} om {time}'
-  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced. {type} kommer från
-  # terms.block_types, samma i alla betingelser.
+  # DRAFT (LOG N7.F18h): written by the build, not ethics-sourced. Lugnt inom förvarningen,
+  # sedan dags nu, och när det är sent hur sent, vid sessionens klocka -- rött först efter
+  # marginalen för försenat (S, 21 okt 2026). {type} kommer från terms.block_types, samma i
+  # alla betingelser.
+  block_due_soon: 'Block {block} ({type}) om {time}'
   block_due: Block {block} ({type}) ska starta nu.
-  # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
-  block_overdue: Block {block} ({type}) är FÖRSENAT.
-  # Ett schemalagt fasbyte eller återuppvärmningen, i tid och försenat, som för ett block.
+  # Ett schemalagt fasbyte eller återuppvärmningen, som för ett block.
+  event_due_soon: '{phase} om {time}'
   event_due: '{phase} ska starta nu.'
-  event_overdue: '{phase} är FÖRSENAD.'
+  behind_schedule: 'Efter schemat +{time}'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  progress: '{done}/{total}'
+  progress_open: '{done} givna'
   # Fylls i next_event:s {phase} när nästa händelse är ett block.
   block_label: block {block} ({value})
   # Visas så länge sessionen är avbruten (SPEC.md 13). En rad i brödtextstorlek: ett test
@@ -518,25 +602,15 @@ warnings:
   open_items: 'Olösta konfigurationsplatshållare: {value}'
   # DRAFT (LOG N7.F11b15): written by the build, not ethics-sourced. Kort nog att dela
   # statusraden med `application_cap` (tests/test_ui.py).
-  out_of_range: >-
-    Filamenten tog slut ({value}), vilket är vanligt. Yttersta filamentet används och
-    flaggas.
+  out_of_range: 'Filamenten tog slut ({value}); yttersta filamentet används och flaggas.'
   # DRAFT (LOG N7.F11b16): written by the build, not ethics-sourced
   application_cap: Gränsen på {value} appliceringar nåddes; bästa skattningen används och flaggas.
-  substitution_unknown: Inget filament märkt {filament} g finns. Utbytet registrerades inte.
-  substitution_not_lower: >-
-    Filamentet {filament} g är inte lättare än det som efterfrågades. Det registreras som
-    applicerat.
-  # DRAFT (LOG N7.F11b20): written by the build, not ethics-sourced. Ett filament som skrevs
-  # in i utbytesfältet men aldrig registrerades innan försöket tog slut; {controls[...]} är en
-  # knapp.
-  substitution_not_recorded: >-
-    "{value}" skrevs in som använt filament men registrerades inte, så försöket behåller det
-    efterfrågade. Om det användes: skriv en anteckning eller tryck på
-    {controls[discard_repeat]}.
-  distance_implausible: >-
-    Bana {path}: {value} mm ligger utanför det rimliga intervallet. Skriv samma värde igen för
-    att bekräfta det, eller skriv det rättade värdet.
+  # Bredvid valet av använt filament, tills nästa applicering börjar (S, 21 okt 2026).
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  substitution_recorded: 'Registrerat: filamentet {filament} g användes i stället.'
+  substitution_not_lower: 'Registrerat, men {filament} g är inte lättare än det som efterfrågades.'
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  substitution_not_recorded: '{value} g valdes men registrerades aldrig: försöket behåller det efterfrågade.'
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   catch_trials_felt: >-
     Fler än tillåten andel av kontrollförsöken utan tryck rapporterades som kända ({value}).
@@ -546,9 +620,10 @@ warnings:
   # DRAFT (LOG N7.F6c): written by the build, not ethics-sourced. Omformulerad 5 okt 2026:
   # försöksledaren rapporterar det nu själv, så texten säger inte längre att bruset inte kan
   # höjas mer.
+  # Förkortad 21 okt 2026 (LOG N7.F18d): statusraden är smalare bredvid avstånden.
   masking_failed: >-
-    Deltagaren hör fortfarande plagget. Erbjud öronproppar under hörlurarna. Bruset har stängts
-    av så att ni kan prata, och kontrollen börjar om från början när propparna sitter på plats.
+    Deltagaren hör fortfarande plagget: erbjud öronproppar under hörlurarna. Bruset är av så
+    att ni kan prata; kontrollen börjar om när propparna sitter i.
   masking_failed_after_earplugs: >-
     Fortfarande hörbart med öronproppar. Sessionen fortsätter och registreras som inte helt
     maskerad.
@@ -595,25 +670,28 @@ demo:
   participant: 'Deltagare:'
   experimenter: 'Försöksledare:'
   modes:
-    "off": En person
-    watch: Simulerad, i lugn takt
-    fast: Simulerad, snabb
-  skip_to: 'Hoppa till {what} ({time})'
-  skip_none: Ingen väntan att hoppa över
-  skip_none_detail: >-
-    Bara en tidsstyrd väntan på ett schemalagt steg kan hoppas över: capsaicinet, blocken,
-    återuppvärmningen, interventionens slut. Den stannar {lead} s innan steget ska göras, så att
-    nedräkningen och larmet fortfarande syns.
+    "off": Manuell
+    watch: Auto, i lugn takt
+    fast: Auto, snabb
   auto_run: Automatisk körning
   auto_running: 'Automatisk körning: på (klicka för att stoppa)'
   auto_run_detail: >-
     Både deltagaren och försöksledaren är simulerade och snabba, och varje tidsstyrd väntan
     hoppas över, tills du klickar igen; då går var och en tillbaka till vad den var. Inget
     hoppas över utom väntan: varje mätning görs ändå.
-  fast_forward: 'Spola fram till:'
-  fast_forward_go: Kör
-  fast_forwarding: 'Spolar fram till {phase}…'
-  skipped: 'Hoppade över {value} min väntan.'
+  # DRAFT (LOG N7.F18b): written by the build, not ethics-sourced
+  jump: 'Hoppa till:'
+  jump_go: Kör
+  jump_entry: '{phase}: {stage}'
+  jump_detail: >-
+    Går direkt till det valda steget, utan att köra stegen däremellan, och låter den som
+    trycker vara densamma. Ett steg man hoppar tillbaka till körs igen; allt det registrerade
+    tidigare sparas, och loggen visar vilka rader som kom efter hoppet. Ett värde som ett
+    överhoppat steg skulle ha mätt -- beröringskalibreringen, en stickskattning -- tas från
+    den konfigurerade reservlösningen och flaggas i loggen.
+  # DRAFT (LOG N7.F18b): written by the build, not ethics-sourced
+  jump_needs_calibration: '{entry} (kräver beröringskalibreringen först)'
+  jumped: 'Hoppade till {stage}.'
   clock: 'Klocka: {speed}×'
   clock_detail: >-
     Varje tidsstyrt intervall i sessionen -- vilopauser, signaler, schemalagda väntetider,
@@ -621,8 +699,8 @@ demo:
     simuleringar lika. Bara handens egen tid (hur länge en knapp hålls) är verklig. 1 är
     realtid. Väljs när demon startas (Klockans hastighet); ett plagg som bärs går alltid i 1.
   remote: 'Fjärrkontroll:'
-  worn_note: 'Plagget bärs: bara personer, ingen automatik eller framspolning.'
-  worn_note_detail: 'Någon kan ha plagget på sig: deltagaren och försöksledaren är personer, inte simuleringar, och automatisk körning och framspolning är avstängda.'
+  worn_note: 'Plagget bärs: bara personer, ingen automatisk körning.'
+  worn_note_detail: 'Någon kan ha plagget på sig: deltagaren och försöksledaren är personer, inte simuleringar, och automatisk körning är avstängd. Hoppa till fungerar ändå, men inte förbi beröringskalibreringen innan den har körts.'
   # Hur en demonstration skiljer sig från en session, sagt där det gäller (LOG N7.F17d).
   # DRAFT (LOG N7.F17d): written by the build, not ethics-sourced
   session_differs:
@@ -655,20 +733,20 @@ dialogs:
   resume_since_sensitisation: 'Sensitiseringen började för {hours} h {minutes} min sedan.'
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   resume_not_sensitised: Sensitiseringen hade inte börjat.
-  # DRAFT (LOG N7.F11c9): written by the build, not ethics-sourced
-  distances_outstanding: Kartläggningsavstånd saknas fortfarande. Skriv in dem med Kartläggningsavstånd…, eller tryck på Nästa steg för att avsluta med dem registrerade som saknade.
+  distances_missing: '{phase}: {paths}'
+  distances_missing_all: alla fyra
+  distance_to_confirm: '{path} (att bekräfta)'
   fit_rerun_reason: Varför gör du om proceduren? Registreras tillsammans med den kasserade skattningen, som sparas.
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The re-calibrations, the
-  # same in every condition and wherever they are offered. One line to read with the participant
-  # waiting; the whole of it on hover, as the `_detail` (LOG N7.F17e).
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
-  recalibrate_rebalance: Balansera om kanalerna nu? Plagget går till noll, steg 3 och 4 körs igen och sessionen fortsätter där den var. Allt som registrerats sparas.
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
-  recalibrate_restart: Starta om beröringskalibreringen från steg 1 nu? Plagget går till noll och sessionen fortsätter sedan där den var. Allt som registrerats sparas.
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
-  recalibrate_rebalance_detail: 'Balansera om kanalerna nu? Plagget går till noll och det som pågår avbryts. Deltagaren ställer in var och en av de andra kanalerna mot mittkanalen igen och jämför dem (steg 3 och 4), och sedan kommer frågan om jämnhet, och valet av mönster bara om beröringskalibreringen inte har gjort det ännu; en behaglighetsnivå som redan är inställd behålls. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
-  # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
-  recalibrate_restart_detail: 'Starta om beröringskalibreringen nu? Plagget går till noll och det som pågår avbryts. Kalibreringen börjar om från steg 1 som en ny omgång, utan övningen på skattningsskalan och utan valet av mönster om beröringskalibreringen redan har gjort det. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats hittills sparas.'
+  # DRAFT (LOG N7.F18i): written by the build, not ethics-sourced. Omkalibreringen: vad som
+  # ska göras om, och vilka steg varje val kör igen, sedan varför (S, 21 okt 2026).
+  recalibrate: Plagget går till noll och det som pågår avbryts. Sedan fortsätter sessionen där den var, med de nya nivåerna; schemalagda steg behåller sina tider. Allt som registrerats sparas.
+  recalibrate_what: Vad ska göras om
+  recalibrate_choices:
+    rebalance: Balansera om kanalerna
+    restart: Starta om kalibreringen
+  recalibrate_choices_detail:
+    rebalance: 'Steg 3 och 4 igen: varje kanal matchas och jämförs med mittkanalen, sedan frågan om jämnhet. Behaglighetsnivån behålls.'
+    restart: 'Alla steg från steg 1, som en ny omgång. Övningen på skattningsskalan och ett redan gjort val av mönster görs inte om.'
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced
   recalibration_reason: Varför? Registreras tillsammans med valet.
   # DRAFT (LOG N7.F12a1): written by the build, not ethics-sourced. The keys are what the log
@@ -690,6 +768,32 @@ dialogs:
   # Knapparna till frågan om att återuppta.
   resume_yes: Återuppta sessionen
   resume_no: Starta en ny session
+
+# Rutans egen rad under fälten för kartläggningsavstånden (S, 21 okt 2026). {phase} är
+# tidpunktens namn i `timeline`.
+# DRAFT (LOG N7.F18f): written by the build, not ethics-sourced
+distances:
+  # The unit, in each empty field.
+  unit: mm
+  recorded: 'Registrerat, {phase}: {values}.'
+  corrected: 'Rättat, {phase}: {values}.'
+  value: '{path} {value} mm'
+  inside_primary: '{value} mm är inne i primära zonen: mät från mitten. Samma igen behåller det.'
+  too_far: '{value} mm är längre än en gräns kan vara: kontrollera. Samma igen behåller det.'
+
+# Sidan när sessionen är klar, under instruktionen (S, 21 okt 2026). Stegen för uppladdning är
+# SOP.md 14.2:s.
+# DRAFT (LOG N7.F18l): written by the build, not ethics-sourced
+data_check:
+  saved: 'Sparat: {files} filer i {folder}.'
+  missing: 'Registrerat som saknat: {value}.'
+  none_missing: Inget är registrerat som saknat.
+  upload: >-
+    Uppladdning (SOP 14.2): kopiera varje fil med P{code}_S{session}_ i namnet till
+    {upload_folder}; kopiera, flytta inte. Om en fil redan finns där, välj Hoppa över, aldrig
+    Ersätt, och säg till S. Kontrollera sedan att 01_raw har samma filer, med samma namn och
+    storlek. Radera aldrig den här datorns kopia.
+  demo: 'En demonstration: dess data stannar i {folder} och laddas aldrig upp.'
 
 preflight:
   # Vad startprogrammet kontrollerar innan en session startar (SPEC.md 11, 15, 17.5). En vägran
@@ -728,9 +832,12 @@ preflight:
   hardware_changed: 'Den här sessionen körs med annan utrustning än labbets ({value}). Sessionsfilen registrerar det.'
 
 zones:
-  # Bredvid zondiagrammet (SPEC.md 11): var den aktuella stimuleringen ska ges.
-  target: '{region} zonen, plats {site}'
-  target_region: '{region} zonen'
+  # I zondiagrammet bredvid instruktionen (SPEC.md 11), ritade och inte en del av figuren, så
+  # att en spegelvänd höger hand behåller dem läsbara (S, 21 okt 2026).
+  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
+  primary: PH
+  secondary: SH
+  caption: platshållare, inte skalenlig
 
 hardware:
   # Hårdvarupanelen (SPEC.md 11, 12.1). Trycket per kanal utelämnas helt under interventionen

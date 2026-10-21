@@ -118,6 +118,18 @@ def tone(hz: float, duration_s: float, level_dbfs: float, ramp_s: float,
     return samples
 
 
+def click(hz: float, duration_s: float, decay_s: float, level_dbfs: float,
+          sample_rate_hz: int) -> np.ndarray:
+    """A tick: a sine at `hz` that starts at once and dies away with time constant `decay_s`,
+    over `duration_s`. Its peak is a `level_dbfs` RMS sine's, so it is no louder than a tone
+    at that level, and shorter. No onset ramp, unlike `tone`: the sharp start is what makes
+    it a tick rather than a beep (S, 21 Oct 2026: "more like a tick and less like an alert")."""
+    n = int(round(duration_s * sample_rate_hz))
+    t = np.arange(n) / sample_rate_hz
+    peak = amplitude(level_dbfs) * np.sqrt(2)
+    return peak * np.exp(-t / decay_s) * np.sin(2 * np.pi * hz * t)
+
+
 # -- outputs ----------------------------------------------------------------------------
 
 
@@ -268,6 +280,8 @@ class Audio:
 
         self.noise_level_dbfs: float | None = None
         self.noise_running = False
+        # Running at no level (`silence_noise`): the stream goes on, so the cue still sounds.
+        self.noise_silenced = False
 
     @property
     def output(self) -> AudioOutput:
@@ -291,7 +305,7 @@ class Audio:
                 detail=f"{level_dbfs:.1f} dBFS asked, held at the ceiling {self.max_dbfs:.1f}",
             )
         self.noise_level_dbfs = applied
-        if self.noise_running:
+        if self.noise_running and not self.noise_silenced:
             self.output.set_noise(amplitude(applied))
         return applied
 
@@ -299,7 +313,24 @@ class Audio:
         applied = self.set_noise_level(level_dbfs)
         self.output.start_noise(amplitude(applied))
         self.noise_running = True
+        self.noise_silenced = False
         self.log("white_noise_started", detail=f"{applied:.1f} dBFS")
+
+    def silence_noise(self, reason: str) -> None:
+        """The noise at no level, its stream still running (`NoiseGate`). Logged."""
+        if not self.noise_running or self.noise_silenced:
+            return
+        self.output.set_noise(0.0)
+        self.noise_silenced = True
+        self.log("white_noise_silenced", detail=reason)
+
+    def unsilence_noise(self, reason: str) -> None:
+        """Back at the level the participant chose. Logged."""
+        if not self.noise_running or not self.noise_silenced:
+            return
+        self.output.set_noise(amplitude(self.noise_level_dbfs))
+        self.noise_silenced = False
+        self.log("white_noise_resumed", detail=f"{reason}, {self.noise_level_dbfs:.1f} dBFS")
 
     def stop_noise(self, reason: str) -> None:
         """For the area mapping and the earplug exchange (SPEC.md 10.5, 10.7). Logged."""
@@ -307,6 +338,7 @@ class Audio:
             return
         self.output.stop_noise()
         self.noise_running = False
+        self.noise_silenced = False
         self.log("white_noise_stopped", detail=reason)
 
     def resume_noise(self, reason: str) -> None:
@@ -322,7 +354,9 @@ class Audio:
     # -- tones -------------------------------------------------------------------------
 
     def participant_cue(self) -> None:
-        """The alert tone over the noise, `participant_cue_over_noise_db` above it.
+        """The alert tone over the noise, `participant_cue_over_noise_db` above it. While the
+        noise is silenced (`NoiseGate`) the tone plays at that same level, so the cue sounds
+        the same in every step.
 
         Never louder than a sine whose peak is full scale (`CUE_MAX_DBFS`): a clipped tone is a
         distorted one, with harmonics the configuration never asked for. When the margin has
@@ -372,11 +406,11 @@ class Audio:
         hand, not the participant's attention.
         """
         self.output.experimenter_tone(
-            tone(
+            click(
                 float(self.config["pacing_tick_hz"]),
                 float(self.config["pacing_tick_duration_s"]),
+                float(self.config["pacing_tick_decay_s"]),
                 float(self.config["experimenter_alert_level_dbfs"]),
-                self.ramp_s,
                 self.sample_rate_hz,
             )
         )
@@ -385,3 +419,48 @@ class Audio:
     def close(self) -> None:
         if self.noise_running:
             self.stop_noise("session closed")
+
+
+class NoiseGate:
+    """When the masking noise is heard (S, 21 Oct 2026: "Noise should be silenced in all
+    phases and sub-phases when not needed, and in steps where the experimenter has to explain
+    something").
+
+    The noise masks the garment's mechanical sound (Bilaga 3a: "brus som maskerar ljudet från
+    plaggets mekaniska delar"), so it is wanted while the garment may run -- the touch
+    calibration, and the intervention while its touch is on -- and silenced otherwise, and
+    whenever the instruction is a sentence the experimenter says aloud. It is silenced rather
+    than stopped, so the participant's cue still sounds, at its usual level.
+
+    Armed once the masking check has set a level; until then the check runs the noise itself.
+    What it follows -- the stage, the touch, the instruction -- is the same in every condition,
+    so its on and off are too (SPEC.md 16).
+    """
+
+    def __init__(self, audio: Audio):
+        self.audio = audio
+        self.armed = False
+        self.wanted = False
+        self.saying = False
+
+    def arm(self) -> None:
+        self.armed = True
+        self._apply("the audio setup is done")
+
+    def want(self, wanted: bool, reason: str) -> None:
+        if wanted != self.wanted:
+            self.wanted = wanted
+            self._apply(reason)
+
+    def say(self, saying: bool) -> None:
+        if saying != self.saying:
+            self.saying = saying
+            self._apply("a sentence said aloud" if saying else "said")
+
+    def _apply(self, reason: str) -> None:
+        if not self.armed:
+            return
+        if self.wanted and not self.saying:
+            self.audio.unsilence_noise(reason)
+        else:
+            self.audio.silence_noise(reason)

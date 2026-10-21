@@ -2,18 +2,32 @@
   <title>Placeholder: primary and secondary hyperalgesia zones, dorsum of the hand</title>
 
   <!-- Drawn for the dark experimenter screen (UI_PRINCIPLES.md 3.5): light lines on nothing,
-       so the diagram is never the brightest thing in the room. The ids `primary` and
-       `secondary` are what tatp/ui/widgets.py highlights for the current stimulus; a
-       replacement figure must keep them. -->
+       so the diagram is never the brightest thing in the room. tatp/ui/widgets.py highlights
+       the ids below for the current stimulus; a replacement figure must keep them:
+
+       - `primary` and `secondary`, the two zones;
+       - `primary_site_1` .. `primary_site_8` and `secondary_site_1` .. `secondary_site_8`,
+         where each numbered stimulation site is (study1.yaml pinprick.n_sites, brush.n_sites).
+         Their placement here is a placeholder, evenly spread, like the rest of the figure
+         (open item 11).
+
+       - `view`, the part of the figure the window shows: the back of the hand round the zones,
+         so the zones and their sites are drawn as large as the window's room allows.
+
+       The figure is the RIGHT hand's dorsum, fingers up, so the thumb is on the left; the
+       experimenter window mirrors it for a left hand. It carries no text, so that a mirrored
+       drawing never shows mirrored writing: the labels are drawn by the window. -->
   <style>
     .outline { fill: none;    stroke: #9a9a9a; stroke-width: 3; stroke-linejoin: round; }
     .sh      { fill: none;    stroke: #9a9a9a; stroke-width: 2.5; stroke-dasharray: 7 5; }
     .ph      { fill: #3a3a3a; stroke: #9a9a9a; stroke-width: 2.5; }
-    .lbl     { font-family: Roboto, Helvetica, Arial, sans-serif; font-size: 17px; fill: #ebebeb; }
-    .cap     { font-family: Roboto, Helvetica, Arial, sans-serif; font-size: 12px; fill: #9a9a9a; }
+    .site    { fill: none;    stroke: #6a6a6a; stroke-width: 1.5; }
+    .view    { fill: none;    stroke: none; }
   </style>
 
-  <!-- Dorsum of the left hand, schematic. Fingers point up, thumb to the left. -->
+  <rect id="view" class="view" x="40" y="140" width="200" height="200" />
+
+  <!-- Dorsum of the right hand, schematic. Fingers point up, thumb to the left. -->
   <path class="outline" d="
     M 96,372
     C 92,330 88,300 86,272
@@ -44,10 +58,25 @@
   <ellipse id="secondary" class="sh" cx="154" cy="250" rx="62" ry="52" />
 
   <!-- Primary hyperalgesia: the thermode / capsaicin site itself -->
-  <rect id="primary" class="ph" x="128" y="232" width="48" height="40" rx="3" />
+  <rect id="primary" class="ph" x="124" y="228" width="56" height="48" rx="3" />
 
-  <text class="lbl" x="146" y="257" text-anchor="middle">PH</text>
-  <text class="lbl" x="154" y="322" text-anchor="middle">SH</text>
+  <!-- The secondary zone's sites, round it between the two zones, 1 distal and on clockwise -->
+  <circle id="secondary_site_1" class="site" cx="154" cy="210" r="5" />
+  <circle id="secondary_site_2" class="site" cx="188" cy="222" r="5" />
+  <circle id="secondary_site_3" class="site" cx="202" cy="250" r="5" />
+  <circle id="secondary_site_4" class="site" cx="188" cy="278" r="5" />
+  <circle id="secondary_site_5" class="site" cx="154" cy="290" r="5" />
+  <circle id="secondary_site_6" class="site" cx="120" cy="278" r="5" />
+  <circle id="secondary_site_7" class="site" cx="106" cy="250" r="5" />
+  <circle id="secondary_site_8" class="site" cx="120" cy="222" r="5" />
 
-  <text class="cap" x="160" y="396" text-anchor="middle">placeholder — not to scale</text>
+  <!-- The primary zone's sites, two rows of four inside it -->
+  <circle id="primary_site_1" class="site" cx="132" cy="238" r="4" />
+  <circle id="primary_site_2" class="site" cx="145" cy="238" r="4" />
+  <circle id="primary_site_3" class="site" cx="158" cy="238" r="4" />
+  <circle id="primary_site_4" class="site" cx="171" cy="238" r="4" />
+  <circle id="primary_site_5" class="site" cx="132" cy="266" r="4" />
+  <circle id="primary_site_6" class="site" cx="145" cy="266" r="4" />
+  <circle id="primary_site_7" class="site" cx="158" cy="266" r="4" />
+  <circle id="primary_site_8" class="site" cx="171" cy="266" r="4" />
 </svg>

@@ -43,7 +43,8 @@ def loaded():
 
 @pytest.fixture
 def rig(app, loaded, tmp_path):
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "data"),
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data"),
                                             "cloud_sync_markers": []}}
     config = cfg.Config(**{**loaded.__dict__, "hardware": hardware})
     session = Session(
@@ -453,7 +454,8 @@ def test_a_deleted_participant_window_takes_its_key_router_with_it(app, loaded, 
     import gc
 
     for attempt in range(3):
-        hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / f"d{attempt}"),
+        hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                                "folder": str(tmp_path / f"d{attempt}"),
                                                 "cloud_sync_markers": []},
                     "audio": {**loaded.hardware["audio"], "backend": "recording"}}
         config = cfg.Config(**{**loaded.__dict__, "hardware": hardware})

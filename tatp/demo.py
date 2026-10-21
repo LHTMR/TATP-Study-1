@@ -17,10 +17,11 @@ commands and data files -- with these things changed, and none of them able to r
   (SPEC.md 13, 10.9): it runs at real time only (`check_speed`), since above it the rate limit
   is looser in real time; the participant and the experimenter are both people, never
   simulations (`check_person`) -- a simulated participant would raise pressure on someone
-  else's arm, and a simulated experimenter would press Next step into garment output with
-  nobody at the experimenter screen; so neither auto-run nor fast-forward, which make both
-  fast, is offered. What is left is the garment display and Skip. As a second guard, the
-  simulated experimenter never resumes an interruption by itself there either. The ceiling,
+  else's arm, and a simulated experimenter would press Next into garment output with nobody
+  at the experimenter screen; so auto-run, which makes both fast, is not offered, and Jump to
+  does not reach the intervention's touch before a real touch calibration has run. As a
+  second guard, the simulated experimenter never resumes an interruption by itself there
+  either. The ceiling,
   the rate limit and the stop are the session's own, unchanged. The remote alone is the remote
   when it is plugged in, as in a session (`demo_key_source`); every keyboard otherwise, so it
   runs on any computer. A simulated participant's presses arrive either way.
@@ -34,21 +35,20 @@ commands and data files -- with these things changed, and none of them able to r
 - **The controls, along the foot of the experimenter window** (`DemoControls`; S, 20 Oct
   2026: "the demo controls should be integrated into the main window"). Each says what it
   would do now, or why it can do nothing:
-  - **Who presses.** The participant and the experimenter are each, independently, a person,
-    a simulation paced to be watched, or a simulation as fast as it can go (`OFF`, `WATCH`,
+  - **Who presses.** The participant and the experimenter are each, independently, manual (a
+    person), auto and paced to be watched, or auto as fast as it can go (`OFF`, `WATCH`,
     `FAST`; `sim/responders.py`, `sim/experimenters.py`, the validator's own), changeable at
     any time, so the remote can be handed between a person and the simulation mid-session.
     Logged at the start and at every change (`demo_simulation`).
-  - **Skip** names the timed wait it would end -- for the capsaicin, a block, the rekindle,
-    the intervention's end -- and how much of it is left; it ends `demo.skip_lead_s` before
-    the step, by moving session time on (`Clock.skip`). The hand's own time is not affected.
-    Logged (`demo_wait_skipped`).
-  - **Auto-run** names the step under way and runs it with both simulations fast, then hands
-    them back: the way past a series of repeated measurements. A stage is finished, never
-    skipped: what later stages need from it -- the touch calibration, the F40s -- comes from
-    the real procedure, not from invented values. Logged (`demo_auto_run`).
-  - **Fast-forward** runs both simulations fast and skips every timed wait until a chosen
-    phase begins. Logged (`demo_fast_forward`).
+  - **Auto-run** runs the steps with both simulations fast, every timed wait skipped as it
+    begins, until switched off, then hands them back: the way past a series of repeated
+    measurements. Nothing is skipped but waiting. Logged (`demo_auto_run`).
+  - **Jump to** goes straight to any step of any phase, back or forward, without running the
+    steps between and with who presses left as it is (S, 21 Oct 2026: it replaced Skip and
+    Fast-forward). Session time moves on to where the step would begin, never back
+    (`SessionRunner.jump_to`). A step run again writes its rows beside the earlier ones; a
+    value a skipped step would have measured -- the touch calibration, an F40 -- comes from
+    the configured fallback, flagged in the log. Logged (`demo_jump`, `demo_jump_fallback`).
   - The clock's speed, explained, and the remote's buttons lit as they arrive.
 
 `demo.clock_speed` (or `--demo-speed`) can also run every session-paced interval faster, as the
@@ -83,12 +83,11 @@ from tatp.pinprick import _Series
 from tatp.remote_keys import ANY_KEYBOARD, RAW_INPUT, remote_present, with_key_source
 from tatp.responder import Action
 from tatp.session import DRIVERS, with_session_choices
-from tatp.session_runner import SessionRunner
+from tatp.session_runner import SessionRunner, stage_group, stage_names
 from tatp.touchcal import EstimationPresentation
-from tatp.ui.experimenter import BLINDED_PHASES, clock_text, event_name
+from tatp.ui.experimenter import BLINDED_PHASES
 from tatp.ui.garment_display import states_from_status
 from tatp.ui.participant import ParticipantWindow
-from tatp.ui.timeline import FOLDED
 from tatp.ui.widgets import (
     BACKGROUND,
     CONTROL_BORDER,
@@ -105,7 +104,7 @@ from tatp.ui.widgets import (
     sized,
     stylesheet,
 )
-from tatp.units import MS_PER_S, S_PER_MIN
+from tatp.units import MS_PER_S
 
 OFF = "off"
 WATCH = "watch"
@@ -129,6 +128,8 @@ RESTS_DIFFER = "rests"
 GARMENT_DIFFERS = "garment"
 # The suffix of the whole explanation of each, shown on hover.
 DETAIL = "_detail"
+# How many characters of a step's name Jump to shows before cutting it.
+JUMP_LIST_CHARACTERS = 20
 
 
 def real_time_settings(study1: dict, speed: float, scale_timeout: bool = True) -> dict:
@@ -314,7 +315,7 @@ class Demo(QObject):
         self.settings = self.session.config.study1["demo"]
         self.garment_name = self.session.config.hardware["garment"]["driver"]
         # Whether someone may be wearing it: then people are the participant and the
-        # experimenter, and neither auto-run nor fast-forward is offered (`check_person`).
+        # experimenter, and auto-run is not offered (`check_person`).
         # Checked before either simulation starts, so a refusal leaves nothing running.
         self.worn = worn_garment(self.garment_name)
         check_person(self.garment_name, "participant", participant_mode)
@@ -340,16 +341,12 @@ class Demo(QObject):
         # None until set, so the starting modes are logged too, a person's included.
         self.participant_mode: str | None = None
         self.experimenter_mode: str | None = None
-        # The modes an auto-run or a fast-forward hands back when it ends, by who; empty when
-        # neither runs.
+        # The modes an auto-run hands back when it ends, by who; empty when none runs.
         self._before_finish: dict[str, str] = {}
         # Whether Auto-run is on (`set_auto_run`).
         self.auto_running = False
-        # The phase a fast-forward runs to; None when none runs.
-        self.fast_forward_to: str | None = None
         # Its controls, kept here so they live as long as the demonstration (run_session.py).
         self.controls: DemoControls | None = None
-        runner.stage_started.connect(self._stage_started)
         self.set_participant(participant_mode)
         self.set_experimenter(experimenter_mode)
 
@@ -367,7 +364,7 @@ class Demo(QObject):
         self._garment_timer.timeout.connect(self._feed_garment)
         self._garment_timer.start()
         self._feed_garment()
-        # A fast-forward skips each timed wait as it begins, and watches for its phase.
+        # Auto-run skips each timed wait as it begins.
         self._forward_timer = QTimer(self)
         self._forward_timer.setInterval(
             int(round(float(self.settings["controls_refresh_s"]) * MS_PER_S))
@@ -426,8 +423,8 @@ class Demo(QObject):
         self.experimenter_mode = mode
 
     def choose(self, who: str, mode: str) -> None:
-        """A mode chosen in the demo controls: kept, even past an auto-run or a fast-forward,
-        which still hands the other back."""
+        """A mode chosen in the demo controls: kept, even past an auto-run, which still hands
+        the other back."""
         self._before_finish.pop(who, None)
         self._set(who, mode)
 
@@ -437,10 +434,6 @@ class Demo(QObject):
     def _log_mode(self, who: str, before: str | None, after: str) -> None:
         if before != after:
             self.session.log("demo_simulation", detail=f"{who}: {after}")
-
-    def skippable_s(self) -> float | None:
-        """The session seconds Skip would skip now, or None: what its button says."""
-        return self.runner.skippable_s(float(self.settings["skip_lead_s"]))
 
     def skip_wait(self, lead_s: float | None = None) -> float | None:
         """End the timed wait now running, `lead_s` (`demo.skip_lead_s` unless given) before
@@ -455,9 +448,8 @@ class Demo(QObject):
         """Both simulations fast, remembering what they were; not on a worn garment, where
         both are people (`check_person`)."""
         if self.worn:
-            raise DemoError(f"auto-run and fast-forward are not offered on the "
-                            f"{self.garment_name} garment: the participant and the "
-                            f"experimenter are people")
+            raise DemoError(f"auto-run is not offered on the {self.garment_name} garment: the "
+                            f"participant and the experimenter are people")
         if not self._before_finish:
             self._before_finish = {"participant": self.participant_mode,
                                    "experimenter": self.experimenter_mode}
@@ -481,47 +473,24 @@ class Demo(QObject):
         else:
             self.auto_running = False
             self.session.log("demo_auto_run", detail="off")
-            if self.fast_forward_to is None:
-                self._forward_timer.stop()
-                self._hand_back()
+            self._forward_timer.stop()
+            self._hand_back()
 
-    def fast_forward(self, phase: str) -> None:
-        """Both simulations fast, and every timed wait skipped as it begins, until `phase`
-        begins; then as they were (LOG N7.F16j)."""
-        assert phase in self.runner.phases, f"no phase {phase!r} in this session"
-        self._speed_up()
-        self.fast_forward_to = phase
-        self.session.log("demo_fast_forward", detail=phase)
-        self._forward_timer.start()
-        self._forward()
-
-    def _reached(self) -> bool:
-        phases = self.runner.phases
-        now = FOLDED.get(self.session.phase, self.session.phase)
-        return now in phases and phases.index(now) >= phases.index(self.fast_forward_to)
+    def jump(self, stage_id: str) -> None:
+        """Straight to `stage_id` (`SessionRunner.jump_to`), who presses left as it is."""
+        self.runner.jump_to(stage_id)
 
     def _forward(self) -> None:
-        if self.fast_forward_to is not None and (self._reached() or self.session.closed):
-            self._end_fast_forward()
-        if self.fast_forward_to is None and not self.auto_running:
+        if not self.auto_running:
             self._forward_timer.stop()
         elif not self.session.closed:
             self.skip_wait(0.0)
-
-    def _end_fast_forward(self) -> None:
-        self.fast_forward_to = None
-        if not self.auto_running:
-            self._forward_timer.stop()
-            self._hand_back()
 
     def _hand_back(self) -> None:
         before, self._before_finish = self._before_finish, {}
         for who, mode in before.items():
             self._set(who, mode)
 
-    def _stage_started(self, _stage_id: str) -> None:
-        if self.fast_forward_to is not None and self._reached():
-            self._end_fast_forward()
     def stop(self) -> None:
         self.participant.stop()
         self.experimenter.stop()
@@ -632,9 +601,9 @@ class DemoControls(QWidget):
     2026; LOG N7.F16j, N7.F17d). Experimenter text only.
 
     Each says what it would do now, or why it can do nothing: who presses for each role,
-    switched at any moment; Skip naming the wait it would end and how much of it is left;
-    Auto-run, on until switched off; Fast-forward to a phase still to come. The clock's speed
-    is said and explained, and the remote's buttons light as they arrive. How the demo differs
+    switched at any moment; Auto-run, on until switched off; Jump to any step of any phase,
+    in session order. The clock's speed is said and explained, and the remote's buttons light
+    as they arrive. How the demo differs
     from a session is said where it applies: the step under way's timing or garment display
     on the panel while it runs, the rest on the controls they concern (`session_differs`).
     """
@@ -656,15 +625,23 @@ class DemoControls(QWidget):
                                            lambda mode: self._choose("participant", mode))
         self.experimenter_mode = ModeSwitch(words["modes"],
                                             lambda mode: self._choose("experimenter", mode))
-        self.skip_button = button("")
-        self.skip_button.clicked.connect(self.skip_wait)
         self.auto_run_button = button(words["auto_run"])
         self.auto_run_button.setCheckable(True)
         self.auto_run_button.setToolTip(words["auto_run_detail"])
         self.auto_run_button.clicked.connect(self.auto_run)
-        self.fast_forward = sized(QComboBox(), SIZE_SMALL)
-        self.fast_forward_button = button(words["fast_forward_go"])
-        self.fast_forward_button.clicked.connect(self.fast_forward_now)
+        # Every step of every phase, in session order (S, 21 Oct 2026).
+        self.jump_list = sized(QComboBox(), SIZE_SMALL)
+        # As wide as a step's usual name; a longer one is cut, whole in the open list.
+        self.jump_list.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.jump_list.setMinimumContentsLength(JUMP_LIST_CHARACTERS)
+        self.jump_list.setToolTip(words["jump_detail"])
+        self.jump_button = button(words["jump_go"])
+        self.jump_button.setToolTip(words["jump_detail"])
+        self.jump_button.clicked.connect(self.jump_now)
+        self._jump_entries: list[tuple[str, str, bool]] = []
+        # A step chosen in the list is kept; until one is, the list follows the session.
+        self._jump_chosen = False
+        self.jump_list.activated.connect(self._jump_picked)
         self.clock = label(SIZE_SMALL, colour=DEMO_COLOUR)
         self.clock.setText(words["clock"].format(speed=f"{demo.session.clock.speed:g}"))
         self.clock.setToolTip(words["clock_detail"])
@@ -676,11 +653,10 @@ class DemoControls(QWidget):
         # whole line in the tooltip, as the row may cut it.
         self.differs_now = label(SIZE_SMALL, colour=DEMO_COLOUR)
         self.differs_now.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        # On a worn garment the participant and the experimenter are people, and so neither
-        # auto-run nor fast-forward, which make both simulations fast, is offered
-        # (`check_person`). Fixed for the demonstration, so the note is there from the start
-        # or never.
-        for widget in (self.participant_mode, self.experimenter_mode, self.fast_forward):
+        # On a worn garment the participant and the experimenter are people, and so auto-run,
+        # which makes both simulations fast, is not offered (`check_person`). Fixed for the
+        # demonstration, so the note is there from the start or never.
+        for widget in (self.participant_mode, self.experimenter_mode):
             widget.setEnabled(not demo.worn)
         self.worn_note = label(SIZE_SMALL, colour=WARNING_COLOUR)
         self.worn_note.setText(words["worn_note"])
@@ -706,19 +682,16 @@ class DemoControls(QWidget):
         who.addWidget(self.remote)
         actions = QHBoxLayout()
         actions.setSpacing(ITEM_GAP_PX)
-        actions.addWidget(self.skip_button)
         actions.addWidget(self.auto_run_button)
         actions.addSpacing(GROUP_GAP_PX)
-        forward = label(SIZE_SMALL, colour=DEMO_COLOUR)
-        forward.setText(words["fast_forward"])
-        actions.addWidget(forward)
-        actions.addWidget(self.fast_forward)
-        actions.addWidget(self.fast_forward_button)
+        jump = label(SIZE_SMALL, colour=DEMO_COLOUR)
+        jump.setText(words["jump"])
+        actions.addWidget(jump)
+        actions.addWidget(self.jump_list)
+        actions.addWidget(self.jump_button)
         # A control that can do nothing is not drawn: on a worn garment the note saying why
-        # stands where auto-run and fast-forward would be.
-        for widget in (self.auto_run_button, forward, self.fast_forward,
-                       self.fast_forward_button):
-            widget.setVisible(not demo.worn)
+        # stands where auto-run would be.
+        self.auto_run_button.setVisible(not demo.worn)
         self.worn_note.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.worn_note.setToolTip(words["worn_note_detail"])
         actions.addWidget(self.worn_note, 2)
@@ -732,8 +705,6 @@ class DemoControls(QWidget):
         layout.addLayout(who)
         layout.addLayout(actions)
 
-        # Whether the status line says a fast-forward is running, which `sync` takes down.
-        self._forwarding_shown = False
         if participant is not None:
             watch = _RemoteWatch(participant, self.remote, self)
             participant.installEventFilter(watch)
@@ -750,22 +721,19 @@ class DemoControls(QWidget):
         self.demo.choose(who, mode)
         self.sync()
 
-    def skip_wait(self) -> None:
-        skipped_s = self.demo.skip_wait()
-        if skipped_s is not None:
-            self.status.setText(
-                self.words["skipped"].format(value=f"{skipped_s / S_PER_MIN:.1f}")
-            )
-        self.sync()
-
     def auto_run(self, on: bool) -> None:
         self.demo.set_auto_run(on)
         self.sync()
 
-    def fast_forward_now(self) -> None:
-        phase = self.fast_forward.currentData()
-        if phase is not None:
-            self.demo.fast_forward(phase)
+    def _jump_picked(self, _index: int) -> None:
+        self._jump_chosen = True
+
+    def jump_now(self) -> None:
+        stage_id = self.jump_list.currentData()
+        if stage_id is not None and self.demo.runner.jumpable(stage_id):
+            self.demo.jump(stage_id)
+            self.status.setText(self.words["jumped"].format(stage=self.jump_list.currentText()))
+            self._jump_chosen = False
         self.sync()
 
     def sync(self, *_stage_id) -> None:
@@ -780,35 +748,42 @@ class DemoControls(QWidget):
             self.differs_now.setText(differs)
             self.differs_now.setToolTip("" if key is None else self.differs[f"{key}{DETAIL}"])
 
-        skippable_s = demo.skippable_s()
-        event = demo.session.next_event()
-        if skippable_s is not None and event is not None:
-            self.skip_button.setText(words["skip_to"].format(
-                what=event_name(self.text, event), time=clock_text(skippable_s)))
-            self.skip_button.setToolTip("")
-        else:
-            self.skip_button.setText(words["skip_none"])
-            self.skip_button.setToolTip(words["skip_none_detail"].format(
-                lead=f"{float(demo.settings['skip_lead_s']):g}"))
-        self.skip_button.setEnabled(skippable_s is not None and event is not None)
-
-        forwarding = demo.fast_forward_to is not None
         self.auto_run_button.setChecked(demo.auto_running)
         self.auto_run_button.setText(words["auto_running" if demo.auto_running
                                            else "auto_run"])
         self.auto_run_button.setEnabled(not demo.worn)
+        self._sync_jump()
 
-        phases = demo.runner.phases
-        now = FOLDED.get(demo.session.phase, demo.session.phase)
-        later = phases[phases.index(now) + 1:] if now in phases else []
-        if [self.fast_forward.itemData(i) for i in range(self.fast_forward.count())] != later:
-            self.fast_forward.clear()
-            for phase in later:
-                self.fast_forward.addItem(self.text["phases"][phase], phase)
-        self.fast_forward_button.setEnabled(not demo.worn and not forwarding and bool(later))
-        if forwarding:
-            self.status.setText(words["fast_forwarding"].format(
-                phase=self.text["phases"][demo.fast_forward_to]))
-        elif self._forwarding_shown:
-            self.status.clear()
-        self._forwarding_shown = forwarding
+    def _sync_jump(self) -> None:
+        """Every step of every phase, named "phase: step", in session order; one that cannot
+        be jumped to now is listed, greyed, saying why (UI_PRINCIPLES.md 5.13). Rebuilt only
+        when that changes, so a choice made is kept."""
+        runner, text, words = self.demo.runner, self.text, self.words
+        entries = []
+        for stage in runner.stages:
+            group = stage_group(stage.id, stage.phase)
+            entry = words["jump_entry"].format(
+                phase=text["phases"][group],
+                stage=stage_names(stage.id, text, runner.session.schedule)[1])
+            ok = runner.jumpable(stage.id)
+            if not ok and runner.session.garment.worn and runner.deliveries is None:
+                entry = words["jump_needs_calibration"].format(entry=entry)
+            entries.append((stage.id, entry, ok))
+        ids = [stage_id for stage_id, _, _ in entries]
+        if entries != self._jump_entries:
+            chosen = self.jump_list.currentData()
+            self.jump_list.clear()
+            for stage_id, entry, ok in entries:
+                self.jump_list.addItem(entry, stage_id)
+                item = self.jump_list.model().item(self.jump_list.count() - 1)
+                item.setEnabled(ok)
+            if chosen in ids:
+                self.jump_list.setCurrentIndex(ids.index(chosen))
+            self._jump_entries = entries
+        if not self._jump_chosen:
+            # The step after the one under way, until another is chosen.
+            here = ids.index(runner.stages[runner.stage_index].id)
+            self.jump_list.setCurrentIndex(min(here + 1, len(ids) - 1))
+        self.jump_button.setEnabled(any(ok for _, _, ok in entries))
+        self.jump_list.setEnabled(any(ok for _, _, ok in entries))
+

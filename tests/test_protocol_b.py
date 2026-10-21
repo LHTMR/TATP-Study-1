@@ -179,7 +179,7 @@ def test_calibration_never_reads_or_shows_the_condition(rig, monkeypatch):
         property(lambda self: read.append(True) or original.fget(self)),
     )
     shown = []
-    rig.experimenter.set_instruction = lambda text: shown.append(text)
+    rig.experimenter.set_instruction = lambda text, *_: shown.append(text)
     rig.experimenter.set_status = lambda text: shown.append(text)
     _calibrate(rig)
     assert read == []
@@ -356,9 +356,9 @@ def test_a_channel_winning_every_comparison_is_readjusted_then_accepted(rig):
     shown = []
     real = rig.experimenter.set_instruction
 
-    def spy(text):
+    def spy(text, *rest):
         shown.append(text)
-        real(text)
+        real(text, *rest)
 
     rig.experimenter.set_instruction = spy
 
@@ -1044,8 +1044,8 @@ def _check_off_interval_from_stop(rig):
 def test_the_experimenter_sees_how_many_ratings_are_answered(rig):
     seen = []
     window = rig.experimenter
-    window.set_instruction = lambda text: (seen.append(text),
-                                           type(window).set_instruction(window, text))
+    window.set_instruction = lambda text, *rest: (
+        seen.append(text), type(window).set_instruction(window, text, *rest))
     _calibrate(rig)
     template = window.text["instructions"]["touchcal_estimation"]
     progress = [text for text in seen if text in
@@ -1237,9 +1237,9 @@ def _start_delivery(rig, delivery, self_start):
     # never collects another's.
     window = rig.experimenter
     window.set_status = lambda text: seen.append(("status", text))
-    window.set_instruction = lambda text: (
+    window.set_instruction = lambda text, *rest: (
         seen.append(("instruction", text)),
-        type(window).set_instruction(window, text),
+        type(window).set_instruction(window, text, *rest),
     )
     cues = []
     rig.participant.warning_cue_shown.connect(lambda: cues.append(True))

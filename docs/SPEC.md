@@ -214,12 +214,14 @@ without the command line:
    participant screen is unchanged (§16). Always the mock garment, with every keyboard the
    remote; never beside a running session (it holds the study folder's instance lock). The
    participant and the
-   experimenter are each a person or the validator's simulation (§17.5), paced to be watched or
-   as fast as it goes, changeable mid-session from a Demo controls window, which also offers
-   *Skip the wait* (session time moved on to just before the next due step) and *Finish this
-   stage* (both simulations fast until the next stage; a stage is finished, never skipped, so
-   nothing a later stage needs is invented). Every change of who presses, and every skip, is
-   logged. Also `run_session.py --demo`.
+   experimenter are each manual (a person) or auto (the validator's simulation, §17.5), paced
+   to be watched or as fast as it goes, changeable mid-session from the demo controls along the
+   foot of the experimenter window, which also offer *Auto-run* (both simulations fast and every
+   timed wait skipped, until switched off) and *Jump to* (straight to any step of any phase,
+   back or forward, without running those between, who presses unchanged; a value a skipped step
+   would have measured comes from the configured fallback, flagged; S, 21 Oct 2026, docs/LOG.md
+   N7.F18b). Every change of who presses, every skipped wait and every jump is logged. Also
+   `run_session.py --demo`.
 3. **Instruments and environment** — filament weighing, temperature, humidity (§8.1).
 4. **Design a pattern** — the garment pattern designer (§12.2).
 5. **Preview schedule** — the timeline and its warnings (§7.2).
@@ -527,8 +529,8 @@ where the border fell — that is a pen mark and a ruler, not a keypress.
 - The participant reports the change in sensation **verbally** (Bilaga 1 §3.6.2: "a definite
   change in sensation — 'burning', 'tenderness', 'more intense pricking'"). The experimenter
   stops, marks the border on the skin and measures it. Nothing about the signal is recorded.
-- **The white noise is off for the whole mapping phase**, so that the participant and the
-  experimenter can talk (§10.5). It resumes afterwards.
+- **The white noise is silent for the whole mapping**, so that the participant and the
+  experimenter can talk (§10.5): it is heard only while the garment may run.
 - There is no participant instruction screen for mapping. The experimenter instructs verbally
   from `instructions.mapping_script`; the participant screen shows the standby display.
 - The experimenter **types the four distances in mm whenever convenient — this must never block
@@ -760,15 +762,20 @@ language.
   is identical in every condition (§16). The audible cue is sounded from the same signal, so the
   two cannot come apart, except before the noise starts and while it is stopped, when the cue
   is visual only (§10.9, `Audio.participant_cue`).
-- **Continuous white noise** to the participant's headphones at a configured level, with an
-  **alert tone mixed over it** as the cue.
+- **White noise** to the participant's headphones at the level the participant set, with an
+  **alert tone mixed over it** as the cue. It masks the garment's mechanical sound (Bilaga 3a),
+  so it is heard while the garment may run -- the touch calibration, and the intervention while
+  its touch is on -- and is silenced otherwise, and while the experimenter says something aloud
+  (S, 21 Oct 2026; docs/LOG.md N7.F18j). Silenced, its stream runs on at no level, so the cue
+  sounds at its usual level throughout. What it follows is the same in every condition.
 - Separate lab-side alerts for the experimenter — block due, rekindle approaching — which must
   not be audible to the participant over the noise.
 - Timestamp every cue onset.
 - Between blocks the participant screen shows a neutral standby display.
-- **The white noise stops for the secondary-hyperalgesia mapping** (§8.4) and resumes after it.
-  The mapping is instructed verbally and answered verbally, so masking noise would prevent the
-  exchange it exists to protect. Log the stop and the resume.
+- **The white noise is silent for the secondary-hyperalgesia mapping** (§8.4), which falls
+  outside the garment's phases. The mapping is instructed verbally and answered verbally, so
+  masking noise would prevent the exchange it exists to protect. Log every silencing and
+  resumption.
 
 ### 10.6 VAS questions and anchors
 
@@ -1010,13 +1017,18 @@ button's printed symbol are open items L11 and L12.
 
 Displays:
 
-- Current phase, session elapsed time, countdown to the next scheduled event.
-- What to do now: which filament, which site, which path, which brush region.
-- **A diagram of the primary and secondary hyperalgesic zones**, marking where the current
-  stimulus should be applied. A placeholder line drawing is committed at
+- Current phase, its steps, session elapsed time, countdown to the next scheduled event, and
+  how far behind schedule a step is once it is late.
+- What to do now, under a heading saying whether to act, get ready or wait (a wait with its time
+  left): which filament, which brush, which path; and while the participant rates, what to have
+  ready next (S, 21 Oct 2026).
+- **A diagram of the primary and secondary hyperalgesic zones** beside that instruction,
+  marking where the current stimulus should be applied: the zone, and every numbered site of it
+  with the current one filled, or the four mapping paths with the current one drawn heavy. A
+  right hand's drawing, mirrored for a left one. A placeholder line drawing is committed at
   `assets/hyperalgesia_zones.svg` — hand outline, filled rectangle for the primary zone, dashed
-  ellipse for the secondary. Replace it when a proper figure exists; the layout is built around
-  it either way. Include the monofilament delivery instructions alongside it if
+  ellipse for the secondary, the sites evenly spread. Replace it when a proper figure exists
+  (open item 11, the sites' placement included); the layout is built around it either way. Include the monofilament delivery instructions alongside it if
   they fit without crowding — perpendicular approach, bend to about three-quarters of the
   filament's length, about 1 s, no lateral movement, slow removal.
 - Confirmation that the participant's response was received.

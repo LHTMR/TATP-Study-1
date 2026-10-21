@@ -55,7 +55,8 @@ def loaded():
 
 
 def _make_rig(loaded, tmp_path, study1=None, seed=7, trained=True):
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "data"),
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data"),
                                             "cloud_sync_markers": []}}
     config = cfg.Config(**{**loaded.__dict__, "hardware": hardware,
                            "study1": study1 or loaded.study1})
@@ -535,7 +536,8 @@ def test_a_recalibration_in_the_protocols_place_withdraws_discard_and_gives_it_b
 
 def test_the_substitution_entry_is_offered_only_while_a_filament_trial_listens(rig):
     """A filament typed outside a filament trial reached no listener and was cleared and lost
-    (15 Oct 2026 pilot review). The trial that listens is the one that offers the entry."""
+    (15 Oct 2026 pilot review). The trial that listens is the one that offers the choice, of
+    the set's filaments (S, 21 Oct 2026)."""
     experimenter, participant = rig.experimenter, rig.participant
     protocol = _long(rig)
     assert experimenter.substitution.isHidden()
@@ -544,20 +546,26 @@ def test_the_substitution_entry_is_offered_only_while_a_filament_trial_listens(r
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
     for widget in (experimenter.substitution, experimenter.substitution_button):
         assert not widget.isHidden() and widget.isEnabled(), "a filament trial is running"
-    # Typed and never recorded: not applied, but logged when the trial withdraws the entry.
-    experimenter.substitution.setText("15")
+    labels = [experimenter.substitution.itemData(i)
+              for i in range(1, experimenter.substitution.count())]
+    assert labels == [f.label_g for f in protocol.filaments], "the set, lightest first"
+    # Chosen and never recorded: not applied, but logged when the trial withdraws the choice.
+    experimenter.substitution.setCurrentIndex(experimenter.substitution.findData("15"))
     _answer(participant, _observer(protocol._trial))
-    assert experimenter.substitution.isHidden(), "the trial has ended"
-    assert experimenter.substitution_button.isHidden()
-    assert experimenter.substitution.text() == ""
+    assert not experimenter.substitution.isEnabled(), "the trial has ended"
+    assert not experimenter.substitution_button.isEnabled()
+    assert experimenter.substitution.currentData() == ""
     (logged,) = [row for row in _rows(rig.session, "log")
                  if row["event"] == "substitution_not_recorded"]
     assert logged["origin"] == "experimenter" and logged["severity"] == "warning"
-    assert logged["detail"].endswith(": 15")
+    assert logged["detail"].endswith(": 15 g")
     assert not [row for row in _rows(rig.session, "log")
                 if row["event"] == "substitution_entered"]
-    # And on screen, where it was typed (spec-review of N7.F11a; LOG N7.F11b20).
-    assert experimenter._warning_text == _not_recorded(experimenter, "15")
+    # And beside the choice, until the next application starts (S, 21 Oct 2026).
+    assert experimenter.substitution_message.text() == _not_recorded(experimenter, "15")
+    assert experimenter._warning_text == ""
+    _spin(lambda: protocol._trial is not None)
+    assert experimenter.substitution_message.text() == "", "gone as the next one starts"
     protocol.cancel()
     assert experimenter.substitution.isHidden(), "the protocol has ended"
 
@@ -575,11 +583,11 @@ def test_a_filament_typed_when_the_stop_ends_the_trial_is_warned(rig):
     protocol = _long(rig)
     _start(protocol)
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
-    experimenter.substitution.setText("10")
+    experimenter.substitution.setCurrentIndex(experimenter.substitution.findData("10"))
     participant.emergency_stop.emit()
     assert "substitution_not_recorded" in _events(rig.session)
-    assert experimenter._warning_text == _not_recorded(experimenter, "10")
-    assert experimenter.substitution.text() == ""
+    assert experimenter.substitution_message.text() == _not_recorded(experimenter, "10")
+    assert experimenter.substitution.currentData() == ""
     experimenter.resume_requested.emit()
     protocol.cancel()
 
@@ -611,32 +619,30 @@ def test_a_substitution_is_fitted_as_applied(rig):
     assert "substitution_entered" in _events(session)
 
 
-def test_an_unknown_substitution_is_refused(rig):
+def test_a_label_outside_the_set_cannot_reach_a_trial(rig):
+    """The choice lists the set and nothing else; a label from anywhere else is a defect."""
     protocol = _long(rig)
-    done = _start(protocol)
-
-    def bad(answered, trial):
-        if answered == 0:
-            rig.experimenter.substitution_entered.emit("999")
-
-    _drive(protocol, done, before_answer=bad)
-    assert _rows(rig.session, "pinprick")[0]["substituted"] == "false"
-    assert "substitution_unknown" in _events(rig.session)
+    _start(protocol)
+    _spin(lambda: rig.participant.stack.currentWidget() is rig.participant.vas)
+    with pytest.raises(AssertionError, match="999"):
+        protocol._trial._on_substitution("999")
+    protocol.cancel()
 
 
-def test_a_substitution_warning_goes_once_a_lower_filament_is_recorded(rig):
-    """Code review of N7.F11b16: a resolved warning does not outlive its resolution."""
+def test_what_became_of_a_substitution_is_said_beside_it(rig):
+    """S, 21 Oct 2026: "Filament correction should have a message when it is received and
+    recorded"; and beside the choice, not on the warning line."""
     window = rig.experimenter
+    warnings = window.text["warnings"]
     protocol = _long(rig)
     done = _start(protocol)
     _spin(lambda: rig.participant.stack.currentWidget() is rig.participant.vas)
-    window.substitution_entered.emit("999")
-    assert "999" in window._warning_text
     window.substitution_entered.emit("15")
-    assert window._warning_text == ""
+    assert window.substitution_message.text() == warnings["substitution_recorded"].format(
+        filament="15")
     window.substitution_entered.emit("300")
-    assert "300" in window._warning_text, "not lower than asked for"
-    window.substitution_entered.emit("15")
+    assert window.substitution_message.text() == warnings["substitution_not_lower"].format(
+        filament="300"), "recorded, but not lower than asked for"
     assert window._warning_text == ""
     protocol.cancel()
     assert not done

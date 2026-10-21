@@ -56,7 +56,14 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from tatp.config import Config, instruction
 from tatp.procedure import NO_RERUNS_LEFT, Procedure, Rig
 from tatp.session import Session
-from tatp.ui.experimenter import ExperimenterWindow
+from tatp.ui.experimenter import (
+    CONFIRMED,
+    NOW,
+    QUERIED,
+    WAIT,
+    ExperimenterWindow,
+)
+from tatp.ui.experimenter import PREPARE as GET_READY
 from tatp.ui.participant import ParticipantWindow
 from tatp.units import MS_PER_S
 
@@ -66,7 +73,6 @@ PAIN_SCALE = "pain"
 # experimenter text: through the cue's lead, and once the stimulus is due (LOG N7.F16f).
 PREPARE = "prepare"
 APPLY = "apply"
-APPLIED = "applied"
 
 # Controlled vocabularies of the data files (docs/DATA_SCHEMA.md), not wording.
 LONG = "long"
@@ -105,6 +111,15 @@ READY_LONG_FIRST = "ready_long_first"
 READY_SHORT = "ready_short"
 READY_BRUSH = "ready_brush"
 READY_PINPRICK_BLOCK = "ready_pinprick_block"
+# While the participant rates: what to have ready next (S, 21 Oct 2026).
+RATING_NEXT_FILAMENT = "rating_next_filament"
+RATING_NEXT_EITHER = "rating_next_either"
+RATING_NEXT_BRUSH = "rating_next_brush"
+RATING_NEXT_OPEN = "rating_next_open"
+RATING_LAST = "rating_last"
+# Keys in the experimenter text's `status`: how far a series has got.
+PROGRESS = "progress"
+PROGRESS_OPEN = "progress_open"
 
 # The fit is in log10 force (SPEC.md 8.2), so undoing it is a power of ten. Not a parameter.
 LOG_BASE = 10.0
@@ -630,6 +645,9 @@ class _RatedTrial(QObject):
         self._cue_onset_t_session_s: float | None = None
         self._cue_onset_elapsed_s: float | None = None
         self._pending = None
+        # What the experimenter screen shows from the delivery press until the rating: what
+        # to have ready next, which only the series running the trial knows (S, 21 Oct 2026).
+        self.after_delivery: Callable[[], None] | None = None
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -641,8 +659,8 @@ class _RatedTrial(QObject):
     # -- hooks -------------------------------------------------------------------------
 
     def _instruction(self, key: str) -> str:
-        """`PREPARE` through the cue's lead, `APPLY` once the stimulus is due, `APPLIED` once
-        the press says it was (review of N7.F17: "then press Next step" stayed up after it)."""
+        """`PREPARE` through the cue's lead, under "Prepare"; `APPLY` once the stimulus is due,
+        under "Now" (LOG N7.F16f)."""
         raise NotImplementedError
 
     def _stimulus_detail(self) -> str:
@@ -678,13 +696,13 @@ class _RatedTrial(QObject):
         self.participant.show_warning_cue()
         self.session.log("warning_cue", detail=f"trial {self.trial_index}")
 
-        self._instruct(instruction)
+        self._instruct(instruction, GET_READY)
         self.experimenter.set_status("")
         self.experimenter.refresh()
         self._after_from(self._cue_onset_elapsed_s, self.warning_duration_s, self._end_cue)
 
-    def _instruct(self, text: str) -> None:
-        self.experimenter.set_instruction(text)
+    def _instruct(self, text: str, heading: str) -> None:
+        self.experimenter.set_instruction(text, heading)
         # The zone diagram marks where this stimulus goes (SPEC.md 11), and a filament brings
         # the monofilament technique with it.
         self.experimenter.set_target(
@@ -710,7 +728,7 @@ class _RatedTrial(QObject):
         self.stimulus_delivered = True
         self.awaits_proceed = True
         self.experimenter.proceed_requested.connect(self._on_delivered)
-        self._instruct(self._apply_text)
+        self._instruct(self._apply_text, NOW)
         self.experimenter.refresh()
 
     def _on_delivered(self) -> None:
@@ -723,9 +741,17 @@ class _RatedTrial(QObject):
         self.stimulus_delivered_iso = self.session.clock.wall_iso()
         self.session.log("stimulus_delivered", origin="experimenter",
                          detail=self._stimulus_detail())
-        # Built now, from what was applied: a substitution may have been entered meanwhile.
-        self._instruct(self._instruction(APPLIED))
+        self.show_after_delivery()
         self._cue_rating()
+
+    def show_after_delivery(self) -> None:
+        """What to have ready next, while the participant rates (S, 21 Oct 2026), worked out
+        by the series running this trial; with none, that what comes next is open."""
+        if self.after_delivery is not None:
+            self.after_delivery()
+            return
+        self.experimenter.set_instruction(
+            instruction(self.session.config, RATING_NEXT_OPEN), WAIT)
 
     def _stop_awaiting(self) -> None:
         if self.awaits_proceed:
@@ -822,32 +848,24 @@ class PinprickTrial(_RatedTrial):
         self.filaments = ladder(session.config)
         # Changed by the experimenter's substitution while the trial runs (SPEC.md 8.2).
         self.applied_label_g = application.applied_label_g
-        # The substitution warning this trial raised, withdrawn once a lower one is recorded.
-        self._substitution_warning: str | None = None
 
     def _filament(self, label_g: str) -> Filament:
         return self.filaments[ladder_index(self.filaments, label_g)]
 
     def _instruction(self, key: str) -> str:
-        text = self.experimenter.text
         self._filament(self.application.applied_label_g)  # refuses one not held, before the cue
-        # What was applied, once it has been: a substitution entered meanwhile included.
-        label_g = (self.application.applied_label_g if key == APPLIED
-                   else self.application.filament_label_g)
-        return instruction(
-            self.session.config, f"{key}_filament",
-            filament=label_g,
-            force_mn=self._filament(label_g).force_nominal_mn,
-            site=self.application.site_index,
-            region=text["terms"]["regions"][self.application.region],
-        )
+        # Where it goes is the zone diagram's, beside it (S, 21 Oct 2026).
+        return instruction(self.session.config, f"{key}_filament",
+                           filament=self.application.filament_label_g)
 
     def _stimulus_detail(self) -> str:
         return f"filament {self.application.filament_label_g} g"
 
     def _connect_extra(self) -> None:
         self.experimenter.substitution_entered.connect(self._on_substitution)
-        # The one owner of the entry's offer: it is shown exactly while it is listened to.
+        # The one owner of the choice's offer: it is shown exactly while it is listened to,
+        # listing the set's filaments, lightest first (S, 21 Oct 2026: a drop-down).
+        self.experimenter.set_filaments([filament.label_g for filament in self.filaments])
         self.experimenter.set_actions_enabled(substitution=True)
 
     def _disconnect_extra(self) -> None:
@@ -858,31 +876,29 @@ class PinprickTrial(_RatedTrial):
         if unrecorded:
             self.session.log(
                 "substitution_not_recorded", origin="experimenter", severity="warning",
-                detail=f"trial {self.trial_index}: {unrecorded}",
+                detail=f"trial {self.trial_index}: {unrecorded} g",
             )
-            # On screen too: the experimenter meant it, and the row says otherwise.
-            self.experimenter.set_warning(
+            # Beside the choice too: the experimenter meant it, and the row says otherwise.
+            self.experimenter.show_substitution(
                 self.experimenter.text["warnings"]["substitution_not_recorded"].format(
                     value=unrecorded, controls=self.experimenter.text["controls"]
-                )
+                ),
+                QUERIED,
             )
 
     def _on_substitution(self, label_g: str) -> None:
         """The experimenter applied another filament than the one asked for (SPEC.md 8.2).
 
-        Recorded as applied, because the row must describe what touched the skin. An unknown
-        label cannot be recorded -- there is no force to fit -- so it is refused and said so.
-        One that is not lower than asked for is recorded too, since it was applied, but warned:
-        the spec's substitution is a lowering, and anything else is probably a slip.
+        Recorded as applied, because the row must describe what touched the skin, and said so
+        beside the choice (S, 21 Oct 2026). The choice offers only the set's filaments, so none
+        is unknown. One that is not lower than asked for is recorded too, since it was
+        applied, but said so: the spec's substitution is a lowering, and anything else is
+        probably a slip. Once the stimulus is applied, what to have ready next is worked out
+        again: the long protocol's search steps from the filament applied.
         """
+        # Stage boundary (CLAUDE.md): the choice lists the ladder and nothing else.
+        assert label_g in {f.label_g for f in self.filaments}, f"no {label_g} g filament"
         warnings = self.experimenter.text["warnings"]
-        if label_g not in {f.label_g for f in self.filaments}:
-            self.session.log(
-                "substitution_unknown", origin="experimenter", severity="warning",
-                detail=f"{label_g} g",
-            )
-            self._warn_substitution(warnings["substitution_unknown"].format(filament=label_g))
-            return
         self.applied_label_g = label_g
         asked = self._filament(self.application.filament_label_g).force_nominal_mn
         lower = self._filament(label_g).force_nominal_mn < asked
@@ -892,16 +908,13 @@ class PinprickTrial(_RatedTrial):
             severity="info" if lower else "warning",
             detail=f"asked {self.application.filament_label_g} g, applied {label_g} g",
         )
-        if not lower:
-            self._warn_substitution(warnings["substitution_not_lower"].format(filament=label_g))
-        elif self._substitution_warning is not None:
-            # Resolved: a substitution the spec allows is now what is recorded.
-            self.experimenter.clear_warning(self._substitution_warning)
-            self._substitution_warning = None
-
-    def _warn_substitution(self, text: str) -> None:
-        self._substitution_warning = text
-        self.experimenter.set_warning(text)
+        self.experimenter.show_substitution(
+            warnings["substitution_recorded" if lower else "substitution_not_lower"].format(
+                filament=label_g),
+            CONFIRMED if lower else QUERIED,
+        )
+        if self.delivered_elapsed_s is not None:
+            self.show_after_delivery()
         self.experimenter.refresh()
 
     def _rated(self, response) -> None:
@@ -1062,6 +1075,7 @@ class _Series(Procedure):
     def disconnect_actions(self) -> None:
         self.experimenter.discard_requested.disconnect(self._on_discard)
         self._set_discardable(None)
+        self.experimenter.set_progress("")
 
     def suspend_offers(self) -> None:
         """A re-calibration runs in this protocol's place (docs/LOG.md N7.F12a1): Discard is
@@ -1093,7 +1107,11 @@ class _Series(Procedure):
 
         def prepare() -> None:
             self.rig.show_between()
-            self.experimenter.set_instruction(self._ready_instruction())
+            self.experimenter.set_instruction(self._ready_instruction(), GET_READY)
+            # The zone the series is in, on the diagram beside it (S, 21 Oct 2026); not beside
+            # a sentence to read aloud, which has the instruction's whole width (LOG N7.F17e).
+            if not self._ready_is_read_aloud():
+                self.experimenter.set_target(self.region)
             self.experimenter.refresh()
 
         self.await_proceed(lambda: self.train_then((self.rating_scale(),), then), prepare)
@@ -1101,6 +1119,10 @@ class _Series(Procedure):
     def _ready_instruction(self) -> str:
         """What the experimenter is told before the start: what is about to be applied."""
         raise NotImplementedError
+
+    def _ready_is_read_aloud(self) -> bool:
+        """Whether the ready instruction is a sentence to say to the participant."""
+        return False
 
     def _region_name(self) -> str:
         return self.experimenter.text["terms"]["regions"][self.region]
@@ -1136,13 +1158,63 @@ class _Series(Procedure):
         """Run one application; `on_rated(trial, response)` receives it."""
         self._set_discardable(None)
         self.applications += 1
+        self.experimenter.set_progress(self._progress())
         made: list[_RatedTrial] = []
 
         def make() -> _RatedTrial:
             made[:] = [make_trial()]
+            made[0].after_delivery = lambda: self._show_after_delivery(made[0])
             return made[0]
 
         self.run_trial(make, lambda response: on_rated(made[0], response))
+
+    def _progress(self) -> str:
+        """How far the series has got, for beside the heading (S, 21 Oct 2026)."""
+        raise NotImplementedError
+
+    # -- what to have ready while the participant rates (S, 21 Oct 2026) -----------------
+
+    def next_after(
+        self, trial: _RatedTrial
+    ) -> list[Application | BrushApplication | None] | None:
+        """What would come after `trial`, for each way its rating could fall that changes
+        it: worked out on copies, deciding and logging nothing. None in the list where the
+        series would end; None for the whole where it cannot be foreseen. A rating at the top
+        of the scale can also cap the next one (SPEC.md 8.2); that is not foreseen here, and
+        the interval shows what was decided."""
+        raise NotImplementedError
+
+    def _show_after_delivery(self, trial: _RatedTrial) -> None:
+        """While the participant rates: the next application to have ready, where the rating
+        cannot change it; the two filaments it could be, where it decides between them; and
+        under "Wait" where it decides more than that. Never the rating itself."""
+        after = self.next_after(trial)
+        if after is None:
+            self.instruct(RATING_NEXT_OPEN, WAIT)
+            return
+        given = [application for application in after if application is not None]
+        if not given:
+            self.instruct(RATING_LAST, WAIT)
+            return
+        if len(given) < len(after) or len({a.site_index for a in given}) > 1:
+            self.instruct(RATING_NEXT_OPEN, WAIT)
+            return
+        application = given[0]
+        if isinstance(application, BrushApplication):
+            self.instruct(RATING_NEXT_BRUSH, GET_READY)
+        else:
+            labels = sorted({a.filament_label_g for a in given},
+                            key=lambda g: ladder_index(self.filaments, g))
+            if len(labels) == 1:
+                self.instruct(RATING_NEXT_FILAMENT, GET_READY, filament=labels[0])
+            elif len(labels) == 2:
+                self.instruct(RATING_NEXT_EITHER, GET_READY, lighter=labels[0],
+                              heavier=labels[1])
+            else:
+                self.instruct(RATING_NEXT_OPEN, WAIT)
+                return
+        self.experimenter.set_target(self.region, application.site_index,
+                                     filament=isinstance(application, Application))
 
     def interval(self, table: str, trial: _RatedTrial) -> None:
         """The jittered wait after an application, during which it may be discarded."""
@@ -1174,7 +1246,7 @@ class _Series(Procedure):
             # Also what a resume lands on, so the stop screen does not outlast the stop.
             self.participant.show_rest(wait_s)
             if self._expected is None:
-                self.instruct(BETWEEN_APPLICATIONS if received else BETWEEN_DISCARDED)
+                self.instruct(BETWEEN_APPLICATIONS if received else BETWEEN_DISCARDED, WAIT)
             else:
                 self._shown_seconds = None
                 self._show_expected()
@@ -1191,14 +1263,15 @@ class _Series(Procedure):
             return
         self._shown_seconds = seconds
         expected = self._expected
+        # Under "Wait", with the seconds left until it is due, and where it goes on the
+        # diagram (S, 16 and 21 Oct 2026).
         if isinstance(expected, BrushApplication):
-            self.instruct(NEXT_BRUSH, seconds=seconds, site=expected.site_index,
-                          region=self._region_name())
-            return
-        filament = self.filaments[ladder_index(self.filaments, expected.filament_label_g)]
-        self.instruct(NEXT_FILAMENT, seconds=seconds, site=expected.site_index,
-                      region=self._region_name(), filament=expected.filament_label_g,
-                      force_mn=filament.force_nominal_mn)
+            self.instruct(NEXT_BRUSH, WAIT, wait_s=seconds)
+        else:
+            self.instruct(NEXT_FILAMENT, WAIT, wait_s=seconds,
+                          filament=expected.filament_label_g)
+        self.experimenter.set_target(self.region, expected.site_index,
+                                     filament=isinstance(expected, Application))
 
     def _received(self, trial: _RatedTrial) -> str:
         if isinstance(trial, BrushTrial):
@@ -1391,6 +1464,9 @@ class LongProtocol(_Series):
         )
         self.wait_to_start(self._next)
 
+    def _ready_is_read_aloud(self) -> bool:
+        return self.session.vas_training_due(PAIN_SCALE)
+
     def _ready_instruction(self) -> str:
         # The session's first pain measure: what is about to happen is said to the participant
         # first, and the pain scale's training follows the go (SPEC.md 10.6).
@@ -1442,11 +1518,13 @@ class LongProtocol(_Series):
             self._rated,
         )
 
-    def _application(self, purpose: str, index: int, site: int) -> Application:
+    def _application(self, purpose: str, index: int, site: int,
+                     offset: int = 1) -> Application:
+        """`offset` 1 is the next application; the one being given now is `offset` 0."""
         return Application(
             protocol=LONG,
             region=self.region,
-            trial_index=self.applications + 1,
+            trial_index=self.applications + offset,
             purpose=purpose,
             filament_label_g=self.filaments[index].label_g,
             site_index=site,
@@ -1465,6 +1543,33 @@ class LongProtocol(_Series):
         placed = place(self.cap, self.rotation, self.region, planned.index)
         assert placed is not None, "a ceiling of zero ends the run before placing"
         return self._application(planned.purpose, *placed)
+
+    def _progress(self) -> str:
+        # Its length is the ratings' to decide, so only the count so far.
+        return self.experimenter.text["status"][PROGRESS_OPEN].format(done=self.applications)
+
+    def next_after(self, trial: PinprickTrial) -> list[Application | None] | None:
+        """For a rating below the target and one at it, on copies of the search: the two the
+        rating decides between, or the same one twice once the measurement plan is set. Not
+        where either would bracket the crossing: the plan it draws then is shuffled with the
+        session's random numbers after the interval's own draw, so it cannot be told yet."""
+        planned, _site = self._last
+        applied = ladder_index(self.filaments, trial.applied_label_g)
+        ceiling = self.cap.ceiling(self.region, self.rotation.n_sites)
+        after = []
+        for rating in (0.0, self.target):
+            state = copy.deepcopy(self.state)
+            state.record(Outcome(planned.index, applied, rating, planned.purpose))
+            if state.measuring and not self.state.measuring:
+                return None
+            following = None if ceiling == 0 else state.next(ceiling)
+            if state.measuring and not self.state.measuring:
+                return None  # the cap bracketed it
+            placed = (None if following is None
+                      else place(self.cap, self.rotation, self.region, following.index))
+            after.append(None if placed is None
+                         else self._application(following.purpose, *placed, offset=1))
+        return after
 
     def _rated(self, trial: PinprickTrial, response) -> None:
         planned, site = self._last
@@ -1525,7 +1630,7 @@ class LongProtocol(_Series):
             # What is due now, in place of the last trial's instruction and site (which this
             # clears).
             self.experimenter.set_instruction(self.instruction_text(
-                f"f40_fit_review{NO_RERUNS_LEFT}" if exhausted else "f40_fit_review"))
+                f"f40_fit_review{NO_RERUNS_LEFT}" if exhausted else "f40_fit_review"), NOW)
             self.experimenter.set_actions_enabled(fit_accept=True, fit_rerun=not exhausted)
             self.fit_ready.emit(fit)
 
@@ -1719,6 +1824,17 @@ class _RatingSeries(_Series):
         if len(self.ratings) == self.n_trials:
             return None
         return self._planned()
+
+    def _progress(self) -> str:
+        # The application under way, of the fixed count (S, 21 Oct 2026: "x/N").
+        return self.experimenter.text["status"][PROGRESS].format(
+            done=len(self.ratings) + 1, total=self.n_trials)
+
+    def next_after(self, trial: _RatedTrial) -> list[Application | BrushApplication | None]:
+        """The rating does not change what follows: the next of the count, or the end."""
+        if len(self.ratings) + 1 == self.n_trials:
+            return [None]
+        return [self._planned()]
 
     def _planned(self) -> Application | BrushApplication | None:
         """The next application if one is still to come, None if none can be given."""

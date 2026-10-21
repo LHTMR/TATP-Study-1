@@ -47,7 +47,7 @@ from tatp.resume import RECALIBRATION_EVENT, RESUME_CHOICE, ResumeState
 from tatp.session import Session
 from tatp.touchcal_maths import REFERENCE_STRONGER, TEST_STRONGER, Delivery
 from tatp.trials import Choice, Cue, ExperimenterChoice, Ramp, Trial
-from tatp.ui.experimenter import ExperimenterWindow
+from tatp.ui.experimenter import WAIT, ExperimenterWindow
 from tatp.ui.participant import SIDES, ParticipantWindow
 from tatp.units import MS_PER_S
 
@@ -1098,7 +1098,7 @@ class DeliveryStart(Trial):
 
     def start(self) -> None:
         self.session.garment.stop()
-        self.instruct(TOUCH_START_INSTRUCTION)
+        self.instruct(TOUCH_START_INSTRUCTION, WAIT)
         levels = self.delivery.pressure_kpa or {}
         self.ramp_then(levels, lambda: self.cue_then(self._cued))
 
@@ -1575,7 +1575,7 @@ class TouchCalibration(Procedure):
         self.experimenter.set_instruction(self.instruction_text(
             "touchcal_bracket", index=self._anchor_count - len(plans) + 1,
             count=self._anchor_count,
-            target=self.experimenter.text["terms"]["anchor_targets"][plan.target_key]))
+            target=self.experimenter.text["terms"]["anchor_targets"][plan.target_key]), WAIT)
         self.run_trial(lambda: Cue(*self._windows()), on)
 
     def _estimate(self) -> None:
@@ -1626,11 +1626,9 @@ class TouchCalibration(Procedure):
             return
         # "x/N answered" (S, 5 Oct 2026): the same count in every condition, and never what
         # was answered (SPEC.md 16).
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touchcal_estimation"].format(
-                answered=len(self.estimates), total=len(self.estimates) + len(plans)
-            )
-        )
+        self.experimenter.set_instruction(self.instruction_text(
+            "touchcal_estimation", answered=len(self.estimates),
+            total=len(self.estimates) + len(plans)), WAIT)
         self.experimenter.refresh()
 
         def presented(outcome) -> None:
@@ -1898,11 +1896,9 @@ class TouchCalibration(Procedure):
 
     def _channel_instruction(self, key: str, channel: int) -> None:
         """A step 3 or 4 instruction, with which of the other channels this is."""
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"][key].format(
-                channel=channel, index=self.others.index(channel) + 1, count=len(self.others)
-            )
-        )
+        self.experimenter.set_instruction(self.instruction_text(
+            key, channel=channel, index=self.others.index(channel) + 1,
+            count=len(self.others)), WAIT)
 
     def _match_channel(self, channel: int, then: Callable[[], None], zero_retries: int = 0,
                        readjust: bool = False):
@@ -2142,9 +2138,7 @@ class TouchCalibration(Procedure):
             for index in range(int(self.touch["pleasantness_adjustments"]))
         ]
         settings: list[float] = []
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touchcal_pleasantness"]
-        )
+        self.experimenter.set_instruction(self.instruction_text("touchcal_pleasantness"), WAIT)
 
         def next_plan() -> None:
             if len(settings) == len(plans):
@@ -2187,9 +2181,7 @@ class TouchCalibration(Procedure):
             self._after_evenness()
             return
         levels = self._levels(self.pleasant_kpa, "evenness check")
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touchcal_evenness"]
-        )
+        self.experimenter.set_instruction(self.instruction_text("touchcal_evenness"), WAIT)
 
         def answered(side: str) -> None:
             self.session.garment.stop()
@@ -2261,9 +2253,7 @@ class TouchCalibration(Procedure):
         order = list(self.pattern_config["preference_candidates"])
         self.session.rng.shuffle(order)
         levels = self._levels(self.pleasant_kpa, "preference selection")
-        self.experimenter.set_instruction(
-            self.experimenter.text["instructions"]["touchcal_preference"]
-        )
+        self.experimenter.set_instruction(self.instruction_text("touchcal_preference"), WAIT)
 
         def chosen(name: str) -> None:
             self.session.garment.stop()
@@ -2285,6 +2275,40 @@ class TouchCalibration(Procedure):
     # -- the end -----------------------------------------------------------------------
 
     def _finish_calibration(self, preferred: str) -> None:
+        result = self._result(preferred)
+        self.experimenter.set_instruction("")
+        self.finish(result)
+
+    def unrun_result(self, why: str) -> TouchCalibrationResult:
+        """A calibration that never ran, for a demonstration that jumped past it (S, 21 Oct
+        2026: "it should actually skip"): `_skip`'s fallbacks with no ratings at all -- the
+        targets read off the garment's range, every gain one, the level between P30 and P80,
+        the fixed pattern for the participant-preferred condition -- recorded as skipped and
+        not valid for analysis, as a skip is. On the mock garment only (`tatp/demo.py`): it
+        sets pressures no one has felt."""
+        garment = self.session.garment
+        # Stage boundary (CLAUDE.md): never on anything that may be worn.
+        assert self.session.demo and not garment.worn, (
+            f"a calibration that never ran, on {garment.driver_name}"
+        )
+        self.skipped = True
+        self.valid = False
+        self.stage1_pass = False
+        self.session.log("touchcal_skipped", origin="software", severity="warning",
+                         detail=f"{why}; never run, not valid for analysis")
+        self.bracket = self._device_range()
+        self._fallback(("skipped",))
+        self._set_targets()
+        for channel in self.others:
+            self.gains[channel] = 1.0
+            self.gain_sources[channel] = GAIN_SKIPPED
+        self.pleasant_kpa = maths.geometric_mean(
+            [self.targets[self.low_pct], self.targets[self.high_pct]]
+        )
+        return self._result(self.pattern_config["fixed_ct_pattern"])
+
+    def _result(self, preferred: str) -> TouchCalibrationResult:
+        """The calibration's result, its channels written and its end logged."""
         conditions = self.pattern_config["condition_pattern"]
         sham_kpa = self.targets[self.sham_pct]
         plan = {
@@ -2334,8 +2358,7 @@ class TouchCalibration(Procedure):
             + ("; skipped" if self.skipped else "")
             + ("" if self.valid else "; not valid for analysis"),
         )
-        self.experimenter.set_instruction("")
-        self.finish(result)
+        return result
 
     def _write_channels(self, preferred: str, levels: dict, clamped: dict) -> None:
         """One row per channel: what a resumed session needs to deliver (SPEC.md 15).

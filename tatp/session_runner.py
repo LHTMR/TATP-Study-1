@@ -79,6 +79,7 @@ from tatp.touchcal import (
 )
 from tatp.touchcal_maths import Delivery
 from tatp.trials import MessageConfirm
+from tatp.ui.experimenter import NOW, WAIT
 from tatp.ui.participant import STANDBY_SCREEN
 from tatp.units import MIN_PER_H, S_PER_MIN
 
@@ -87,6 +88,8 @@ WELCOME_SCREEN = "welcome"
 SESSION_STARTING_SCREEN = "session_starting"
 END_SCREEN = "session_end"
 BASELINE_INTRO_SCREEN = "intro_baseline"
+# The rest between the intervention's blocks (S, 21 Oct 2026).
+STANDBY_INTERVENTION_SCREEN = "standby_intervention"
 # An experimenter text key, not wording: the last instruction, once the files are closed.
 SESSION_COMPLETE_INSTRUCTION = "session_complete"
 SESSION_ABORTED_INSTRUCTION = "session_aborted"
@@ -118,6 +121,8 @@ REKINDLE_END = "rekindle_end"
 READY_TOUCH_BLOCK = "ready_touch_block"
 # The stage that marks the skin before pre-sensitisation's measures (docs/LOG.md N7.F16l).
 MARK_ZONE_STAGE = f"{PRE_S}.mark_zone"
+SESSION_END_STAGE = "session_end"
+LINE_BREAK = "\n"
 FIRST_SESSION = 1
 
 
@@ -216,6 +221,43 @@ def stage_layout(schedule: Schedule) -> list[tuple[str, str, Upcoming | None]]:
     return stages
 
 
+def stage_key(stage_id: str) -> str:
+    """A stage's key in the experimenter text's `stages`: what it is, whichever time point."""
+    if stage_id.startswith(BLOCK + "."):
+        return BLOCK
+    if stage_id in (TOUCH_CALIBRATION, SENSITISATION, REKINDLE, SESSION_END_STAGE):
+        return stage_id
+    prefix, _, rest = stage_id.partition(".")
+    return stage_id.replace(".", "_") if prefix in (CAPSAICIN, INTERVENTION) else rest
+
+
+def stage_group(stage_id: str, phase: str) -> str:
+    """The phase a stage is shown under, in the row of a phase's steps and in Jump to: the
+    phase it begins in (`stage_layout`), as the phase row above it shows -- but the touch
+    calibration's own, which it sets as it begins."""
+    return TOUCH_CALIBRATION if stage_id == TOUCH_CALIBRATION else phase
+
+
+def stage_names(stage_id: str, text: dict, schedule: Schedule) -> tuple[str, str]:
+    """(short, full) for a stage, from the experimenter text's `stages_short` and `stages`."""
+    key = stage_key(stage_id)
+    values = {}
+    if key == BLOCK:
+        block = next(b for b in schedule.blocks if f"{BLOCK}.{b.index}" == stage_id)
+        values = {"block": block.index, "type": text["terms"]["block_types"][block.type]}
+    return text["stages_short"][key].format(**values), text["stages"][key].format(**values)
+
+
+def stage_plan(schedule: Schedule, text: dict) -> dict[str, list[tuple[str, str, str]]]:
+    """Every phase's stages in order, (id, short, full): the schedule's, the same in every
+    condition (SPEC.md 16)."""
+    plan: dict[str, list[tuple[str, str, str]]] = {}
+    for stage_id, phase, _at in stage_layout(schedule):
+        plan.setdefault(stage_group(stage_id, phase), []).append(
+            (stage_id, *stage_names(stage_id, text, schedule)))
+    return plan
+
+
 class _QuietDeliveryStart(DeliveryStart):
     """`DeliveryStart` that leaves the experimenter screen to the runner (LOG N7.D17).
 
@@ -231,7 +273,7 @@ class _QuietDeliveryStart(DeliveryStart):
     prompting = False
     cueing = False
 
-    def instruct(self, key: str, **values: object) -> None:
+    def instruct(self, key: str, heading: str | None = None, **values: object) -> None:
         """Nothing on the experimenter screen."""
 
     def cue_then(self, then) -> None:
@@ -279,7 +321,7 @@ class TouchBlock(Procedure):
         def prepare() -> None:
             self.rig.show_between()
             self.experimenter.set_instruction(
-                self.instruction_text(READY_TOUCH_BLOCK, block=self.block_index)
+                self.instruction_text(READY_TOUCH_BLOCK, block=self.block_index), NOW
             )
             self.experimenter.refresh()
 
@@ -288,7 +330,9 @@ class TouchBlock(Procedure):
     def _next(self) -> None:
         # "x/N answered", as in the estimation run: the same in every condition.
         self.experimenter.set_instruction(
-            self.instruction_text("touch_block", answered=self.done_count, total=len(self.plan))
+            self.instruction_text("touch_block", answered=self.done_count,
+                                  total=len(self.plan)),
+            WAIT,
         )
         scale = self.plan[self.done_count]
         self.run_trial(
@@ -340,6 +384,8 @@ class SessionRunner(Procedure):
         # the same in every condition.
         self.phases = session_phases(self.session.schedule)
         self.experimenter.set_timeline(self.phases)
+        self.experimenter.set_stage_plan(stage_plan(self.session.schedule,
+                                                    self.experimenter.text))
         # Stages a resumed session found completed (`_resume`); empty for a fresh session.
         self._completed: frozenset[str] = frozenset()
         self._launch: Callable[[], None] | None = None
@@ -450,7 +496,10 @@ class SessionRunner(Procedure):
         fixed = {
             "setup.garment": self._fit_garment,
             "setup.welcome": self._welcome,
-            "setup.masking_check": lambda: self._protocol(lambda: MaskingCheck(self.rig)),
+            # From the noise level it sets on, the noise is heard only while the garment may
+            # run (`tatp.audio.NoiseGate`; S, 21 Oct 2026).
+            "setup.masking_check": lambda: self._protocol(lambda: MaskingCheck(self.rig),
+                                                          lambda _: self.session.noise.arm()),
             "setup.stop_rehearsal": lambda: self._protocol(lambda: StopRehearsal(self.rig)),
             "touch_calibration": self._touch_calibration,
             "touch_calibration.baseline": self._baseline,
@@ -470,7 +519,7 @@ class SessionRunner(Procedure):
         primary_g = self.pinprick["primary_filament_label_g"]
         return {
             "mark_zone": lambda: self.await_proceed(self._stage_done,
-                                                    self._standby("mark_zone")),
+                                                    self._standby("mark_zone", NOW)),
             "long": lambda: self._long(phase),
             "mapping": self._mapping,
             "short_primary": lambda: self._protocol(
@@ -497,6 +546,7 @@ class SessionRunner(Procedure):
             self.session.set_phase(stage.phase)
         self.session.log("stage_started", detail=stage.id)
         self.experimenter.new_stage()
+        self.experimenter.set_stage(stage_group(stage.id, stage.phase), stage.id)
         # After the row, so what a listener logs falls inside the stage it belongs to.
         self.stage_started.emit(stage.id)
         # Each stage draws from a stream of its own, derived from the seed and the stage id
@@ -529,10 +579,12 @@ class SessionRunner(Procedure):
 
         self.run_child(make, done)
 
-    def _standby(self, instruction: str, **values: object) -> Callable[[], None]:
+    def _standby(self, instruction: str, heading: str,
+                 **values: object) -> Callable[[], None]:
         def prepare() -> None:
             self._show_between()
-            self.experimenter.set_instruction(self.instruction_text(instruction, **values))
+            self.experimenter.set_instruction(self.instruction_text(instruction, **values),
+                                              heading)
             self.experimenter.set_status("")
             self.experimenter.refresh()
 
@@ -550,12 +602,18 @@ class SessionRunner(Procedure):
         if self._delivery is not None and self._delivery.prompting:
             self.participant.show_message(SELF_START_SCREEN)
         elif self._delivery is None or not self._delivery.cueing:
-            self.participant.show_message(STANDBY_SCREEN)
+            self.participant.show_message(self._standby_screen())
+
+    def _standby_screen(self) -> str:
+        """The rest screen: while the intervention's touch is on, the one saying the screen
+        brings what comes next, since between blocks it does (S, 21 Oct 2026); otherwise the
+        one saying the experimenter will. Which follows the touch, not the condition."""
+        return STANDBY_INTERVENTION_SCREEN if self._touch_on else STANDBY_SCREEN
 
     # == setup and touch calibration ===========================================================
 
     def _fit_garment(self) -> None:
-        standby = self._standby("fit_garment")
+        standby = self._standby("fit_garment", NOW)
 
         def prepare() -> None:
             standby()
@@ -566,7 +624,7 @@ class SessionRunner(Procedure):
 
     def _welcome(self) -> None:
         # What happens next, which the experimenter is about to see from across the divider.
-        self.instruct("welcome")
+        self.instruct("welcome", WAIT)
         self.run_trial(
             lambda: MessageConfirm(
                 self.session, self.participant, self.experimenter,
@@ -580,8 +638,11 @@ class SessionRunner(Procedure):
             # Every condition's delivery, computed identically; which one is used is decided
             # only when the intervention starts (SPEC.md 16).
             self._calibrated(result)
+            self.session.noise.want(False, "touch calibration done")
             self._offer_recalibration()
 
+        # The garment runs through the calibration, so the noise masks it (Bilaga 3a).
+        self.session.noise.want(True, "touch calibration")
         self._protocol(self._new_calibration, calibrated)
 
     def _new_calibration(self) -> TouchCalibration:
@@ -664,6 +725,13 @@ class SessionRunner(Procedure):
                 return Prior(start, pinprick.CONFIG_DEFAULT)
             return prior_for(config, phase, number, previous)
         previous_phase = PRE_S if phase == POST_S else POST_S
+        if previous_phase not in self.f40_mn:
+            # Only a demonstration that jumped past the earlier estimate gets here: started as
+            # a session with no earlier estimate is (docs/LOG.md N7.D8), and said so.
+            self._jump_fallback(f"{phase} starts from the configured filament: the "
+                                f"{previous_phase} estimate was jumped past")
+            return Prior(self.pinprick["start_filament_label_g_session1_pre_s"],
+                         pinprick.CONFIG_DEFAULT)
         return prior_for(config, phase, number, self.f40_mn[previous_phase])
 
     def _long(self, phase: str) -> None:
@@ -681,27 +749,18 @@ class SessionRunner(Procedure):
         self._protocol(make, estimated)
 
     def _mapping(self) -> None:
-        """SPEC.md 8.4, 10.5: the noise stops for the verbal exchange and resumes after it."""
-        self.session.audio.stop_noise("area mapping")
-        phases = [*self.ledger.time_points]
-        if self.session.phase not in phases:
-            phases.append(self.session.phase)
-        # The distances can be entered from now on, for this time point and any earlier one.
-        self.experimenter.set_mapping_phases(phases)
+        """SPEC.md 8.4. The noise is silent for the verbal exchange, as it is whenever the
+        garment cannot run (`tatp.audio.NoiseGate`)."""
 
         def make() -> AreaMapping:
             mapping = AreaMapping(self.rig, self.ledger)
             mapping.pacing_cue.connect(self._pacing_tick)
             return mapping
 
-        self._protocol(make, lambda _: self.session.audio.resume_noise("area mapping ended"))
+        self._protocol(make)
 
     def _pacing_tick(self, path: int, cue: int) -> None:
         self.session.audio.pacing_tick(f"path {path}, cue {cue}")
-        if cue == 1:
-            # The mapping walks the secondary zone towards the primary. Set on the path's first
-            # cue, because the path's own instruction clears the diagram's target.
-            self.experimenter.set_target(SECONDARY, filament=True)
 
     def _preview(self, procedure) -> None:
         """SPEC.md 11.1. The procedures take the preview down themselves once decided."""
@@ -721,7 +780,8 @@ class SessionRunner(Procedure):
             self._stage_done()
 
         heat_min = self.session.schedule.window(SENSITISATION).duration_min
-        self.await_proceed(started, self._standby("thermode_start", minutes=f"{heat_min:g}"))
+        self.await_proceed(started, self._standby("thermode_start", NOW,
+                                                  minutes=f"{heat_min:g}"))
 
     def _capsaicin_apply(self, at: Upcoming) -> None:
         def applied() -> None:
@@ -745,12 +805,12 @@ class SessionRunner(Procedure):
 
         def ended() -> None:
             self._stop_touch("the intervention has ended")
-            self.await_proceed(self._stage_done, self._standby("intervention_end"))
+            self.await_proceed(self._stage_done, self._standby("intervention_end", NOW))
 
         # A re-calibration that ends after this is due does not start the touch again only
         # for this to stop it (`_recalibrated`).
         self._touch_off_due_s = at.due_s
-        self._wait_until(at.due_s, ended, self._standby("waiting"))
+        self._wait_until(at.due_s, ended, self._standby("waiting", WAIT))
 
     # == the intervention ======================================================================
 
@@ -764,13 +824,14 @@ class SessionRunner(Procedure):
         in the participant-preferred condition, the self-start prompt until they press.
         """
         self._touch_on = True
+        self.session.noise.want(True, "the garment's touch")
         self._start_delivery()
         self._offer_recalibration()
 
         def show() -> None:
             self._show_between()
             self.experimenter.set_instruction(
-                self.experimenter.text["instructions"][TOUCH_START_INSTRUCTION]
+                self.instruction_text(TOUCH_START_INSTRUCTION), WAIT
             )
             self.experimenter.set_status("")
             self.experimenter.refresh()
@@ -814,7 +875,7 @@ class SessionRunner(Procedure):
         # Standby unless a protocol has the screen: a block still waiting for its go has not
         # taken it yet (N7.F11c8).
         if self._child is None or self._child.awaiting_go:
-            self.participant.show_message(STANDBY_SCREEN)
+            self.participant.show_message(self._standby_screen())
         if self._settled_then is not None:
             then, self._settled_then = self._settled_then, None
             then()
@@ -880,6 +941,7 @@ class SessionRunner(Procedure):
         if self.session.garment.connected:
             self.session.garment.stop()
         self.session.log("garment_deactivated", detail=why)
+        self.session.noise.want(False, why)
         self._offer_recalibration()
 
     # == re-calibration, docs/LOG.md N7.F12a1 ==================================================
@@ -1032,7 +1094,7 @@ class SessionRunner(Procedure):
                 self._start_delivery()
             self._show_between()
             self.experimenter.set_instruction(
-                self.experimenter.text["instructions"][TOUCH_START_INSTRUCTION]
+                self.instruction_text(TOUCH_START_INSTRUCTION), WAIT
             )
             self.experimenter.set_status("")
             self.experimenter.refresh()
@@ -1102,6 +1164,12 @@ class SessionRunner(Procedure):
         def armed() -> None:
             self._arm_launch(block)
             if block.type == "pinprick":
+                if POST_S not in self.chosen_filament_label_g:
+                    # A demonstration that jumped past the post-S estimate.
+                    self.chosen_filament_label_g[POST_S] = self.pinprick[
+                        "start_filament_label_g_session1_pre_s"]
+                    self._jump_fallback("pinprick blocks use the configured filament: the "
+                                        "post-sensitisation estimate was jumped past")
                 filament = self.chosen_filament_label_g[POST_S]
                 self.run_child(
                     lambda: ShortProtocol(
@@ -1117,7 +1185,7 @@ class SessionRunner(Procedure):
                 )
 
         self._set_alarms(at, f"block {block.index}")
-        self._wait_until(at.due_s, armed, self._standby("waiting"))
+        self._wait_until(at.due_s, armed, self._standby("waiting", WAIT))
 
     def _arm_launch(self, block: Block) -> None:
         """The experimenter's go on the armed block both launches it and starts its protocol.
@@ -1162,7 +1230,7 @@ class SessionRunner(Procedure):
             # SPEC.md 7.4, 12.3: deactivated for the rekindle, logged.
             self.session.set_phase(REKINDLE)
             self._stop_touch(REKINDLE)
-            self.await_proceed(started, self._standby("thermode_rekindle"))
+            self.await_proceed(started, self._standby("thermode_rekindle", NOW))
 
         def started() -> None:
             self._clear_alarms()
@@ -1173,7 +1241,7 @@ class SessionRunner(Procedure):
             # Counted down to the heat's end, which is the next thing to act on, not to the
             # next block (15 Oct 2026 pilot review).
             end_s = heat_t_s + duration_s
-            standby = self._standby("rekindle_heating")
+            standby = self._standby("rekindle_heating", WAIT)
 
             def prepare() -> None:
                 self.session.set_upcoming(PHASE, REKINDLE_END, end_s)
@@ -1198,7 +1266,7 @@ class SessionRunner(Procedure):
                 self.session.log("rekindle_heat_confirmed", origin="experimenter")
                 heating(heat_t_s)
 
-            self.await_proceed(confirmed, self._standby("rekindle_resumed"))
+            self.await_proceed(confirmed, self._standby("rekindle_resumed", NOW))
 
         def ended() -> None:
             # The thermode comes off before the garment's touch starts again under it. The
@@ -1209,7 +1277,7 @@ class SessionRunner(Procedure):
             following = self._next_upcoming(self.stage_index + 1)
             if following is not None:
                 self._set_alarms(following, self._alarm_name(following), keep=True)
-            standby = self._standby("rekindle_remove")
+            standby = self._standby("rekindle_remove", NOW)
 
             def prepare() -> None:
                 self._show_upcoming(self.stage_index + 1)
@@ -1248,7 +1316,125 @@ class SessionRunner(Procedure):
             return
         self._set_alarms(at, REKINDLE)
         self._touch_off_due_s = at.due_s  # as at the intervention's end
-        self._wait_until(at.due_s, armed, self._standby("waiting"))
+        self._wait_until(at.due_s, armed, self._standby("waiting", WAIT))
+
+    # == a demonstration's Jump to (S, 21 Oct 2026) ========================================
+
+    def jumpable(self, stage_id: str) -> bool:
+        """Whether Jump to may go to `stage_id` now: not while the session is interrupted, being
+        re-calibrated or closed, and on a garment that may be worn not to the intervention's
+        touch before the touch calibration has run, which only a real one may set."""
+        if (self.session.closed or self.rig.interruptions.active is not None
+                or self.rig.interruptions.resuming or self._recalibrating):
+            return False
+        return not (self.session.garment.worn and self.deliveries is None
+                    and self._touches(stage_id))
+
+    def _touches(self, stage_id: str) -> bool:
+        """Whether the intervention's touch is on when `stage_id` begins."""
+        stage = next(s for s in self.stages if s.id == stage_id)
+        return stage.phase == INTERVENTION and stage_id != "intervention.start"
+
+    def jump_to(self, stage_id: str) -> None:
+        """Go straight to `stage_id`, back or forward, without running the stages between:
+        a demonstration's Jump to (S, 21 Oct 2026: "it should actually skip, not fast
+        forward ... keep manual/auto as it was"). Who presses is untouched.
+
+        What is running is cancelled as an abort cancels it, and an open block is closed
+        aborted. Session time moves on, never back, to where the stage would begin: its own
+        scheduled time, less `demo.skip_lead_s` so its countdown is still seen, or the latest
+        scheduled time before it; t=0 is set now if the stage comes after it. The garment's
+        touch is on exactly as it would be there. A stage run again writes its rows again
+        beside the earlier ones, which stand; the log's `demo_jump` says which came after.
+        A value a jumped-past stage would have measured comes from the configured fallback,
+        logged as `demo_jump_fallback`.
+        """
+        assert self.session.demo, "Jump to is a demonstration's"
+        assert self.jumpable(stage_id), f"{stage_id} cannot be jumped to now"
+        ids = [stage.id for stage in self.stages]
+        index = ids.index(stage_id)
+        here = self.stages[self.stage_index].id
+        back = index <= self.stage_index
+        self.session.log(
+            "demo_jump", severity="warning",
+            detail=f"from {here} to {stage_id}" + (
+                "; run again, its earlier rows stand" if back else ""),
+        )
+        self._stop_for_jump()
+        self._move_clock_to(index)
+        touches = self._touches(stage_id) and not (
+            stage_id == "intervention.end"
+            and self.session.clock.t_session_s() >= self.stages[index].upcoming.due_s)
+        if self._touch_on and not touches:
+            self._stop_touch("demonstration jump")
+        if touches and not self._touch_on:
+            self._fallbacks_for_touch()
+            self.session.set_phase(INTERVENTION)
+            self._deliver(lambda: self._run_stage(index))
+            return
+        self._run_stage(index)
+
+    def _stop_for_jump(self) -> None:
+        """Everything under way stops, writing nothing more, as it does for an abort."""
+        self._disarm()
+        self._clear_alarms()
+        if self._child is not None:
+            self._child.cancel()
+            self._child = None
+        self._halt()
+        self._step = None
+        self._on_go = None
+        self.waiting_until_s = None
+        self._settled_then = None
+        self.experimenter.hide_fit_preview()
+        self.experimenter.withdraw_substitution()
+        self.experimenter.offer_alternative(None)
+        if self.session.block_index is not None:
+            self.session.end_block(aborted=True)
+
+    def _move_clock_to(self, index: int) -> None:
+        """Session time to where stage `index` would begin, if that is later than now."""
+        sensitisation = [stage.id for stage in self.stages].index(SENSITISATION)
+        clock = self.session.clock
+        if index > sensitisation and not clock.session_started:
+            self.session.start_sensitisation()
+        if not clock.session_started:
+            return
+        lead_s = float(self.session.config.study1["demo"]["skip_lead_s"])
+        target = self.stages[index].upcoming
+        earlier = [stage.upcoming.due_s for stage in self.stages[:index]
+                   if stage.upcoming is not None]
+        if target is not None:
+            to_s = target.due_s - lead_s
+        elif earlier:
+            to_s = max(earlier)
+        else:
+            return
+        ahead_s = to_s - clock.t_session_s()
+        if ahead_s > 0:
+            clock.skip(ahead_s)
+            self.session.garment.skip(ahead_s)
+
+    def _fallbacks_for_touch(self) -> None:
+        """What the intervention's touch needs from stages jumped past: a calibration, and
+        the touch scales' training, which the calibration gives."""
+        if self.deliveries is None:
+            calibration = self._new_calibration()
+            self._calibrated(calibration.unrun_result("demonstration jump"))
+            self._jump_fallback("the touch is delivered at the fallback levels: the touch "
+                                "calibration was jumped past")
+        scales = self.session.config.study1["touch_block"]
+        untrained = [scale for scale in [*scales["repeated_scales"], *scales["once_scales"]]
+                     if self.session.vas_training_due(scale)]
+        if untrained:
+            self.session.vas_trained.update(untrained)
+            self._jump_fallback(f"no training for {', '.join(untrained)}: the touch "
+                                "calibration, which gives it, was jumped past")
+
+    def _jump_fallback(self, detail: str) -> None:
+        # Stage boundary (CLAUDE.md): a session never has a stage jumped past.
+        assert self.session.demo, f"a jump fallback in a session: {detail}"
+        self.session.log("demo_jump_fallback", severity="warning", detail=detail)
 
     # == the end ===============================================================================
 
@@ -1295,13 +1481,34 @@ class SessionRunner(Procedure):
         self.experimenter.distances_entered.disconnect(self.ledger.enter)
         self.experimenter.set_mapping_phases([])
         self.experimenter.set_actions_enabled(closed=True)
-        # The one Next step after the session closed: it ends the program.
+        # The one press after the session closed, on Finish session: it ends the program.
         self.rig.closing = True
-        self.experimenter.set_instruction(self.instruction_text(instruction_key))
+        self.experimenter.set_instruction(self.instruction_text(instruction_key), NOW)
+        self.experimenter.set_detail(self._data_check())
         self.experimenter.set_status("")
         self.experimenter.refresh()
         self._complete_shown_s = self.session.clock.real_elapsed_s()
         self.experimenter.proceed_requested.connect(self._end_program)
+
+    def _data_check(self) -> str:
+        """What was saved, anything recorded as missing, and how to upload it (SOP.md 14.2):
+        under the last instruction, so the data are checked and uploaded before the program
+        closes (S, 21 Oct 2026). A demonstration's data are never uploaded, and it says so."""
+        words = self.experimenter.text["data_check"]
+        session = self.session
+        folder = session.data_folder
+        pattern = f"TATP1_*_P{session.participant_code}_S{session.session_number}_*.csv"
+        lines = [words["saved"].format(files=len(list(folder.glob(pattern))), folder=folder)]
+        missing = self.ledger.incomplete()
+        lines.append(words["missing"].format(value=self.ledger.missing_text(missing))
+                     if missing else words["none_missing"])
+        if session.demo:
+            lines.append(words["demo"].format(folder=folder))
+        else:
+            lines.append(words["upload"].format(
+                code=session.participant_code, session=session.session_number,
+                upload_folder=session.config.hardware["data"]["upload_folder"]))
+        return LINE_BREAK.join(lines)
 
     def _end_program(self) -> None:
         """The experimenter's last Next step, on a session already closed. A press within
@@ -1459,13 +1666,16 @@ class SessionRunner(Procedure):
         def go() -> None:
             self._clear_alarms()
             self._launched(at)
+            # Launched: the countdown goes on to the next scheduled step rather than saying
+            # this one is due, and late, while it runs.
+            self._show_upcoming(self.stage_index + 1)
             then()
 
         self._set_alarms(at, at.label_key)
         self._wait_until(
             at.due_s,
-            lambda: self.await_proceed(go, self._standby(instruction, **values)),
-            self._standby(waiting),
+            lambda: self.await_proceed(go, self._standby(instruction, NOW, **values)),
+            self._standby(waiting, WAIT),
         )
 
     def _launched(self, at: Upcoming) -> None:
@@ -1568,6 +1778,8 @@ class SessionRunner(Procedure):
             assert state.masking is not None, "a completed masking check recorded its result"
             self.session.record_masking(*state.masking)
             self.session.audio.start_noise(state.masking[0])
+            # Heard again as the stage it resumes in wants it (`tatp.audio.NoiseGate`).
+            self.session.noise.arm()
         # SPEC.md 10.6: training already given in this session is not given again.
         self.session.vas_trained.update(state.vas_trained)
         # docs/LOG.md N7.F12a1: counted for the whole session, across the crash.

@@ -215,6 +215,7 @@ SCHEMA: tuple[tuple[str, str, type | tuple[type, ...], float | None, float | Non
     ("hardware.yaml", "audio.experimenter_alert_level_dbfs", NUMBER, None, 0),
     ("hardware.yaml", "audio.pacing_tick_hz", NUMBER, 0, None),
     ("hardware.yaml", "audio.pacing_tick_duration_s", NUMBER, 0, None),
+    ("hardware.yaml", "audio.pacing_tick_decay_s", NUMBER, 0, None),
     ("hardware.yaml", "lab_platform", str, None, None),
     ("hardware.yaml", "devices.poll_interval_s", NUMBER, 0, None),
     ("hardware.yaml", "devices.audio_poll_interval_s", NUMBER, 0, None),

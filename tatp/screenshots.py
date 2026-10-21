@@ -38,6 +38,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from fnmatch import fnmatch
+from types import SimpleNamespace
 
 import numpy as np
 import yaml
@@ -61,10 +62,17 @@ from tatp.pinprick import F40Fit, LongResult
 from tatp.remote_keys import ANY_KEYBOARD, with_key_source
 from tatp.responder import Action, Responder
 from tatp.resume import offer_wording
-from tatp.session_runner import session_phases
+from tatp.session_runner import INTERVENTION, session_phases, stage_layout, stage_plan
 from tatp.touchcal import MATCH_TARGET, FitReady
 from tatp.ui.application import application
-from tatp.ui.experimenter import ExperimenterWindow
+from tatp.ui.experimenter import (
+    CONFIRMED,
+    NOW,
+    PREPARE,
+    QUERIED,
+    WAIT,
+    ExperimenterWindow,
+)
 from tatp.ui.garment_display import states_from_status
 from tatp.ui.participant import ParticipantWindow
 from tools.design_pattern import DesignerWindow
@@ -111,9 +119,18 @@ SAMPLE_PRESENTATIONS = 12
 SAMPLE_MATCH = {"channel": SAMPLE_CHANNEL, "index": 2, "count": 4}
 SAMPLE_PATH = "lateral"
 SAMPLE_DISTANCES = ("42", "37,5")
+SAMPLE_DISTANCES_MM = (42.0, 37.5)
+SAMPLE_INSIDE_MM = "8"
 SAMPLE_BLOCK = {"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch"}
 SAMPLE_DUE_IN_S = 245.0
 SAMPLE_DUE_NOW_S = -5.0
+SAMPLE_DUE_SOON_S = 25.0
+# A short series' third application, of five, and its rest; a lighter filament applied.
+SAMPLE_PROGRESS = 3
+SAMPLE_SHORT_N = 5
+SAMPLE_REST_S = 9.0
+SAMPLE_SUBSTITUTE = "15"
+SAMPLE_DATA_FILES = 11
 SAMPLE_OVERDUE_S = -420.0
 SAMPLE_HARDWARE = {"connected": True, "link_lost": False, "faults": [],
                    "channel_pressure_kpa": None, "channels_on": None}
@@ -472,40 +489,38 @@ def _experimenter_states(config: cfg.Config) -> dict:
     instructions = text["instructions"]
     step_mm = f"{float(config.study1['mapping']['step_size_mm']):g}"
     filament = SAMPLE_F40["filament"]
-    applied_filament = cfg.instruction(
-        config, "applied_filament", filament=filament,
-        force_mn=f"{SAMPLE_F40['filament_mn']:g}", site=SAMPLE_SITE,
-        region=text["terms"]["regions"]["primary"],
-    )
-    apply_brush = cfg.instruction(
-        config, "apply_brush", site=SAMPLE_SITE, region=text["terms"]["regions"]["secondary"]
-    )
     path = text["terms"]["mapping_paths"][SAMPLE_PATH]
-    upcoming = {**SAMPLE_BLOCK, "due_in_s": SAMPLE_DUE_IN_S, "overdue": False}
+    upcoming = {**SAMPLE_BLOCK, "due_in_s": SAMPLE_DUE_IN_S, "due_soon": False,
+                "overdue": False}
+
+    def instruct(key, heading, **values):
+        return lambda window: window.set_instruction(cfg.instruction(config, key, **values),
+                                                     heading)
 
     def pinprick(window):
-        window.set_instruction(applied_filament)
-        window.set_target("primary", SAMPLE_SITE, filament=True)
+        # While the participant rates the 26 g at site 3: the next one to have ready.
+        window.set_instruction(cfg.instruction(config, "rating_next_filament",
+                                               filament=filament), PREPARE)
+        window.set_target("primary", SAMPLE_SITE + 1, filament=True)
+        window.set_progress(text["status"]["progress"].format(done=SAMPLE_PROGRESS,
+                                                              total=SAMPLE_SHORT_N))
         window.set_status(instructions["await_participant"])
         # What a filament trial offers while it runs (tatp/pinprick.py `_connect_extra`).
         window.set_actions_enabled(substitution=True)
 
-    def instruct(key, **values):
-        return lambda window: window.set_instruction(cfg.instruction(config, key, **values))
-
     # What is up while a block is waited for, and once it is due: the sample block is a touch
     # block.
-    waiting = instruct("waiting")
-    ready = instruct("ready_touch_block", block=SAMPLE_BLOCK["block_index"])
+    waiting = instruct("waiting", WAIT)
+    ready = instruct("ready_touch_block", NOW, block=SAMPLE_BLOCK["block_index"])
 
     return {
         "plain": (
             "No banners, no open items, nothing scheduled -- a correctly configured session "
-            "at setup. The routine controls along the bottom, Next step emphasised; the "
-            "situational ones (Resume, Discard, Rebalance, the fit choice, the filament "
-            "entry, Mapping distances) hidden in places kept for them; no zone diagram, "
-            "since there is no target; the garment connected, its button quiet at the foot "
-            "of the side column.",
+            "at setup. The routine controls along the bottom, Next emphasised; the "
+            "situational ones (Resume, Discard, the rematch, Re-calibrate, the fit choice, "
+            "the filament applied instead, the mapping distances) hidden in places kept for "
+            "them; no zone diagram, since there is no target; the garment's state, channels "
+            "and button together on the right.",
             {}, None,
         ),
         "placeholder_banner": (
@@ -541,11 +556,57 @@ def _experimenter_states(config: cfg.Config) -> dict:
             {"hardware": {**SAMPLE_HARDWARE, "connected": False}}, None,
         ),
         "pinprick_primary": (
-            "A pinprick application: the filament by its gram label, the primary zone "
-            "outlined on the diagram with its site beside it, the technique text below, and "
-            "the response pending -- never its value. The filament-applied-instead entry is "
-            "offered, as it is only during a filament trial.",
+            "A pinprick application rated: under Prepare, the next filament to have ready, "
+            "its site marked among the zone's eight on the diagram beside the instruction, "
+            "the series' progress at the heading's right, the technique text below, the "
+            "response pending -- never its value -- and the filament-applied-instead choice "
+            "at the foot, as it is only during a filament trial (S, 21 Oct 2026).",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S}, pinprick,
+        ),
+        "pinprick_apply": (
+            "The filament is due: under Now, S's wording, the site on the diagram, Next "
+            "pressable (S, 21 Oct 2026).",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: (
+                instruct("apply_filament", NOW, filament=filament)(window),
+                window.set_target("primary", SAMPLE_SITE, filament=True),
+                window.set_progress(text["status"]["progress"].format(
+                    done=SAMPLE_PROGRESS, total=SAMPLE_SHORT_N)),
+                window.set_actions_enabled(substitution=True),
+            ),
+        ),
+        "pinprick_interval": (
+            "The rest before the next filament: under Wait with the seconds left, the next "
+            "filament and its site (S, 16 and 21 Oct 2026).",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: (
+                window.set_instruction(cfg.instruction(config, "next_filament",
+                                                       filament=filament), WAIT,
+                                       SAMPLE_REST_S),
+                window.set_target("primary", SAMPLE_SITE, filament=True),
+                window.set_progress(text["status"]["progress"].format(
+                    done=SAMPLE_PROGRESS, total=SAMPLE_SHORT_N)),
+            ),
+        ),
+        "substitution_recorded": (
+            "A lighter filament recorded as applied instead: the message beside the choice, "
+            "in the target colour, until the next application starts (S, 21 Oct 2026).",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: (
+                pinprick(window),
+                window.set_filaments([f["label_g"] for f in config.filaments["filaments"]]),
+                window.show_substitution(text["warnings"]["substitution_recorded"].format(
+                    filament=SAMPLE_SUBSTITUTE), CONFIRMED),
+            ),
+        ),
+        "prepare_series": (
+            "Before a series: under Prepare, S's wording, and the zone it is in on the diagram "
+            "(S, 21 Oct 2026).",
+            {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: (
+                instruct("ready_short", PREPARE, filament=filament)(window),
+                window.set_target("primary"),
+            ),
         ),
         "pilot_rig_pinprick": (
             "What the 15 Oct 2026 pilot looked like: the prototype sleeve's reduced-capability "
@@ -559,21 +620,32 @@ def _experimenter_states(config: cfg.Config) -> dict:
             "A brush stroke in the secondary zone: the dashed ellipse outlined.",
             {"phase": "post_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: (
-                window.set_instruction(apply_brush),
+                instruct("apply_brush", NOW)(window),
                 window.set_target("secondary", SAMPLE_SITE),
             ),
         ),
         "mapping": (
-            "A mapping path: the secondary zone outlined without a site, the technique text "
-            "shown because a filament is used, and Mapping distances offered now that a "
-            "phase has been mapped.",
+            "A mapping path: the four paths on the diagram, the one being walked heavy, the "
+            "technique text shown because a filament is used, and the mapping distances box "
+            "on the right now that a phase has been mapped (S, 21 Oct 2026).",
             {"phase": "post_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: (
                 window.set_instruction(
-                    cfg.instruction(config, "mapping_path", path=path, step=step_mm)
+                    cfg.instruction(config, "mapping_path", path=path, step=step_mm), NOW
                 ),
-                window.set_target("secondary", filament=True),
+                window.set_target("secondary", filament=True, path=SAMPLE_PATH),
                 window.set_mapping_phases(["post_sensitisation"]),
+            ),
+        ),
+        "distances": (
+            "The mapping distances box with a row per mapped time point: two recorded, "
+            "outlined in the target colour, one queried in amber, and the line under the "
+            "fields saying why and what to do (S, 21 Oct 2026).",
+            {"phase": "post_intervention", "elapsed_s": SAMPLE_ELAPSED_S},
+            lambda window: (
+                waiting(window),
+                window.set_mapping_phases(["post_sensitisation", "post_intervention"]),
+                _type_distances(window, config),
             ),
         ),
         "block_pinprick": (
@@ -586,31 +658,44 @@ def _experimenter_states(config: cfg.Config) -> dict:
             "A touch block in the intervention: the one line shown at every touch start in "
             "every condition, and nothing else that could differ between them.",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S},
-            lambda window: window.set_instruction(instructions["touch_start"]),
+            instruct("touch_start", WAIT),
         ),
         "intervention_fault": (
             "A garment fault during the intervention: shown in red, counted, and without the "
             "channel, which could say which pattern is running (SPEC.md 16).",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
              "hardware": {**SAMPLE_HARDWARE, "faults": [SAMPLE_FAULT]}},
-            lambda window: window.set_instruction(instructions["touch_start"]),
+            instruct("touch_start", WAIT),
         ),
         "countdown": (
-            "Waiting for the next block: 'Next: block 3 (touch) in 04:05', grey, and nothing "
-            "to do meanwhile.",
+            "Waiting for the next block: 'Next: block 3 (touch) in 04:05', grey, and the "
+            "heading saying Wait with the same time left.",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S, "next_event": upcoming},
             waiting,
         ),
-        "block_due": (
-            "The block is due: amber and bold in the same place as the countdown.",
+        "block_due_soon": (
+            "The block due within the due alert's lead: calmly, in amber, with its time "
+            "left (S, 21 Oct 2026).",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
-             "next_event": {**SAMPLE_BLOCK, "due_in_s": SAMPLE_DUE_NOW_S, "overdue": False}},
+             "next_event": {**SAMPLE_BLOCK, "due_in_s": SAMPLE_DUE_SOON_S, "due_soon": True,
+                            "overdue": False}},
+            waiting,
+        ),
+        "block_due": (
+            "The block is due: amber and bold in the same place as the countdown, and how late "
+            "beside the session clock, in amber.",
+            {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
+             "next_event": {**SAMPLE_BLOCK, "due_in_s": SAMPLE_DUE_NOW_S, "due_soon": True,
+                            "overdue": False}},
             ready,
         ),
         "block_overdue": (
-            "The block is overdue: red and bold, OVERDUE in capitals.",
+            "The block past the overdue alert's margin: still 'due now' in amber where the "
+            "countdown is, and how late beside the session clock, now in red (S, 21 Oct 2026: "
+            "a red OVERDUE was alarming).",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
-             "next_event": {**SAMPLE_BLOCK, "due_in_s": SAMPLE_OVERDUE_S, "overdue": True}},
+             "next_event": {**SAMPLE_BLOCK, "due_in_s": SAMPLE_OVERDUE_S, "due_soon": True,
+                            "overdue": True}},
             ready,
         ),
         "rekindle_due": (
@@ -619,8 +704,8 @@ def _experimenter_states(config: cfg.Config) -> dict:
             {"phase": "rekindle", "elapsed_s": SAMPLE_ELAPSED_S,
              "next_event": {"kind": "rekindle", "label_key": "rekindle", "block_index": None,
                             "block_type": None, "due_in_s": SAMPLE_DUE_NOW_S,
-                            "overdue": False}},
-            instruct("thermode_rekindle"),
+                            "due_soon": True, "overdue": False}},
+            instruct("thermode_rekindle", NOW),
         ),
         "interrupted_emergency_stop": (
             "The participant pressed the stop: the red line under the phase, the step on hold "
@@ -634,23 +719,23 @@ def _experimenter_states(config: cfg.Config) -> dict:
         ),
         "touchcal_stopped_recalibrate": (
             "The participant pressed the stop during touch calibration's step 4, with step 2's "
-            "fit accepted: beside Resume, Rebalance channels… and Restart calibration… are "
-            "offered, each in the place of its kin in the situational row, and each asks why "
-            "(docs/LOG.md N7.F12a1). The same in every condition; nothing else moved.",
+            "fit accepted: beside Resume, Re-calibrate… is offered, in the place of the "
+            "rematch in the situational row; its dialog asks what to repeat and why (docs/"
+            "LOG.md N7.F12a1; S, 21 Oct 2026). The same in every condition; nothing else "
+            "moved.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "emergency_stop"},
             lambda window: (
-                window.set_instruction(cfg.instruction(config, "touchcal_equalise",
-                                                       **SAMPLE_MATCH)),
+                instruct("touchcal_equalise", WAIT, **SAMPLE_MATCH)(window),
                 window.set_actions_enabled(recalibrate_rebalance=True,
                                            recalibrate_restart=True),
             ),
         ),
         "intervention_recalibrate": (
             "The intervention, waiting for the next block with the condition's touch on: "
-            "Rebalance channels… and Restart calibration… offered at any time, as during touch "
-            "calibration (S, 15 Oct 2026; docs/LOG.md N7.F12a1). The same in every condition, "
-            "and no pressures (SPEC.md 16).",
+            "Re-calibrate… offered at any time, as during touch calibration (S, 15 Oct 2026; "
+            "docs/LOG.md N7.F12a1). The same in every condition, and no pressures (SPEC.md "
+            "16).",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S, "next_event": upcoming},
             lambda window: (
                 waiting(window),
@@ -665,9 +750,8 @@ def _experimenter_states(config: cfg.Config) -> dict:
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "emergency_stop"},
             lambda window: (
-                window.set_instruction(instructions["touchcal_estimation"].format(
-                    answered=SAMPLE_ANSWERED, total=SAMPLE_PRESENTATIONS
-                )),
+                instruct("touchcal_estimation", WAIT, answered=SAMPLE_ANSWERED,
+                         total=SAMPLE_PRESENTATIONS)(window),
                 window.set_actions_enabled(recalibration_used=True),
             ),
         ),
@@ -676,8 +760,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
             "offered.",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "pause"},
-            instruct("ready_long", region=text["terms"]["regions"]["secondary"],
-                     filament=filament),
+            instruct("ready_long", PREPARE, filament=filament),
         ),
         "status_warning": (
             "A warning in the status region, in amber, kept apart from the routine status so "
@@ -695,13 +778,13 @@ def _experimenter_states(config: cfg.Config) -> dict:
             "Before the session's first pain measure: what to tell the participant, set down "
             "the type scale to fit its region.",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
-            instruct("ready_long_first"),
+            instruct("ready_long_first", PREPARE),
         ),
         "fit_garment": (
             "The first step of a session: the garment, the remote's buttons by their printed "
-            "symbols, the headphones and the cue, then Next step.",
+            "symbols, the headphones and the cue, then Next.",
             {"phase": "setup"},
-            instruct("fit_garment"),
+            instruct("fit_garment", NOW),
         ),
         "hardware_pressures": (
             "Touch calibration: the hardware panel with every channel's pressure and one "
@@ -710,7 +793,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
              "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA,
                           "channels_on": SAMPLE_CHANNELS_ON,
                           "faults": [SAMPLE_FAULT]}},
-            instruct("touchcal_match", **SAMPLE_MATCH),
+            instruct("touchcal_match", WAIT, **SAMPLE_MATCH),
         ),
         "link_lost": (
             "The prototype sleeve's link lost mid-session (docs/LOG.md N7.U16): shown "
@@ -720,7 +803,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
              "garment_connected": False,
              "hardware": {**SAMPLE_HARDWARE, "connected": False, "link_lost": True,
                           "faults": [SAMPLE_FAULT, SAMPLE_LINK_FAULT]}},
-            instruct("touchcal_match", **SAMPLE_MATCH),
+            instruct("touchcal_match", WAIT, **SAMPLE_MATCH),
         ),
         "long_instruction": (
             "A long instruction: an unusable touch estimate with no re-runs left. At the large "
@@ -731,51 +814,50 @@ def _experimenter_states(config: cfg.Config) -> dict:
             lambda window: (
                 window.set_instruction(cfg.instruction(
                     config, "touchcal_stage1_exhausted", value=text["terms"]["stage1"]["flat"]
-                )),
+                ), NOW),
                 window.offer_alternative(text["controls"]["fit_fallback"]),
             ),
         ),
         "touchcal_estimation_skip": (
             "The estimation run with the mock or prototype garment: how many ratings are "
-            "answered, and Skip calibration under the garment, shown only on a pilot rig once "
-            "a few ratings are in (docs/LOG.md N7.F8b, N7.F8c). Nothing else has moved.",
+            "answered, and Skip calibration in the situational row, shown only on a pilot rig "
+            "once a few ratings are in (docs/LOG.md N7.F8b, N7.F8c). Nothing else has moved.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: (
-                window.set_instruction(
-                    instructions["touchcal_estimation"].format(
-                        answered=SAMPLE_ANSWERED, total=SAMPLE_PRESENTATIONS
-                    )
-                ),
+                instruct("touchcal_estimation", WAIT, answered=SAMPLE_ANSWERED,
+                         total=SAMPLE_PRESENTATIONS)(window),
                 window.set_actions_enabled(skip_calibration=True),
             ),
         ),
         "awaiting_rebalance": (
-            "The evenness question answered 'uneven': Rebalance offered beside Next step, "
+            "The evenness question answered 'uneven': the rematch offered beside Next, "
             "because the procedure waits on either.",
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "hardware": {**SAMPLE_HARDWARE, "channel_pressure_kpa": SAMPLE_PRESSURES_KPA,
                           "channels_on": SAMPLE_CHANNELS_ON}},
             lambda window: (
-                window.set_instruction(cfg.instruction(config, "touchcal_uneven")),
+                window.set_instruction(cfg.instruction(config, "touchcal_uneven"), NOW),
                 window.set_actions_enabled(rebalance=True),
             ),
         ),
         "intervention_end": (
             "The intervention over and the garment off: what to tell the participant before "
-            "the measures begin again, then Next step (docs/LOG.md N7.F11c10). The same in "
+            "the measures begin again, then Next (docs/LOG.md N7.F11c10). The same in "
             "every condition.",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S},
-            lambda window: window.set_instruction(cfg.instruction(config, "intervention_end")),
+            instruct("intervention_end", NOW),
         ),
         "session_complete": (
             "The last state: the session closed and every file written, the garment to come "
-            "off, and Next step to close the program (docs/LOG.md N7.F11c9). The garment is "
-            "shown disconnected, as closing the session leaves it, and Pause and the garment "
-            "button are withdrawn: nothing is left to pause or to connect again.",
+            "off, what was saved and how to upload it under the instruction, and Finish "
+            "session to close the program (docs/LOG.md N7.F11c9; S, 21 Oct 2026). The "
+            "garment is shown disconnected, as closing the session leaves it, and Pause and "
+            "the garment button are withdrawn: nothing is left to pause or to connect again.",
             {"phase": "session_end", "elapsed_s": SAMPLE_ELAPSED_S, "garment_connected": False,
              "hardware": {**SAMPLE_HARDWARE, "connected": False}},
             lambda window: (
-                window.set_instruction(cfg.instruction(config, "session_complete")),
+                window.set_instruction(cfg.instruction(config, "session_complete"), NOW),
+                window.set_detail(_sample_data_check(config)),
                 window.set_actions_enabled(closed=True),
             ),
         ),
@@ -787,7 +869,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S,
              "fit_preview_enabled": True},
             lambda window: (
-                window.set_instruction(cfg.instruction(config, "f40_fit_review")),
+                window.set_instruction(cfg.instruction(config, "f40_fit_review"), NOW),
                 window.set_actions_enabled(fit_decision=True),
                 window.show_fit_preview(_sample_f40_fit()),
             ),
@@ -798,7 +880,7 @@ def _experimenter_states(config: cfg.Config) -> dict:
             {"phase": "touch_calibration", "elapsed_s": SAMPLE_ELAPSED_S,
              "fit_preview_enabled": True},
             lambda window: (
-                window.set_instruction(cfg.instruction(config, "touchcal_fit_review")),
+                window.set_instruction(cfg.instruction(config, "touchcal_fit_review"), NOW),
                 window.set_actions_enabled(fit_decision=True),
                 window.show_fit_preview(_sample_touch_fit()),
             ),
@@ -836,9 +918,9 @@ def _demo_window(config: cfg.Config, sample: _SampleDemo, lose: str | None = Non
         sample.garment.lost(lose)
         window.garment_display.show_states(sample.states(), True, 0.0)
     window.garment_display.setVisible(True)
-    region = config.experimenter_text["terms"]["regions"]["secondary"]
-    window.set_instruction(cfg.instruction(config, "ready_long", region=region,
-                                           filament=SAMPLE_DEMO_FILAMENT))
+    window.set_instruction(cfg.instruction(config, "ready_long",
+                                           filament=SAMPLE_DEMO_FILAMENT), PREPARE)
+    window.set_target("secondary")
     responder = Responder(config.hardware)
     controls = DemoControls(
         sample, config.experimenter_text,
@@ -855,6 +937,13 @@ def _session_window(config: cfg.Config, read_view) -> ExperimenterWindow:
     N7.F16h) and the mock garment's channels in its side column (N7.F16i)."""
     window = ExperimenterWindow(config.experimenter_text, read_view)
     window.set_timeline(_session_phases(config))
+    # The row of the phase's steps, as a session sets it (S, 21 Oct 2026): the view's phase,
+    # at its first step.
+    plan = stage_plan(schedule.generate(config.schedule), config.experimenter_text)
+    phase = read_view()["phase"]
+    if phase in plan:
+        window.set_stage_plan(plan)
+        window.set_stage(phase, plan[phase][0][0])
     # Next step pressable where the instruction asks for it, as a session's is (UI_PRINCIPLES.md
     # 5.13, 5.16), not in every picture: there is no procedure here to ask.
     proceed = config.experimenter_text["controls"]["proceed"]
@@ -907,26 +996,17 @@ def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
             "The error dialog: a red title and the message as raised.",
             window.error_dialog(SAMPLE_ERROR),
         ),
-        "recalibrate_rebalance_dialog": (
-            "Rebalance channels…: what it does, wherever it is offered, and why, from a fixed "
-            "list; Rebalance channels disabled until a reason is chosen (docs/LOG.md "
-            "N7.F12a1).",
-            window.recalibration_dialog("rebalance"),
-        ),
-        "recalibrate_restart_dialog": (
-            "Restart calibration…, with a reason chosen, shown pressed, so Restart calibration "
-            "is enabled (docs/LOG.md N7.F12a1).",
-            _chosen(window.recalibration_dialog("restart"), "channel_uneven"),
-        ),
     }
-    window.set_mapping_phases(["post_sensitisation", "post_intervention"])
-    for field, typed in zip(window.distances.fields, SAMPLE_DISTANCES, strict=False):
-        field.setText(typed)
-    dialogs["distances_dialog"] = (
-        "The mapping distances window (SPEC.md 8.4): the latest mapped phase selected, one "
-        "field per path in path order, two typed with either decimal mark. Non-modal: the "
-        "session runs on behind it.",
-        window.distances,
+    window.set_actions_enabled(recalibrate_rebalance=True, recalibrate_restart=True)
+    dialogs["recalibrate_dialog"] = (
+        "Re-calibrate…: what each choice repeats, then why, from a fixed list; Re-calibrate "
+        "disabled until both are chosen (docs/LOG.md N7.F12a1; S, 21 Oct 2026).",
+        window.recalibration_dialog(),
+    )
+    dialogs["recalibrate_dialog_chosen"] = (
+        "Re-calibrate… with Restart the calibration and a reason chosen, shown pressed, so "
+        "Re-calibrate is enabled.",
+        _chosen(window.recalibration_dialog(), "restart", "channel_uneven"),
     )
     for name, (description, dialog) in dialogs.items():
         yield Shot(f"experimenter_{language}_{name}", f"{description} ({language})",
@@ -945,10 +1025,47 @@ def _dispose(window: QWidget) -> None:
     QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
-def _chosen(dialog, reason: str):
-    """A re-calibration dialog with `reason` chosen, as the experimenter leaves it."""
+def _chosen(dialog, action: str, reason: str):
+    """A re-calibration dialog with `action` and `reason` chosen, as the experimenter leaves
+    it."""
+    dialog.actions[action].click()
     dialog.options[reason].click()
     return dialog
+
+
+def _type_distances(window, config: cfg.Config) -> None:
+    """Post-sensitisation's distances in, one confirmed outside the range; post-
+    intervention's partly typed, one with either decimal mark, and one queried as inside the
+    primary zone -- as the ledger reports them."""
+    text = config.experimenter_text
+    box = window.distances
+    for field, typed in zip(box.fields("post_sensitisation"), SAMPLE_DISTANCES * 2,
+                            strict=False):
+        field.setText(typed)
+    later = box.fields("post_intervention")
+    later[0].setText(SAMPLE_DISTANCES[0])
+    later[1].setText(SAMPLE_INSIDE_MM)
+    box.show_outcome("post_sensitisation", dict(enumerate(SAMPLE_DISTANCES_MM * 2, 1)), {},
+                     "", CONFIRMED)
+    paths = text["terms"]["mapping_paths"]
+    path_ids = list(paths)
+    box.show_outcome("post_intervention", {1: SAMPLE_DISTANCES_MM[0]},
+                     {2: float(SAMPLE_INSIDE_MM)},
+                     text["distances"]["inside_primary"].format(
+                         phase=text["timeline"]["post_intervention"],
+                         path=paths[path_ids[1]], value=SAMPLE_INSIDE_MM),
+                     QUERIED)
+
+
+def _sample_data_check(config: cfg.Config) -> str:
+    """What the session-complete page says was saved and how to upload it, for the sample."""
+    words = config.experimenter_text["data_check"]
+    return "\n".join((
+        words["saved"].format(files=SAMPLE_DATA_FILES, folder=SAMPLE_DATA_FOLDER),
+        words["none_missing"],
+        words["upload"].format(code=SAMPLE_PARTICIPANT, session=SAMPLE_SESSION_NUMBER,
+                               upload_folder=config.hardware["data"]["upload_folder"]),
+    ))
 
 
 def _grab_dialog(dialog: QWidget) -> QPixmap:
@@ -963,12 +1080,12 @@ def _grab_dialog(dialog: QWidget) -> QPixmap:
 
 class _SampleDemo(QObject):
     """What the demo controls draw from, with no session behind it: a person at both places,
-    a connected mock garment with every channel's pressure set and some channels on, the
-    filament series of pre-sensitisation under way, and a skippable wait only when asked."""
+    a connected mock garment with every channel's pressure set and some channels on, and the
+    filament series of pre-sensitisation under way."""
 
     stage_started = Signal(str)
 
-    def __init__(self, config: cfg.Config, worn: bool = False, skippable_s=None):
+    def __init__(self, config: cfg.Config, worn: bool = False):
         super().__init__()
         self.runner = self
         self.session = self
@@ -987,27 +1104,27 @@ class _SampleDemo(QObject):
         self.experimenter_mode = OFF
         self.auto_running = False
         self.config = config
-        self.fast_forward_to = None
+        self.schedule = schedule.generate(config.schedule)
         self.phases = _session_phases(config)
         self.phase = SAMPLE_DEMO_PHASE
-        self.stages = [type("Stage", (), {"id": SAMPLE_DEMO_STAGE})()]
-        self.stage_index = 0
-        self._skippable_s = skippable_s
+        self.stages = [SimpleNamespace(id=stage_id, phase=phase)
+                       for stage_id, phase, _ in stage_layout(self.schedule)]
+        self.stage_index = [stage.id for stage in self.stages].index(SAMPLE_DEMO_STAGE)
+        # No touch calibration has run, so on a worn garment the intervention's touch cannot
+        # be jumped to.
+        self.deliveries = None
 
     def choose(self, who: str, mode: str) -> None:
         setattr(self, f"{who}_mode", mode)
 
-    def skippable_s(self) -> float | None:
-        return self._skippable_s
+    def jumpable(self, stage_id: str) -> bool:
+        stage = next(stage for stage in self.stages if stage.id == stage_id)
+        return not (self.worn and stage.phase == INTERVENTION
+                    and stage_id != "intervention.start")
 
     def differs_now(self) -> str | None:
         # The filament series under way: its rests are a demonstration's.
         return RESTS_DIFFER
-
-    def next_event(self) -> dict | None:
-        upcoming = {"kind": "phase", "label_key": "capsaicin_removal", "block_index": None,
-                    "block_type": None, "due_in_s": SAMPLE_DUE_IN_S, "overdue": False}
-        return upcoming if self._skippable_s is not None else None
 
     def states(self) -> dict:
         return states_from_status(self.garment.status(), self.garment.channels(),
@@ -1087,10 +1204,11 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"A demonstration's experimenter window (docs/LOG.md N7.D23, N7.F16j): the timeline, "
         f"the channels as commanded in the side column -- every channel's pressure set, "
         f"channels {', '.join(map(str, SAMPLE_DEMO_CHANNELS_ON))} on -- and the demo controls "
-        f"along the foot: who presses for the participant and the experimenter, the clock's "
-        f"speed, the remote's buttons, Skip saying there is no wait to skip, Auto-run, "
-        f"Fast-forward offering the phases to come, and how the filament series under way "
-        f"differs from a session -- its rests -- in blue beside them (N7.F17d) ({language}).",
+        f"along the foot: who presses for the participant and the experimenter (manual, auto "
+        f"watchable or auto fast), the clock's speed, the remote's buttons, Auto-run, Jump to "
+        f"offering every step of every phase with the one after the step under way chosen "
+        f"(S, 21 Oct 2026), and how the filament series under way differs from a session -- "
+        f"its rests -- in violet beside them (N7.F17d) ({language}).",
         _grab_checked(window, f"experimenter_{language}_demo_controls"),
     )
     sample.garment.set_channel(SAMPLE_DEMO_CHANGED, True)
@@ -1098,23 +1216,22 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     display = window.garment_display
     display.show_states(sample.states(), False, changed_s)
     display.show_states(sample.states(), False, changed_s + SAMPLE_DEMO_CHANGED_AGO_S)
-    sample._skippable_s = SAMPLE_DUE_IN_S - float(sample.settings["skip_lead_s"])
     controls.remote.set_held(Action.INCREASE, True)
     controls.sync()
     yield Shot(
         f"experimenter_{language}_demo_controls_garment_changed",
         f"The same {SAMPLE_DEMO_CHANGED_AGO_S:g} s after channel {SAMPLE_DEMO_CHANGED} was "
         f"turned on (docs/LOG.md N7.F12f): its row lit and its bar outlined, fading back over "
-        f"screens.garment_highlight_s; the remote's right button held; and a timed wait "
-        f"running, which Skip names with what is left of it ({language}).",
+        f"screens.garment_highlight_s; and the remote's right button held ({language}).",
         _grab_checked(window, f"experimenter_{language}_demo_controls_garment_changed"),
     )
     window, _ = _demo_window(config, _SampleDemo(config, worn=True), lose=SAMPLE_DEMO_LOST)
     yield Shot(
         f"experimenter_{language}_demo_controls_worn_link_lost",
         f"A demonstration on a worn garment, its link lost (docs/LOG.md N7.F12f): the "
-        f"participant and the experimenter people, and auto-run and fast-forward off, said in "
-        f"amber; the channels held at their last command in amber, not shown switching off, "
+        f"participant and the experimenter people, and auto-run off, said in amber, and the "
+        f"intervention's steps greyed in Jump to until a touch calibration has run; the "
+        f"channels held at their last command in amber, not shown switching off, "
         f"and the side column's warning that the outputs may still hold it (N7.U16) "
         f"({language}).",
         _grab_checked(window, f"experimenter_{language}_demo_controls_worn_link_lost"),

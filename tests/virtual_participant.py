@@ -44,7 +44,8 @@ FAST_CHOICE_S = 0.005
 def make_config(loaded: cfg.Config, tmp_path, **study1_overrides) -> cfg.Config:
     hardware = {
         **loaded.hardware,
-        "data": {"folder": str(tmp_path / "data"), "cloud_sync_markers": []},
+        "data": {**loaded.hardware["data"],
+                 "folder": str(tmp_path / "data"), "cloud_sync_markers": []},
         "audio": {**loaded.hardware["audio"], "backend": "recording"},
     }
     study1 = {

@@ -6,8 +6,8 @@ The normal experimenter runs a whole session from the experimenter screen, and o
   instruction -- the "Get ready" line -- parses it against the `prepare_filament` or
   `prepare_brush` wording it was formatted from, and touches the virtual participant: the
   filament's force -- the weighed one where the set has been weighed, since that is what the
-  filament presses with -- or the brush. Once "Now: apply" is up with Next step offered, it
-  presses Next step (docs/LOG.md N7.F16f). Reading
+  filament presses with -- or the brush. Once "Apply" is up with Next offered, it presses
+  Next (docs/LOG.md N7.F16f). Reading
   the screen rather than the protocol is the point: a prompt that named the wrong filament
   would be applied wrongly here, as it would be in the lab. The cue is noticed as it goes up
   (`warning_cue_shown`), not by looking now and then: at the validator's speed a cue is on
@@ -57,21 +57,21 @@ RESUME_AFTER_S = 5.0
 NORMAL_DISTANCES_MM = (40.0, 35.0, 45.0, 30.0)
 # The reason an ended scenario's session file records.
 SCENARIO_ENDED = "validator: the scenario's error path is over"
-# Instructions after which the software waits for Next step.
+# Instructions after which the software waits for Next.
 PROCEED_INSTRUCTIONS = (
     "capsaicin_apply", "capsaicin_remove", "thermode_rekindle", "rekindle_remove",
     "touchcal_uneven", "earplugs", "ready_long_first", "mark_zone",
-    # The intervention's end, told to the participant, and the session complete, whose Next
-    # step closes the program (docs/LOG.md N7.F11c9, N7.F11c10).
+    # The intervention's end, told to the participant, and the session complete, whose
+    # Finish session closes the program (docs/LOG.md N7.F11c9, N7.F11c10).
     "intervention_end", "session_complete", "session_aborted",
 )
-# Templated instructions after which the software waits for Next step: the ready line of each
-# kind of series and block, and the VAS training -- the anchors and proportionality explained
-# aloud, then the go (SPEC.md 10.6).
+# Templated instructions after which the software waits for Next: the ready line of each kind
+# of series and block, the VAS training -- the anchors and proportionality explained aloud,
+# then the go (SPEC.md 10.6) -- and the session end's prompt for missing distances.
 PROCEED_TEMPLATES = (
     "fit_garment", "thermode_start", "intervention_start",
     "vas_training", "ready_long", "ready_short", "ready_brush", "ready_pinprick_block",
-    "ready_touch_block",
+    "ready_touch_block", "distances_outstanding",
 )
 
 
@@ -115,9 +115,7 @@ class VirtualExperimenter(QObject):
         self._mapping_ready = template("mapping_ready")
         self._mapping_path = template("mapping_path")
         self._proceed_templates = [template(key) for key in PROCEED_TEMPLATES]
-        self._proceed = {instruction(config, key) for key in PROCEED_INSTRUCTIONS} | {
-            text["dialogs"]["distances_outstanding"]
-        }
+        self._proceed = {instruction(config, key) for key in PROCEED_INSTRUCTIONS}
         self._accept = {instruction_template(config, key) for key in (
             "touchcal_stage1_failed", "touchcal_fit_review"
         )}
@@ -214,7 +212,7 @@ class VirtualExperimenter(QObject):
             window.phase,
             window.garment,
             window.instruction,
-            window.technique,
+            window.detail,
             window.status,
             window.open_items,
         ):

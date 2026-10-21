@@ -221,11 +221,11 @@ def finished(app, loaded, tmp_path_factory):
     runner.shown_upcoming = []
     real = runner.experimenter.set_instruction
 
-    def spy(text):
+    def spy(text, *rest):
         runner.shown_instructions.append(text)
         upcoming = runner.session._upcoming
         runner.shown_upcoming.append(None if upcoming is None else upcoming[1])
-        real(text)
+        real(text, *rest)
 
     runner.experimenter.set_instruction = spy
     Driver(runner.rig, runner).run()
@@ -450,16 +450,38 @@ def test_the_gap_after_a_rating_does_not_leave_the_last_application_up(finished)
     assert between in finished.shown_instructions
 
 
-def test_the_noise_stops_for_each_mapping_and_resumes(finished):
-    events = [(r["event"], r["detail"]) for r in _events(finished.session)]
-    stops = [i for i, (e, d) in enumerate(events)
-             if e == "white_noise_stopped" and d == "area mapping"]
-    resumes = [i for i, (e, d) in enumerate(events)
-               if e == "white_noise_resumed" and d.startswith("area mapping ended")]
-    assert len(stops) == len(resumes) == 2
-    ticks = [i for i, (e, _) in enumerate(events) if e == "pacing_tick"]
-    assert ticks and all(any(s < t < r for s, r in zip(stops, resumes, strict=True))
-                         for t in ticks), "every audible tick falls inside a mapping"
+def test_the_noise_is_heard_only_while_the_garment_may_run(finished):
+    """S, 21 Oct 2026: silenced in every phase that does not need it and while the
+    experimenter explains something; it masks the garment (Bilaga 3a). Heard through the touch
+    calibration and the intervention's touch, silent for the mappings and every pain measure
+    outside the intervention."""
+    events = [(r["event"], r["detail"], r["phase"]) for r in _events(finished.session)]
+    heard, intervals, start = False, [], None
+    for i, (event, _detail, _phase) in enumerate(events):
+        if event == "white_noise_silenced" and heard:
+            intervals.append((start, i))
+            heard = False
+        elif event in ("white_noise_resumed", "white_noise_started") and not heard:
+            heard, start = True, i
+    if heard:
+        intervals.append((start, len(events)))
+
+    def during(index: int) -> bool:
+        return any(a <= index < b for a, b in intervals)
+
+    ticks = [i for i, (e, _, _) in enumerate(events) if e == "pacing_tick"]
+    assert ticks and not any(during(t) for t in ticks), "every tick in silence"
+    cues = [i for i, (e, _, p) in enumerate(events)
+            if e == "stimulus_due" and p in ("pre_sensitisation", "post_sensitisation")]
+    assert cues and not any(during(c) for c in cues), "no noise for the pain measures"
+    touch = [i for i, (e, _, p) in enumerate(events)
+             if e == "warning_cue" and p == "touch_calibration"]
+    assert touch and all(during(c) for c in touch), "the noise masks the calibration"
+    on = [i for i, (e, _, _) in enumerate(events) if e == "garment_activated"]
+    assert on and all(during(i) for i in on), "and the intervention's touch"
+    said = [i for i, (e, d, _) in enumerate(events)
+            if e == "white_noise_silenced" and d == "a sentence said aloud"]
+    assert said, "silenced while the experimenter says something aloud"
 
 
 def test_the_mapping_areas_are_recorded(finished):
@@ -554,7 +576,17 @@ def test_the_next_event_counts_down_and_goes_overdue(app, loaded, tmp_path):
     assert upcoming["kind"] == "block" and upcoming["block_index"] == block.index
     assert upcoming["block_type"] == block.type
     assert 0 < upcoming["due_in_s"] <= block.planned_offset_s and not upcoming["overdue"]
-    session.set_upcoming("phase", "capsaicin", 0.0)
+    # Due soon from the due alert, overdue only past the overdue alert's margin, as the alerts
+    # sound (S, 21 Oct 2026: OVERDUE the moment it fell due was alarming).
+    validation = session.config.schedule["validation"]
+    now_s = session.clock.t_session_s()
+    session.set_upcoming("phase", "capsaicin", now_s + validation["due_alert_lead_s"] / 2)
+    upcoming = session.experimenter_view()["next_event"]
+    assert upcoming["due_soon"] and not upcoming["overdue"]
+    session.set_upcoming("phase", "capsaicin", now_s - validation["overdue_alert_margin_s"] / 2)
+    upcoming = session.experimenter_view()["next_event"]
+    assert upcoming["due_in_s"] < 0 and not upcoming["overdue"], "late, not yet overdue"
+    session.set_upcoming("phase", "capsaicin", now_s - validation["overdue_alert_margin_s"] * 2)
     assert session.experimenter_view()["next_event"]["overdue"]
     session.close()
 
@@ -743,7 +775,8 @@ def test_a_resume_after_the_thermode_came_off_only_restarts_the_touch(app, loade
     assert runner.resume.rekindle_thermode_removed
     shown = []
     real = runner.experimenter.set_instruction
-    runner.experimenter.set_instruction = lambda text: (shown.append(text), real(text))
+    runner.experimenter.set_instruction = lambda text, *rest: (shown.append(text),
+                                                               real(text, *rest))
     Driver(runner.rig, runner, stop_when=lambda: "garment_activated" in [
         r["event"] for r in _events(runner.session)
     ]).run()
@@ -782,9 +815,12 @@ def _logged(runner, event, detail=None) -> bool:
 
 
 def _offered(runner) -> tuple[bool, bool, bool]:
+    """(rebalance, restart, used up) as the window offers them: one Re-calibrate… control
+    whose dialog lists what can be taken (S, 21 Oct 2026)."""
     window = runner.experimenter
-    return (not window.recalibrate_rebalance_button.isHidden(),
-            not window.recalibrate_restart_button.isHidden(),
+    shown = not window.recalibrate_button.isHidden()
+    return (shown and window._awaiting["recalibrate_rebalance"],
+            shown and window._awaiting["recalibrate_restart"],
             not window.recalibration_used.isHidden())
 
 
@@ -1615,11 +1651,27 @@ def _experimenter_sequence(app, loaded, tmp_path, condition) -> list[tuple[str, 
     shown: list[tuple[str, float]] = []
     real = runner.experimenter.set_instruction
 
-    def spy(text):
-        shown.append((text, session.clock.t_session_s()))
-        real(text)
+    def spy(text, *rest):
+        # The heading with it (S, 21 Oct 2026): over the instruction, so as seen as it.
+        shown.append((f"{rest[0] if rest else None}: {text}", session.clock.t_session_s()))
+        real(text, *rest)
 
     runner.experimenter.set_instruction = spy
+    # The masking noise is perceived too (S, 21 Oct 2026: silenced when the garment cannot
+    # run): its every change, with its time, is part of what must not differ.
+    real_silence, real_unsilence = session.audio.silence_noise, session.audio.unsilence_noise
+
+    def silence(reason):
+        shown.append((f"noise silenced: {reason}", session.clock.t_session_s()))
+        real_silence(reason)
+
+    def unsilence(reason):
+        shown.append((f"noise heard: {reason}", session.clock.t_session_s()))
+        real_unsilence(reason)
+
+    session.audio.silence_noise, session.audio.unsilence_noise = silence, unsilence
+    session.audio.start_noise(float(loaded.hardware["audio"]["white_noise_start_dbfs"]))
+    session.noise.arm()
     moved_on = []
     # The runner as the rig's root, so whether Next step is offered is read as in a session
     # (`Rig.proceed_awaited`); what follows the touch start waits for the go, as a block does.
@@ -1676,6 +1728,7 @@ def test_the_touch_start_looks_the_same_to_the_experimenter_in_every_condition(
     texts = [[text for text, _ in sequence] for sequence in sequences]
     assert texts[0] == texts[1] == texts[2]
     assert "next step offered: True" in texts[0]
+    assert any(text.startswith("noise heard") for text in texts[0]), "the noise masks it"
     for sequence in sequences:
         moved_s = sequence[-1][1] - sequence[0][1]
         assert display_s - EARLY_S <= moved_s < display_s + TIMING_TOLERANCE_S
@@ -1684,6 +1737,12 @@ def test_the_touch_start_looks_the_same_to_the_experimenter_in_every_condition(
         offered_s = next(t for text, t in sequence if text == "next step offered: True")
         offered_after_s = offered_s - sequence[0][1]
         assert display_s - EARLY_S <= offered_after_s < display_s + TIMING_TOLERANCE_S
+    # And the noise changes at the same moments in every condition.
+    noise = [[t - sequence[0][1] for text, t in sequence if text.startswith("noise")]
+             for sequence in sequences]
+    for later in noise[1:]:
+        assert all(abs(a - b) < TIMING_TOLERANCE_S for a, b in zip(noise[0], later,
+                                                                   strict=True))
 
 
 # -- around and between the tasks (15 Oct 2026 pilot review, LOG N7.F11c) --------------------
@@ -1837,7 +1896,9 @@ def test_a_resume_while_a_delivery_is_starting_never_leaves_the_paused_screen_up
         time.sleep(0.0005)
     assert runner._delivery is not None and not runner._delivery.cueing
     assert window.stack.currentWidget() is window.message
-    assert window.message.text == loaded.participant_text["screens"]["standby"]
+    # The rest between the intervention's blocks: the screen brings what comes next there
+    # (S, 21 Oct 2026).
+    assert window.message.text == loaded.participant_text["screens"]["standby_intervention"]
     runner.cancel()
     session.close()
 
@@ -1858,6 +1919,6 @@ def test_a_self_start_prompt_stays_up_while_a_block_waits_for_its_go(app, loaded
                      lambda _: None)
     assert window.message.text == self_start
     press(window, "f5")
-    assert window.message.text == loaded.participant_text["screens"]["standby"]
+    assert window.message.text == loaded.participant_text["screens"]["standby_intervention"]
     runner.cancel()
     session.close()

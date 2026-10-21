@@ -41,7 +41,8 @@ def loaded():
 
 @pytest.fixture
 def rig(app, loaded, tmp_path):
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "data"),
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data"),
                                             "cloud_sync_markers": []}}
     config = cfg.Config(**{**loaded.__dict__, "hardware": hardware})
     session = Session(config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=CLOCK_SPEED),
@@ -58,6 +59,13 @@ def rig(app, loaded, tmp_path):
 @pytest.fixture
 def ledger(rig):
     return MappingLedger(rig.session, rig.experimenter)
+
+
+@pytest.fixture
+def opened(ledger):
+    """A ledger whose time point's mapping has begun, as the distances can be entered then."""
+    ledger.open_time_point(PHASE)
+    return ledger
 
 
 def _spin(condition) -> None:
@@ -125,15 +133,19 @@ def test_each_path_is_started_by_the_experimenter_and_every_cue_is_logged(rig, l
 
 
 def test_the_experimenter_is_told_which_path_and_then_to_measure(rig, ledger, loaded):
-    """LOG N7.F11b11: "Path 2 of 4 (lateral)", where it said "Path lateral of 4", then the
-    distances to measure once the last path is done."""
+    """LOG N7.F11b11: "Path 2 of 4 (lateral)", where it said "Path lateral of 4"; the path on
+    the diagram, the one to walk heavy (S, 21 Oct 2026); then the distances to measure in the
+    box, with a column of its own from the mapping's start."""
     text = rig.experimenter.text
     mapping = AreaMapping(rig, ledger)
     mapping.start()
     paths = text["terms"]["mapping_paths"]
     ready = cfg.instruction(loaded, "mapping_ready", index=1, count=4, path=paths["proximal"])
     assert rig.experimenter.instruction.text().endswith(ready)
+    assert not rig.experimenter.zone.isVisibleTo(rig.experimenter), "beside the script, none"
+    assert PHASE in rig.experimenter.distances.columns
     rig.experimenter.proceed_requested.emit()
+    assert rig.experimenter.zone.path == "proximal"
     step = f"{loaded.study1['mapping']['step_size_mm']:g}"
     assert rig.experimenter.instruction.text() == cfg.instruction(
         loaded, "mapping_path", path=paths["proximal"], step=step
@@ -142,38 +154,29 @@ def test_the_experimenter_is_told_which_path_and_then_to_measure(rig, ledger, lo
     assert rig.experimenter.instruction.text() == cfg.instruction(
         loaded, "mapping_ready", index=2, count=4, path=paths["lateral"]
     )
+    assert rig.experimenter.zone.path == "lateral", "the next path, before it is walked"
     mapping.cancel()
-    _run_paths(rig, ledger)
-    assert rig.experimenter.status.text() == text["instructions"]["mapping_distances"]
 
 
-def test_the_distances_reminder_stays_until_they_are_entered(rig, ledger):
-    """Code review of N7.F11b11: in the status line the next trial replaced the reminder and a
-    warning could hide it. It is a line of its own that only the entry takes down."""
+def test_what_became_of_each_distance_is_said_in_the_box(rig, ledger, loaded):
+    """S, 21 Oct 2026: a recorded entry is confirmed, a queried one says why and what to do,
+    beside the fields and not on the warning line."""
     window = rig.experimenter
-    reminder = window.text["instructions"]["mapping_distances"]
+    box = window.distances
+    words = window.text["distances"]
     _run_paths(rig, ledger)
-    window.set_status(window.text["instructions"]["await_participant"])
-    window.new_stage()
-    window.new_stage()
-    assert reminder in window.status.text(), "a status and two stage starts later"
-    window.distances_entered.emit(PHASE, (30.0, None, 50.0, None))
-    assert reminder in window.status.text(), "two still to enter"
-    window.distances_entered.emit(PHASE, (30.0, 40.0, 50.0, 45.0))
-    assert reminder not in window.status.text()
-
-
-def test_an_answered_distance_query_takes_its_warning_down(rig, ledger, loaded):
-    window = rig.experimenter
-    _run_paths(rig, ledger)
+    window.distances_entered.emit(PHASE, (30.0, None, None, None))
+    assert words["recorded"].split("{")[0] in box.message.text()
+    assert window._warning_text == "", "nothing on the warning line"
+    inside = loaded.study1["mapping"]["distance_plausible_min_mm"] / 2
+    window.distances_entered.emit(PHASE, (None, inside, None, None))
+    assert box.message.text() == words["inside_primary"].format(value=f"{inside:g}")
     too_far = loaded.study1["mapping"]["distance_plausible_max_mm"] * 2
-    window.distances_entered.emit(PHASE, (too_far, None, None, None))
-    assert window._warning_text, "queried"
-    window.distances_entered.emit(PHASE, (40.0, None, None, None))
-    assert window._warning_text == "", "a plausible value answers the query"
-    window.distances_entered.emit(PHASE, (None, too_far, None, None))
-    window.distances_entered.emit(PHASE, (None, too_far, None, None))
-    assert window._warning_text == "", "the same value again confirms it"
+    window.distances_entered.emit(PHASE, (None, None, too_far, None))
+    assert box.message.text() == words["too_far"].format(value=f"{too_far:g}")
+    window.distances_entered.emit(PHASE, (None, None, too_far, None))
+    assert words["recorded"].split("{")[0] in box.message.text(), "the same again keeps it"
+    assert window._warning_text == ""
 
 
 def test_the_cue_train_stops_itself_at_max_steps(rig, ledger, loaded):
@@ -250,7 +253,7 @@ def test_an_implausible_distance_is_queried_then_accepted_when_repeated(rig, led
     rig.experimenter.distances_entered.emit(PHASE, (too_far, 20.0, 50.0, 40.0))
     assert _rows(rig.session, "sh_area") == [], "queried, not silently accepted"
     assert "distance_queried" in _events(rig.session)
-    assert f"{too_far:g}" in rig.experimenter.status.text()
+    assert f"{too_far:g}" in rig.experimenter.distances.message.text()
     rig.experimenter.distances_entered.emit(PHASE, (too_far, None, None, None))
     (row,) = _rows(rig.session, "sh_area")
     assert float(row["distance_1_mm"]) == too_far
@@ -321,6 +324,15 @@ def test_distances_for_a_phase_with_no_mapping_are_an_error(ledger):
         ledger.enter("pre_sensitisation", (1.0, 2.0, 3.0, 4.0))
 
 
+def test_distances_typed_before_their_path_is_walked_are_held(rig, opened):
+    """A column exists from the mapping's start, so a distance can come first; its row is
+    written when its path starts, as it needs the path's start."""
+    rig.experimenter.distances_entered.emit(PHASE, (30.0, None, None, None))
+    assert _rows(rig.session, "mapping") == []
+    opened.path_started(PHASE, 1)
+    assert [r["path_id"] for r in _rows(rig.session, "mapping")] == ["proximal"]
+
+
 # -- the session end -----------------------------------------------------------------------
 
 
@@ -329,9 +341,13 @@ def test_outstanding_distances_prompt_once_then_close_flagged_missing(rig, ledge
     rig.experimenter.distances_entered.emit(PHASE, (30.0, None, 50.0, None))
     assert ledger.outstanding() == [PHASE]
     assert ledger.close() is False, "the first call prompts"
-    assert rig.experimenter.instruction.text() == (
-        rig.experimenter.text["dialogs"]["distances_outstanding"]
-    )
+    # Which are missing, by time point and path (S, 21 Oct 2026).
+    text = rig.experimenter.text
+    paths = text["terms"]["mapping_paths"]
+    missing = text["dialogs"]["distances_missing"].format(
+        phase=text["timeline"][PHASE], paths=f"{paths['lateral']}, {paths['medial']}")
+    assert rig.experimenter.instruction.text() == cfg.instruction(
+        rig.session.config, "distances_outstanding", missing=missing)
     assert ledger.close() is True, "the second closes"
     rows = _rows(rig.session, "mapping")
     assert [(r["path_id"], r["distance_missing"]) for r in rows] == [

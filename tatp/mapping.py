@@ -4,17 +4,21 @@
 does not record where the border fell -- that is a pen mark and a ruler. `AreaMapping` runs
 the four paths: the experimenter starts each one, a cue fires every `step_interval_s` for up to
 `max_steps` cues, and the experimenter stops it at the border. Each cue is logged and emitted
-as `pacing_cue`, which is what Milestone 5 wires to the audible tick. The white noise is
-switched off around the mapping by whoever runs it, not here. An interruption mid-path runs the
-whole path again from its start, because the filament was lifted.
+as `pacing_cue`, which is what Milestone 5 wires to the audible tick. The masking noise is
+silent through it, as it is whenever the garment cannot run (`tatp.audio.NoiseGate`). An
+interruption mid-path runs the whole path again from its start, because the filament was
+lifted. The zone diagram beside the instruction shows the four paths, the one to walk drawn
+heavy (S, 21 Oct 2026).
 
 **The distances never block.** They are typed whenever convenient, often long after the path,
 so they are held by `MappingLedger`, which lives for the whole session and listens to the
 experimenter's `distances_entered`. Each path's `mapping` row is written the moment its
 distance is accepted (SPEC.md 14.3), and the `sh_area` row once all four are in. A distance
 outside the plausible range is queried rather than accepted: the experimenter confirms it by
-entering the same value again. A different value for a path already recorded is a correction,
-and appends a superseding row -- analysis takes the last row per time point and path (see
+entering the same value again. What became of each entry is said in the distances box, beside
+the fields (`ExperimenterWindow.distances`; S, 21 Oct 2026). A different value for a path
+already recorded is a correction, and appends a superseding row -- analysis takes the last row
+per time point and path (see
 docs/DATA_SCHEMA.md). At session end `MappingLedger.close()` prompts once for anything
 outstanding and, the next time it is called, writes what there is with the gaps flagged
 missing. Until then a walked but unmeasured path is recoverable from its logged start.
@@ -32,14 +36,17 @@ from dataclasses import dataclass, field
 
 from PySide6.QtCore import QObject, Signal
 
+from tatp.config import instruction
 from tatp.procedure import Procedure, Rig
 from tatp.session import Session, SessionError
-from tatp.ui.experimenter import ExperimenterWindow
+from tatp.ui.experimenter import CONFIRMED, NOW, PREPARE, QUERIED, ExperimenterWindow
 
 # There is no participant mapping screen, only standby: the participant is instructed and
 # answers verbally (SPEC.md 8.4).
 from tatp.ui.participant import STANDBY_SCREEN
 
+# The zone the paths cross, on the diagram (tatp/ui/widgets.py ZONE_IDS).
+SECONDARY_ZONE = "secondary"
 # The formula takes opposite pairs, so it is defined for exactly four paths round the zone.
 N_PATHS_FOR_AREA = 4
 
@@ -100,18 +107,13 @@ class MappingLedger(QObject):
         )
         self.time_points: dict[str, _TimePoint] = {}
         self.prompted = False
-        # Time points whose paths have all been walked: their distances are what the reminder
-        # asks for (`_remind`).
-        self.walked: set[str] = set()
-        # The implausible-distance query on the warning line, withdrawn once answered.
-        self._query_warning: str | None = None
         experimenter.distances_entered.connect(self.enter)
 
     # -- written by the mapping procedure ------------------------------------------------
 
     def path_started(self, phase: str, path: int) -> None:
         """A path's pacing began. A path run again replaces its start."""
-        point = self.time_points.setdefault(phase, _TimePoint(self.n_paths))
+        point = self.time_points[phase]
         clock = self.session.clock
         point.starts[path] = (clock.wall_iso(), clock.t_session_s())
         if path in point.distances and path not in point.rows:
@@ -136,37 +138,35 @@ class MappingLedger(QObject):
             "mapping_restored", severity="warning",
             detail=f"{phase}: {len(distances)} of {self.n_paths} distances already recorded",
         )
-        self.walked.add(phase)
-        self._remind()
+        self._show(phase, "", CONFIRMED)
 
-    def paths_walked(self, phase: str) -> None:
-        """Every path of a time point has been walked: its distances can be measured now."""
-        self.walked.add(phase)
-        self._remind()
-
-    def _remind(self) -> None:
-        """The reminder to measure and enter the distances, for as long as a walked time
-        point's are not all in. A reminder line of its own, not the status, which the next
-        trial replaces, and not the warning line, which a warning takes over and a stage
-        start clears (15 Oct 2026 pilot review)."""
-        waiting = [phase for phase in self.walked if not self.time_points[phase].area_written]
-        self.experimenter.set_reminder(
-            self.experimenter.text["instructions"]["mapping_distances"] if waiting else ""
-        )
+    def open_time_point(self, phase: str) -> None:
+        """`phase`'s mapping begins: from now its distances can be entered, in a column of the
+        distances box of their own, whose empty fields say what is still to enter."""
+        self.time_points.setdefault(phase, _TimePoint(self.n_paths))
+        self.experimenter.set_mapping_phases([*self.time_points])
 
     # -- the experimenter's entries ----------------------------------------------------
 
     def enter(self, phase: str, distances: Sequence[float | None]) -> None:
-        """Distances for one time point, None for any not yet measured. Never blocks."""
-        if phase not in self.time_points:
-            raise SessionError(f"distances were entered for {phase!r}, which has no mapping")
+        """Distances for one time point, None for any not yet measured. Never blocks.
+
+        What became of them is said in the distances box (S, 21 Oct 2026): what was recorded
+        or corrected, or why a value is queried -- inside the primary zone, or further than any
+        border should be -- and that entering it again keeps it."""
         if len(distances) != self.n_paths:
             raise SessionError(
                 f"{len(distances)} distances were entered for {phase!r}; there are "
                 f"{self.n_paths} paths"
             )
+        if phase not in self.time_points:
+            raise SessionError(f"distances were entered for {phase!r}, which has no mapping")
+        # A column of the box exists from the mapping's start, so a distance can be typed
+        # before its path is walked: it is held, and its row written when the path starts.
         point = self.time_points[phase]
-        warnings = []
+        words = self.experimenter.text["distances"]
+        name = self.experimenter.text["timeline"][phase]
+        queries, recorded, corrected_values = [], [], []
         corrected = False
         for path, value in enumerate(distances, start=1):
             if value is None:
@@ -183,15 +183,16 @@ class MappingLedger(QObject):
                     "distance_queried", origin="experimenter", severity="warning",
                     detail=f"{phase}, path {path}: {value} mm",
                 )
-                warnings.append(
-                    self.experimenter.text["warnings"]["distance_implausible"].format(
-                        path=self.path_name(path), value=f"{value:g}"
-                    )
-                )
+                low_mm = float(self.mapping["distance_plausible_min_mm"])
+                why = "inside_primary" if value < low_mm else "too_far"
+                queries.append(words[why].format(phase=name, path=self.path_name(path),
+                                                 value=f"{value:g}"))
                 continue
             confirmed = point.queried.pop(path, None) == value
             point.distances[path] = (value, self.session.clock.wall_iso())
+            shown = words["value"].format(path=self.short_path_name(path), value=f"{value:g}")
             if previous is None:
+                recorded.append(shown)
                 self.session.log(
                     "distance_entered", origin="experimenter",
                     severity="warning" if confirmed else "info",
@@ -200,25 +201,33 @@ class MappingLedger(QObject):
                 )
             else:
                 corrected = True
+                corrected_values.append(shown)
                 self.session.log(
                     "distance_corrected", origin="experimenter", severity="warning",
                     detail=f"{phase}, path {path}: {previous[0]} mm -> {value} mm",
                 )
             if path in point.starts:
                 self._write_path(phase, point, path)
-        if warnings:
-            self._query_warning = " ".join(warnings)
-            self.experimenter.set_warning(self._query_warning)
-        elif self._query_warning is not None and not any(
-            p.queried for p in self.time_points.values()
-        ):
-            # Every query answered: confirmed, or replaced by a plausible value.
-            self.experimenter.clear_warning(self._query_warning)
-            self._query_warning = None
+        if queries:
+            self._show(phase, " ".join(queries), QUERIED)
+        elif recorded or corrected_values:
+            lines = []
+            if recorded:
+                lines.append(words["recorded"].format(phase=name, values=", ".join(recorded)))
+            if corrected_values:
+                lines.append(words["corrected"].format(phase=name,
+                                                       values=", ".join(corrected_values)))
+            self._show(phase, " ".join(lines), CONFIRMED)
         if point.complete and (not point.area_written or corrected):
             self._write_area(phase, point)
-        self._remind()
         self.experimenter.refresh()
+
+    def _show(self, phase: str, message: str, kind: str) -> None:
+        """The box's fields for `phase` as the ledger holds them, and `message` under them."""
+        point = self.time_points[phase]
+        self.experimenter.distances.show_outcome(
+            phase, {path: value for path, (value, _) in point.distances.items()},
+            dict(point.queried), message, kind)
 
     # -- session end (SPEC.md 8.4) ------------------------------------------------------
 
@@ -234,8 +243,10 @@ class MappingLedger(QObject):
         outstanding = self.outstanding()
         if outstanding and not self.prompted:
             self.prompted = True
+            # Which are missing, and which wait for a confirmation (S, 21 Oct 2026).
             self.experimenter.set_instruction(
-                self.experimenter.text["dialogs"]["distances_outstanding"]
+                instruction(self.session.config, "distances_outstanding",
+                            missing=self.missing_text(outstanding)), NOW
             )
             self.experimenter.refresh()
             self.session.log(
@@ -255,13 +266,38 @@ class MappingLedger(QObject):
                 elif path not in point.rows:
                     self._write_path(phase, point, path)
             self._write_area(phase, point)
-        self._remind()
         return True
+
+    def incomplete(self) -> list[str]:
+        """Time points without all four distances: once closed, those recorded missing."""
+        return [phase for phase, point in self.time_points.items() if not point.complete]
+
+    def missing_text(self, phases: Sequence[str]) -> str:
+        """Each of `phases`' distances still missing, and which wait for a confirmation, for
+        the closing prompt and the session-complete page."""
+        text = self.experimenter.text
+        dialogs = text["dialogs"]
+        parts = []
+        for phase in phases:
+            point = self.time_points[phase]
+            paths = [dialogs["distance_to_confirm"].format(path=self.path_name(path))
+                     if path in point.queried else self.path_name(path)
+                     for path in range(1, self.n_paths + 1) if path not in point.distances]
+            listed = (dialogs["distances_missing_all"]
+                      if len(paths) == self.n_paths and not point.queried
+                      else ", ".join(paths))
+            parts.append(dialogs["distances_missing"].format(
+                phase=text["timeline"][phase], paths=listed))
+        return "; ".join(parts)
 
     # -- plumbing ----------------------------------------------------------------------
 
     def path_name(self, path: int) -> str:
         return self.experimenter.text["terms"]["mapping_paths"][self.path_ids[path - 1]]
+
+    def short_path_name(self, path: int) -> str:
+        """As the distances box's rows name it, for its own narrow message line."""
+        return self.experimenter.text["terms"]["mapping_paths_short"][self.path_ids[path - 1]]
 
     def _write_path(self, phase: str, point: _TimePoint, path: int) -> None:
         start_iso, start_t = point.starts[path]
@@ -339,6 +375,8 @@ class AreaMapping(Procedure):
 
     def begin(self) -> None:
         self.session.log("mapping_started", detail=self.session.phase)
+        # The distances can be entered from now on, for this time point and any earlier one.
+        self.ledger.open_time_point(self.session.phase)
         self._await_path()
 
     def _standby(self) -> None:
@@ -348,7 +386,6 @@ class AreaMapping(Procedure):
         self.path += 1
         if self.path > self.n_paths:
             # The borders are on the skin; what is left is measuring them, whenever convenient.
-            self.ledger.paths_walked(self.session.phase)
             self.experimenter.refresh()
             self.finish(MappingResult(self.session.phase, self.n_paths))
             return
@@ -356,15 +393,23 @@ class AreaMapping(Procedure):
             "mapping_ready", index=self.path, count=self.n_paths,
             path=self.ledger.path_name(self.path),
         )
-        # Read aloud before the first path; there is no participant mapping screen.
+        # Read aloud before the first path; there is no participant mapping screen. Built
+        # last, so the noise stays silent while it is up (`tatp.audio.NoiseGate`).
         if self.path == 1:
-            instruction = f"{self.instruction_text('mapping_script')}\n\n{ready}"
+            text = f"{self.instruction_text('mapping_script')}\n\n{ready}"
         else:
-            instruction = ready
+            text = ready
+
+        path_id = self.ledger.path_ids[self.path - 1]
 
         def prepare() -> None:
             self._standby()
-            self.experimenter.set_instruction(instruction)
+            # The path to walk next on the diagram beside it (S, 21 Oct 2026).
+            self.experimenter.set_instruction(text, PREPARE)
+            # Not beside the script read aloud before the first path, which has the
+            # instruction's whole width (LOG N7.F17e).
+            if self.path > 1:
+                self.experimenter.set_target(SECONDARY_ZONE, path=path_id)
             self.experimenter.set_status("")
             self.experimenter.refresh()
 
@@ -378,7 +423,9 @@ class AreaMapping(Procedure):
         self.experimenter.set_instruction(self.instruction_text(
             "mapping_path", path=self.ledger.path_name(self.path),
             step=f"{float(self.mapping['step_size_mm']):g}",
-        ))
+        ), NOW)
+        self.experimenter.set_target(SECONDARY_ZONE, filament=True,
+                                     path=self.ledger.path_ids[self.path - 1])
         self.experimenter.refresh()
         self.cue = 0
         self.on_proceed(self._stop_path)

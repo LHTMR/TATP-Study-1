@@ -54,12 +54,11 @@ from collections.abc import Callable
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication
 
-from tatp.config import instruction
 from tatp.interruption import Interruptions
 from tatp.remote_keys import key_source
 from tatp.session import Session
-from tatp.trials import MessageConfirm, VasTraining
-from tatp.ui.experimenter import ExperimenterWindow
+from tatp.trials import MessageConfirm, VasTraining, spoken_instruction
+from tatp.ui.experimenter import NOW, WAIT, ExperimenterWindow
 from tatp.ui.participant import STANDBY_SCREEN, ParticipantWindow, RemoteKeyRouter
 from tatp.units import MS_PER_S
 
@@ -76,6 +75,7 @@ PRACTICE_INTRO = "practice_intro"
 PROPORTIONALITY = "proportionality"
 # Between the scale's labels where the experimenter is told to read them out.
 ANCHOR_SEPARATOR = " / "
+
 
 
 class Rig(QObject):
@@ -393,7 +393,7 @@ class Procedure(QObject):
                 VAS_TRAINING_INSTRUCTION,
                 anchors=ANCHOR_SEPARATOR.join(anchor["label"] for anchor in anchors),
                 explanation=config.say[PROPORTIONALITY][scale],
-            ))
+            ), NOW)
             self.experimenter.set_status("")
             self.experimenter.refresh()
             self.session.log(VAS_TRAINING_SHOWN, detail=scale)
@@ -407,13 +407,18 @@ class Procedure(QObject):
 
         self.await_proceed(explained, show)
 
-    def instruct(self, key: str, **values: object) -> None:
-        """What the experimenter should do now (SPEC.md 11), filled by `config.instruction`."""
-        self.experimenter.set_instruction(self.instruction_text(key, **values))
+    def instruct(self, key: str, heading: str, wait_s: float | None = None,
+                 **values: object) -> None:
+        """What the experimenter should do now (SPEC.md 11), filled by `config.instruction`,
+        under `heading` (`tatp.ui.experimenter.HEADINGS`) and, for a wait, its time left."""
+        self.experimenter.set_instruction(self.instruction_text(key, **values), heading,
+                                          wait_s)
         self.experimenter.refresh()
 
     def instruction_text(self, key: str, **values: object) -> str:
-        return instruction(self.session.config, key, **values)
+        """`instructions.<key>`, filled. One with a sentence to say aloud silences the noise
+        while it is up, and any other brings it back (`tatp.audio.NoiseGate`)."""
+        return spoken_instruction(self.session, key, **values)
 
     def wait(self, seconds: float, then: Callable[[], None]) -> None:
         """Session-paced time: scaled by the clock, and restarted if interrupted."""
@@ -437,7 +442,8 @@ class Procedure(QObject):
 
         def show() -> None:
             self.participant.show_message(screen)
-            self.experimenter.set_instruction(instruction)
+            # The participant is reading: nothing for the experimenter to do but wait.
+            self.experimenter.set_instruction(instruction, WAIT)
             self.experimenter.set_status("")
             self.experimenter.refresh()
 

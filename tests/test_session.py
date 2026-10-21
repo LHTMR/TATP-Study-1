@@ -55,7 +55,8 @@ def _session_values(session):
 
 def _session_with(loaded, tmp_path, schedule, participant_code):
     """A session on a crafted schedule, so a test never depends on today's `schedule.yaml`."""
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "d"),
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "d"),
                                             "cloud_sync_markers": []}}
     config = cfg.Config(**{**loaded.__dict__, "hardware": hardware, "schedule": schedule})
     return Session(config, participant_code, 1, "SM", EXAMPLES)
@@ -192,7 +193,8 @@ def test_startup_warnings_reach_the_log(session):
 
 def test_unapproved_participant_wording_is_logged_at_startup(loaded, tmp_path):
     """SPEC.md 20. Driven by a crafted config, so it stays tested as wording gets approved."""
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "d"),
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "d"),
                                             "cloud_sync_markers": []}}
     text = {**loaded.participant_text, "screens": {"standby": f"{cfg.PLACEHOLDER_PREFIX} - no"}}
     config = cfg.Config(

@@ -137,3 +137,53 @@ def test_the_real_output_is_not_built_until_something_plays(audio_config, monkey
     assert built == []
     made.start_noise(-40.0)
     assert len(built) == 1
+
+
+# -- the noise gate and the tick (S, 21 Oct 2026; docs/LOG.md N7.F18j) ----------------------
+
+
+def test_silenced_noise_keeps_its_stream_so_the_cue_still_sounds(audio, logged):
+    audio.start_noise(-35.0)
+    audio.silence_noise("not needed")
+    assert audio.output.events[-1] == ("set_noise", 0.0)
+    assert audio.noise_running and audio.noise_silenced
+    audio.participant_cue()
+    assert _events(audio)[-1] == "participant_tone", "the cue at its usual level"
+    audio.set_noise_level(-30.0)
+    assert audio.output.events[-1][0] == "participant_tone", "silent until let back"
+    audio.unsilence_noise("needed")
+    assert audio.output.events[-1] == ("set_noise", amplitude(-30.0))
+    names = [event for event, _ in logged if event.startswith("white_noise")]
+    assert names[-2:] == ["white_noise_silenced", "white_noise_resumed"]
+
+
+def test_the_gate_follows_the_garment_and_what_is_said(audio):
+    gate = audio_module.NoiseGate(audio)
+    gate.want(True, "calibration")
+    gate.say(True)
+    assert audio.output.events == [], "nothing before the masking check sets a level"
+    audio.start_noise(-35.0)
+    gate.arm()
+    assert audio.noise_silenced, "said aloud"
+    gate.say(False)
+    assert not audio.noise_silenced, "the garment may run"
+    gate.want(False, "calibration done")
+    assert audio.noise_silenced
+    gate.want(True, "the touch")
+    assert not audio.noise_silenced
+
+
+def test_the_tick_is_a_click_no_louder_than_the_alert(audio_config):
+    """S, 21 Oct 2026: "more like a tick and less like an alert": a sharp start, gone within
+    a few ms, its peak no higher than the alert's."""
+    rate = int(audio_config["sample_rate_hz"])
+    level = float(audio_config["experimenter_alert_level_dbfs"])
+    samples = audio_module.click(float(audio_config["pacing_tick_hz"]),
+                                 float(audio_config["pacing_tick_duration_s"]),
+                                 float(audio_config["pacing_tick_decay_s"]), level, rate)
+    peak = amplitude(level) * np.sqrt(2)
+    assert np.max(np.abs(samples)) <= peak
+    onset = int(rate / float(audio_config["pacing_tick_hz"]))
+    assert np.max(np.abs(samples[:onset])) > peak / 2, "it starts at once"
+    assert np.max(np.abs(samples[-onset:])) < peak / 100, "and has died away by its end"
+    assert len(samples) / rate < float(audio_config["experimenter_alert_duration_s"]) / 10

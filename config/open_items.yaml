@@ -88,7 +88,11 @@ items:
   - item: "11"
     summary: A proper hyperalgesic-zone figure
     resolved_when: {file: study1.yaml, path: "assets.zone_diagram_approved"}
-    fix: Replace assets/hyperalgesia_zones.svg. Explicitly not blocking (SPEC.md 20).
+    fix: Replace assets/hyperalgesia_zones.svg, keeping its ids. Explicitly not blocking
+         (SPEC.md 20). Since 21 Oct 2026 the figure also says where each numbered
+         stimulation site is (`primary_site_N`, `secondary_site_N`), which the experimenter
+         applies to; the placeholder spreads them evenly, which is a guess (docs/LOG.md
+         N7.F18e). Settle their placement before piloting with participants.
     blocks_use: false
 
   - item: "12"

@@ -180,14 +180,26 @@ the experimenter screen; the session never moves on for it (§8.3). The wait doe
 through a stop or a pause, and starts again at the resume (docs/LOG.md N7.F17e).
 
 A demonstration (`demo` true in the session file, docs/LOG.md N7.D23) logs who presses:
-`demo_simulation`, `detail` `participant: <mode>` or `experimenter: <mode>` (`off` a person,
-`watch` or `fast` a simulation), at the start and at every change, so each response's origin
-can be read back; and each Skip, `demo_wait_skipped`, `detail` the session seconds
-skipped -- `t_session_s` jumps by that much there. Auto-run is `demo_auto_run`, `detail`
-`on` when switched on and `off` when switched off (docs/LOG.md N7.F17d; before 20 Oct 2026 it
-ran one stage, and `detail` was that stage's id); a Fast-forward is `demo_fast_forward`, `detail` the phase it runs
-to, and skips every timed wait on the way, each a `demo_wait_skipped` with no lead left
-(docs/LOG.md N7.F16j).
+`demo_simulation`, `detail` `participant: <mode>` or `experimenter: <mode>` (`off` manual, a
+person; `watch` or `fast` auto, a simulation), at the start and at every change, so each
+response's origin can be read back. Auto-run is `demo_auto_run`, `detail` `on` when switched
+on and `off` when switched off (docs/LOG.md N7.F17d; before 20 Oct 2026 it ran one stage, and
+`detail` was that stage's id), and skips every timed wait as it begins, each a
+`demo_wait_skipped`, `detail` the session seconds skipped -- `t_session_s` jumps by that much
+there.
+
+A Jump to (from 21 Oct 2026, docs/LOG.md N7.F18b; it replaced Skip and Fast-forward, whose
+`demo_fast_forward` older demonstrations have) is `demo_jump` (`warning`), `detail` `from
+<stage id> to <stage id>`, with `; run again, its earlier rows stand` when it goes back to a
+stage already begun. Every row after it, up to the next `demo_jump`, belongs to the stage
+jumped to and what follows, so a stage run twice has two sets of rows, told apart by their
+`timestamp_iso` against the jump's. What the stages between were not run for is not there; where
+a later stage needed it, the configured fallback stood in, each logged `demo_jump_fallback`
+(`warning`, `detail` what stood in and why): the touch calibration as `touchcal_skipped` with
+the device range's targets, a pinprick estimate as the configured start filament, the touch
+scales' training as given. A jump forward moves session time on, never back: `t_session_s`
+jumps to the stage's scheduled time, less `demo.skip_lead_s`, or to the latest scheduled time
+before it, and t=0 is set at the jump (`sensitisation_started`) when the stage comes after it.
 
 Each pinprick or brush application logs `stimulus_due` when the cue's lead is over and the
 experimenter is asked to apply it, then `stimulus_delivered` (`origin` experimenter) at their
@@ -254,11 +266,21 @@ intervention is counted as an intervention one too. A choice no longer offered w
 dialog is confirmed is logged `recalibration_ignored` (severity `warning`) and does nothing.
 
 `substitution_not_recorded` (origin `experimenter`, severity `warning`, `detail`
-`trial <n>: <what was typed>`) is written when a filament trial ends with something typed in
-the filament-applied-instead entry and Record filament never pressed. It did **not** change
-what the trial's row records as applied. The entry is offered only during a
-filament trial and emptied when it ends, so the text is never carried to the next trial
-(docs/LOG.md N7.F11a3).
+`trial <n>: <label> g`) is written when a filament trial ends with a filament chosen in the
+filament-applied-instead choice and Record never pressed. It did **not** change what the
+trial's row records as applied. The choice is offered only during a filament trial and reset
+when it ends, so it is never carried to the next trial (docs/LOG.md N7.F11a3). Until 21 Oct
+2026 the entry was free text, `detail` what was typed, and a label not in the set was refused
+as `substitution_unknown`; the choice now lists the set's filaments only (N7.F18e).
+
+The masking noise is heard only while the garment may run: through the touch calibration and
+while the intervention's touch is on, from the masking check on (docs/LOG.md N7.F18j). Otherwise
+it is silenced, its stream still running so the participant's cue still sounds, and while an
+instruction asks the experimenter to say something aloud. Each change is `white_noise_silenced`
+or `white_noise_resumed` (`detail` why, the level once resumed). Until 21 Oct 2026 the noise ran
+throughout, stopped only for the area mapping (`white_noise_stopped` / `white_noise_resumed`,
+`detail` `area mapping`); `white_noise_stopped` is now the earplug exchange's and the session's
+close.
 
 `software_error` (severity `error`, the exception in `detail`) is written when an error nothing
 in the software caught stops the session: the garment goes to zero, the experimenter is told

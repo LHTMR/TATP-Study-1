@@ -64,7 +64,8 @@ def loaded():
 @pytest.fixture
 def running(app, loaded, tmp_path):
     """A started session with both windows, ready for a trial."""
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "data"),
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data"),
                                             "cloud_sync_markers": []}}
     config = cfg.Config(**{**loaded.__dict__, "hardware": hardware})
     session = Session(
@@ -280,11 +281,24 @@ def test_the_sequence_reaches_the_log(running):
 
 
 def test_the_experimenter_is_told_what_to_apply_and_never_the_rating(running):
-    session, _, experimenter = running
+    """Named by its gram label (SPEC.md 8.1), under Prepare and then Now, where it goes on the
+    diagram beside it rather than in words (S, 21 Oct 2026)."""
+    session, participant, experimenter = running
     text = session.config.experimenter_text
+    trial = PinprickTrial(session, participant, experimenter, APPLICATION)
+    trial.start()
+    headings = text["headings"]
+    assert "26 g" in experimenter.instruction.text()
+    assert experimenter.alert.text() == headings["prepare"]
+    assert (experimenter.zone.region, experimenter.zone.site) == (
+        APPLICATION.region, APPLICATION.site_index)
+    _spin(lambda: trial.awaits_proceed)
+    assert experimenter.instruction.text() == cfg.instruction(
+        session.config, "apply_filament", filament="26")
+    assert experimenter.alert.text() == headings["now"]
+    assert experimenter.zone.site == APPLICATION.site_index
+    trial.cancel()
     _run_trial(running)
-    assert "26 g" in experimenter.instruction.text(), "named by its gram label (SPEC.md 8.1)"
-    assert text["terms"]["regions"]["primary"] in experimenter.instruction.text()
     assert experimenter.status.text() == text["instructions"]["response_received"]
     assert "40" not in experimenter.status.text(), "a rating never reaches the lab screen"
 

@@ -22,7 +22,7 @@ from pathlib import Path
 from tatp import allocation as alloc
 from tatp import provenance
 from tatp import schedule as sched
-from tatp.audio import Audio
+from tatp.audio import Audio, NoiseGate
 from tatp.clock import ISO_FORMAT, Clock
 from tatp.config import REPO_ROOT, Config, hash_files
 from tatp.datafiles import DataFileCollection
@@ -340,6 +340,9 @@ class Session:
         # SPEC.md 10.5, 10.7. Owned here beside the garment for the same reason: every phase
         # needs it and none of them does it.
         self.audio = Audio(config.hardware["audio"], self.clock, self.log)
+        # When the masking noise is heard (S, 21 Oct 2026): the session runner says when the
+        # garment may run, and every instruction whether it is said aloud.
+        self.noise = NoiseGate(self.audio)
 
     def _unused_stamp(self, participant_code: str, session_number: int) -> str:
         """A filename stamp no file of this participant and session already has.
@@ -418,13 +421,18 @@ class Session:
         kind, label_key, block_index, block_type, due_s = self._upcoming
         now_s = self.clock.t_session_s()
         due_in_s = due_s - (0.0 if now_s is None else now_s)
+        # The same moments as the lab-side alerts (schedule.yaml validation): due soon from
+        # the due alert on, and overdue from the overdue alert on, not the moment it is late
+        # (S, 21 Oct 2026: OVERDUE the instant a step fell due was alarming).
+        validation = self.config.schedule["validation"]
         return {
             "kind": kind,
             "label_key": label_key,
             "block_index": block_index,
             "block_type": block_type,
             "due_in_s": due_in_s,
-            "overdue": due_in_s < 0,
+            "due_soon": due_in_s <= float(validation["due_alert_lead_s"]),
+            "overdue": -due_in_s > float(validation["overdue_alert_margin_s"]),
         }
 
     def set_upcoming(

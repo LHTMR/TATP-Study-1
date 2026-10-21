@@ -55,7 +55,8 @@ def state(loaded):
 @pytest.fixture
 def running(app, loaded, tmp_path):
     """A started session in the touch-calibration phase, with both windows."""
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "data"),
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data"),
                                             "cloud_sync_markers": []}}
     config = cfg.Config(**{**loaded.__dict__, "hardware": hardware})
     session = Session(

@@ -32,7 +32,7 @@ from tatp.pinprick import PAIN_SCALE
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import Session
-from tatp.ui.experimenter import ExperimenterWindow
+from tatp.ui.experimenter import NOW, PREPARE, ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
@@ -58,7 +58,8 @@ def loaded():
 
 @pytest.fixture
 def rig(app, loaded, tmp_path):
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "data"),
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data"),
                                             "cloud_sync_markers": []}}
     config = cfg.Config(**{**loaded.__dict__, "hardware": hardware})
     session = Session(
@@ -291,11 +292,10 @@ def test_each_adjustment_is_held_at_the_ceiling_afresh(rig):
 
 
 def test_the_instruction_template_parses_back_into_its_fields(loaded):
-    template = instruction_template(loaded, "apply_filament")
-    text = template.format(filament="0.40", force_mn=3.9, site=2, region="primary")
+    template = instruction_template(loaded, "next_filament")
+    text = template.format(filament="0.40")
     match = template_pattern(template).fullmatch(text)
     assert match["filament"] == "0.40"
-    assert match["site"] == "2"
 
 
 def test_the_experimenter_applies_the_named_filament_at_every_cue(rig):
@@ -307,7 +307,8 @@ def test_the_experimenter_applies_the_named_filament_at_every_cue(rig):
     rig.experimenter.set_instruction(
         instruction(rig.session.config, "prepare_filament",
                     filament="26", force_mn=255.0, site=1,
-                    region=text["terms"]["regions"]["primary"])
+                    region=text["terms"]["regions"]["primary"]),
+        PREPARE,
     )
     for applications in (1, 2):
         rig.participant.show_warning_cue()
@@ -325,7 +326,8 @@ def test_the_experimenter_strokes_the_brush_when_asked(rig):
     text = rig.experimenter.text
     rig.experimenter.set_instruction(
         instruction(rig.session.config, "prepare_brush",
-                    site=1, region=text["terms"]["regions"]["primary"])
+                    site=1, region=text["terms"]["regions"]["primary"]),
+        PREPARE,
     )
     rig.participant.show_warning_cue()
     _spin(lambda: experimenter.applied == ["brush"])
@@ -341,9 +343,10 @@ def test_the_experimenter_presses_start_when_the_software_waits(rig):
     rig.experimenter.proceed_requested.connect(lambda: presses.append(1))
     experimenter.start()
     # Any instruction that waits on Next step; "ready" became one per kind of series.
-    rig.experimenter.set_instruction(cfg.instruction(rig.session.config, "rekindle_remove"))
+    rig.experimenter.set_instruction(
+        cfg.instruction(rig.session.config, "rekindle_remove"), NOW)
     _spin(lambda: presses)
-    rig.experimenter.set_instruction(cfg.instruction(rig.session.config, "stop_rehearsal"))
+    rig.experimenter.set_instruction(cfg.instruction(rig.session.config, "stop_rehearsal"), NOW)
     count = len(presses)
     deadline = time.monotonic() + 0.05
     _spin(lambda: time.monotonic() > deadline)
@@ -358,7 +361,8 @@ def test_nothing_is_applied_without_a_cue(rig):
     rig.experimenter.set_instruction(
         instruction(rig.session.config, "prepare_filament",
                     filament="26", force_mn=255.0, site=1,
-                    region=text["terms"]["regions"]["primary"])
+                    region=text["terms"]["regions"]["primary"]),
+        PREPARE,
     )
     deadline = time.monotonic() + 0.1
     _spin(lambda: time.monotonic() > deadline)

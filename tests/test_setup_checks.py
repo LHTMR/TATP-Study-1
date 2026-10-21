@@ -392,7 +392,8 @@ def test_the_rehearsal_fires_the_real_stop_and_shows_the_resume(rig, loaded, tmp
     seen = []
     instructions = []
     real = rig.experimenter.set_instruction
-    rig.experimenter.set_instruction = lambda text: (instructions.append(text), real(text))
+    rig.experimenter.set_instruction = lambda text, *rest: (instructions.append(text),
+                                                            real(text, *rest))
     virtual = Virtual(rig, StopRehearsal(rig))
 
     def watch(trial):

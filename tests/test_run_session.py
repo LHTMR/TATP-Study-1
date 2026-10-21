@@ -45,7 +45,8 @@ def loaded():
 def config(loaded, tmp_path):
     hardware = {
         **loaded.hardware,
-        "data": {"folder": str(tmp_path / "data"), "cloud_sync_markers": []},
+        "data": {**loaded.hardware["data"],
+                 "folder": str(tmp_path / "data"), "cloud_sync_markers": []},
         "audio": {**loaded.hardware["audio"], "backend": "recording"},
         # One offscreen screen, not the lab's two.
         "screens": {

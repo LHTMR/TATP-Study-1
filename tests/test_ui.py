@@ -15,7 +15,8 @@ import numpy as np
 import pytest
 from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QFont, QFontInfo, QFontMetrics, QImage, QKeyEvent, QKeySequence
-from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from tatp import config as cfg
 from tatp import screenshots
@@ -25,7 +26,7 @@ from tatp.session import Session
 from tatp.ui import experimenter as experimenter_ui
 from tatp.ui import participant as participant_ui
 from tatp.ui import widgets
-from tatp.ui.experimenter import ExperimenterWindow
+from tatp.ui.experimenter import CONFIRMED, NOW, QUERIED, ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 from tatp.ui.vas import BACKGROUND, QT_KEYS, QUESTION_Y_FRACTION, SIDE_MARGIN_FRACTION
 
@@ -33,6 +34,12 @@ EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
 SPIN_TIMEOUT_S = 5.0
 LAPTOP_WIDTH_PX = screenshots.LAPTOP_WIDTH_PX
 LAPTOP_HEIGHT_PX = screenshots.LAPTOP_HEIGHT_PX
+# The instructions shown with the zone diagram beside them (S, 21 Oct 2026).
+WITH_DIAGRAM = (
+    "prepare_filament", "prepare_brush", "apply_filament", "apply_brush",
+    "rating_next_filament", "rating_next_either", "rating_next_brush", "next_filament",
+    "next_brush", "ready_long", "ready_short", "ready_brush", "mapping_ready", "mapping_path",
+)
 # The share of a banner's width a headline may take, leaving room for a machine that renders
 # the same font a little wider.
 BANNER_WIDTH_MARGIN = 0.95
@@ -53,7 +60,8 @@ def loaded():
 
 @pytest.fixture
 def session(loaded, tmp_path):
-    hardware = {**loaded.hardware, "data": {"folder": str(tmp_path / "data"),
+    hardware = {**loaded.hardware, "data": {**loaded.hardware["data"],
+                                            "folder": str(tmp_path / "data"),
                                             "cloud_sync_markers": []}}
     config = cfg.Config(**{**loaded.__dict__, "hardware": hardware})
     made = Session(config, "01", 1, "SM", EXAMPLES, clock=Clock(speed=100.0), rng_seed=7)
@@ -867,7 +875,10 @@ def test_every_instruction_fits_its_region(app, participant, experimenter):
         ready=cfg.instruction_template(config, "ready_short"),
     )
     for key, template in _instructions_to_show(config).items():
-        window.set_instruction(template.format_map(values))
+        window.set_instruction(template.format_map(values), NOW)
+        # Those shown with the zone diagram beside them, at the narrower width it leaves.
+        if key in WITH_DIAGRAM:
+            window.set_target("primary", 1)
         label = window.instruction
         assert label.heightForWidth(window._left_width()) <= label.height(), (
             f"instructions.{key} runs past its region ({participant} participant, "
@@ -898,7 +909,7 @@ def test_a_warning_outlives_the_routine_status_and_one_stage_start(drawn):
     next stage's start and goes at the one after."""
     window, _ = drawn
     text = window.text
-    warning = text["warnings"]["substitution_unknown"].format(filament="2")
+    warning = text["warnings"]["application_cap"].format(value="20")
     window.set_warning(warning)
     window.set_status(text["instructions"]["await_participant"])
     shown = window.status.text()
@@ -927,11 +938,8 @@ def test_every_warning_the_status_region_carries_fits_it(app, language):
     shown = [warnings[key].format_map(values) for key in (
         "catch_trials_felt", "masking_at_ceiling", "masking_failed",
         "masking_failed_after_earplugs", "equalisation_mismatch", "application_cap",
-        "substitution_unknown", "substitution_not_lower", "distance_implausible",
+        "mapping_limit",
     )]
-    shown.append(warnings["substitution_not_recorded"].format(
-        value="0.008", controls=text["controls"]
-    ))
     # The long protocol can raise its two together, as `LongProtocol._warn` joins them.
     out_of_range = warnings["out_of_range"].format(
         value=max(text["terms"]["out_of_range"].values(), key=len)
@@ -941,9 +949,27 @@ def test_every_warning_the_status_region_carries_fits_it(app, language):
     for filled in shown:
         window.set_warning(filled)
         assert filled in window.status.text()
-        assert window.status.heightForWidth(window._left_width()) <= window.status.height(), (
-            f"{filled!r} runs past the status region in {language}"
-        )
+        assert window.status.heightForWidth(window._status_width()) <= (
+            window.status.height()), f"{filled!r} runs past the status region in {language}"
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_what_became_of_a_substitution_fits_beside_it(app, language):
+    """S, 21 Oct 2026: a message beside what was entered, not in the middle of the screen."""
+    config = cfg.load(language, language)
+    text = config.experimenter_text
+    window = screenshots._session_window(config, lambda: _all_keys())
+    window.resize(LAPTOP_WIDTH_PX, LAPTOP_HEIGHT_PX)
+    window.show()
+    warnings = text["warnings"]
+    for key, kind in (("substitution_recorded", CONFIRMED), ("substitution_not_lower", QUERIED),
+                      ("substitution_not_recorded", QUERIED)):
+        shown = warnings[key].format(filament="0.008", value="0.008",
+                                     controls=text["controls"])
+        window.show_substitution(shown, kind)
+        QApplication.processEvents()
+        line = window.substitution_message
+        assert line.heightForWidth(line.width()) <= line.height(), (key, language)
 
 
 def test_a_warning_is_dimmed_with_its_step_while_interrupted(drawn):
@@ -977,7 +1003,7 @@ def test_the_window_fits_the_screenshot_size(drawn):
 
 def test_the_interruption_line_does_not_move_the_instruction(drawn):
     window, held = drawn
-    window.set_instruction("x")
+    window.set_instruction("x", experimenter_ui.NOW)
     window.show()
     before = window.instruction.pos().y()
     held["view"] = _all_keys(interruption="emergency_stop")
@@ -991,7 +1017,7 @@ def test_the_instruction_starts_at_the_same_place_in_every_step(drawn):
     5.5)."""
     window, _ = drawn
     window.show()
-    window.set_instruction("x")
+    window.set_instruction("x", experimenter_ui.NOW)
     plain = window.instruction.mapTo(window, window.instruction.rect().topLeft())
     window.set_target("primary", 3, filament=True)
     window.set_status("y")
@@ -1056,14 +1082,15 @@ def test_a_hidden_control_leaves_the_focus_with_the_window(drawn):
     assert QApplication.focusWidget() is window
 
 
-def test_withdrawing_the_substitution_hands_back_unrecorded_text(drawn):
+def test_withdrawing_the_substitution_hands_back_an_unrecorded_choice(drawn):
     window, _ = drawn
+    window.set_filaments(["8", "15", "26"])
     window.set_actions_enabled(substitution=True)
-    window.substitution.setText(" 15 ")
+    window.substitution.setCurrentIndex(window.substitution.findData("15"))
     with pytest.raises(AssertionError, match="withdraw_substitution"):
         window.set_actions_enabled(substitution=False)
     assert window.withdraw_substitution() == "15"
-    assert window.substitution.text() == ""
+    assert window.substitution.currentData() == ""
     assert not window.substitution.isVisibleTo(window)
     window.refresh()
     assert window.withdraw_substitution() == "", "handed back once only"
@@ -1118,6 +1145,43 @@ def test_next_step_is_offered_only_while_a_press_would_do_something(drawn):
     assert seen == [()]
 
 
+@pytest.mark.parametrize("key, signal", [(Qt.Key_Space, "proceed_requested"),
+                                         (Qt.Key_P, "pause_requested")])
+def test_the_keys_work_whichever_window_is_active(app, loaded, key, signal):
+    """S, 21 Oct 2026: "none of the experimenter shortcuts work". On one screen the
+    participant's window is above this one, and once it was clicked it had the keys: the keys
+    now work across the program."""
+    window = ExperimenterWindow(loaded.experimenter_text, lambda: _all_keys())
+    window.set_proceed_source(lambda: True)
+    window.show()
+    other = QWidget()
+    other.show()
+    other.activateWindow()
+    QTest.qWaitForWindowActive(other)
+    assert QApplication.activeWindow() is other
+    seen = _emitted(getattr(window, signal))
+    QTest.keyClick(other, key)
+    QApplication.processEvents()
+    assert seen == [()]
+    other.close()
+    window.close()
+
+
+def test_a_text_field_keeps_its_keys(app, loaded):
+    """A note being typed takes its spaces and letters: they never press Next or Pause."""
+    window = ExperimenterWindow(loaded.experimenter_text, lambda: _all_keys())
+    window.set_proceed_source(lambda: True)
+    window.show()
+    window.activateWindow()
+    QTest.qWaitForWindowActive(window)
+    window.note.setFocus()
+    seen = _emitted(window.proceed_requested) + _emitted(window.pause_requested)
+    QTest.keyClicks(window.note, "P ")
+    assert window.note.text() == "P "
+    assert seen == []
+    window.close()
+
+
 def test_the_step_on_hold_is_dimmed_while_interrupted(drawn):
     window, held = drawn
     running = (window.instruction.styleSheet(), window.status.styleSheet())
@@ -1130,13 +1194,20 @@ def test_the_step_on_hold_is_dimmed_while_interrupted(drawn):
     assert (window.instruction.styleSheet(), window.status.styleSheet()) == running
 
 
-def test_the_zone_diagram_is_shown_only_with_a_target(drawn):
+def test_the_zone_diagram_is_shown_only_with_a_target_beside_its_instruction(drawn):
+    """S, 21 Oct 2026: "bigger and below/connected to the instructions so that it is part of
+    the instructions": beside it, as tall as its region, and the instruction narrower then."""
     window, _ = drawn
-    assert not window.zone.isVisibleTo(window) and not window.target.isVisibleTo(window)
-    window.set_target("secondary", 2)
-    assert window.zone.isVisibleTo(window) and window.target.isVisibleTo(window)
-    window.set_instruction("next")
     assert not window.zone.isVisibleTo(window)
+    full = window._left_width()
+    window.set_target("secondary", 2)
+    assert window.zone.isVisibleTo(window)
+    assert window.zone.height() > experimenter_ui.INSTRUCTION_LINES * window.instruction.font(
+        ).pointSize(), "at least as tall as the instruction's lines"
+    assert window._left_width() < full
+    window.set_instruction("next", experimenter_ui.NOW)
+    assert not window.zone.isVisibleTo(window)
+    assert window._left_width() == full
 
 
 def test_the_session_clock_is_secondary(drawn):
@@ -1208,31 +1279,33 @@ def test_rebalance_and_the_fit_choice_wait_to_be_asked_for(drawn):
     assert not window.fit_accept_button.isVisibleTo(window)
 
 
-def test_the_recalibrations_are_offered_running_or_stopped_never_paused(drawn):
+def test_the_recalibration_is_offered_running_or_stopped_never_paused(drawn):
     """docs/LOG.md N7.F12a1: while running and beside Resume after a stop, not during the
-    experimenter's own pause; in the places of their kin, which win them when offered."""
+    experimenter's own pause; one control for both paths (S, 21 Oct 2026), in the place of
+    the calibration's own rematch, which wins it when offered."""
     window, held = drawn
-    pair = (window.recalibrate_rebalance_button, window.recalibrate_restart_button)
+    button = window.recalibrate_button
     window.set_actions_enabled(recalibrate_rebalance=True, recalibrate_restart=True)
     for kind in (None, "emergency_stop"):
         held["view"] = _all_keys(interruption=kind)
         window.refresh()
-        assert all(_offered(window, widget) for widget in pair), kind
+        assert _offered(window, button), kind
     held["view"] = _all_keys(interruption="pause")
     window.refresh()
-    assert not any(widget.isVisibleTo(window) for widget in pair)
+    assert not button.isVisibleTo(window)
     held["view"] = _all_keys()
     window.refresh()
-    for kin, widget in ((window.rebalance_button, pair[0]),
-                        (window.fit_rerun_button, pair[1])):
-        assert (window.controls.getItemPosition(window.controls.indexOf(kin))
-                == window.controls.getItemPosition(window.controls.indexOf(widget)))
-    window.set_actions_enabled(rebalance=True, fit_decision=True)
-    assert not any(widget.isVisibleTo(window) for widget in pair), "the kin win the place"
+    assert (window.controls.getItemPosition(window.controls.indexOf(window.rebalance_button))
+            == window.controls.getItemPosition(window.controls.indexOf(button)))
+    window.set_actions_enabled(rebalance=True)
+    assert not button.isVisibleTo(window), "the rematch wins the place"
     assert _offered(window, window.rebalance_button)
-    assert _offered(window, window.fit_rerun_button)
-    window.set_actions_enabled(rebalance=False, fit_decision=False, closed=True)
-    assert not any(widget.isVisibleTo(window) for widget in pair), "none once closed"
+    window.set_actions_enabled(rebalance=False, recalibrate_rebalance=False)
+    assert _offered(window, button), "either path alone offers it"
+    window.set_actions_enabled(recalibrate_restart=False)
+    assert not button.isVisibleTo(window), "nothing to take"
+    window.set_actions_enabled(recalibrate_rebalance=True, closed=True)
+    assert not button.isVisibleTo(window), "none once closed"
 
 
 def test_the_used_up_line_shows_only_while_stopped(drawn):
@@ -1246,23 +1319,32 @@ def test_the_used_up_line_shows_only_while_stopped(drawn):
         "recalibration_used"].format(controls=window.text["controls"])
 
 
-def test_a_recalibration_asks_why_from_a_fixed_list(drawn):
+def test_a_recalibration_asks_what_to_repeat_and_why(drawn):
+    """S, 21 Oct 2026: "the different options (which parts to repeat) should be clearer"."""
     window, held = drawn
-    reasons = window.text["dialogs"]["recalibration_reasons"]
+    dialogs = window.text["dialogs"]
+    reasons = dialogs["recalibration_reasons"]
     seen = _emitted(window.recalibration_requested)
-    for choice, button in (("rebalance", window.recalibrate_rebalance_button),
-                           ("restart", window.recalibrate_restart_button)):
-        dialog = window.open_recalibration_dialog(choice)
+    window.set_actions_enabled(recalibrate_rebalance=True, recalibrate_restart=True)
+    for choice in ("rebalance", "restart"):
+        dialog = window.open_recalibration_dialog()
+        assert list(dialog.actions) == ["rebalance", "restart"]
         assert list(dialog.options) == list(reasons)
-        assert not dialog.confirm.isEnabled(), "not without a reason"
+        assert dialog.windowTitle() == window.recalibrate_button.text()
+        dialog.options["channel_uneven"].click()
+        assert not dialog.confirm.isEnabled(), "not without what to repeat"
+        dialog.actions[choice].click()
+        assert dialog.confirm.isEnabled()
         dialog.options["too_strong"].click()
         dialog.options["channel_uneven"].click()
         assert [key for key, option in dialog.options.items() if option.isChecked()] == [
             "channel_uneven"], "one reason at a time"
         dialog.confirm.click()
         assert seen[-1] == (choice, "channel_uneven")
-        assert dialog.windowTitle() == button.text()
-    dialog = window.open_recalibration_dialog("restart")
+    window.set_actions_enabled(recalibrate_rebalance=False)
+    dialog = window.open_recalibration_dialog()
+    assert list(dialog.actions) == ["restart"], "only what can be taken"
+    assert dialog.action() == "restart", "chosen already, being the only one"
     dialog.options["other"].click()
     dialog.cancel.click()
     assert len(seen) == 2, "cancelling chooses nothing"
@@ -1374,15 +1456,17 @@ def test_the_note_field_asks_for_a_note_again_after_saying_one_was_saved(app, dr
         QApplication.processEvents()
 
 
-def test_the_rerun_reason_confirms_with_enter_and_the_recalibration_is_brief(drawn):
+def test_the_rerun_reason_confirms_with_enter_and_each_recalibration_says_what_it_repeats(
+        drawn):
     window, _ = drawn
     assert window.rerun_dialog().confirm.isDefault()
+    window.set_actions_enabled(recalibrate_rebalance=True, recalibrate_restart=True)
+    dialog = window.recalibration_dialog()
+    dialogs = window.text["dialogs"]
+    shown = {widget.text() for widget in dialog.findChildren(QLabel)}
     for choice in ("rebalance", "restart"):
-        dialog = window.recalibration_dialog(choice)
-        brief = window.text["dialogs"][f"recalibrate_{choice}"]
-        detail = window.text["dialogs"][f"recalibrate_{choice}_detail"]
-        assert dialog.message.text() == brief and dialog.message.toolTip() == detail
-        assert len(brief) < len(detail)
+        assert dialog.actions[choice].text() == dialogs["recalibrate_choices"][choice]
+        assert dialogs["recalibrate_choices_detail"][choice] in shown
 
 
 def test_a_rerun_carries_its_reason(drawn):
@@ -1400,12 +1484,15 @@ def test_a_note_and_a_substitution_are_emitted_and_cleared(drawn):
     notes, substitutions = _emitted(window.note_entered), _emitted(window.substitution_entered)
     window.note.setText("  participant sneezed ")
     window.note_button.click()
+    window.set_filaments(["8", "15", "26"])
     window.set_actions_enabled(substitution=True)
-    window.substitution.setText("15")
+    window.substitution.setCurrentIndex(window.substitution.findData("15"))
     window.substitution_button.click()
     assert notes == [("participant sneezed",)]
     assert substitutions == [("15",)]
-    assert window.note.text() == window.substitution.text() == ""
+    assert window.note.text() == "" and window.substitution.currentData() == ""
+    window.substitution_button.click()
+    assert substitutions == [("15",)], "nothing chosen is nothing recorded"
     window.note_button.click()
     assert notes == [("participant sneezed",)], "an empty note is not a note"
 
@@ -1416,37 +1503,69 @@ def test_the_distance_fields_follow_the_configured_path_order(drawn, loaded):
     assert window.distances.path_ids == loaded.study1["mapping"]["path_ids"]
 
 
-def test_distances_are_entered_for_a_mapped_phase_and_never_block(drawn):
+def test_distances_are_entered_in_the_window_against_their_own_time_point(drawn):
+    """S, 21 Oct 2026: embedded, not a window of its own; and a column per time point, since
+    one set of fields with a choice of time point sent post-intervention's distances as
+    post-sensitisation's corrections in S's demo."""
     window, _ = drawn
     distances = window.distances
     seen = _emitted(window.distances_entered)
-    assert not window.distances_button.isVisibleTo(window), "nothing mapped yet"
-    assert not distances.enter_button.isEnabled()
+    assert not distances.isVisibleTo(window), "nothing mapped yet"
+    assert distances.parent() is not None and not distances.isWindow()
     window.set_mapping_phases(["post_sensitisation"])
-    assert _offered(window, window.distances_button)
-    window.distances_button.click()
-    assert distances.isVisible() and not distances.isModal()
-    distances.fields[0].setText("42,5")
-    distances.fields[2].setText("-3")
+    assert _offered(window, distances)
+    distances.fields("post_sensitisation")[0].setText("42,5")
+    distances.fields("post_sensitisation")[2].setText("-3")
     distances.enter_button.click()
     assert seen == [("post_sensitisation", (42.5, None, -3.0, None))]
 
-    # A new mapping while distances are typed changes neither the fields nor the phase.
+    # A new mapping adds its own column and leaves what is typed where it was.
     window.set_mapping_phases(["post_sensitisation", "post_intervention"])
-    assert distances.phase.currentData() == "post_sensitisation"
-    assert distances.fields[0].text() == "42,5"
+    assert distances.fields("post_sensitisation")[0].text() == "42,5"
+    distances.fields("post_intervention")[1].setText("31")
+    distances.fields("post_intervention")[1].returnPressed.emit()
+    assert seen[-1] == ("post_intervention", (None, 31.0, None, None))
+    assert seen[-2][0] == "post_sensitisation", "Enter sends every time point typed in"
+    unit = window.text["distances"]["unit"]
+    assert distances.fields("post_intervention")[0].placeholderText() == unit
 
-    # With nothing typed, the latest phase is selected.
-    distances.clear()
-    window.set_mapping_phases(["post_sensitisation", "post_intervention", "rekindle"])
-    assert distances.phase.currentData() == "rekindle", "the latest when nothing is typed"
+
+def test_what_became_of_a_distance_is_said_beside_it(drawn):
+    window, _ = drawn
+    window.set_mapping_phases(["post_sensitisation"])
+    box = window.distances
+    box.show_outcome("post_sensitisation", {1: 42.0}, {2: 4.0}, "queried", QUERIED)
+    fields = box.fields("post_sensitisation")
+    assert widgets.TARGET_COLOUR in fields[0].styleSheet(), "recorded"
+    assert widgets.WARNING_COLOUR in fields[1].styleSheet(), "queried"
+    assert fields[2].styleSheet() == "", "nothing yet"
+    assert box.message.text() == "queried"
+    assert widgets.WARNING_COLOUR in box.message.styleSheet()
+
+
+@pytest.mark.parametrize("language", ["sv", "en"])
+def test_what_the_distances_box_says_fits_its_lines(app, language):
+    """Its column is narrow (S, 21 Oct 2026: the distances beside the garment), so what it
+    says is held to its lines: a query, and all four recorded at once."""
+    text = cfg.load(language, language).experimenter_text
+    words, short = text["distances"], text["terms"]["mapping_paths_short"]
+    line = widgets.label(widgets.SIZE_SMALL, wrap=True)
+    room = line.fontMetrics().lineSpacing() * experimenter_ui.DISTANCE_MESSAGE_LINES
+    values = ", ".join(words["value"].format(path=name, value="123.5")
+                       for name in short.values())
+    for shown in (words["inside_primary"].format(value="12.5"),
+                  words["too_far"].format(value="1234.5"),
+                  words["recorded"].format(phase=text["timeline"]["post_intervention"],
+                                           values=values)):
+        line.setText(shown)
+        assert line.heightForWidth(experimenter_ui.DISTANCES_COLUMN_PX) <= room, shown
 
 
 def test_an_unfinished_distance_is_not_sent(drawn):
     window, _ = drawn
     seen = _emitted(window.distances_entered)
     window.set_mapping_phases(["post_sensitisation"])
-    window.distances.fields[1].setText("12.")
+    window.distances.fields("post_sensitisation")[1].setText("12.")
     window.distances.enter_button.click()
     assert seen == []
 
@@ -1455,21 +1574,38 @@ def test_an_unfinished_distance_is_not_sent(drawn):
     "event, key",
     [
         ({"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch",
-          "due_in_s": 125.2, "overdue": False}, "next_event"),
+          "due_in_s": 125.2, "due_soon": False, "overdue": False}, "next_event"),
         ({"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch",
-          "due_in_s": -4.0, "overdue": False}, "block_due"),
+          "due_in_s": 25.2, "due_soon": True, "overdue": False}, "block_due_soon"),
         ({"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch",
-          "due_in_s": -400.0, "overdue": True}, "block_overdue"),
+          "due_in_s": -4.0, "due_soon": True, "overdue": False}, "block_due"),
+        ({"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch",
+          "due_in_s": -400.0, "due_soon": True, "overdue": True}, "block_overdue"),
         ({"kind": "rekindle", "label_key": "rekindle", "block_index": None, "block_type": None,
-          "due_in_s": -1.0, "overdue": False}, "event_due"),
+          "due_in_s": -1.0, "due_soon": True, "overdue": False}, "event_due"),
     ],
 )
 def test_the_countdown_states(drawn, event, key):
+    """Calm until near, then due; how late once it is, beside the clock, red only past the
+    overdue alert's margin (S, 21 Oct 2026: "This overdue notice is a bit alarming")."""
     window, held = drawn
     held["view"] = _all_keys(next_event=event)
     window.refresh()
     status = window.text["status"]
-    if key == "next_event":
+    late = event["due_in_s"] < 0
+    assert bool(window.behind.text()) == late
+    if late:
+        assert window.behind.text() == status["behind_schedule"].format(
+            time=experimenter_ui.clock_text(-event["due_in_s"]))
+        red = experimenter_ui.DISCONNECTED_COLOUR in window.behind.styleSheet()
+        assert red == event["overdue"]
+    if key == "block_due_soon":
+        assert window.countdown.text() == status["block_due_soon"].format(
+            block=3, type=window.text["terms"]["block_types"]["touch"], time="00:26")
+    elif key == "block_overdue":
+        assert window.countdown.text() == status["block_due"].format(
+            block=3, type=window.text["terms"]["block_types"]["touch"])
+    elif key == "next_event":
         assert window.countdown.text() == status["next_event"].format(
             phase=status["block_label"].format(
                 block=3, value=window.text["terms"]["block_types"]["touch"]
@@ -1592,7 +1728,7 @@ def test_accumulating_faults_do_not_grow_the_side_column(drawn):
 
 def test_refresh_does_not_refit_unchanged_text(drawn, monkeypatch):
     window, _ = drawn
-    window.set_instruction("apply")
+    window.set_instruction("apply", experimenter_ui.NOW)
     calls = []
     monkeypatch.setattr(experimenter_ui, "_fit_to", lambda *args: calls.append(args))
     window.refresh()
@@ -1615,14 +1751,35 @@ def test_a_fault_in_the_intervention_is_shown_without_its_channel(drawn):
 
 
 def test_the_zone_diagram_marks_the_target_and_a_new_step_clears_it(drawn):
+    """S, 21 Oct 2026: "The diagram should show the sites, rather than writing the site
+    number"; and a mapping path on it rather than in words."""
     window, _ = drawn
-    window.set_instruction("apply")
+    window.set_instruction("apply", experimenter_ui.NOW)
     window.set_target("secondary", 4)
-    assert window.zone.region == "secondary"
-    assert "4" in window.target.text()
-    window.set_instruction("next")
-    assert window.zone.region is None
-    assert window.target.text() == ""
+    assert (window.zone.region, window.zone.site, window.zone.path) == ("secondary", 4, None)
+    window.set_instruction("next", experimenter_ui.NOW)
+    assert window.zone.region is None and window.zone.site is None
+    window.set_target("secondary", path="lateral")
+    assert window.zone.path == "lateral"
+
+
+def test_every_site_a_protocol_uses_is_on_the_diagram(loaded):
+    """The figure carries a numbered site for each of the rotation's (open item 11)."""
+    zone = widgets.ZoneDiagram(loaded.experimenter_text["zones"],
+                               loaded.experimenter_text["terms"]["mapping_paths_short"])
+    for region in ("primary", "secondary"):
+        assert zone.sites(region) == int(loaded.study1["pinprick"]["n_sites"])
+        assert zone.sites(region) == int(loaded.study1["brush"]["n_sites"])
+
+
+@pytest.mark.parametrize("limb, mirrored", [("left", True), ("right", False)])
+def test_the_hand_is_mirrored_for_a_left_limb(drawn, limb, mirrored):
+    """The figure is a right hand's back; a left one is its mirror image, so the thumb, and
+    the lateral path, are on the side they are on the participant (S, 21 Oct 2026)."""
+    window, held = drawn
+    held["view"] = _all_keys(limb=limb)
+    window.refresh()
+    assert window.zone.mirrored is mirrored
 
 
 def test_a_pinprick_trial_marks_its_zone(rig_trial):
@@ -1782,11 +1939,11 @@ def test_catch_trials_are_left_off_the_touch_plot(drawn):
 def test_a_long_instruction_steps_down_the_scale_and_moves_nothing(drawn):
     window, _ = drawn
     window.show()
-    window.set_instruction("x")
+    window.set_instruction("x", experimenter_ui.NOW)
     status_y = window.status.pos().y()
     assert window.instruction.font().pointSize() == experimenter_ui.SIZE_HEADLINE
     longest = max(window.text["instructions"].values(), key=len)
-    window.set_instruction(longest)
+    window.set_instruction(longest, experimenter_ui.NOW)
     assert window.instruction.font().pointSize() < experimenter_ui.SIZE_HEADLINE
     assert window.instruction.heightForWidth(window.instruction.width()) <= (
         window.instruction.height()
