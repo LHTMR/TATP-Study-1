@@ -485,7 +485,7 @@ def test_the_noise_is_heard_only_while_the_garment_may_run(finished):
         if event == "white_noise_silenced" and heard:
             intervals.append((start, i))
             heard = False
-        elif event in ("white_noise_resumed", "white_noise_started") and not heard:
+        elif event in ("white_noise_unsilenced", "white_noise_started") and not heard:
             heard, start = True, i
     if heard:
         intervals.append((start, len(events)))

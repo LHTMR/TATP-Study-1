@@ -139,7 +139,7 @@ def test_silenced_noise_keeps_its_stream_so_the_cue_still_sounds(audio, logged):
     audio.unsilence_noise("needed")
     assert audio.output.events[-1] == ("set_noise", amplitude(-30.0))
     names = [event for event, _ in logged if event.startswith("white_noise")]
-    assert names[-2:] == ["white_noise_silenced", "white_noise_resumed"]
+    assert names[-2:] == ["white_noise_silenced", "white_noise_unsilenced"]
 
 
 def test_the_gate_follows_the_garment_and_what_is_said(audio):
@@ -155,6 +155,22 @@ def test_the_gate_follows_the_garment_and_what_is_said(audio):
     gate.want(False, "calibration done")
     assert audio.noise_silenced
     gate.want(True, "the touch")
+    assert not audio.noise_silenced
+
+
+def test_the_masking_check_run_again_is_heard(audio):
+    """A demonstration's jump back to the masking check: the level is set by ear, so the
+    noise must not stay silenced (spec review of N7.F18j)."""
+    gate = audio_module.NoiseGate(audio)
+    audio.start_noise(-35.0)
+    gate.arm()
+    assert audio.noise_silenced, "the garment cannot run here"
+    gate.disarm()
+    assert not audio.noise_silenced
+    audio.set_noise_level(-30.0)
+    assert audio.output.events[-1] == ("set_noise", amplitude(-30.0))
+    gate.want(True, "no effect until armed again")
+    gate.want(False, "nor this")
     assert not audio.noise_silenced
 
 

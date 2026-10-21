@@ -277,9 +277,10 @@ The masking noise is heard only while the garment may run: through the touch cal
 while the intervention's touch is on, from the masking check on (docs/LOG.md N7.F18j). Otherwise
 it is silenced, its stream still running so the participant's cue still sounds, and while an
 instruction asks the experimenter to say something aloud. Each change is `white_noise_silenced`
-or `white_noise_resumed` (`detail` why, the level once resumed). Until 21 Oct 2026 the noise ran
-throughout, stopped only for the area mapping (`white_noise_stopped` / `white_noise_resumed`,
-`detail` `area mapping`); `white_noise_stopped` is now the earplug exchange's and the session's
+or `white_noise_unsilenced` (`detail` why, the level once heard again). Until 21 Oct 2026 the
+noise ran throughout, stopped only for the area mapping (`white_noise_stopped` /
+`white_noise_resumed`, `detail` `area mapping`); `white_noise_resumed` is no longer written, so
+it means only that, and `white_noise_stopped` is now the earplug exchange's and the session's
 close.
 
 `software_error` (severity `error`, the exception in `detail`) is written when an error nothing

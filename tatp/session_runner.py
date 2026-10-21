@@ -496,10 +496,7 @@ class SessionRunner(Procedure):
         fixed = {
             "setup.garment": self._fit_garment,
             "setup.welcome": self._welcome,
-            # From the noise level it sets on, the noise is heard only while the garment may
-            # run (`tatp.audio.NoiseGate`; S, 21 Oct 2026).
-            "setup.masking_check": lambda: self._protocol(lambda: MaskingCheck(self.rig),
-                                                          lambda _: self.session.noise.arm()),
+            "setup.masking_check": self._masking_check,
             "setup.stop_rehearsal": lambda: self._protocol(lambda: StopRehearsal(self.rig)),
             "touch_calibration": self._touch_calibration,
             "touch_calibration.baseline": self._baseline,
@@ -621,6 +618,12 @@ class SessionRunner(Procedure):
             self.participant.show_message(SESSION_STARTING_SCREEN)
 
         self.await_proceed(self._stage_done, prepare)
+
+    def _masking_check(self) -> None:
+        """From the noise level it sets on, the noise is heard only while the garment may run
+        (`tatp.audio.NoiseGate`; S, 21 Oct 2026). Until then the check runs it, audible."""
+        self.session.noise.disarm()
+        self._protocol(lambda: MaskingCheck(self.rig), lambda _: self.session.noise.arm())
 
     def _welcome(self) -> None:
         # What happens next, which the experimenter is about to see from across the divider.
@@ -1360,12 +1363,13 @@ class SessionRunner(Procedure):
         index = ids.index(stage_id)
         here = self.stages[self.stage_index].id
         back = index <= self.stage_index
+        # After the stop, so what ending the stage jumped from writes comes before it.
+        self._stop_for_jump()
         self.session.log(
             "demo_jump", severity="warning",
             detail=f"from {here} to {stage_id}" + (
                 "; run again, its earlier rows stand" if back else ""),
         )
-        self._stop_for_jump()
         self._move_clock_to(index)
         touches = self.touches(stage_id) and not (
             stage_id == "intervention.end"
@@ -1814,8 +1818,6 @@ class SessionRunner(Procedure):
         for phase, point in state.mapping.items():
             if not point.area_written:
                 self.ledger.restore(phase, point.starts, point.distances)
-        if self.ledger.time_points:
-            self.experimenter.set_mapping_phases([*self.ledger.time_points])
 
         index = next(i for i, stage in enumerate(self.stages) if stage.id not in done)
         stage = self.stages[index]

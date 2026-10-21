@@ -138,6 +138,8 @@ class MappingLedger(QObject):
             "mapping_restored", severity="warning",
             detail=f"{phase}: {len(distances)} of {self.n_paths} distances already recorded",
         )
+        # Its column first, which shows what is already recorded (spec review of N7.F18f).
+        self.experimenter.set_mapping_phases([*self.time_points])
         self._show(phase, "", CONFIRMED)
 
     def open_time_point(self, phase: str) -> None:

@@ -30,9 +30,11 @@ branch reviewed with `make check` passing on the lab PC; the history is in the g
   dialog (i). Noise only while the garment may run; the tick a click (j). The intervention's
   rest screen (k). The finish page on checking and uploading the data (l). Demo-data findings (m).
 - **State on the Mac:** `make check` fails only on the 9 known Mac failures (section 3, item 1);
-  1390 unit tests pass, validator 36/36, ruff and the literal lint clean.
-- **Still to do on this branch:** `/code-review high`, then spec-review, fixes, then on the lab
-  PC: `make check`, and re-approve the changed screens after looking at each against
+  1392 unit tests pass, validator 36/36, ruff and the literal lint clean.
+- **Reviewed:** `/code-review high` (N7.F18n) and spec-review (N7.F18o), findings fixed. The
+  spec review ran out of turns before reading all of `tatp/ui/experimenter.py`, `widgets.py`,
+  `screenshots.py`, `sim/` and the text files; the code review covered those.
+- **Still to do on this branch, on the lab PC:** `make check`, and re-approve the changed screens after looking at each against
   `docs/UI_PRINCIPLES.md` (the references are lab-PC renders, so the Mac cannot approve them):
   `make shots ARGS="--approve-matching 'experimenter_*'"`, then the participant
   `*_standby_intervention`. 18 screens are new. Then merge.
@@ -41,7 +43,7 @@ branch reviewed with `make check` passing on the lab PC; the history is in the g
 
 **For S** (all in `docs/LOG.md` §7):
 - **Decisions to confirm:** the noise silent outside the garment's phases, so the cue sounds
-  over silence there at the same level (N7.F18j); a demo's Jump-to fallbacks (N7.F18b); where
+  over silence there at the same level, so the measures outside the intervention are taken in silence and its pinprick blocks under the noise (N7.F18j); a demo's Jump-to fallbacks (N7.F18b); where
   each numbered site is drawn, a placeholder (open item 11, N7.F18e); the rekindle's touch
   restart (N7.F11b10); re-calibration in the intervention (N7.F12a1); a worn-garment demo
   fully manual (N7.F12f1); the mouse's "!" (N7.F12e4); shortened interruption lines (N7.F11b12,

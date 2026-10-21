@@ -18,6 +18,7 @@ from tatp.mapping import AreaMapping, MappingLedger, plausible, sh_area_mm2
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import Session, SessionError
+from tatp.ui import widgets
 from tatp.ui.experimenter import ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 
@@ -317,6 +318,20 @@ def test_a_resume_while_waiting_for_a_path_restores_standby(rig, ledger):
     rig.experimenter.resume_requested.emit()
     assert rig.participant.message.text == rig.participant.text["screens"]["standby"]
     mapping.cancel()
+
+
+def test_a_time_point_carried_over_from_a_crash_gets_its_column(ledger):
+    """SPEC.md 15: a resumed session restores a mapping with distances still to enter. Its
+    column is opened by the restore itself, showing what was recorded (spec review of
+    N7.F18f: the restore drew into a column that did not exist yet)."""
+    now_iso = ledger.session.clock.wall_iso()
+    starts = {path: (now_iso, 60.0 * path) for path in range(1, 5)}
+    ledger.restore(PHASE, starts, {1: (30.0, now_iso)})
+    fields = ledger.experimenter.distances.fields(PHASE)
+    assert widgets.TARGET_COLOUR in fields[0].styleSheet(), "recorded before the crash"
+    assert fields[1].styleSheet() == "", "still to enter"
+    ledger.experimenter.distances_entered.emit(PHASE, (None, 20.0, 50.0, 40.0))
+    assert ledger.time_points[PHASE].area_written, "the rest entered here completes it"
 
 
 def test_distances_for_a_phase_with_no_mapping_are_an_error(ledger):

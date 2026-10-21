@@ -330,7 +330,8 @@ class Audio:
             return
         self.output.set_noise(amplitude(self.noise_level_dbfs))
         self.noise_silenced = False
-        self.log("white_noise_resumed", detail=f"{reason}, {self.noise_level_dbfs:.1f} dBFS")
+        self.log("white_noise_unsilenced",
+                 detail=f"{reason}, {self.noise_level_dbfs:.1f} dBFS")
 
     def stop_noise(self, reason: str) -> None:
         """For the earplug exchange (SPEC.md 10.7) and the session's end. Logged."""
@@ -436,6 +437,12 @@ class NoiseGate:
     def arm(self) -> None:
         self.armed = True
         self._apply("the audio setup is done")
+
+    def disarm(self) -> None:
+        """The masking check runs the noise itself again: only a demonstration's jump back to
+        it, since a session runs it once, before arming (spec review of N7.F18j)."""
+        self.armed = False
+        self.audio.unsilence_noise("the masking check")
 
     def want(self, wanted: bool, reason: str) -> None:
         if wanted != self.wanted:
