@@ -333,23 +333,13 @@ class Audio:
         self.log("white_noise_resumed", detail=f"{reason}, {self.noise_level_dbfs:.1f} dBFS")
 
     def stop_noise(self, reason: str) -> None:
-        """For the area mapping and the earplug exchange (SPEC.md 10.5, 10.7). Logged."""
+        """For the earplug exchange (SPEC.md 10.7) and the session's end. Logged."""
         if not self.noise_running:
             return
         self.output.stop_noise()
         self.noise_running = False
         self.noise_silenced = False
         self.log("white_noise_stopped", detail=reason)
-
-    def resume_noise(self, reason: str) -> None:
-        """Back at the level the participant chose. Logged."""
-        if self.noise_running:
-            return
-        if self.noise_level_dbfs is None:
-            raise AudioError("resume_noise: no level has been set, so nothing can resume")
-        self.output.start_noise(amplitude(self.noise_level_dbfs))
-        self.noise_running = True
-        self.log("white_noise_resumed", detail=f"{reason}, {self.noise_level_dbfs:.1f} dBFS")
 
     # -- tones -------------------------------------------------------------------------
 

@@ -30,7 +30,6 @@ SAY_FIELD = "{say["
 VAS_PRACTICE_RATING = "vas_practice_rating"
 
 
-
 def spoken_instruction(session: Session, key: str, **values: object) -> str:
     """`instructions.<key>`, filled. One with a sentence for the experimenter to say aloud
     silences the masking noise while it is up, and any other lets it back (S, 21 Oct 2026;
@@ -38,6 +37,7 @@ def spoken_instruction(session: Session, key: str, **values: object) -> str:
     raw = session.config.experimenter_text["instructions"][key]
     session.noise.say(SAY_FIELD in raw)
     return instruction(session.config, key, **values)
+
 
 class Trial(QObject):
     """The shared machinery. A subclass implements `start()`."""

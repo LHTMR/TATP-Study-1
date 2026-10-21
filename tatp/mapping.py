@@ -36,9 +36,9 @@ from dataclasses import dataclass, field
 
 from PySide6.QtCore import QObject, Signal
 
-from tatp.config import instruction
 from tatp.procedure import Procedure, Rig
 from tatp.session import Session, SessionError
+from tatp.trials import spoken_instruction
 from tatp.ui.experimenter import CONFIRMED, NOW, PREPARE, QUERIED, ExperimenterWindow
 
 # There is no participant mapping screen, only standby: the participant is instructed and
@@ -245,8 +245,8 @@ class MappingLedger(QObject):
             self.prompted = True
             # Which are missing, and which wait for a confirmation (S, 21 Oct 2026).
             self.experimenter.set_instruction(
-                instruction(self.session.config, "distances_outstanding",
-                            missing=self.missing_text(outstanding)), NOW
+                spoken_instruction(self.session, "distances_outstanding",
+                                   missing=self.missing_text(outstanding)), NOW
             )
             self.experimenter.refresh()
             self.session.log(

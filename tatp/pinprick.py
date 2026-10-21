@@ -53,9 +53,10 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
-from tatp.config import Config, instruction
+from tatp.config import Config
 from tatp.procedure import NO_RERUNS_LEFT, Procedure, Rig
 from tatp.session import Session
+from tatp.trials import spoken_instruction
 from tatp.ui.experimenter import (
     CONFIRMED,
     NOW,
@@ -751,7 +752,7 @@ class _RatedTrial(QObject):
             self.after_delivery()
             return
         self.experimenter.set_instruction(
-            instruction(self.session.config, RATING_NEXT_OPEN), WAIT)
+            spoken_instruction(self.session, RATING_NEXT_OPEN), WAIT)
 
     def _stop_awaiting(self) -> None:
         if self.awaits_proceed:
@@ -855,8 +856,8 @@ class PinprickTrial(_RatedTrial):
     def _instruction(self, key: str) -> str:
         self._filament(self.application.applied_label_g)  # refuses one not held, before the cue
         # Where it goes is the zone diagram's, beside it (S, 21 Oct 2026).
-        return instruction(self.session.config, f"{key}_filament",
-                           filament=self.application.filament_label_g)
+        return spoken_instruction(self.session, f"{key}_filament",
+                                  filament=self.application.filament_label_g)
 
     def _stimulus_detail(self) -> str:
         return f"filament {self.application.filament_label_g} g"
@@ -992,8 +993,8 @@ class BrushTrial(_RatedTrial):
 
     def _instruction(self, key: str) -> str:
         text = self.experimenter.text
-        return instruction(
-            self.session.config, f"{key}_brush",
+        return spoken_instruction(
+            self.session, f"{key}_brush",
             site=self.application.site_index,
             region=text["terms"]["regions"][self.application.region],
         )

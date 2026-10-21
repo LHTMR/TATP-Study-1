@@ -77,7 +77,6 @@ PROPORTIONALITY = "proportionality"
 ANCHOR_SEPARATOR = " / "
 
 
-
 class Rig(QObject):
     """The session, both windows, the interruptions and the pattern clock, held together."""
 

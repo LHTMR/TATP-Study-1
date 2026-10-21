@@ -1304,7 +1304,13 @@ def test_the_recalibration_is_offered_running_or_stopped_never_paused(drawn):
     assert _offered(window, button), "either path alone offers it"
     window.set_actions_enabled(recalibrate_restart=False)
     assert not button.isVisibleTo(window), "nothing to take"
-    window.set_actions_enabled(recalibrate_rebalance=True, closed=True)
+    # Restart is not offered beside the procedure's own Re-run, which does the same free
+    # (review of N7.F18i).
+    window.set_actions_enabled(fit_rerun=True, recalibrate_restart=True)
+    assert not button.isVisibleTo(window), "the re-run is the restart here"
+    window.set_actions_enabled(recalibrate_rebalance=True)
+    assert window.recalibration_dialog().actions.keys() == {"rebalance"}
+    window.set_actions_enabled(fit_rerun=False, closed=True)
     assert not button.isVisibleTo(window), "none once closed"
 
 
@@ -1525,7 +1531,15 @@ def test_distances_are_entered_in_the_window_against_their_own_time_point(drawn)
     distances.fields("post_intervention")[1].setText("31")
     distances.fields("post_intervention")[1].returnPressed.emit()
     assert seen[-1] == ("post_intervention", (None, 31.0, None, None))
-    assert seen[-2][0] == "post_sensitisation", "Enter sends every time point typed in"
+    # Only what changed is sent again: saving one time point never re-enters another's, which
+    # would confirm a queried value nobody entered again (review of N7.F18f).
+    assert len(seen) == 2
+    distances.fields("post_intervention")[2].setText("40")
+    distances.enter_button.click()
+    assert seen[-1] == ("post_intervention", (None, None, 40.0, None))
+    # Enter in a field sends it again, unchanged: that is how a query is confirmed.
+    distances.fields("post_sensitisation")[0].returnPressed.emit()
+    assert seen[-1] == ("post_sensitisation", (42.5, None, None, None))
     unit = window.text["distances"]["unit"]
     assert distances.fields("post_intervention")[0].placeholderText() == unit
 

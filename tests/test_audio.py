@@ -96,21 +96,6 @@ def test_no_cue_sounds_without_the_noise_it_is_set_against(audio):
     assert "participant_tone" not in _events(audio)
 
 
-def test_stop_and_resume_are_logged_and_keep_the_level(audio, logged):
-    audio.start_noise(-35.0)
-    audio.stop_noise("mapping")
-    audio.resume_noise("mapping over")
-    names = [event for event, _ in logged]
-    assert names[-2:] == ["white_noise_stopped", "white_noise_resumed"]
-    assert audio.output.events[-1] == ("start_noise", amplitude(-35.0))
-    assert audio.noise_running
-
-
-def test_nothing_resumes_that_never_started(audio):
-    with pytest.raises(AudioError, match="no level"):
-        audio.resume_noise("too early")
-
-
 def test_the_experimenter_alert_goes_to_the_lab_side_output(audio, logged):
     audio.experimenter_alert("block due")
     assert _events(audio) == ["experimenter_tone"]

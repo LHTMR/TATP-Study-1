@@ -1327,10 +1327,15 @@ class SessionRunner(Procedure):
         if (self.session.closed or self.rig.interruptions.active is not None
                 or self.rig.interruptions.resuming or self._recalibrating):
             return False
-        return not (self.session.garment.worn and self.deliveries is None
-                    and self._touches(stage_id))
+        return not self.needs_calibration(stage_id)
 
-    def _touches(self, stage_id: str) -> bool:
+    def needs_calibration(self, stage_id: str) -> bool:
+        """Whether Jump to `stage_id` waits for a real touch calibration: the intervention's
+        touch on a garment that may be worn."""
+        return (self.session.garment.worn and self.deliveries is None
+                and self.touches(stage_id))
+
+    def touches(self, stage_id: str) -> bool:
         """Whether the intervention's touch is on when `stage_id` begins."""
         stage = next(s for s in self.stages if s.id == stage_id)
         return stage.phase == INTERVENTION and stage_id != "intervention.start"
@@ -1362,11 +1367,15 @@ class SessionRunner(Procedure):
         )
         self._stop_for_jump()
         self._move_clock_to(index)
-        touches = self._touches(stage_id) and not (
+        touches = self.touches(stage_id) and not (
             stage_id == "intervention.end"
             and self.session.clock.t_session_s() >= self.stages[index].upcoming.due_s)
         if self._touch_on and not touches:
             self._stop_touch("demonstration jump")
+        if not touches:
+            # A touch calibration cancelled mid-way never said it was done (review of N7.F18j);
+            # the stage jumped to wants the noise again itself if it runs the garment.
+            self.session.noise.want(False, "demonstration jump")
         if touches and not self._touch_on:
             self._fallbacks_for_touch()
             self.session.set_phase(INTERVENTION)
@@ -1497,8 +1506,10 @@ class SessionRunner(Procedure):
         words = self.experimenter.text["data_check"]
         session = self.session
         folder = session.data_folder
-        pattern = f"TATP1_*_P{session.participant_code}_S{session.session_number}_*.csv"
-        lines = [words["saved"].format(files=len(list(folder.glob(pattern))), folder=folder)]
+        # This run's own files, by the name the collection gives them: not an earlier run's.
+        written = [table for table in session.files.tables
+                   if session.files.path(table).exists()]
+        lines = [words["saved"].format(files=len(written), folder=folder)]
         missing = self.ledger.incomplete()
         lines.append(words["missing"].format(value=self.ledger.missing_text(missing))
                      if missing else words["none_missing"])

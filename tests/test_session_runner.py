@@ -228,11 +228,35 @@ def finished(app, loaded, tmp_path_factory):
         real(text, *rest)
 
     runner.experimenter.set_instruction = spy
+    # The small print under the instruction, last of all the finish page's data check.
+    runner.shown_details = []
+    real_detail = runner.experimenter.set_detail
+
+    def detail_spy(text):
+        runner.shown_details.append(text)
+        real_detail(text)
+
+    runner.experimenter.set_detail = detail_spy
     Driver(runner.rig, runner).run()
     return runner
 
 
 # -- the whole session -------------------------------------------------------------------------
+
+
+def test_the_finish_page_says_what_this_session_saved_and_how_to_upload_it(finished):
+    """S, 21 Oct 2026: the last page prompts to check and upload the data. The count is this
+    run's own files (review of N7.F18l)."""
+    session = finished.session
+    words = finished.experimenter.text["data_check"]
+    files = [path for path in session.data_folder.iterdir()
+             if path.name.startswith(f"TATP1_{session.files.stamp}_")]
+    lines = finished.shown_details[-1].split("\n")
+    assert lines[0] == words["saved"].format(files=len(files), folder=session.data_folder)
+    assert lines[1] == words["none_missing"]
+    assert lines[2] == words["upload"].format(
+        code=session.participant_code, session=session.session_number,
+        upload_folder=session.config.hardware["data"]["upload_folder"])
 
 
 def test_every_stage_runs_once_in_the_planned_order(finished):

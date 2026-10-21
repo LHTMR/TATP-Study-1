@@ -973,9 +973,9 @@ class ExperimenterWindow(QWidget):
         disconnected by the close, is not to be connected again with no stop wired to it.
         `recalibrate_rebalance` and `recalibrate_restart` say which re-calibrations can be
         taken (docs/LOG.md N7.F12a1); Re-calibrate… is offered while either can, while running
-        or stopped but not paused, and not while the procedure offers its own rematch, and its
-        dialog offers only those; `recalibration_used` says, while stopped, that the limit is
-        reached.
+        or stopped but not paused, and its dialog offers only those, and neither while the
+        procedure offers its own rematch, nor Restart beside its Re-run (`_recalibrations`);
+        `recalibration_used` says, while stopped, that the limit is reached.
 
         The substitution choice is withdrawn through `withdraw_substitution`, which hands back
         anything chosen and not recorded, so it is never dropped unseen.
@@ -1089,13 +1089,21 @@ class ExperimenterWindow(QWidget):
         made.confirm.setDefault(True)
         return made
 
+    def _recalibrations(self) -> list[str]:
+        """The re-calibrations Re-calibrate… offers now: each one that can be taken, but
+        Restart not while the procedure offers its own Re-run, which does the same without
+        counting against the limit (docs/LOG.md N7.F12a1)."""
+        rerunning = self._interruption is None and self._awaiting["fit_rerun"]
+        return [choice for choice in RECALIBRATIONS
+                if self._awaiting[f"recalibrate_{choice}"]
+                and not (choice == RECALIBRATE_RESTART and rerunning)]
+
     def recalibration_dialog(self) -> ActionChoiceDialog:
         """What to repeat, each choice saying which steps it runs again, and why, from a fixed
         list (docs/LOG.md N7.F12a1; S, 21 Oct 2026). Only what can be taken now is offered.
         The same in every condition, wherever it is offered."""
         controls, dialogs = self.text["controls"], self.text["dialogs"]
-        offered = [choice for choice in RECALIBRATIONS
-                   if self._awaiting[f"recalibrate_{choice}"]]
+        offered = self._recalibrations()
         return ActionChoiceDialog(
             controls["recalibrate"],
             dialogs["recalibrate"],
@@ -1594,9 +1602,9 @@ class ExperimenterWindow(QWidget):
         mapped = bool(self._mapping_phases)
         open_ = not self._awaiting["closed"]
         # Not while paused: the pause is the experimenter's own, and Resume ends it.
+        # Not while the calibration offers its own rematch either, which has its place.
         recalibrating = ((running or stopped) and open_ and not rebalancing
-                         and (self._awaiting["recalibrate_rebalance"]
-                              or self._awaiting["recalibrate_restart"]))
+                         and bool(self._recalibrations()))
         # The choice stays in sight with its message until the next application offers it
         # afresh, so what became of the last one can still be read (S, 21 Oct 2026).
         choice_shown = substituting or bool(self.substitution_message.text())
@@ -1819,11 +1827,12 @@ class DistancesBox(QWidget):
     Never blocking: entered whenever convenient.
 
     Enter in a field, or Save, emits `entered(phase, distances)` -- the window's
-    `distances_entered` -- for each time point with anything typed, with None for a field left
-    blank. The ledger then says what became of each (`show_outcome`): a recorded field is
-    outlined in the target colour, a queried one in amber, and the lines under the fields say
-    what was recorded or why it is queried. A queried value is confirmed by entering it again,
-    so the fields keep what was typed. A column per time point means a distance is always
+    `distances_entered` -- for each time point with a field changed since it was last sent,
+    or the field Enter was pressed in, with None for any other. The ledger then says what
+    became of each (`show_outcome`): a recorded field is outlined in the target colour, a
+    queried one in amber, and the lines under the fields say what was recorded or why it is
+    queried. A queried value is confirmed by entering it again -- Enter in its field -- so the
+    fields keep what was typed. A column per time point means a distance is always
     typed against the time point it belongs to: one shared set of fields with a choice of time
     point kept the earlier one selected, and the post-intervention distances were entered as
     corrections to the post-sensitisation ones (S's demo, 21 Oct 2026).
@@ -1856,6 +1865,10 @@ class DistancesBox(QWidget):
             self.grid.addWidget(name, row, 0)
         self.validator = QRegularExpressionValidator(QRegularExpression(DISTANCE_PATTERN), self)
         self.columns: dict[str, list[QLineEdit]] = {}
+        # What each field last sent: only a field changed since, or the one Enter is pressed
+        # in, is sent again, so a queried value is confirmed only by entering it again, never
+        # by saving another time point's (review of N7.F18f).
+        self._sent: dict[QLineEdit, str] = {}
         self.message = label(SIZE_SMALL, wrap=True)
         self.message.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.message.setFixedHeight(self.message.fontMetrics().lineSpacing()
@@ -1885,7 +1898,7 @@ class DistancesBox(QWidget):
                 field.setValidator(self.validator)
                 field.setPlaceholderText(self.text["distances"]["unit"])
                 field.setToolTip(self.text["controls"]["distances_hint"])
-                field.returnPressed.connect(self.enter)
+                field.returnPressed.connect(self._enter_in_field)
                 self.grid.addWidget(field, row, column)
                 fields.append(field)
             self.columns[phase] = fields
@@ -1894,15 +1907,20 @@ class DistancesBox(QWidget):
         """`phase`'s fields, in path order."""
         return self.columns[phase]
 
-    def enter(self) -> None:
-        """Emit what is filled in for each time point, None for a blank. A time point with a
+    def _enter_in_field(self) -> None:
+        self.enter(self.sender())
+
+    def enter(self, pressed_in: QLineEdit | None = None) -> None:
+        """Emit, for each time point, the fields changed since they were last sent and the
+        field Enter was `pressed_in`, None for any other or a blank. A time point with such a
         field that is not a number sends nothing, and that field is outlined in red."""
         for phase, fields in self.columns.items():
             values: list[float | None] = []
             valid = True
             for field in fields:
                 typed = field.text().strip()
-                if not typed:
+                if not typed or (field is not pressed_in
+                                 and typed == self._sent.get(field, "")):
                     values.append(None)
                 elif field.hasAcceptableInput():
                     values.append(float(typed.replace(DECIMAL_COMMA, DECIMAL_POINT)))
@@ -1910,6 +1928,8 @@ class DistancesBox(QWidget):
                     valid = False
                     field.setStyleSheet(f"border: 1px solid {DISCONNECTED_COLOUR};")
             if valid and any(value is not None for value in values):
+                for field in fields:
+                    self._sent[field] = field.text().strip()
                 self.entered.emit(phase, tuple(values))
 
     def clear_confirmation(self) -> None:

@@ -766,7 +766,8 @@ class DemoControls(QWidget):
                 phase=text["phases"][group],
                 stage=stage_names(stage.id, text, runner.session.schedule)[1])
             ok = runner.jumpable(stage.id)
-            if not ok and runner.session.garment.worn and runner.deliveries is None:
+            # Only where that is why: an interruption greys every step, for its own reason.
+            if runner.needs_calibration(stage.id):
                 entry = words["jump_needs_calibration"].format(entry=entry)
             entries.append((stage.id, entry, ok))
         ids = [stage_id for stage_id, _, _ in entries]

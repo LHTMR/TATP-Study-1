@@ -511,6 +511,20 @@ def test_jump_to_the_intervention_starts_the_touch_on_fallback_levels(app, loade
         _finish(runner, demo)
 
 
+def test_jumping_out_of_the_touch_calibration_silences_the_noise(app, loaded):
+    """A calibration cancelled by a jump never says it is done: the noise must not stay on
+    into stages where the garment cannot run (review of N7.F18j)."""
+    runner, demo = _demo(app, loaded)
+    runner.start()
+    try:
+        _jump(runner, demo, "touch_calibration")
+        assert runner.session.noise.wanted, "the garment runs through the calibration"
+        _jump(runner, demo, "pre_sensitisation.long")
+        assert not runner.session.noise.wanted
+    finally:
+        _finish(runner, demo)
+
+
 def test_jump_to_never_moves_session_time_back(app, loaded):
     runner, demo = _demo(app, loaded)
     runner.start()
