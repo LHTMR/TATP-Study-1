@@ -460,6 +460,7 @@ class SessionRunner(Procedure):
         self.experimenter.abort_requested.connect(self.abort)
         # For the whole session, interruptions included (SPEC.md 11, 13).
         self.experimenter.note_entered.connect(self._note)
+        self.experimenter.correction_refused.connect(self._correction_refused)
         # Connected here, before `start` connects the procedure's own handlers, so a pending
         # delivery is cancelled and restarted before any step repeats.
         self.rig.interruptions.interrupted.connect(self._delivery_interrupted)
@@ -1576,6 +1577,10 @@ class SessionRunner(Procedure):
         so a note the experimenter sees confirmed is one that is in the log."""
         stamp = self.session.log(NOTE_EVENT, origin="experimenter", detail=note)
         self.experimenter.confirm_note(time_of(stamp))
+
+    def _correction_refused(self, chosen: str) -> None:
+        self.session.log("correction_too_late", origin="experimenter", severity="warning",
+                         detail=chosen)
 
     def stop_for_error(self, summary: str) -> None:
         """An error nothing caught, in a session still open (`stop_on_error`).

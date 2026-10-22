@@ -582,6 +582,11 @@ status:
   recalibration_used: Omkalibreringarna som tillåts i en session är förbrukade, så bara {controls[resume]} erbjuds.
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   discarded: Senaste försöket kasserat. Det upprepas.
+  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
+  discarded_not_repeated: >-
+    Senaste försöket kasserat. Gränsen för antal appliceringar är nådd, så det upprepas inte.
+  # DRAFT (LOG N7.F18ad): written by the build, not ethics-sourced
+  discard_pending: Försöket kasseras när det har skattats och görs sedan om.
 
 warnings:
   # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. A path that ended at
@@ -727,7 +732,6 @@ dialogs:
   correction: Vad var fel med appliceringen som just gjordes?
   correction_filament: 'Ett annat filament användes:'
   correction_discard: Skattningen sparas i data, märkt som kasserad, och appliceringen görs om om inte gränsen för antal appliceringar är nådd.
-  correction_discard_after_rating: Möjligt när deltagaren har skattat den.
   # SPEC.md 15. Båda värdena formateras av sessionen från dess egen text.
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   resume_found: 'En oavslutad session hittades för denna deltagare. Genomfört: {completed}. {since_sensitisation} Återuppta den med den ursprungliga tidsplanen?'

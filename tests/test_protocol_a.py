@@ -498,16 +498,16 @@ def test_a_discard_writes_a_discards_row_and_repeats(rig):
 
 
 def test_discard_is_offered_only_while_there_is_something_to_discard(rig):
-    """docs/LOG.md N7.U10: during the interval after a completed application, and not before,
-    during the next one, or once the protocol has ended. Hidden rather than disabled when not
-    offered, since the 15 Oct 2026 pilot review."""
+    """docs/LOG.md N7.U10, N7.F18ad: from the "applied" press through the interval after it,
+    and not before, during the next one's cue, or once the protocol has ended. Hidden rather
+    than disabled when not offered, since the 15 Oct 2026 pilot review."""
     experimenter, participant = rig.experimenter, rig.participant
     protocol = _long(rig)
     protocol.start()
     assert not experimenter._awaiting["discard"], "nothing has been applied yet"
     experimenter.proceed_requested.emit()
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
-    assert not experimenter._awaiting["discard"], "the application is not complete"
+    assert experimenter._awaiting["discard"], "applied: from the press (N7.F18ad)"
     _answer(participant, _observer(protocol._trial))
     assert experimenter._awaiting["discard"], "the interval after a rated application"
     assert experimenter.correct_button.isEnabled()
@@ -560,7 +560,7 @@ def test_a_correction_is_offered_from_the_applied_press_until_the_next_cue(rig):
     asked = protocol._trial.application.filament_label_g
     assert list(dialog.filaments) == [f.label_g for f in protocol.filaments
                                       if f.label_g != asked], "the set's others, lightest first"
-    assert not dialog.discard.isEnabled(), "not until it is rated"
+    assert dialog.discard.isEnabled(), "from the press: done once the rating is in"
     dialog.deleteLater()
     _answer(participant, _observer(protocol._trial))
     dialog = experimenter.correction_dialog()
@@ -589,8 +589,10 @@ def test_the_dialog_records_what_is_chosen_only_on_confirming(rig):
     assert discards == [True]
     dialog = window.open_correction_dialog()
     dialog.filaments["8"].click()
+    refused = _emitted_args(window.correction_refused)
     window.set_actions_enabled(substitution=False, discard=False)  # the next cue meanwhile
     dialog.confirm.click()
+    assert refused == [("filament 8",)], "not recorded, but said, for the log"
     assert filaments == [("15",)], "too late: nothing recorded"
     assert window.substitution_message.text() == window.text["warnings"]["correction_too_late"]
 
@@ -654,6 +656,29 @@ def test_a_substitution_corrected_back_is_said_as_the_one_asked_for(rig):
         "substitution_asked"].format(filament=asked)
     assert protocol._trial.applied_label_g == asked
     protocol.cancel()
+
+
+def test_the_last_application_can_be_discarded_before_its_rating(rig):
+    """Spec review of N7.F18z: with no rest after the last application, Discard is offered
+    from the "applied" press and done once the rating is in (SPEC.md 11) -- the last too."""
+    session, experimenter, participant = rig.session, rig.experimenter, rig.participant
+    protocol = ShortProtocol(rig, "primary", "26", _cap(rig))
+    done = _start(protocol)
+    n_trials = session.config.study1["pinprick"]["short_protocol_n_trials"]
+    for given in range(1, n_trials + 1):
+        _spin(lambda: participant.stack.currentWidget() is participant.vas)
+        if given == n_trials:
+            experimenter.discard_requested.emit()
+            assert experimenter.status.text() == experimenter.text["status"]["discard_pending"]
+        _answer(participant, 0)
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)  # the repeat
+    _answer(participant, 0)
+    _spin(lambda: done)
+    rows = _rows(session, "pinprick")
+    (discard,) = _rows(session, "discards")
+    assert len(rows) == n_trials + 1
+    assert discard["trial_timestamp_iso"] == rows[n_trials - 1]["timestamp_iso"]
+    assert "discard_pending" in _events(session)
 
 
 def test_the_stop_withdraws_the_correction_offer(rig):

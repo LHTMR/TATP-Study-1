@@ -1,11 +1,12 @@
 # STATUS
 
-**Last updated:** 21 October 2026 (on S's MacBook).
+**Last updated:** 22 October 2026 (on S's MacBook).
 **Milestone:** 6 (pilotable), in progress. **Priority: testing the code in demo mode** (S,
 20 Oct). The real valve garment is not built yet, so everything that needs it is parked.
 **Branches:** each change on its own `pilot/<topic>` branch from `main`, reviewed and merged
-back (`CLAUDE.md`, Committing). **`pilot/demo-feedback-2`** (N7.F18a–m, S's MacBook demo of
-21 Oct) is committed, not merged, not pushed; see below. **`pilot/swedish-docs` is parked on
+back (`CLAUDE.md`, Committing). **`pilot/demo-feedback-2`** (N7.F18a–ad, S's MacBook demos of
+21 and 22 Oct) is committed and pushed after every commit (S, 22 Oct), not merged; see below.
+`main` carries a note sending lab-PC testing to this branch. **`pilot/swedish-docs` is parked on
 purpose** (S, 16 Oct): the Swedish SOP waits for the next SOP update. `main` is pushed.
 
 ---
@@ -29,29 +30,31 @@ branch reviewed with `make check` passing on the lab PC; the history is in the g
   garment grouped on the right (g). Due soon / due now / behind schedule (h). One Re-calibrate
   dialog (i). Noise only while the garment may run; the tick a click (j). The intervention's
   rest screen (k). The finish page on checking and uploading the data (l). Demo-data findings (m).
-- **S's demo of 22 Oct, after review** (N7.F18p-v, not separately reviewed): Space is Next
-  from the start; x/N wherever a count is known; the heading at the instruction's size;
-  "Prepare" over a rest's last 5 s; "as shown" gone; the distances asked for after the paths,
-  their fields highlighted; Discard in the central area; only the sites used drawn; a jump
-  past the calibration brings its stand-in. Run `/code-review high` and spec-review on these
-  commits before merging.
+- **S's demo of 22 Oct** (N7.F18p-v): Space is Next from the start; x/N wherever a count is
+  known; the heading at the instruction's size; "Prepare" over a rest's last 5 s; the
+  distances asked for after the paths, their fields highlighted; only the sites used drawn.
+- **S's list of 22 Oct** (N7.F18w-ab): jumps never stick, and the intermittent stall fixed (a
+  self-start touch holds the session until its prompt is up); the Mac lays out like the lab
+  PC; Correct last application… for the filament and Discard; no rest after a series' last
+  application (Discard from the press keeps it discardable, N7.F18ad); short screens not
+  shown and demo waits 3 / 5 s saying the session's; brush sites per zone.
 - **State on the Mac:** `make check` fails only on the known Mac failures (section 3, item 1);
-  1398 unit tests pass, validator 36/36, ruff and the literal lint clean.
-- **Reviewed:** `/code-review high` (N7.F18n) and spec-review (N7.F18o), findings fixed. The
-  spec review ran out of turns before reading all of `tatp/ui/experimenter.py`, `widgets.py`,
-  `screenshots.py`, `sim/` and the text files; the code review covered those.
+  1413 unit tests pass, validator 36/36, ruff and the literal lint clean.
+- **Reviewed:** every batch by `/code-review high` and spec-review, findings fixed (N7.F18n,
+  o, ac, ad), except N7.F18p-v, which the N7.F18w-ad reviews covered only where they touched
+  the same code.
 - **Still to do on this branch, on the lab PC:** `make check`, and re-approve the changed screens after looking at each against
   `docs/UI_PRINCIPLES.md` (the references are lab-PC renders, so the Mac cannot approve them):
   `make shots ARGS="--approve-matching 'experimenter_*'"`, then the participant
-  `*_standby_intervention`. 18 screens are new. Then merge.
-- **On the lab laptop:** the demo window with the open-items line is over 800 px tall (it was
-  before this branch too); the session window is 637 px with a banner on the Mac's test
-  fonts, 3 px under the limit: check it on the lab PC.
+  `*_standby_intervention`. Many screens are new or changed (headings, correction dialog,
+diagram). Then merge.
+- **On the lab laptop:** the session window is 637 px with a banner on the test fonts, 3 px
+  under the 640 limit: check it on the lab PC. The experimenter window is capped at the lab
+  screen's 1280 x 800, plus the demo panel in a demonstration.
 
 **For S** (all in `docs/LOG.md` §7):
-- **Brush sites (N7.F18u, R37), to decide:** 4 primary sites (2 if the brush is wider than
-  ~10 mm) and 5 secondary, one ~2 cm stroke; needs the lab brush's width and Bilaga 1 checked.
-- **Decisions to confirm:** the 5 s Prepare lead (N7.F18r); the noise silent outside the garment's phases, so the cue sounds
+- **Decisions to confirm:** the 5 s Prepare lead (N7.F18r); X = 2 s and the demo's 3 / 5 s
+  waits (N7.F18aa); the noise silent outside the garment's phases, so the cue sounds
   over silence there at the same level, so the measures outside the intervention are taken in silence and its pinprick blocks under the noise (N7.F18j); a demo's Jump-to fallbacks (N7.F18b); where
   each numbered site is drawn, a placeholder (open item 11, N7.F18e); the rekindle's touch
   restart (N7.F11b10); re-calibration in the intervention (N7.F12a1); a worn-garment demo

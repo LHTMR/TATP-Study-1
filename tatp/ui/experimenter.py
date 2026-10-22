@@ -284,6 +284,8 @@ class ExperimenterWindow(QWidget):
     # The filament actually applied, when the experimenter substitutes a lower one for the one
     # asked for (SPEC.md 8.2). Carries its gram label.
     substitution_entered = Signal(str)
+    # A correction confirmed once it could no longer be taken: what was chosen, for the log.
+    correction_refused = Signal(str)
     # The four mapping distances for one time point (SPEC.md 8.4): the phase, then a tuple of
     # millimetres with None for any not yet measured. Entered whenever convenient.
     distances_entered = Signal(str, object)
@@ -1259,18 +1261,17 @@ class ExperimenterWindow(QWidget):
 
     def correction_dialog(self) -> CorrectionDialog:
         """What was wrong with the application just given: another filament, or discard and
-        repeat it (S, 22 Oct 2026). Discard is listed until the rating is in, greyed, saying
-        so; the filaments only while one can be recorded."""
+        repeat it (S, 22 Oct 2026); each only while it can be taken, Discard listed greyed
+        otherwise."""
         controls, dialogs = self.text["controls"], self.text["dialogs"]
         filaments = ({label_g: controls["substitution_option"].format(filament=label_g)
                       for label_g in self._filaments}
                      if self._awaiting["substitution"] else {})
-        discard_note = dialogs["correction_discard" if self._awaiting["discard"]
-                               else "correction_discard_after_rating"]
         return CorrectionDialog(
             controls["correct_application"], dialogs["correction"],
             dialogs["correction_filament"], filaments,
-            controls["discard_repeat"], discard_note, self._awaiting["discard"],
+            controls["discard_repeat"], dialogs["correction_discard"],
+            self._awaiting["discard"],
             controls["correction_confirm"], controls["cancel"], parent=self,
         )
 
@@ -1287,6 +1288,9 @@ class ExperimenterWindow(QWidget):
             elif action == CORRECT_DISCARD and self._awaiting["discard"]:
                 self.discard_requested.emit()
             else:
+                # Not recorded, but not lost without trace: it was what the experimenter
+                # meant to say about the application (spec review of N7.F18y).
+                self.correction_refused.emit(f"{action} {filament}".strip())
                 self.show_substitution(self.text["warnings"]["correction_too_late"], QUERIED)
 
         dialog.accepted.connect(chosen)

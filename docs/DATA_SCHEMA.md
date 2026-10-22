@@ -270,7 +270,12 @@ The filament applied instead is chosen in a dialog, Correct last application…,
 in, into the trial's own row (`substitution_entered`); after it, as a `corrections` row and
 `substitution_corrected` (origin `experimenter`, severity `info`, or `warning` when not lighter
 than asked; `detail` `<table> trial <n>: asked <label> g, applied <label> g, recorded <label>
-g`). The same dialog discards and repeats. A choice is recorded on confirming, so nothing is
+g`). The same dialog discards and repeats, from the "applied" press: chosen before the rating is in,
+it is logged `discard_pending` (origin `experimenter`, `detail` `trial <n>`) and done when the
+rating arrives, so a series' last application, which has no rest after it, can be discarded too
+(docs/LOG.md N7.F18ad). A choice confirmed once it could no longer be taken records nothing and
+is logged `correction_too_late` (origin `experimenter`, severity `warning`, `detail` `filament
+<label>` or `discard`). A choice is recorded on confirming, so nothing is
 left chosen and unrecorded, and `substitution_not_recorded` is no longer written: until 22 Oct
 2026 it marked a filament chosen in the filament-applied-instead entry and Record never
 pressed (`detail` `trial <n>: <label> g`), which did not change the row. Before 21 Oct 2026 the

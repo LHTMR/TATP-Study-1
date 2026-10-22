@@ -1017,8 +1017,8 @@ def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
                           if f["label_g"] != given])
     window.set_actions_enabled(substitution=True, discard=False)
     dialogs["correction_dialog"] = (
-        "Correct last application… before the rating is in: another filament from the set, "
-        "or Discard and repeat, listed greyed, saying when it can be taken.",
+        "Correct last application… once Discard has been chosen before the rating: another "
+        "filament from the set still, Discard listed greyed.",
         window.correction_dialog(),
     )
     window.set_actions_enabled(discard=True)

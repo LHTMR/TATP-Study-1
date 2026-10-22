@@ -599,6 +599,11 @@ status:
   # small size: a test holds both languages to it.
   recalibration_used: The re-calibrations allowed in a session are used up, so only {controls[resume]} is offered.
   discarded: Last trial discarded. It will be repeated.
+  discarded_not_repeated: >-
+    Last trial discarded. The application limit has been reached, so it will not be repeated.
+  # DRAFT (LOG N7.F18ad): written by the build, not ethics-sourced. Discard chosen before the
+  # rating is in, done when it arrives.
+  discard_pending: The trial will be discarded once it is rated, then repeated.
 
 warnings:
   # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. A path that ended at
@@ -759,7 +764,6 @@ dialogs:
   correction: What was wrong with the application just given?
   correction_filament: 'Another filament was applied:'
   correction_discard: Its rating is kept in the data, marked as discarded, and it is repeated unless the application limit is reached.
-  correction_discard_after_rating: Possible once the participant has rated it.
   # SPEC.md 15. Both values are formatted by the session from its own text.
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   resume_found: 'An unfinished session was found for this participant. Completed: {completed}. {since_sensitisation} Resume it, keeping the original timing?'

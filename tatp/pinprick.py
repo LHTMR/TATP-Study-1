@@ -938,7 +938,8 @@ class PinprickTrial(_RatedTrial):
         self.session.log(
             "substitution_entered",
             origin="experimenter",
-            severity="info" if lower else "warning",
+            severity="info" if lower or label_g == self.application.filament_label_g
+            else "warning",
             detail=f"asked {self.application.filament_label_g} g, applied {label_g} g",
         )
         self.experimenter.show_substitution(*substitution_message(
@@ -1083,6 +1084,9 @@ class _Series(Procedure):
         self._discardable: tuple[str, str, int] | None = None
         # The rated filament application that may still be corrected (`_set_discardable`).
         self._correctable: PinprickTrial | None = None
+        # Discard chosen between the "applied" press and the rating: done once the rating is
+        # in (`interval`), so the series' last application can be discarded too.
+        self._discard_pending = False
         # What was discardable when a re-calibration took this protocol's place.
         # What `suspend_offers` withdrew: the discardable application, and the trial that may
         # still be corrected.
@@ -1224,6 +1228,9 @@ class _Series(Procedure):
         made: list[_RatedTrial] = []
 
         def make() -> _RatedTrial:
+            # Each run of the trial afresh, a repeat after a stop included: a discard chosen
+            # for the one a stop cut short is not this one's.
+            self._discard_pending = False
             made[:] = [make_trial()]
             made[0].after_delivery = lambda: self._show_after_delivery(made[0])
             return made[0]
@@ -1249,7 +1256,9 @@ class _Series(Procedure):
     def _show_after_delivery(self, trial: _RatedTrial) -> None:
         """While the participant rates: the next application to have ready, where the rating
         cannot change it; the two filaments it could be, where it decides between them; and
-        under "Wait" where it decides more than that. Never the rating itself."""
+        under "Wait" where it decides more than that. Never the rating itself. From here the
+        application can be discarded (`_on_discard`)."""
+        self.experimenter.set_actions_enabled(discard=not self._discard_pending)
         after = self.next_after(trial)
         if after is None:
             self.instruct(RATING_NEXT_OPEN, WAIT)
@@ -1283,16 +1292,25 @@ class _Series(Procedure):
         """The jittered wait after an application, during which it may be discarded or
         corrected. None after the series' last: nothing follows it to space, so the series
         ends with its rating (S, 22 Oct 2026: "We don't need a final rest after the last
-        filament"), and the last can be corrected only until its rating is in."""
-        if self._upcoming() is None:
-            self.experimenter.set_status(self._received(trial))
-            # Not inside the rating's own handling, which is still unwinding.
-            self.step(lambda: self._after(0.0, self._next))
-            return
-        self._set_discardable((table, trial.cue_onset_iso, trial.trial_index), trial)
+        filament"), and its filament can be corrected only until its rating is in. A discard
+        chosen before the rating is done now, the last application's included (SPEC.md 11)."""
         assert trial.delivered_elapsed_s is not None, "a rated application was pressed applied"
         self._interval_start_s = trial.delivered_elapsed_s
+        if self._discard_pending:
+            self._discard_pending = False
+            self._set_discardable((table, trial.cue_onset_iso, trial.trial_index), trial)
+            self._on_discard()
+            return
+        if self._upcoming() is None:
+            self.experimenter.set_status(self._received(trial))
+            self._end_now()
+            return
+        self._set_discardable((table, trial.cue_onset_iso, trial.trial_index), trial)
         self._wait_then_next(received=self._received(trial))
+
+    def _end_now(self) -> None:
+        # Not inside the rating's own handling, which is still unwinding.
+        self.step(lambda: self._after(0.0, self._next))
 
     def _wait_then_next(self, received: str = "") -> None:
         """`received`: the status line naming the application just rated -- never its rating,
@@ -1420,7 +1438,7 @@ class _Series(Procedure):
                  < self.filaments[ladder_index(self.filaments, asked)].force_nominal_mn)
         self.session.log(
             "substitution_corrected", origin="experimenter",
-            severity="info" if lower else "warning",
+            severity="info" if lower or label_g == asked else "warning",
             detail=f"{table} trial {trial_index}: asked {asked} g, applied {label_g} g, "
                    f"recorded {previous} g",
         )
@@ -1448,6 +1466,16 @@ class _Series(Procedure):
     # -- discard and repeat (SPEC.md 11) ------------------------------------------------
 
     def _on_discard(self) -> None:
+        trial = self._trial
+        if (self._discardable is None and self.rig.interruptions.active is None
+                and trial is not None and trial.delivered_elapsed_s is not None):
+            # Applied, not yet rated: discarded once the rating is in (`interval`).
+            self._discard_pending = True
+            self.experimenter.set_actions_enabled(discard=False)
+            self.experimenter.set_status(self.experimenter.text["status"]["discard_pending"])
+            self.session.log("discard_pending", origin="experimenter",
+                             detail=f"trial {trial.trial_index}")
+            return
         if self._discardable is None or self.rig.interruptions.active is not None:
             self.session.log(
                 "discard_ignored",
@@ -1472,12 +1500,15 @@ class _Series(Procedure):
         self.session.log(
             "trial_discarded", origin="experimenter", detail=f"{table} trial {trial_index}"
         )
-        # Offered only in the rest before another application (`interval`), so the run is
-        # never at its cap here and the repeat always follows.
+        # The discard is recorded either way -- the trial was delivered badly whatever follows.
+        # At the application cap no repeat can follow: the status says so, and the run ends.
         repeats = self._rollback()
-        assert repeats, "a discard left no room to repeat it"
-        self.experimenter.set_status(self.experimenter.text["status"]["discarded"])
+        status = "discarded" if repeats else "discarded_not_repeated"
+        self.experimenter.set_status(self.experimenter.text["status"][status])
         self.experimenter.refresh()
+        if not repeats:
+            self._end_now()
+            return
         # A fresh interval, timed from the discarded application's press as every interval is
         # (SPEC.md 8.3; LOG N7.F17a), so the repeat is as far from the stimulus actually given
         # as any application is from the one before it -- not from the discard.
