@@ -16,6 +16,7 @@ Numbers are never reused.
 | [R34](R34-vas-proportionality-training-frequency.md) | Is the VAS proportionality instruction (SPEC §10.6) given at first use of each scale in every session, or only in session 1? | medium | Every session, at the first use of each scale in that session (LOG N7.T1) |
 | [R35](R35-vas-practice-rating.md) | Should the VAS training's practice rating be free placement or aimed at a target, and should it be recorded, and where? (SPEC §10.6) | medium | Free placement, no target, no feedback; logged only (`vas_practice_rating`), never in a ratings table |
 | [R36](R36-recalibration-after-emergency-stop.md) | What re-calibration to offer when resuming from an emergency stop, by phase (S's pilot, 15 Oct 2026) | medium | In touch calibration only: Resume, Rebalance channels or Restart calibration, once per session; elsewhere Resume as now; lowering a channel or stopping the touch mid-intervention is S's |
+| [R37](R37-brush-sites.md) | How many brush sites per zone, what stroke, and how they rotate (SPEC §8.3) | low (sites), medium (stroke) | Recommended: one ~2 cm stroke in both zones; primary 4 sites (2 × 2 grid; 2 if the brush is wider than ~10 mm), secondary 5 sites tangential ~1 cm outside the thermode outline; rotate every application, restarting at site 1 each block |
 
 ## To fetch
 
@@ -42,3 +43,6 @@ papers are copyrighted), a later session re-reads it and updates the report that
 | (look up by title) | Liljencrantz et al. 2013, Altered C-tactile processing in human dynamic tactile allodynia, *Pain* 154:227–234 (read only through the 2014 open review) | R36 |
 | 10.1097/00001756-199905140-00022 | Petersen & Rowbotham 1999, heat/capsaicin rekindling model, *Neuroreport* 10:1511–1516 (abstract only) | R36 |
 | 10.1152/jn.1991.66.1.190 | LaMotte et al. 1991, neurogenic hyperalgesia areas and time course, *J Neurophysiol* 66:190–211 (abstract only) | R36 |
+| 10.1016/j.sjpain.2011.01.003 | Samuelsson, Leffler & Hansson 2011, Dynamic mechanical allodynia in the secondary hyperalgesic area in the capsaicin model, *Scand J Pain* 2:85–92 (abstract only; stroke count, length and site handling) | R37, RB2 |
+| (no DOI; KI open archive 10616/39679) | Samuelsson 2005/2011 thesis, Dynamic mechanical allodynia in peripheral neuropathic pain (KI archive returned 403; effect of stroke number and length) | R37 |
+| 10.1113/jphysiol.1990.sp018135 | Nordin 1990, Low-threshold mechanoreceptive and nociceptive units with unmyelinated (C) fibres in the human supraorbital nerve, *J Physiol* 426:229–240 (CT fatigue recovery time) | R37 |

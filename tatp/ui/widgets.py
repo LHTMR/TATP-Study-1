@@ -266,6 +266,8 @@ class ZoneDiagram(QWidget):
         self.site: int | None = None
         self.path: str | None = None
         self.mirrored = False
+        # Per zone, how many sites the series under way uses (`set_sites_in_use`).
+        self.in_use: dict[str, int] = {}
 
     def width_for(self, height_px: int) -> int:
         """The width the drawing fills at `height_px`: the diagram keeps its proportions."""
@@ -289,6 +291,21 @@ class ZoneDiagram(QWidget):
         assert path is None or path in PATH_DIRECTIONS, f"no mapping path {path!r}"
         self.region, self.site, self.path = region, site, path
         self.update()
+
+    def set_sites_in_use(self, region: str, count: int | None) -> None:
+        """Draw only `region`'s first `count` sites, those a series uses; None, every one."""
+        assert count is None or count >= 1, count
+        if count is None:
+            self.in_use.pop(region, None)
+        else:
+            self.in_use[region] = count
+        self.update()
+
+    def drawn_sites(self) -> int:
+        """How many of the target zone's sites are drawn: those the series uses, and the
+        current one even past that, where a repeat after a discard has gone on to it."""
+        figure = self.sites(self.region)
+        return min(figure, max(self.in_use.get(self.region, figure), self.site or 0))
 
     def set_mirrored(self, mirrored: bool) -> None:
         if mirrored != self.mirrored:
@@ -363,8 +380,8 @@ class ZoneDiagram(QWidget):
         painter.drawText(foot, Qt.AlignCenter, self.words["caption"])
 
     def _draw_sites(self, painter: QPainter, drawing: QRectF, scale: float) -> None:
-        """Every site of the zone, the current one filled and numbered."""
-        for site in range(1, self.sites(self.region) + 1):
+        """The sites drawn, the current one filled and numbered."""
+        for site in range(1, self.drawn_sites() + 1):
             marker = self._rect(drawing, SITE_ID.format(region=self.region, site=site))
             if site != self.site:
                 painter.setPen(QPen(QColor(TARGET_COLOUR), SITE_LINE_PX))

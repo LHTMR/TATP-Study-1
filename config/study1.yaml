@@ -341,6 +341,10 @@ cues:
   # A visual warning cue precedes every stimulus (SPEC.md 10.5).
   warning_lead_s: 1.0
   warning_duration_s: 0.5
+  # The experimenter's "Prepare", over the last seconds of a rest between applications and on
+  # through the warning cue: the cue's lead alone flashed it up for a second (S, 22 Oct 2026;
+  # LOG N7.F18r). The rest before that stays "Wait". The same in every condition.
+  experimenter_prepare_lead_s: 5.0
   # A rest between two stimuli longer than this shows `screens.please_wait` rather than a
   # blank, so the participant can see that the pause is meant (S, 16 Oct 2026; LOG N7.F14d).
   please_wait_min_s: 1.0

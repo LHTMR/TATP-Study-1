@@ -64,6 +64,8 @@ PROCEED_INSTRUCTIONS = (
     # The intervention's end, told to the participant, and the session complete, whose
     # Finish session closes the program (docs/LOG.md N7.F11c9, N7.F11c10).
     "intervention_end", "session_complete", "session_aborted",
+    # The distances asked for after the last path; Next does not wait for them (N7.F18s).
+    "mapping_measure",
 )
 # Templated instructions after which the software waits for Next: the ready line of each kind
 # of series and block, the VAS training -- the anchors and proportionality explained aloud,

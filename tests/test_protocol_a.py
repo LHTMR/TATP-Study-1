@@ -417,6 +417,14 @@ def test_the_interval_shows_the_next_application_counting_down_to_it(app, loaded
         rig.session.clock.skip(1.0)
         after, text, possible = redrawn()
         assert after < before and text in possible, "it counts down"
+        # Its last seconds under "Prepare", in the words the cue goes on with, so nothing
+        # changes for the second the cue lasts (S, 22 Oct 2026).
+        lead_s = config.study1["cues"]["experimenter_prepare_lead_s"]
+        rig.session.clock.skip(max(0.0, remaining() - lead_s + 0.5))
+        protocol._show_expected()
+        assert experimenter._heading == "prepare"
+        assert experimenter.instruction.text() == cfg.instruction(
+            config, "prepare_filament", filament=expected.filament_label_g)
         _spin(lambda: protocol._trial is not None and protocol._trial is not first)
         assert protocol._trial.application == expected, "the one shown is the one given"
         _drive(protocol, done)
@@ -818,6 +826,22 @@ def test_the_short_protocol_intervals_are_jittered_within_range(rig):
     assert len(intervals) == pinprick["short_protocol_n_trials"]
     assert all(pinprick["isi_min_s"] <= s <= pinprick["isi_max_s"] for s in intervals)
     assert len(set(intervals)) > 1
+
+
+def test_the_diagram_draws_only_the_sites_a_short_series_uses(rig):
+    """S, 22 Oct 2026: "more sites are shown on the diagram than are actually used". Five
+    applications use five of the figure's sites; the end of the series gives the zone back."""
+    zone = rig.experimenter.zone
+    protocol = ShortProtocol(rig, "primary", "26", _cap(rig))
+    done = _start(protocol)
+    n_trials = rig.session.config.study1["pinprick"]["short_protocol_n_trials"]
+    used = []
+    _drive(protocol, done,
+           before_answer=lambda answered, trial: zone.region is not None
+           and used.append(zone.drawn_sites()))
+    assert n_trials < zone.sites("primary"), "the figure has more"
+    assert used and set(used) == {n_trials}, used
+    assert "primary" not in zone.in_use, "given back at the series' end"
 
 
 def test_the_brush_writes_the_brush_table(rig):

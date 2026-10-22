@@ -118,6 +118,8 @@ class MappingLedger(QObject):
         point.starts[path] = (clock.wall_iso(), clock.t_session_s())
         if path in point.distances and path not in point.rows:
             self._write_path(phase, point, path)
+        # Walked: its field asks for its distance from now on.
+        self._show_fields(phase)
 
     def restore(
         self,
@@ -228,8 +230,18 @@ class MappingLedger(QObject):
         """The box's fields for `phase` as the ledger holds them, and `message` under them."""
         point = self.time_points[phase]
         self.experimenter.distances.show_outcome(
-            phase, {path: value for path, (value, _) in point.distances.items()},
-            dict(point.queried), message, kind)
+            phase, set(point.distances), set(point.queried), self._awaited(point), message,
+            kind)
+
+    def _show_fields(self, phase: str) -> None:
+        point = self.time_points[phase]
+        self.experimenter.distances.show_fields(
+            phase, set(point.distances), set(point.queried), self._awaited(point))
+
+    @staticmethod
+    def _awaited(point: _TimePoint) -> set[int]:
+        """Paths walked whose distance is still to be entered."""
+        return set(point.starts) - set(point.distances) - set(point.queried)
 
     # -- session end (SPEC.md 8.4) ------------------------------------------------------
 
@@ -384,17 +396,32 @@ class AreaMapping(Procedure):
     def _standby(self) -> None:
         self.participant.show_message(STANDBY_SCREEN)
 
+    def _ask_for_distances(self) -> None:
+        """The borders are on the skin: measure and enter them now, while the marks are fresh
+        (S, 22 Oct 2026: "strongly encouraged to enter them at the time they are measured"),
+        the empty fields highlighted until they are. Next does not wait for them: a distance
+        can still be entered later, and the session's end asks for any missing."""
+
+        def prepare() -> None:
+            self._standby()
+            self.experimenter.set_progress("")
+            self.experimenter.set_instruction(self.instruction_text("mapping_measure"), NOW)
+            self.experimenter.set_status("")
+            self.experimenter.refresh()
+
+        self.await_proceed(
+            lambda: self.finish(MappingResult(self.session.phase, self.n_paths)), prepare)
+
     def _await_path(self) -> None:
         self.path += 1
         if self.path > self.n_paths:
-            # The borders are on the skin; what is left is measuring them, whenever convenient.
-            self.experimenter.refresh()
-            self.finish(MappingResult(self.session.phase, self.n_paths))
+            self._ask_for_distances()
             return
         ready = self.instruction_text(
             "mapping_ready", index=self.path, count=self.n_paths,
             path=self.ledger.path_name(self.path),
         )
+        self.experimenter.set_count(self.path, self.n_paths)
         # Read aloud before the first path; there is no participant mapping screen. Built
         # last, so the noise stays silent while it is up (`tatp.audio.NoiseGate`).
         if self.path == 1:

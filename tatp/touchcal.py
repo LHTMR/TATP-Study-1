@@ -1317,7 +1317,7 @@ class TouchCalibration(Procedure):
         # intervention starts with, and `_kept_preference` the step 6 choice it keeps;
         # `_used_run_index`, the run whose result governed the touch, never superseded since
         # it was used.
-        self.step_name = STEP_TRAINING
+        self._step_name = STEP_TRAINING
         self._entry: tuple[str, str] | None = None
         self._kept_preference: str | None = None
         self._used_run_index: int | None = None
@@ -1346,6 +1346,18 @@ class TouchCalibration(Procedure):
         self.skipped = False
         # This run's (plan, rating) pairs; reset by `_start_run`.
         self.estimates: list[tuple[maths.EstimationPlan, float]] = []
+
+
+    @property
+    def step_name(self) -> str:
+        return self._step_name
+
+    @step_name.setter
+    def step_name(self, name: str) -> None:
+        """A step begins: the last one's count goes, and a step that counts sets its own
+        (S, 22 Oct 2026: x/N wherever it could be shown)."""
+        self._step_name = name
+        self.experimenter.set_progress("")
 
     def connect_actions(self) -> None:
         self.experimenter.skip_calibration_requested.connect(self._skip)
@@ -1576,6 +1588,7 @@ class TouchCalibration(Procedure):
             "touchcal_bracket", index=self._anchor_count - len(plans) + 1,
             count=self._anchor_count,
             target=self.experimenter.text["terms"]["anchor_targets"][plan.target_key]), WAIT)
+        self.experimenter.set_count(self._anchor_count - len(plans) + 1, self._anchor_count)
         self.run_trial(lambda: Cue(*self._windows()), on)
 
     def _estimate(self) -> None:
@@ -1629,6 +1642,7 @@ class TouchCalibration(Procedure):
         self.experimenter.set_instruction(self.instruction_text(
             "touchcal_estimation", answered=len(self.estimates),
             total=len(self.estimates) + len(plans)), WAIT)
+        self.experimenter.set_count(len(self.estimates), len(self.estimates) + len(plans))
         self.experimenter.refresh()
 
         def presented(outcome) -> None:
@@ -1899,6 +1913,7 @@ class TouchCalibration(Procedure):
         self.experimenter.set_instruction(self.instruction_text(
             key, channel=channel, index=self.others.index(channel) + 1,
             count=len(self.others)), WAIT)
+        self.experimenter.set_count(self.others.index(channel) + 1, len(self.others))
 
     def _match_channel(self, channel: int, then: Callable[[], None], zero_retries: int = 0,
                        readjust: bool = False):

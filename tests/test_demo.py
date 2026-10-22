@@ -474,9 +474,11 @@ def test_jump_to_goes_straight_to_a_step_without_running_those_between(app, load
         removal = next(s.upcoming.due_s for s in runner.stages if s.id == "capsaicin.remove")
         assert session.clock.session_started
         assert session.clock.t_session_s() >= removal
-        # Its prior: the pre-sensitisation estimate it would start from was jumped past.
+        # Its prior: the pre-sensitisation estimate it would start from was jumped past; and
+        # past the touch calibration, its stand-in comes with the jump (S, 22 Oct 2026).
         fallbacks = [e["detail"] for e in events if e["event"] == "demo_jump_fallback"]
-        assert len(fallbacks) == 1 and "pre_sensitisation" in fallbacks[0]
+        assert any("pre_sensitisation" in detail for detail in fallbacks)
+        assert any("touch calibration" in detail for detail in fallbacks)
     finally:
         _finish(runner, demo)
 
@@ -510,6 +512,28 @@ def test_jump_to_the_intervention_starts_the_touch_on_fallback_levels(app, loade
         assert not session.vas_training_due("intensity")
         # The touch's start, then the block itself.
         assert session.phase == "intervention"
+    finally:
+        _finish(runner, demo)
+
+
+def test_a_jump_past_the_calibration_brings_its_stand_in_at_once(app, loaded):
+    """S's demo, 22 Oct 2026: a jump to post-sensitisation, then on to the intervention's
+    start, stopped there with "the touch calibration has not delivered a result". The
+    stand-in comes with the jump past it, not only with one into the touch."""
+    runner, demo = _demo(app, loaded)
+    runner.start()
+    try:
+        _jump(runner, demo, "post_sensitisation.long")
+        assert runner.deliveries is not None
+        assert "demo_jump_fallback" in [e["event"] for e in _events(runner.session)]
+        _jump(runner, demo, "intervention.start")
+        demo.skip_wait(0.0)  # to the moment it is due
+        deadline = time.monotonic() + 10.0  # real seconds: the demo clock runs at 1x here
+        while runner._on_go is None:
+            assert time.monotonic() < deadline, "the intervention's start never awaited Next"
+            QApplication.processEvents()
+        runner.experimenter.proceed_requested.emit()  # its Next starts the touch
+        assert runner._touch_on
     finally:
         _finish(runner, demo)
 
@@ -549,8 +573,11 @@ def test_on_a_worn_garment_the_touch_waits_for_a_real_calibration(app, loaded, w
     runner.start()
     try:
         assert not runner.jumpable("block.1")
-        assert runner.jumpable("intervention.start")
-        assert runner.jumpable("post_intervention.long")
+        # Nor any step past the calibration, from which the session would go on to the touch
+        # with none to deliver it (S's demo, 22 Oct 2026).
+        assert not runner.jumpable("intervention.start")
+        assert not runner.jumpable("pre_sensitisation.long")
+        assert runner.jumpable("touch_calibration")
         controls = demo.controls
         index = controls.jump_list.findData("block.1")
         assert not controls.jump_list.model().item(index).isEnabled()

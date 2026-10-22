@@ -102,6 +102,9 @@ def _run_paths(rig, ledger, stop_after_cues=3):
         rig.experimenter.proceed_requested.emit()
         _spin(lambda path=path: (path, stop_after_cues) in cues)
         rig.experimenter.proceed_requested.emit()
+    # Then the distances asked for; Next goes on whether or not they are in (N7.F18s).
+    _spin(lambda: mapping._on_go is not None)
+    rig.experimenter.proceed_requested.emit()
     _spin(lambda: done)
     return mapping, cues, done[0]
 
@@ -329,9 +332,37 @@ def test_a_time_point_carried_over_from_a_crash_gets_its_column(ledger):
     ledger.restore(PHASE, starts, {1: (30.0, now_iso)})
     fields = ledger.experimenter.distances.fields(PHASE)
     assert widgets.TARGET_COLOUR in fields[0].styleSheet(), "recorded before the crash"
-    assert fields[1].styleSheet() == "", "still to enter"
+    assert "background-color" in fields[1].styleSheet(), "walked, still to enter: asked for"
     ledger.experimenter.distances_entered.emit(PHASE, (None, 20.0, 50.0, 40.0))
     assert ledger.time_points[PHASE].area_written, "the rest entered here completes it"
+
+
+def test_after_the_last_path_the_distances_are_asked_for_and_highlighted(rig, ledger, loaded):
+    """S, 22 Oct 2026: not blocking, but "strongly encouraged to enter them at the time they
+    are measured, through instructions and highlighting the boxes until they are entered"."""
+    window = rig.experimenter
+    mapping = AreaMapping(rig, ledger)
+    done = []
+    mapping.finished.connect(done.append)
+    mapping.start()
+    cues = []
+    mapping.pacing_cue.connect(lambda path, cue: cues.append((path, cue)))
+    for path in range(1, 5):
+        window.proceed_requested.emit()
+        _spin(lambda path=path: (path, 1) in cues)
+        assert "background-color" in window.distances.fields(PHASE)[path - 1].styleSheet(), (
+            "walked: its field asks for its distance")
+        window.proceed_requested.emit()
+    _spin(lambda: mapping._on_go is not None)
+    assert window.instruction.text() == cfg.instruction(loaded, "mapping_measure")
+    assert not done, "the step waits for Next"
+    window.distances_entered.emit(PHASE, (30.0, None, None, None))
+    fields = window.distances.fields(PHASE)
+    assert "background-color" not in fields[0].styleSheet(), "entered: no longer asked for"
+    assert "background-color" in fields[1].styleSheet()
+    window.proceed_requested.emit()
+    _spin(lambda: done)
+    assert ledger.outstanding() == [PHASE], "never blocked: what is missing is asked at the end"
 
 
 def test_distances_for_a_phase_with_no_mapping_are_an_error(ledger):

@@ -46,11 +46,12 @@ from __future__ import annotations
 import math
 import re
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from html import escape
 
 from PySide6.QtCore import QPoint, QRegularExpression, Qt, QTimer, Signal, SignalInstance
 from PySide6.QtGui import (
+    QColor,
     QFontMetrics,
     QGuiApplication,
     QKeySequence,
@@ -67,6 +68,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QSizePolicy,
+    QStackedLayout,
     QVBoxLayout,
     QWidget,
 )
@@ -124,6 +126,9 @@ RICH_LINE_BREAK = "<br>"
 # for all three, which was a quarter of a laptop screen left empty in almost every session.
 # The interruption line is reserved at one line; a test holds both languages' wording to it.
 ALERT_LINES = 1
+# The heading at the instruction's own largest size, at least as prominent as what it heads
+# (S, 22 Oct 2026); a stop or pause line too long for it is set a size down until it fits.
+ALERT_SIZES = (SIZE_HEADLINE, SIZE_LARGE, SIZE_BODY, SIZE_SMALL)
 # What to do now has four lines at the headline size, so a sentence to read aloud keeps it
 # (review of N7.F16). A longer one is set a size down the scale, until it fits (3.3, 4.3).
 INSTRUCTION_LINES = 4
@@ -155,13 +160,18 @@ ZONE_HEIGHT_PX = 240
 DISTANCE_FIELD_PX = 56
 # The distances box's message: lines of small text enough for a query in its narrow column.
 DISTANCE_MESSAGE_LINES = 4
-SUBSTITUTION_MESSAGE_LINES = 2
+# A distance field walked and still awaited: a heavier outline and a tint of the same colour.
+AWAITED_BORDER_PX = 2
+AWAITED_TINT_ALPHA = 0.25
+# One line beside the choice: the lab laptop has no height for a second (LOG N7.F18q).
+SUBSTITUTION_MESSAGE_LINES = 1
 CONTROL_COLUMNS = 5
 # Over what to do now (S, 21 Oct 2026): act, get ready, or wait. Keys of the experimenter
 # text's `headings`, each drawn in its own colour, so it is known before it is read
 # (UI_PRINCIPLES.md 5.6).
 NOW, PREPARE, WAIT = HEADINGS = ("now", "prepare", "wait")
 WAIT_FOR = "wait_for"
+PREPARE_FOR = "prepare_for"
 # The two kinds of entry message, by how they are drawn.
 CONFIRMED, QUERIED = "confirmed", "queried"
 # The figure is a right hand (assets/hyperalgesia_zones.svg): mirrored for this limb.
@@ -373,7 +383,8 @@ class ExperimenterWindow(QWidget):
         layout.addSpacing(ITEM_GAP_PX // 2)
         layout.addWidget(self.stages)
         layout.addLayout(self.alert_row)
-        layout.addSpacing(ITEM_GAP_PX)
+        # Close: the heading is the instruction's own (S, 22 Oct 2026).
+        layout.addSpacing(ITEM_GAP_PX // 2)
         layout.addLayout(self.centre, 1)
         layout.addSpacing(ITEM_GAP_PX)
         layout.addLayout(self.controls)
@@ -476,10 +487,12 @@ class ExperimenterWindow(QWidget):
         # session is interrupted, which is then what is going on now. Reserved, so the
         # instruction below it never moves (UI_PRINCIPLES.md 3.3). How far a series has got
         # is at its right.
-        self.alert = label(SIZE_BODY, wrap=True)
+        self.alert = label(ALERT_SIZES[0], wrap=True)
         self.alert.setFixedHeight(self.alert.fontMetrics().lineSpacing() * ALERT_LINES)
-        self.progress = label(SIZE_BODY, colour=SECONDARY)
+        self.progress = label(SIZE_LARGE, colour=SECONDARY)
+        self._alert_fitted: tuple[str, int] | None = None
         self.alert_row = QHBoxLayout()
+        self.alert_row.setSpacing(ITEM_GAP_PX)
         self.alert_row.addWidget(self.alert, 1)
         self.alert_row.addWidget(self.progress)
 
@@ -523,7 +536,8 @@ class ExperimenterWindow(QWidget):
         left = QVBoxLayout()
         left.setSpacing(0)
         left.addLayout(instruction_row)
-        left.addSpacing(ITEM_GAP_PX)
+        # Half a gap: the instruction's last reserved line is seldom used.
+        left.addSpacing(ITEM_GAP_PX // 2)
         left.addWidget(self.status)
         left.addWidget(self.detail, 1)
         left.addLayout(self._build_substitution())
@@ -602,11 +616,30 @@ class ExperimenterWindow(QWidget):
         self.substitution_message.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.substitution_message.setFixedHeight(
             self.substitution_message.fontMetrics().lineSpacing() * SUBSTITUTION_MESSAGE_LINES)
-        row = QHBoxLayout()
-        row.setSpacing(ITEM_GAP_PX)
+        # Discard and repeat, about the application just given, so with it in what is going on
+        # now, not among the session's controls (S, 22 Oct 2026). It shares the choice's
+        # place: it is offered in the rest after a rating, when the choice is over, and the
+        # message beside them keeps its width.
+        self.discard_button = button(controls["discard_repeat"])
+        choice = QHBoxLayout()
+        choice.setContentsMargins(0, 0, 0, 0)
+        choice.setSpacing(ITEM_GAP_PX)
         for widget in (self.substitution_label, self.substitution, self.substitution_button):
             _reserve(widget)
-            row.addWidget(widget)
+            choice.addWidget(widget)
+        discard = QHBoxLayout()
+        discard.setContentsMargins(0, 0, 0, 0)
+        _reserve(self.discard_button)
+        discard.addWidget(self.discard_button)
+        discard.addStretch(1)
+        self._choice_slot = QStackedLayout()
+        for page_layout in (choice, discard):
+            page = QWidget()
+            page.setLayout(page_layout)
+            self._choice_slot.addWidget(page)
+        row = QHBoxLayout()
+        row.setSpacing(ITEM_GAP_PX)
+        row.addLayout(self._choice_slot)
         _reserve(self.substitution_message)
         row.addWidget(self.substitution_message, 1)
         self.set_filaments([])
@@ -627,7 +660,6 @@ class ExperimenterWindow(QWidget):
         self.pause_button = button(self._keyed(controls["pause"], keys["pause"]), SIZE_BODY)
         self.resume_button = button(self._keyed(controls["resume"], keys["resume"]), SIZE_BODY)
         self.abort_button = button(controls["abort"], SIZE_BODY)
-        self.discard_button = button(controls["discard_repeat"])
         # A step's other answer, where Next would otherwise have meant "no": labelled by the
         # step with what it does (`offer_alternative`; review of N7.F16).
         self.alternative_button = button("")
@@ -709,14 +741,13 @@ class ExperimenterWindow(QWidget):
         # with the re-calibration sharing its slot -- when the procedure offers the rematch,
         # which does the same from where it stands, the rematch has it; Re-run before Accept,
         # as in the fit window and every dialog, the choice that goes on on the right
-        # (UI_PRINCIPLES.md 5.5); and Skip calibration last. Discard is never offered with
-        # Accept, so it shares Accept's slot, away from Next, where a reflexive second press
-        # of the way forward cannot reach it (review of N7.F16).
+        # (UI_PRINCIPLES.md 5.5); and Skip calibration last. Discard is with what is going on
+        # now (`_build_substitution`), still away from Next.
         for column, widgets in enumerate((
             (self.alternative_button,),
             (self.rebalance_button, self.recalibrate_button),
             (self.fit_rerun_button,),
-            (self.fit_accept_button, self.discard_button),
+            (self.fit_accept_button,),
             (self.skip_button,),
         )):
             for widget in widgets:
@@ -777,9 +808,9 @@ class ExperimenterWindow(QWidget):
         """What to do now (SPEC.md 11), under its heading: `NOW`, act; `PREPARE`, get ready;
         `WAIT`, nothing to do yet (S, 21 Oct 2026). Every instruction says which, so it is
         never left to the wording. A wait shows its time left: `wait_s` if the step counts it
-        itself -- a series' interval, set again as it runs down -- else the countdown to the
-        next scheduled step, while one is pending. Formatted by the caller from the
-        experimenter text.
+        itself -- a series' interval, set again as it runs down, under "Prepare" for its last
+        seconds -- else the countdown to the next scheduled step, while one is pending.
+        Formatted by the caller from the experimenter text.
 
         Clears the zone diagram's target: a new instruction is a new step, and a stimulus
         location left over from the last one would point at the wrong place. A step that
@@ -790,21 +821,36 @@ class ExperimenterWindow(QWidget):
         )
         self._instruction_text = text
         self._heading = heading
-        self._wait_s = wait_s if heading == WAIT else None
+        self._wait_s = wait_s if heading in (WAIT, PREPARE) else None
         self._draw_heading()
         self._fit_text()
         self.set_target(None)
 
     def set_progress(self, text: str) -> None:
-        """How far the series under way has got (S, 21 Oct 2026), "" for none."""
+        """How far the step under way has got, "x/N" wherever the count is known (S, 21 and
+        22 Oct 2026), "" for none. The heading beside it is fitted again to the room left."""
         self.progress.setText(text)
+        self._set_alert(self.alert.text(), self.alert.styleSheet())
+
+    def set_count(self, done: int, total: int) -> None:
+        """`done` of `total`, beside the heading: the one under way, or for a run of ratings
+        those answered, as its instruction counts them."""
+        self.set_progress(self.text["status"]["progress"].format(done=done, total=total))
 
     def _draw_heading(self) -> None:
         """The heading, on the line over the instruction while the session runs."""
         if self._interruption is not None or self._link_lost:
             return
-        text, style = self._heading_line()
-        self.alert.setText(text)
+        self._set_alert(*self._heading_line())
+
+    def _set_alert(self, text: str, style: str) -> None:
+        """The line over the instruction, fitted to its one line when its text or the room
+        for it changes: `refresh` redraws it every tick."""
+        width = (self.width() - 2 * MARGIN_PX - ITEM_GAP_PX
+                 - self.progress.sizeHint().width())
+        if (text, width) != self._alert_fitted:
+            self._alert_fitted = (text, width)
+            _fit_to(self.alert, text, ALERT_SIZES, width, self.alert.height())
         _restyle(self.alert, style)
 
     def _heading_line(self) -> tuple[str, str]:
@@ -815,8 +861,9 @@ class ExperimenterWindow(QWidget):
         event = self._next_event
         if self._heading == WAIT and wait_s is None and event is not None:
             wait_s = event["due_in_s"] if event["due_in_s"] > 0 else None
-        text = (words[WAIT_FOR].format(time=clock_text(math.ceil(wait_s)))
-                if self._heading == WAIT and wait_s is not None else words[self._heading])
+        counted = {WAIT: WAIT_FOR, PREPARE: PREPARE_FOR}
+        text = (words[counted[self._heading]].format(time=clock_text(math.ceil(wait_s)))
+                if wait_s is not None else words[self._heading])
         colour = {NOW: TARGET_COLOUR, PREPARE: FOREGROUND, WAIT: SECONDARY}[self._heading]
         return text, emphasis_style(colour)
 
@@ -884,6 +931,8 @@ class ExperimenterWindow(QWidget):
         several are raised as a stage ends, and is cleared at the second. A distance's
         confirmation goes too; a query waiting to be answered stays (UI_PRINCIPLES.md 5.15)."""
         self.set_status("")
+        # The count belonged to the stage before, as the status did.
+        self.set_progress("")
         self.distances.clear_confirmation()
         if not self._warning_text:
             return
@@ -908,6 +957,11 @@ class ExperimenterWindow(QWidget):
             self.detail.setText(self.text["instructions"]["monofilament"])
         if technique or self.detail.text() == self.text["instructions"]["monofilament"]:
             self.detail.setVisible(technique)
+
+    def set_sites_in_use(self, region: str, count: int | None) -> None:
+        """How many of `region`'s sites the series under way uses, for the diagram; None, all
+        the figure has."""
+        self.zone.set_sites_in_use(region, count)
 
     def set_detail(self, text: str) -> None:
         """Small print under the status: what was saved, and how to upload it, at the end."""
@@ -1524,8 +1578,7 @@ class ExperimenterWindow(QWidget):
         else:
             text, style = self._heading_line()
         self._link_lost = link_lost
-        self.alert.setText(text)
-        _restyle(self.alert, style)
+        self._set_alert(text, style)
 
     def _draw_hardware(self, hardware: dict, phase: str) -> None:
         # Connected is the quiet, expected state; disconnected is loud. A hazard state that is
@@ -1615,6 +1668,12 @@ class ExperimenterWindow(QWidget):
         # The choice stays in sight with its message until the next application offers it
         # afresh, so what became of the last one can still be read (S, 21 Oct 2026).
         choice_shown = substituting or bool(self.substitution_message.text())
+        # Discard takes the choice's place while it is offered, paused or not, so the place
+        # does not flip with a pause.
+        discard_place = self._awaiting["discard"]
+        self._choice_slot.setCurrentIndex(1 if discard_place else 0)
+        message_shown = choice_shown
+        choice_shown = choice_shown and not discard_place
         # (widget, shown, pressable). Skip calibration stays in sight through an
         # interruption, as it was, but cannot be pressed then.
         offered = (
@@ -1634,7 +1693,7 @@ class ExperimenterWindow(QWidget):
             (self.substitution_label, choice_shown, True),
             (self.substitution, choice_shown, substituting),
             (self.substitution_button, choice_shown, substituting),
-            (self.substitution_message, choice_shown, True),
+            (self.substitution_message, message_shown, True),
             (self.distances, mapped, mapped),
         )
         focus = QApplication.focusWidget()
@@ -1947,17 +2006,30 @@ class DistancesBox(QWidget):
             self.message.setText("")
             self.message.setToolTip("")
 
-    def show_outcome(self, phase: str, recorded: dict[int, float],
-                     queried: dict[int, float], message: str, kind: str) -> None:
-        """What the ledger made of the entry for `phase`: the paths (1-based) recorded and
-        queried, and the line to show, `CONFIRMED` or `QUERIED`."""
+    def show_fields(self, phase: str, recorded: Collection[int], queried: Collection[int],
+                    awaited: Collection[int]) -> None:
+        """`phase`'s fields as the ledger holds them, by path (1-based): recorded, queried, or
+        walked and still awaited -- the last filled in the target colour until entered, so
+        the eye is drawn to them while the marks are fresh (S, 22 Oct 2026)."""
+        tint = QColor(TARGET_COLOUR)
+        tint.setAlphaF(AWAITED_TINT_ALPHA)
         for path, field in enumerate(self.fields(phase), start=1):
             if path in queried:
                 field.setStyleSheet(f"border: 1px solid {WARNING_COLOUR};")
             elif path in recorded:
                 field.setStyleSheet(f"border: 1px solid {TARGET_COLOUR};")
+            elif path in awaited:
+                field.setStyleSheet(
+                    f"border: {AWAITED_BORDER_PX}px solid {TARGET_COLOUR};"
+                    f" background-color: {tint.name(QColor.HexArgb)};")
             else:
                 field.setStyleSheet("")
+
+    def show_outcome(self, phase: str, recorded: Collection[int], queried: Collection[int],
+                     awaited: Collection[int], message: str, kind: str) -> None:
+        """What the ledger made of the entry for `phase` (`show_fields`), and the line to
+        show, `CONFIRMED` or `QUERIED`."""
+        self.show_fields(phase, recorded, queried, awaited)
         colour = TARGET_COLOUR if kind == CONFIRMED else WARNING_COLOUR
         _restyle(self.message, f"color: {colour};")
         self.message.setText(message)

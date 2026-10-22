@@ -105,6 +105,9 @@ BETWEEN_APPLICATIONS = "between_applications"
 BETWEEN_DISCARDED = "between_applications_discarded"
 NEXT_FILAMENT = "next_filament"
 NEXT_BRUSH = "next_brush"
+# The trial's own "Prepare" wording (`_RatedTrial._instruction`), from the end of the rest.
+PREPARE_FILAMENT = f"{PREPARE}_filament"
+PREPARE_BRUSH = f"{PREPARE}_brush"
 RECEIVED_FILAMENT = "received_filament"
 RECEIVED_BRUSH = "received_brush"
 READY_LONG = "ready_long"
@@ -120,7 +123,7 @@ RATING_NEXT_OPEN = "rating_next_open"
 RATING_LAST = "rating_last"
 # Keys in the experimenter text's `status`: how far a series has got.
 PROGRESS = "progress"
-PROGRESS_OPEN = "progress_open"
+PROGRESS_BOUNDED = "progress_bounded"
 
 # The fit is in log10 force (SPEC.md 8.2), so undoing it is a power of ten. Not a parameter.
 LOG_BASE = 10.0
@@ -1062,6 +1065,8 @@ class _Series(Procedure):
         # The application is due a warning cue's lead after the interval ends: that is what
         # the countdown counts to. Redrawn only when its whole second changes.
         self._warning_lead_s = float(self.session.config.study1["cues"]["warning_lead_s"])
+        self._prepare_lead_s = float(
+            self.session.config.study1["cues"]["experimenter_prepare_lead_s"])
         self._shown_seconds: int | None = None
         self._countdown = QTimer(self)
         screens = self.session.config.hardware["screens"]
@@ -1077,6 +1082,13 @@ class _Series(Procedure):
         self.experimenter.discard_requested.disconnect(self._on_discard)
         self._set_discardable(None)
         self.experimenter.set_progress("")
+        self.experimenter.set_sites_in_use(self.region, None)
+
+    def _sites_in_use(self) -> int:
+        """How many of the zone's sites the series rotates through: the diagram draws those,
+        not every site the figure has (S, 22 Oct 2026). A repeat after a discard goes on to the
+        next site, which the diagram draws as it comes."""
+        return self.rotation.n_sites
 
     def suspend_offers(self) -> None:
         """A re-calibration runs in this protocol's place (docs/LOG.md N7.F12a1): Discard is
@@ -1108,6 +1120,7 @@ class _Series(Procedure):
 
         def prepare() -> None:
             self.rig.show_between()
+            self.experimenter.set_sites_in_use(self.region, self._sites_in_use())
             self.experimenter.set_instruction(self._ready_instruction(), GET_READY)
             # The zone the series is in, on the diagram beside it (S, 21 Oct 2026); not beside
             # a sentence to read aloud, which has the instruction's whole width (LOG N7.F17e).
@@ -1160,6 +1173,7 @@ class _Series(Procedure):
         self._set_discardable(None)
         self.applications += 1
         self.experimenter.set_progress(self._progress())
+        self.experimenter.set_sites_in_use(self.region, self._sites_in_use())
         made: list[_RatedTrial] = []
 
         def make() -> _RatedTrial:
@@ -1265,12 +1279,16 @@ class _Series(Procedure):
         self._shown_seconds = seconds
         expected = self._expected
         # Under "Wait", with the seconds left until it is due, and where it goes on the
-        # diagram (S, 16 and 21 Oct 2026).
+        # diagram (S, 16 and 21 Oct 2026); for its last seconds under "Prepare", in the words
+        # the warning cue's own "Prepare" goes on with, so nothing changes for the second the
+        # cue lasts (S, 22 Oct 2026: it "only flashes up for a very short time").
+        preparing = seconds <= self._prepare_lead_s
+        heading = GET_READY if preparing else WAIT
         if isinstance(expected, BrushApplication):
-            self.instruct(NEXT_BRUSH, WAIT, wait_s=seconds)
+            self.instruct(PREPARE_BRUSH if preparing else NEXT_BRUSH, heading, wait_s=seconds)
         else:
-            self.instruct(NEXT_FILAMENT, WAIT, wait_s=seconds,
-                          filament=expected.filament_label_g)
+            self.instruct(PREPARE_FILAMENT if preparing else NEXT_FILAMENT, heading,
+                          wait_s=seconds, filament=expected.filament_label_g)
         self.experimenter.set_target(self.region, expected.site_index,
                                      filament=isinstance(expected, Application))
 
@@ -1546,8 +1564,15 @@ class LongProtocol(_Series):
         return self._application(planned.purpose, *placed)
 
     def _progress(self) -> str:
-        # Its length is the ratings' to decide, so only the count so far.
-        return self.experimenter.text["status"][PROGRESS_OPEN].format(done=self.applications)
+        """x/N once the measurement plan is drawn: those given, and the plan's rest, the one
+        under way included; through the search, whose length the ratings decide, x of at most
+        the cap (S, 22 Oct 2026: "Pre-sensitisation should show x/N trials as well")."""
+        status = self.experimenter.text["status"]
+        cap = self.state.max_applications
+        if self.state.measuring:
+            total = min(self.applications - 1 + len(self.state.plan), cap)
+            return status[PROGRESS].format(done=self.applications, total=total)
+        return status[PROGRESS_BOUNDED].format(done=self.applications, total=cap)
 
     def next_after(self, trial: PinprickTrial) -> list[Application | None] | None:
         """For a rating below the target and one at it, on copies of the search: the two the
@@ -1825,6 +1850,10 @@ class _RatingSeries(_Series):
         if len(self.ratings) == self.n_trials:
             return None
         return self._planned()
+
+    def _sites_in_use(self) -> int:
+        # A fixed count of applications, one site each, from the first.
+        return min(self.rotation.n_sites, self.n_trials)
 
     def _progress(self) -> str:
         # The application under way, of the fixed count (S, 21 Oct 2026: "x/N").

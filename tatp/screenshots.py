@@ -119,7 +119,6 @@ SAMPLE_PRESENTATIONS = 12
 SAMPLE_MATCH = {"channel": SAMPLE_CHANNEL, "index": 2, "count": 4}
 SAMPLE_PATH = "lateral"
 SAMPLE_DISTANCES = ("42", "37,5")
-SAMPLE_DISTANCES_MM = (42.0, 37.5)
 SAMPLE_INSIDE_MM = "8"
 SAMPLE_BLOCK = {"kind": "block", "label_key": "block", "block_index": 3, "block_type": "touch"}
 SAMPLE_DUE_IN_S = 245.0
@@ -1045,12 +1044,13 @@ def _type_distances(window, config: cfg.Config) -> None:
     later = box.fields("post_intervention")
     later[0].setText(SAMPLE_DISTANCES[0])
     later[1].setText(SAMPLE_INSIDE_MM)
-    box.show_outcome("post_sensitisation", dict(enumerate(SAMPLE_DISTANCES_MM * 2, 1)), {},
-                     "", CONFIRMED)
+    every_path = set(range(1, len(box.path_ids) + 1))
+    box.show_outcome("post_sensitisation", every_path, set(), set(), "", CONFIRMED)
     paths = text["terms"]["mapping_paths"]
     path_ids = list(paths)
-    box.show_outcome("post_intervention", {1: SAMPLE_DISTANCES_MM[0]},
-                     {2: float(SAMPLE_INSIDE_MM)},
+    # The first path recorded, the second queried, the rest walked and still awaited.
+    first, second, *rest = sorted(every_path)
+    box.show_outcome("post_intervention", {first}, {second}, set(rest),
                      text["distances"]["inside_primary"].format(
                          phase=text["timeline"]["post_intervention"],
                          path=paths[path_ids[1]], value=SAMPLE_INSIDE_MM),

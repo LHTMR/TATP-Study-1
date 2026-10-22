@@ -158,6 +158,8 @@ headings:
   prepare: Förbered
   wait: Vänta
   wait_for: 'Vänta · {time}'
+  # Slutet av en vila mellan appliceringar, med nedräkning till nästa (LOG N7.F18r).
+  prepare_for: 'Förbered · {time}'
 
 instructions:
   # SPEC.md 11: vad som ska göras nu, bredvid zondiagrammet.
@@ -175,9 +177,9 @@ instructions:
   # zondiagrammet bredvid instruktionen, som markerar platsen (S, 21 okt 2026); kraften står i
   # data. Under "Förbered" medan deltagaren ser "Gör dig redo" (LOG N7.F16f).
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  prepare_filament: 'Gör dig redo: filamentet {filament} g, som visas.'
+  prepare_filament: 'Gör dig redo: filamentet {filament} g.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  prepare_brush: 'Gör dig redo: penseln, som visas.'
+  prepare_brush: 'Gör dig redo: penseln.'
   # Under "Nu", när förvarningen är slut. Trycket säger att det är applicerat, och skattningen
   # visas räknat från det (S, 20 okt 2026; LOG N7.F16f). S:s lydelse, 21 okt 2026.
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
@@ -188,11 +190,11 @@ instructions:
   # Under "Förbered", medan deltagaren skattar: nästa applicering, så att den är redo när
   # uppehållet är slut (S, 21 okt 2026). Aldrig vad skattningen blev.
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  rating_next_filament: 'Deltagaren skattar. Härnäst: filamentet {filament} g, som visas.'
+  rating_next_filament: 'Deltagaren skattar. Härnäst: filamentet {filament} g.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   rating_next_either: 'Deltagaren skattar. Härnäst: filamentet {lighter} g eller {heavier} g, beroende på skattningen.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  rating_next_brush: 'Deltagaren skattar. Härnäst: penseln, som visas.'
+  rating_next_brush: 'Deltagaren skattar. Härnäst: penseln.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   rating_next_open: 'Deltagaren skattar. Vad som kommer härnäst beror på skattningen.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
@@ -206,8 +208,8 @@ instructions:
   between_applications_discarded: 'Kasserat. Det som kommer härnäst visas här.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. Uppehållet före en
   # applicering, under "Vänta" med tiden som är kvar (S, 16 och 21 okt 2026).
-  next_filament: 'Härnäst: filamentet {filament} g, som visas.'
-  next_brush: 'Härnäst: penseln, som visas.'
+  next_filament: 'Härnäst: filamentet {filament} g.'
+  next_brush: 'Härnäst: penseln.'
   # DRAFT (LOG N7.F14c): written by the build, not ethics-sourced. Statusraden under det
   # uppehållet: appliceringen som just skattades, aldrig skattningen (Bilaga 3a:
   # försöksledaren ser inte deltagarens skattningar).
@@ -279,6 +281,10 @@ instructions:
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
   ready_touch_block: 'Beröringsblock {block}: inget att applicera. Tryck på {controls[proceed]} så skattar deltagaren beröringen.'
   # DRAFT (LOG N7.F11b11): written by the build, not ethics-sourced
+  # Efter sista vägen: avstånden efterfrågas medan markeringarna är färska, och de tomma
+  # fälten markeras tills de är ifyllda; Nästa väntar inte på dem (S, 22 okt 2026).
+  # DRAFT (LOG N7.F18s): written by the build, not ethics-sourced
+  mapping_measure: 'Mät varje väg från primärzonens mitt till dess gränsmarkering och skriv in avstånden under {controls[distances_title]} nu. Tryck sedan på {controls[proceed]}.'
   mapping_ready: 'Bana {index} av {count} ({path}). Börja utanför området. Tryck på {controls[proceed]} för att starta taktsignalen.'
   await_participant: Väntar på deltagarens svar.
   response_received: Svar mottaget.
@@ -559,7 +565,9 @@ status:
   behind_schedule: 'Efter schemat +{time}'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   progress: '{done}/{total}'
-  progress_open: '{done} givna'
+  # Genom långa protokollets sökning, vars längd skattningarna avgör: x av högst taket
+  # (LOG N7.F18q).
+  progress_bounded: '{done}/≤{total}'
   # Fylls i next_event:s {phase} när nästa händelse är ett block.
   block_label: block {block} ({value})
   # Visas så länge sessionen är avbruten (SPEC.md 13). En rad i brödtextstorlek: ett test
@@ -606,11 +614,12 @@ warnings:
   # DRAFT (LOG N7.F11b16): written by the build, not ethics-sourced
   application_cap: Gränsen på {value} appliceringar nåddes; bästa skattningen används och flaggas.
   # Bredvid valet av använt filament, tills nästa applicering börjar (S, 21 okt 2026).
+  # En rad var, för laptopens höjd (LOG N7.F18q).
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  substitution_recorded: 'Registrerat: filamentet {filament} g användes i stället.'
-  substitution_not_lower: 'Registrerat, men {filament} g är inte lättare än det som efterfrågades.'
+  substitution_recorded: 'Registrerat: {filament} g användes i stället.'
+  substitution_not_lower: 'Registrerat, men {filament} g är inte lättare.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  substitution_not_recorded: '{value} g valdes men registrerades aldrig: försöket behåller det efterfrågade.'
+  substitution_not_recorded: '{value} g registrerades inte.'
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   catch_trials_felt: >-
     Fler än tillåten andel av kontrollförsöken utan tryck rapporterades som kända ({value}).

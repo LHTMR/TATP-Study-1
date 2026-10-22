@@ -159,6 +159,8 @@ headings:
   prepare: Prepare
   wait: Wait
   wait_for: 'Wait · {time}'
+  # The end of a rest between applications, counting down to the next (LOG N7.F18r).
+  prepare_for: 'Prepare · {time}'
 
 instructions:
   # SPEC.md 11: what to do now, alongside the zone diagram.
@@ -177,9 +179,9 @@ instructions:
   # Under "Prepare" through the participant's "Get ready" (LOG N7.F16f): Next is not offered
   # until the cue's lead is over.
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  prepare_filament: 'Get ready: the {filament} g filament, as shown.'
+  prepare_filament: 'Get ready: the {filament} g filament.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  prepare_brush: 'Get ready: the brush, as shown.'
+  prepare_brush: 'Get ready: the brush.'
   # Under "Now", once the cue's lead is over. The press says it has been applied, and the
   # rating is cued from it (S, 20 Oct 2026; LOG N7.F16f). S's wording, 21 Oct 2026.
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
@@ -191,11 +193,11 @@ instructions:
   # the interval ends (S, 21 Oct 2026). In the long protocol's search the next filament
   # depends on the rating, so both it could be are named; never what the rating was.
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  rating_next_filament: 'The participant is rating. Coming up: the {filament} g filament, as shown.'
+  rating_next_filament: 'The participant is rating. Coming up: the {filament} g filament.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   rating_next_either: 'The participant is rating. Coming up: the {lighter} g or the {heavier} g filament, depending on the rating.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  rating_next_brush: 'The participant is rating. Coming up: the brush, as shown.'
+  rating_next_brush: 'The participant is rating. Coming up: the brush.'
   # Under "Wait": the series may end with this rating, or what comes next depends on it.
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   rating_next_open: 'The participant is rating. What comes next depends on the rating.'
@@ -210,8 +212,8 @@ instructions:
   between_applications_discarded: 'Discarded. The next step will appear here.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. The gap before an
   # application, under "Wait" with the time left until it is due (S, 16 and 21 Oct 2026).
-  next_filament: 'Coming up: the {filament} g filament, as shown.'
-  next_brush: 'Coming up: the brush, as shown.'
+  next_filament: 'Coming up: the {filament} g filament.'
+  next_brush: 'Coming up: the brush.'
   # DRAFT (LOG N7.F14c): written by the build, not ethics-sourced. The status line through
   # that gap: the application just rated, never its rating (Bilaga 3a: the experimenter does
   # not see the participant's ratings).
@@ -282,6 +284,10 @@ instructions:
   ready_pinprick_block: 'Pinprick block {block}: {ready}'
   # DRAFT (LOG N7.F11b7): written by the build, not ethics-sourced
   ready_touch_block: 'Touch-rating block {block}: nothing to apply. Press {controls[proceed]} and the participant rates the touch.'
+  # After the last path: the distances asked for while the marks are fresh, their empty fields
+  # highlighted until entered; Next does not wait for them (S, 22 Oct 2026).
+  # DRAFT (LOG N7.F18s): written by the build, not ethics-sourced
+  mapping_measure: 'Measure each path from the centre of the primary zone to its border mark, and enter the distances under {controls[distances_title]} now. Then press {controls[proceed]}.'
   # DRAFT (LOG N7.F11b11): written by the build, not ethics-sourced
   mapping_ready: 'Path {index} of {count} ({path}). Start outside the area. Press {controls[proceed]} to start the tick.'
   await_participant: Waiting for the participant's response.
@@ -574,7 +580,9 @@ status:
   # series runs: the applications given of a fixed count, or so far in the filament series,
   # whose length the ratings decide (S, 21 Oct 2026).
   progress: '{done}/{total}'
-  progress_open: '{done} given'
+  # Through the long protocol's search, whose length the ratings decide: x of at most the
+  # cap (LOG N7.F18q).
+  progress_bounded: '{done}/≤{total}'
   # Filled into next_event's {phase} when the next event is a block.
   block_label: block {block} ({value})
   # Shown for as long as the session is interrupted (SPEC.md 13). One line at body size: a test
@@ -623,12 +631,13 @@ warnings:
   application_cap: The {value}-application limit was reached; the best estimate is used, flagged.
   # Beside the filament-applied-instead choice, until the next application starts (S, 21 Oct
   # 2026). The choice lists the set's filaments, so none can be unknown.
+  # One line each, for the laptop's height (LOG N7.F18q).
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  substitution_recorded: 'Recorded: the {filament} g filament was applied instead.'
-  substitution_not_lower: 'Recorded, but the {filament} g is not lighter than the one asked for.'
+  substitution_recorded: 'Recorded: {filament} g applied instead.'
+  substitution_not_lower: 'Recorded, but {filament} g is not lighter.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. A filament chosen and never
   # recorded when its trial ended.
-  substitution_not_recorded: '{value} g was chosen but never recorded: the trial keeps the one asked for.'
+  substitution_not_recorded: '{value} g not recorded: the one asked for stands.'
   catch_trials_felt: >-
     More than the allowed share of zero-pressure catch trials were reported as felt ({value}).
   schedule: 'Schedule warning, block {block}: {value}'

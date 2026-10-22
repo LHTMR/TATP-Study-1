@@ -334,6 +334,7 @@ class TouchBlock(Procedure):
                                   total=len(self.plan)),
             WAIT,
         )
+        self.experimenter.set_count(self.done_count, len(self.plan))
         scale = self.plan[self.done_count]
         self.run_trial(
             lambda: TouchRating(
@@ -677,6 +678,7 @@ class SessionRunner(Procedure):
                 # A blank that reads as a break before the next scale (UI_PRINCIPLES.md 1.10).
                 self.blank_for(gap_s, lambda: rate(index + 1))
 
+            self.experimenter.set_count(index + 1, len(scales))
             self.run_trial(
                 lambda: TouchRating(
                     self.session, self.participant, self.experimenter, scales[index],
@@ -1333,10 +1335,15 @@ class SessionRunner(Procedure):
         return not self.needs_calibration(stage_id)
 
     def needs_calibration(self, stage_id: str) -> bool:
-        """Whether Jump to `stage_id` waits for a real touch calibration: the intervention's
-        touch on a garment that may be worn."""
+        """Whether Jump to `stage_id` waits for a real touch calibration: any step past it, on
+        a garment that may be worn, since the session would reach the intervention's touch
+        from there with no calibration to deliver it (S's demo, 22 Oct 2026)."""
         return (self.session.garment.worn and self.deliveries is None
-                and self.touches(stage_id))
+                and self._past_calibration(stage_id))
+
+    def _past_calibration(self, stage_id: str) -> bool:
+        ids = [stage.id for stage in self.stages]
+        return ids.index(stage_id) > ids.index(TOUCH_CALIBRATION)
 
     def touches(self, stage_id: str) -> bool:
         """Whether the intervention's touch is on when `stage_id` begins."""
@@ -1380,8 +1387,12 @@ class SessionRunner(Procedure):
             # A touch calibration cancelled mid-way never said it was done (review of N7.F18j);
             # the stage jumped to wants the noise again itself if it runs the garment.
             self.session.noise.want(False, "demonstration jump")
-        if touches and not self._touch_on:
+        if self._past_calibration(stage_id):
+            # Past the calibration, whether to the touch or to a step before it that the
+            # session goes on from to the touch (S's demo, 22 Oct 2026: a jump to
+            # post-sensitisation ended at the intervention's start with nothing to deliver).
             self._fallbacks_for_touch()
+        if touches and not self._touch_on:
             self.session.set_phase(INTERVENTION)
             self._deliver(lambda: self._run_stage(index))
             return
@@ -1432,6 +1443,8 @@ class SessionRunner(Procedure):
         """What the intervention's touch needs from stages jumped past: a calibration, and
         the touch scales' training, which the calibration gives."""
         if self.deliveries is None:
+            # Stage boundary (CLAUDE.md): `jumpable` keeps a worn garment from here.
+            assert not self.session.garment.worn, "a jump past calibration on a worn garment"
             calibration = self._new_calibration()
             self._calibrated(calibration.unrun_result("demonstration jump"))
             self._jump_fallback("the touch is delivered at the fallback levels: the touch "

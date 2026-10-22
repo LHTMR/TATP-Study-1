@@ -1586,11 +1586,12 @@ def test_what_became_of_a_distance_is_said_beside_it(drawn):
     window, _ = drawn
     window.set_mapping_phases(["post_sensitisation"])
     box = window.distances
-    box.show_outcome("post_sensitisation", {1: 42.0}, {2: 4.0}, "queried", QUERIED)
+    box.show_outcome("post_sensitisation", {1}, {2}, {3}, "queried", QUERIED)
     fields = box.fields("post_sensitisation")
     assert widgets.TARGET_COLOUR in fields[0].styleSheet(), "recorded"
     assert widgets.WARNING_COLOUR in fields[1].styleSheet(), "queried"
-    assert fields[2].styleSheet() == "", "nothing yet"
+    assert "background-color" in fields[2].styleSheet(), "walked, awaited: highlighted"
+    assert fields[3].styleSheet() == "", "not walked yet"
     assert box.message.text() == "queried"
     assert widgets.WARNING_COLOUR in box.message.styleSheet()
 
