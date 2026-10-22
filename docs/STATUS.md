@@ -76,7 +76,10 @@ diagram). Then merge.
 conda run -n tatp-study-1 python run_session.py --demo --sim-participant watch --session 1 --experimenter SM --garment mock
 ```
 
-A demo writes its data to `data_demo/<time>/`. Record what turns up in LOG and fix it on a
+A whole demo with both roles on "Auto, fast" at 1x takes about 13 min (measured 22 Oct 2026:
+touch calibration 3.7, pre-S 1.8, post-S 1.7, intervention 3.8, post-I 1.6), nearly all of it
+the shortened waits; a higher Clock speed shrinks the rests and estimation touches, not the
+5 s scheduled waits. A demo writes its data to `data_demo/<time>/`. Record what turns up in LOG and fix it on a
 `pilot/` branch.
 
 1. **Walk a whole session as both people, in English and Swedish.**
