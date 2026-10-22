@@ -46,7 +46,7 @@ demo:
   # said beside it with the session's own length. The rests between pinprick and brush
   # applications, the estimation run's window and settle on the mock garment (a worn one
   # keeps the study's, which cover a real sleeve's ramp), and every scheduled wait: heat,
-  # capsaicin, the gaps between blocks. Auto-run still ends one at once.
+  # capsaicin, the gaps between blocks.
   short_wait_s: 3.0
   long_wait_s: 5.0
   long_wait_from_s: 60.0
@@ -55,7 +55,7 @@ demo:
   # often. The lit-up fade is hardware.yaml's screens.garment_highlight_s.
   garment_display_refresh_s: 0.05    # a pattern's on/off steps are seen as they happen
   # How often the demonstration's controls redraw what they offer -- the wait a skip would
-  # end, the step an auto-run would finish -- and the remote's buttons as they are pressed.
+  # end -- and the remote's buttons as they are pressed.
   controls_refresh_s: 0.25
 
 fit_preview:

@@ -701,14 +701,6 @@ demo:
     "off": Manual
     watch: Auto, watchable
     fast: Auto, fast
-  # Both simulations fast and every timed wait skipped, until switched off: the way past a run
-  # of repeated measurements (LOG N7.F17d).
-  auto_run: Auto-run
-  auto_running: 'Auto-run: on (click to stop)'
-  auto_run_detail: >-
-    Both the participant and the experimenter are simulated and fast, and every timed wait is
-    skipped, until you click again; then each goes back to what it was. Nothing is skipped
-    but waiting: every measurement is still made.
   # DRAFT (LOG N7.F18b): written by the build, not ethics-sourced. Straight to any phase or
   # step, back or forward, with who presses left as it is (S, 21 Oct 2026). Each entry is
   # `stages.<id>` under its phase's name.
@@ -734,12 +726,12 @@ demo:
     the demo starts (Clock speed); a worn garment always runs at 1.
   # The remote's four buttons, lit while held, so a press can be seen to arrive.
   remote: 'Remote:'
-  worn_note: 'Worn garment: people only; no auto-run.'
-  worn_note_detail: 'Someone may be wearing this garment: the participant and the experimenter are people, not simulations, and auto-run is off. Jump to still works, but not past the touch calibration before it has run.'
+  worn_note: 'Worn garment: people only.'
+  worn_note_detail: 'Someone may be wearing this garment: the participant and the experimenter are people, not simulations. Jump to still works, but not past the touch calibration before it has run.'
   # DRAFT (LOG N7.F18aa): written by the build, not ethics-sourced. On the demo panel through
   # a scheduled wait a demonstration shortens (S, 22 Oct 2026); {session} is m:ss.
   wait_differs: 'Demo wait: {demo} s (session: {session})'
-  wait_differs_detail: 'A demonstration waits {demo} s here, then goes on; a session waits {session}. Auto-run ends it at once.'
+  wait_differs_detail: 'A demonstration waits {demo} s here, then goes on; a session waits {session}.'
   # How a demonstration differs from a session, each with the session's own value, said where
   # it applies (S, 20 Oct 2026: "not one info dump but embedded where relevant"; LOG N7.F17d):
   # `rests`, `estimation` and `garment` on the demo panel while that step runs (`garment` also

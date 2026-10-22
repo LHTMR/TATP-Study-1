@@ -1121,7 +1121,6 @@ class _SampleDemo(QObject):
             self.garment.set_channel(channel, True)
         self.participant_mode = OFF
         self.experimenter_mode = OFF
-        self.auto_running = False
         self.config = config
         self.schedule = schedule.generate(config.schedule)
         self.phases = _session_phases(config)
@@ -1224,7 +1223,7 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         f"the channels as commanded in the side column -- every channel's pressure set, "
         f"channels {', '.join(map(str, SAMPLE_DEMO_CHANNELS_ON))} on -- and the demo controls "
         f"along the foot: who presses for the participant and the experimenter (manual, auto "
-        f"watchable or auto fast), the clock's speed, the remote's buttons, Auto-run, Jump to "
+        f"watchable or auto fast), the clock's speed, the remote's buttons, Jump to "
         f"offering every step of every phase with the one after the step under way chosen "
         f"(S, 21 Oct 2026), and how the filament series under way differs from a session -- "
         f"its rests -- in violet beside them (N7.F17d) ({language}).",
@@ -1248,7 +1247,7 @@ def _launcher_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
     yield Shot(
         f"experimenter_{language}_demo_controls_worn_link_lost",
         f"A demonstration on a worn garment, its link lost (docs/LOG.md N7.F12f): the "
-        f"participant and the experimenter people, and auto-run off, said in amber, and the "
+        f"participant and the experimenter people, said in amber, and the "
         f"intervention's steps greyed in Jump to until a touch calibration has run; the "
         f"channels held at their last command in amber, not shown switching off, "
         f"and the side column's warning that the outputs may still hold it (N7.U16) "

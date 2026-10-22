@@ -182,11 +182,11 @@ through a stop or a pause, and starts again at the resume (docs/LOG.md N7.F17e).
 A demonstration (`demo` true in the session file, docs/LOG.md N7.D23) logs who presses:
 `demo_simulation`, `detail` `participant: <mode>` or `experimenter: <mode>` (`off` manual, a
 person; `watch` or `fast` auto, a simulation), at the start and at every change, so each
-response's origin can be read back. Auto-run is `demo_auto_run`, `detail` `on` when switched
-on and `off` when switched off (docs/LOG.md N7.F17d; before 20 Oct 2026 it ran one stage, and
-`detail` was that stage's id), and skips every timed wait as it begins, each a
-`demo_wait_skipped`, `detail` the session seconds skipped -- `t_session_s` jumps by that much
-there.
+response's origin can be read back. A scheduled wait the demonstration ends at its demo
+length (docs/LOG.md N7.F18aa) is `demo_wait_skipped`, `detail` the session seconds skipped --
+`t_session_s` jumps by that much there. `demo_auto_run` (`detail` `on` or `off`; before 20 Oct
+2026 a stage's id) is in demonstrations from 20 to 22 Oct 2026 only: Auto-run was removed
+(N7.F18af), as setting both roles to auto, fast does the same now that waits are short.
 
 A Jump to (from 21 Oct 2026, docs/LOG.md N7.F18b; it replaced Skip and Fast-forward, whose
 `demo_fast_forward` older demonstrations have) is `demo_jump` (`warning`), `detail` `from

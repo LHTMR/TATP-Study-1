@@ -18,10 +18,9 @@ commands and data files -- with these things changed, and none of them able to r
   is looser in real time; the participant and the experimenter are both people, never
   simulations (`check_person`) -- a simulated participant would raise pressure on someone
   else's arm, and a simulated experimenter would press Next into garment output with nobody
-  at the experimenter screen; so auto-run, which makes both fast, is not offered, and Jump to
-  does not reach the intervention's touch before a real touch calibration has run. As a
-  second guard, the simulated experimenter never resumes an interruption by itself there
-  either. The ceiling,
+  at the experimenter screen; and Jump to does not reach the intervention's touch before a
+  real touch calibration has run. As a second guard, the simulated experimenter never
+  resumes an interruption by itself there either. The ceiling,
   the rate limit and the stop are the session's own, unchanged. The remote alone is the remote
   when it is plugged in, as in a session (`demo_key_source`); every keyboard otherwise, so it
   runs on any computer. A simulated participant's presses arrive either way.
@@ -43,9 +42,6 @@ commands and data files -- with these things changed, and none of them able to r
     `FAST`; `sim/responders.py`, `sim/experimenters.py`, the validator's own), changeable at
     any time, so the remote can be handed between a person and the simulation mid-session.
     Logged at the start and at every change (`demo_simulation`).
-  - **Auto-run** runs the steps with both simulations fast, every timed wait skipped as it
-    begins, until switched off, then hands them back: the way past a series of repeated
-    measurements. Nothing is skipped but waiting. Logged (`demo_auto_run`).
   - **Jump to** goes straight to any step of any phase, back or forward, without running the
     steps between and with who presses left as it is (S, 21 Oct 2026: it replaced Skip and
     Fast-forward). Session time moves on to where the step would begin, never back
@@ -332,7 +328,7 @@ class Demo(QObject):
         self.settings = self.session.config.study1["demo"]
         self.garment_name = self.session.config.hardware["garment"]["driver"]
         # Whether someone may be wearing it: then people are the participant and the
-        # experimenter, and auto-run is not offered (`check_person`).
+        # experimenter (`check_person`).
         # Checked before either simulation starts, so a refusal leaves nothing running.
         self.worn = worn_garment(self.garment_name)
         check_person(self.garment_name, "participant", participant_mode)
@@ -358,10 +354,6 @@ class Demo(QObject):
         # None until set, so the starting modes are logged too, a person's included.
         self.participant_mode: str | None = None
         self.experimenter_mode: str | None = None
-        # The modes an auto-run hands back when it ends, by who; empty when none runs.
-        self._before_finish: dict[str, str] = {}
-        # Whether Auto-run is on (`set_auto_run`).
-        self.auto_running = False
         # Its controls, kept here so they live as long as the demonstration (run_session.py).
         self.controls: DemoControls | None = None
         self.set_participant(participant_mode)
@@ -381,18 +373,13 @@ class Demo(QObject):
         self._garment_timer.timeout.connect(self._feed_garment)
         self._garment_timer.start()
         self._feed_garment()
-        # Auto-run skips each timed wait as it begins.
-        self._forward_timer = QTimer(self)
-        self._forward_timer.setInterval(
-            int(round(float(self.settings["controls_refresh_s"]) * MS_PER_S))
-        )
-        self._forward_timer.timeout.connect(self._forward)
         # Each scheduled wait lasts `demo_wait_s` of its session length, then ends (S, 22 Oct
         # 2026): (the session time it waits until, the real time it began, its demo and
         # session lengths), or None while no wait runs.
         self._wait: tuple[float, float, float, float] | None = None
         self._wait_timer = QTimer(self)
-        self._wait_timer.setInterval(self._forward_timer.interval())
+        self._wait_timer.setInterval(
+            int(round(float(self.settings["controls_refresh_s"]) * MS_PER_S)))
         self._wait_timer.timeout.connect(self._watch_wait)
         self._wait_timer.start()
 
@@ -472,12 +459,7 @@ class Demo(QObject):
         self.experimenter_mode = mode
 
     def choose(self, who: str, mode: str) -> None:
-        """A mode chosen in the demo controls: kept, even past an auto-run, which still hands
-        the other back."""
-        self._before_finish.pop(who, None)
-        self._set(who, mode)
-
-    def _set(self, who: str, mode: str) -> None:
+        """A mode chosen in the demo controls."""
         (self.set_participant if who == "participant" else self.set_experimenter)(mode)
 
     def _log_mode(self, who: str, before: str | None, after: str) -> None:
@@ -493,58 +475,14 @@ class Demo(QObject):
             self.session.log("demo_wait_skipped", detail=f"{skipped_s:.1f} s")
         return skipped_s
 
-    def _speed_up(self) -> None:
-        """Both simulations fast, remembering what they were; not on a worn garment, where
-        both are people (`check_person`)."""
-        if self.worn:
-            raise DemoError(f"auto-run is not offered on the {self.garment_name} garment: the "
-                            f"participant and the experimenter are people")
-        if not self._before_finish:
-            self._before_finish = {"participant": self.participant_mode,
-                                   "experimenter": self.experimenter_mode}
-        self.set_participant(FAST)
-        self.set_experimenter(FAST)
-
-    def set_auto_run(self, on: bool) -> None:
-        """Auto-run on: both simulations fast, and every timed wait skipped as it begins,
-        until it is switched off, when both go back to what they were -- the way past a run of
-        repeated measurements, switched on and off at any moment (S, 20 Oct 2026; LOG
-        N7.F17d). Nothing is skipped but waiting: what later stages need comes from the real
-        procedure, never from invented values."""
-        if on == self.auto_running:
-            return
-        if on:
-            self._speed_up()
-            self.auto_running = True
-            self.session.log("demo_auto_run", detail="on")
-            self._forward_timer.start()
-            self._forward()
-        else:
-            self.auto_running = False
-            self.session.log("demo_auto_run", detail="off")
-            self._forward_timer.stop()
-            self._hand_back()
-
     def jump(self, stage_id: str) -> None:
         """Straight to `stage_id` (`SessionRunner.jump_to`), who presses left as it is."""
         self.runner.jump_to(stage_id)
-
-    def _forward(self) -> None:
-        if not self.auto_running:
-            self._forward_timer.stop()
-        elif not self.session.closed:
-            self.skip_wait(0.0)
-
-    def _hand_back(self) -> None:
-        before, self._before_finish = self._before_finish, {}
-        for who, mode in before.items():
-            self._set(who, mode)
 
     def stop(self) -> None:
         self.participant.stop()
         self.experimenter.stop()
         self._garment_timer.stop()
-        self._forward_timer.stop()
         self._wait_timer.stop()
         if self.controls is not None:
             self.controls.timer.stop()
@@ -651,7 +589,7 @@ class DemoControls(QWidget):
     2026; LOG N7.F16j, N7.F17d). Experimenter text only.
 
     Each says what it would do now, or why it can do nothing: who presses for each role,
-    switched at any moment; Auto-run, on until switched off; Jump to any step of any phase,
+    switched at any moment; Jump to any step of any phase,
     in session order. The clock's speed is said and explained, and the remote's buttons light
     as they arrive. How the demo differs
     from a session is said where it applies: the step under way's timing or garment display
@@ -675,10 +613,6 @@ class DemoControls(QWidget):
                                            lambda mode: self._choose("participant", mode))
         self.experimenter_mode = ModeSwitch(words["modes"],
                                             lambda mode: self._choose("experimenter", mode))
-        self.auto_run_button = button(words["auto_run"])
-        self.auto_run_button.setCheckable(True)
-        self.auto_run_button.setToolTip(words["auto_run_detail"])
-        self.auto_run_button.clicked.connect(self.auto_run)
         # Every step of every phase, in session order (S, 21 Oct 2026).
         self.jump_list = sized(QComboBox(), SIZE_SMALL)
         # As wide as a step's usual name; a longer one is cut, whole in the open list.
@@ -703,9 +637,8 @@ class DemoControls(QWidget):
         # whole line in the tooltip, as the row may cut it.
         self.differs_now = label(SIZE_SMALL, colour=DEMO_COLOUR)
         self.differs_now.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        # On a worn garment the participant and the experimenter are people, and so auto-run,
-        # which makes both simulations fast, is not offered (`check_person`). Fixed for the
-        # demonstration, so the note is there from the start or never.
+        # On a worn garment the participant and the experimenter are people (`check_person`).
+        # Fixed for the demonstration, so the note is there from the start or never.
         for widget in (self.participant_mode, self.experimenter_mode):
             widget.setEnabled(not demo.worn)
         self.worn_note = label(SIZE_SMALL, colour=WARNING_COLOUR)
@@ -732,16 +665,11 @@ class DemoControls(QWidget):
         who.addWidget(self.remote)
         actions = QHBoxLayout()
         actions.setSpacing(ITEM_GAP_PX)
-        actions.addWidget(self.auto_run_button)
-        actions.addSpacing(GROUP_GAP_PX)
         jump = label(SIZE_SMALL, colour=DEMO_COLOUR)
         jump.setText(words["jump"])
         actions.addWidget(jump)
         actions.addWidget(self.jump_list)
         actions.addWidget(self.jump_button)
-        # A control that can do nothing is not drawn: on a worn garment the note saying why
-        # stands where auto-run would be.
-        self.auto_run_button.setVisible(not demo.worn)
         self.worn_note.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.worn_note.setToolTip(words["worn_note_detail"])
         actions.addWidget(self.worn_note, 2)
@@ -769,10 +697,6 @@ class DemoControls(QWidget):
 
     def _choose(self, who: str, mode: str) -> None:
         self.demo.choose(who, mode)
-        self.sync()
-
-    def auto_run(self, on: bool) -> None:
-        self.demo.set_auto_run(on)
         self.sync()
 
     def _jump_picked(self, _index: int) -> None:
@@ -808,10 +732,6 @@ class DemoControls(QWidget):
             self.differs_now.setText(differs)
             self.differs_now.setToolTip(detail)
 
-        self.auto_run_button.setChecked(demo.auto_running)
-        self.auto_run_button.setText(words["auto_running" if demo.auto_running
-                                           else "auto_run"])
-        self.auto_run_button.setEnabled(not demo.worn)
         self._sync_jump()
 
     def _sync_jump(self) -> None:

@@ -216,8 +216,7 @@ without the command line:
    participant and the
    experimenter are each manual (a person) or auto (the validator's simulation, §17.5), paced
    to be watched or as fast as it goes, changeable mid-session from the demo controls along the
-   foot of the experimenter window, which also offer *Auto-run* (both simulations fast and every
-   timed wait skipped, until switched off) and *Jump to* (straight to any step of any phase,
+   foot of the experimenter window, which also offer *Jump to* (straight to any step of any phase,
    back or forward, without running those between, who presses unchanged; a value a skipped step
    would have measured comes from the configured fallback, flagged; S, 21 Oct 2026, docs/LOG.md
    N7.F18b). Every change of who presses, every skipped wait and every jump is logged. Also

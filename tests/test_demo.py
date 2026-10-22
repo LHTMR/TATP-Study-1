@@ -1,7 +1,7 @@
 """Demonstration sessions. docs/LOG.md N7.D23, tatp/demo.py.
 
 What a demonstration changes is tested here: that it is quarantined and recorded as one, that
-either simulation can run it, Auto-run and the waits it skips, Jump to, and the watchable pace.
+either simulation can run it, the waits it shortens, Jump to, and the watchable pace.
 That the session itself is the real one is the rest of the suite's, and the validator's.
 """
 
@@ -215,10 +215,7 @@ def test_on_a_real_garment_a_demonstration_is_fully_manual(app, loaded, worn):
         controls = demo.controls
         assert not controls.participant_mode.isEnabled()
         assert not controls.experimenter_mode.isEnabled()
-        assert not controls.auto_run_button.isEnabled()
         assert not controls.worn_note.isHidden()
-        with pytest.raises(DemoError):
-            demo.set_auto_run(True)
         for who in ("participant", "experimenter"):
             with pytest.raises(DemoError):
                 demo.choose(who, FAST)
@@ -226,7 +223,7 @@ def test_on_a_real_garment_a_demonstration_is_fully_manual(app, loaded, worn):
     finally:
         _finish(runner, demo)
     runner, demo = _demo(app, loaded)
-    assert demo.controls.auto_run_button.isEnabled() and demo.controls.worn_note.isHidden()
+    assert demo.controls.worn_note.isHidden()
     assert demo.controls.experimenter_mode.isEnabled()
     assert demo.controls.jump_button.isEnabled()
     _finish(runner, demo)
@@ -420,8 +417,6 @@ def test_each_demo_control_says_what_it_would_do_now(app, loaded):
     runner, demo = _demo(app, loaded)
     controls, text = demo.controls, loaded.experimenter_text
     words = text["demo"]
-    assert controls.auto_run_button.text() == words["auto_run"]
-    assert not controls.auto_run_button.isChecked()
     assert [controls.participant_mode.buttons[mode].text() for mode in (OFF, WATCH, FAST)] == [
         words["modes"][mode] for mode in (OFF, WATCH, FAST)]
     stages = [controls.jump_list.itemData(i) for i in range(controls.jump_list.count())]
@@ -821,21 +816,6 @@ def test_skipping_leaves_the_hands_time_alone(app, loaded):
 # -- who presses ----------------------------------------------------------------------------
 
 
-def test_auto_run_runs_both_fast_until_switched_off(app, loaded):
-    """S, 20 Oct 2026 (LOG N7.F17d): switched on and off at any moment, across stages."""
-    runner, demo = _demo(app, loaded, "--sim-participant", WATCH)
-    controls = demo.controls
-    controls.auto_run_button.click()
-    assert demo.auto_running and controls.auto_run_button.isChecked()
-    assert (demo.participant_mode, demo.experimenter_mode) == (FAST, FAST)
-    runner.stage_started.emit("the next stage")
-    assert demo.auto_running, "on until switched off, whatever stage begins"
-    controls.auto_run_button.click()
-    assert not demo.auto_running
-    assert (demo.participant_mode, demo.experimenter_mode) == (WATCH, OFF)
-    _finish(runner, demo)
-
-
 def test_who_presses_switches_at_any_moment(app, loaded):
     runner, demo = _demo(app, loaded)
     switch = demo.controls.participant_mode
@@ -848,25 +828,25 @@ def test_who_presses_switches_at_any_moment(app, loaded):
 
 def test_how_a_demo_differs_is_said_where_and_while_it_applies(app, loaded):
     """S, 20 Oct 2026: "not one info dump but embedded where relevant" (LOG N7.F17d)."""
-    runner, demo = _demo(app, loaded, "--demo-speed", FULL_RUN_SPEED)
+    runner, demo = _demo(app, loaded, "--demo-speed", FULL_RUN_SPEED,
+                         "--sim-participant", FAST, "--sim-experimenter", FAST)
     controls, words = demo.controls, loaded.experimenter_text["demo"]["session_differs"]
     assert demo.differs_now() is None, "setup runs as a session's does"
     assert controls.differs_now.text() == ""
     assert controls.remote.toolTip() == words["keyboards"]
     runner.start()
-    demo.set_auto_run(True)
     deadline = time.monotonic() + FULL_RUN_TIMEOUT_S
     while demo.differs_now() != RESTS_DIFFER:
         assert time.monotonic() < deadline, (
             f"no pinprick series was reached: {runner.stages[runner.stage_index].id}")
         QApplication.processEvents()
+        demo.skip_wait(0.0)
     controls.sync()
     shown = controls.differs_now.text()
     pinprick = loaded.study1["pinprick"]
     assert f"{float(pinprick['isi_min_s']):g}–{float(pinprick['isi_max_s']):g}" in shown, (
         "the session's own interval, not the demo's")
     assert f"{float(demo.settings['rest_s']):g} s" in shown
-    demo.set_auto_run(False)
     runner.session.set_phase("intervention")
     assert demo.differs_now() in (RESTS_DIFFER, GARMENT_DIFFERS)
     _finish(runner, demo)
@@ -881,16 +861,6 @@ def test_every_change_of_who_presses_is_logged(app, loaded):
     modes = [e["detail"] for e in _events(runner.session) if e["event"] == "demo_simulation"]
     assert modes == [f"participant: {OFF}", f"experimenter: {OFF}", f"participant: {WATCH}",
                      f"experimenter: {FAST}", f"participant: {OFF}"]
-    _finish(runner, demo)
-
-
-def test_a_mode_chosen_during_auto_run_is_kept_and_the_other_handed_back(app, loaded):
-    """The person who takes the remote mid-run keeps it; the experimenter still goes back."""
-    runner, demo = _demo(app, loaded, "--sim-participant", WATCH)
-    demo.set_auto_run(True)
-    demo.choose("participant", OFF)
-    demo.set_auto_run(False)
-    assert (demo.participant_mode, demo.experimenter_mode) == (OFF, OFF)
     _finish(runner, demo)
 
 
