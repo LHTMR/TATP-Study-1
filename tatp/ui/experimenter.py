@@ -813,6 +813,11 @@ class ExperimenterWindow(QWidget):
         self._fit_text()
         self.set_target(None)
 
+    @property
+    def heading(self) -> str | None:
+        """The heading of what is up now (`set_instruction`), None with nothing up."""
+        return self._heading
+
     def set_progress(self, text: str) -> None:
         """How far the step under way has got, "x/N" wherever the count is known (S, 21 and
         22 Oct 2026), "" for none. The heading beside it is fitted again to the room left."""
@@ -1214,6 +1219,10 @@ class ExperimenterWindow(QWidget):
         2026: "the demo controls should be integrated into the main window")."""
         self._layout.addSpacing(ITEM_GAP_PX)
         self._layout.addWidget(panel)
+        # The session's window at the lab screen's size, and the demonstration's own panel
+        # under it, which a session does not have: the cap grows by the panel, never clips it.
+        self.setMaximumHeight(LAB_SCREEN_HEIGHT_PX + ITEM_GAP_PX
+                              + panel.minimumSizeHint().height())
 
     def set_proceed_source(self, awaited: Callable[[], bool]) -> None:
         """Ask `awaited()` whether a press of Next step would do anything now (the rig's
@@ -1281,6 +1290,8 @@ class ExperimenterWindow(QWidget):
                 self.show_substitution(self.text["warnings"]["correction_too_late"], QUERIED)
 
         dialog.accepted.connect(chosen)
+        # One owner, released once answered (CLAUDE.md lesson 3).
+        dialog.setAttribute(Qt.WA_DeleteOnClose)
         dialog.open()
         return dialog
 

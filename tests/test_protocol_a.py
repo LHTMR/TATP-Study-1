@@ -536,6 +536,8 @@ def test_a_recalibration_in_the_protocols_place_withdraws_discard_and_gives_it_b
     assert _rows(rig.session, "discards") == []
     protocol.restore_offers()
     assert protocol._discardable == held and experimenter._awaiting["discard"]
+    # The correction comes back with it (code review of N7.F18y).
+    assert protocol._correctable is not None and experimenter._awaiting["substitution"]
     protocol.cancel()
 
 
@@ -624,6 +626,34 @@ def test_a_correction_after_the_rating_is_a_row_of_its_own_and_replans(rig):
     assert protocol.state.delivered == 1, "corrected, not delivered again"
     protocol.cancel()
     assert not done
+
+
+def test_a_correction_that_ends_the_run_ends_the_rest_with_it(rig):
+    """Code review of N7.F18y: corrected to the lightest filament, a rating at or above the
+    target puts the run out of range below, so nothing follows: the run ends there, as after
+    a last application, rather than the rest counting down to nothing."""
+    protocol = _long(rig)
+    done = _start(protocol)
+    _spin(lambda: rig.participant.stack.currentWidget() is rig.participant.vas)
+    _answer(rig.participant, 1)  # 75 %: at or above the target
+    assert protocol._expected is not None
+    rig.experimenter.substitution_entered.emit(protocol.filaments[0].label_g)
+    _spin(lambda: done)
+    assert done[0].out_of_range and done[0].out_of_range_direction == "below"
+
+
+def test_a_substitution_corrected_back_is_said_as_the_one_asked_for(rig):
+    window = rig.experimenter
+    protocol = _long(rig)
+    _start(protocol)
+    _spin(lambda: rig.participant.stack.currentWidget() is rig.participant.vas)
+    asked = protocol._trial.application.filament_label_g
+    window.substitution_entered.emit("15")
+    window.substitution_entered.emit(asked)
+    assert window.substitution_message.text() == window.text["warnings"][
+        "substitution_asked"].format(filament=asked)
+    assert protocol._trial.applied_label_g == asked
+    protocol.cancel()
 
 
 def test_the_stop_withdraws_the_correction_offer(rig):

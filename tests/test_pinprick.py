@@ -282,6 +282,19 @@ def test_the_sequence_reaches_the_log(running):
     assert events.index("rating_cued") < events.index("rating_confirmed")
 
 
+def test_an_apply_line_left_from_a_stopped_application_gives_way_at_the_cue(running):
+    """Code review of N7.F18aa: the cue's short "Get ready" is skipped only where what is up
+    already says to prepare; an "Apply" left by an application a stop cut short would say to
+    act a second early, so it gives way."""
+    session, participant, experimenter = running
+    experimenter.set_instruction("Apply the 26 g filament as shown, then press Next.", "now")
+    trial = PinprickTrial(session, participant, experimenter, APPLICATION)
+    trial.start()
+    assert experimenter.heading == "prepare"
+    assert "26 g" in experimenter.instruction.text()
+    trial.cancel()
+
+
 def test_the_experimenter_is_told_what_to_apply_and_never_the_rating(running):
     """Named by its gram label (SPEC.md 8.1), under Prepare and then Now, where it goes on the
     diagram beside it rather than in words (S, 21 Oct 2026)."""

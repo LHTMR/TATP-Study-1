@@ -766,6 +766,9 @@ def test_text_is_the_lab_pcs_size_on_every_platform(app):
     one pixel on a Mac; set in pixels, the two are alike."""
     assert widgets.label(widgets.SIZE_BODY).font().pixelSize() == round(
         widgets.SIZE_BODY * 96 / 72)
+    # A style sheet's own size too, which overrides the font's (code review of N7.F18x).
+    assert f"font-size: {round(widgets.SIZE_BODY * 96 / 72)}px" in (
+        widgets.primary_button_style())
     assert ExperimenterWindow.maximumSize(ExperimenterWindow(
         cfg.load("en", "en").experimenter_text, lambda: _all_keys())).toTuple() == (
         experimenter_ui.LAB_SCREEN_WIDTH_PX, experimenter_ui.LAB_SCREEN_HEIGHT_PX)

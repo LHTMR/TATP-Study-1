@@ -252,7 +252,8 @@ def primary_button_style(point_size: int = SIZE_BODY) -> str:
     `point_size` is the button's own size, so taking on the emphasis never resizes it."""
     return (
         f"QPushButton {{ background-color: {CONTROL_BORDER}; color: {FOREGROUND}; "
-        f"border: 1px solid {FOREGROUND}; font-size: {point_size}pt; font-weight: bold; }}"
+        f"border: 1px solid {FOREGROUND}; font-size: {round(point_size * PX_PER_POINT)}px; "
+        f"font-weight: bold; }}"
         f"QPushButton:disabled {{ background-color: {CONTROL_BACKGROUND}; color: {DISABLED}; "
         f"border-color: {CONTROL_BACKGROUND}; font-weight: normal; }}"
         f"{PRESS_RULES}"

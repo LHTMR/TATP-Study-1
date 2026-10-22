@@ -547,6 +547,17 @@ class IntolerableCap:
         return max(caps)
 
 
+def substitution_message(warnings: dict, label_g: str, asked_label_g: str,
+                         lower: bool) -> tuple[str, str]:
+    """What became of a filament named as applied, and how it is shown: the one asked for
+    after all (a slip corrected), a lighter one, or a heavier one, which is queried."""
+    if label_g == asked_label_g:
+        return warnings["substitution_asked"].format(filament=label_g), CONFIRMED
+    if lower:
+        return warnings["substitution_recorded"].format(filament=label_g), CONFIRMED
+    return warnings["substitution_not_lower"].format(filament=label_g), QUERIED
+
+
 def other_filaments(filaments: Sequence[Filament], applied_label_g: str) -> list[str]:
     """The set's gram labels, lightest first, but the one recorded as applied: what can be
     named as applied instead of it."""
@@ -718,7 +729,10 @@ class _RatedTrial(QObject):
         self.participant.show_warning_cue()
         self.session.log("warning_cue", detail=f"trial {self.trial_index}")
 
-        if self._prepare_shown:
+        # Too short to read, it is not shown where what is up already says to get ready (a
+        # series' ready line, the end of its rest); anything else -- an "Apply" left from an
+        # application a stop cut short -- would be wrong through the cue, and gives way.
+        if self._prepare_shown or self.experimenter.heading != GET_READY:
             self._instruct(instruction, GET_READY)
         else:
             self._mark_target()
@@ -927,11 +941,8 @@ class PinprickTrial(_RatedTrial):
             severity="info" if lower else "warning",
             detail=f"asked {self.application.filament_label_g} g, applied {label_g} g",
         )
-        self.experimenter.show_substitution(
-            warnings["substitution_recorded" if lower else "substitution_not_lower"].format(
-                filament=label_g),
-            CONFIRMED if lower else QUERIED,
-        )
+        self.experimenter.show_substitution(*substitution_message(
+            warnings, label_g, self.application.filament_label_g, lower))
         self.experimenter.set_filaments(other_filaments(self.filaments, label_g))
         if self.delivered_elapsed_s is not None:
             self.show_after_delivery()
@@ -1073,7 +1084,10 @@ class _Series(Procedure):
         # The rated filament application that may still be corrected (`_set_discardable`).
         self._correctable: PinprickTrial | None = None
         # What was discardable when a re-calibration took this protocol's place.
-        self._held_discardable: tuple[str, str, int] | None = None
+        # What `suspend_offers` withdrew: the discardable application, and the trial that may
+        # still be corrected.
+        self._held_discardable: tuple[tuple[str, str, int] | None,
+                                      PinprickTrial | None] | None = None
         # Through the interval: the application it leads to, shown so the experimenter can
         # prepare it, counting down to the end of the interval (LOG N7.F14c). Checked against
         # the one actually given, which is decided only when the interval ends.
@@ -1119,11 +1133,11 @@ class _Series(Procedure):
         """A re-calibration runs in this protocol's place (docs/LOG.md N7.F12a1): Discard is
         withdrawn, so neither it nor the interval its press would start runs under the
         calibration, and offered again on the way back."""
-        self._held_discardable = self._discardable
+        self._held_discardable = (self._discardable, self._correctable)
         self._set_discardable(None)
 
     def restore_offers(self) -> None:
-        self._set_discardable(self._held_discardable)
+        self._set_discardable(*self._held_discardable)
         self._held_discardable = None
 
     def _set_discardable(self, discardable: tuple[str, str, int] | None,
@@ -1272,7 +1286,8 @@ class _Series(Procedure):
         filament"), and the last can be corrected only until its rating is in."""
         if self._upcoming() is None:
             self.experimenter.set_status(self._received(trial))
-            self._next()
+            # Not inside the rating's own handling, which is still unwinding.
+            self.step(lambda: self._after(0.0, self._next))
             return
         self._set_discardable((table, trial.cue_onset_iso, trial.trial_index), trial)
         assert trial.delivered_elapsed_s is not None, "a rated application was pressed applied"
@@ -1415,16 +1430,16 @@ class _Series(Procedure):
         _record_ceiling(self, trial.rating_percent, applied, trial.application.site_index)
         warnings = self.experimenter.text["warnings"]
         self.experimenter.show_substitution(
-            warnings["substitution_recorded" if lower else "substitution_not_lower"].format(
-                filament=label_g),
-            CONFIRMED if lower else QUERIED,
-        )
+            *substitution_message(warnings, label_g, asked, lower))
         self.experimenter.set_filaments(other_filaments(self.filaments, label_g))
-        # What comes next is decided again from the filament applied.
+        # What comes next is decided again from the filament applied -- and if nothing does
+        # now, the series ends here, as it does after its last application (`interval`).
         self._expected = self._upcoming()
         self._shown_seconds = None
-        if self._expected is not None:
-            self._show_expected()
+        if self._expected is None:
+            self._advance()
+            return
+        self._show_expected()
         self.experimenter.refresh()
 
     def _corrected(self, trial: _RatedTrial, applied_index: int) -> None:

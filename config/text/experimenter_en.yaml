@@ -626,6 +626,9 @@ warnings:
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   substitution_recorded: 'Recorded: {filament} g applied instead.'
   substitution_not_lower: 'Recorded, but {filament} g is not lighter.'
+  # DRAFT (LOG N7.F18ac): written by the build, not ethics-sourced. A substitution corrected
+  # back to the filament asked for.
+  substitution_asked: 'Recorded: the {filament} g asked for was applied.'
   # DRAFT (LOG N7.F18y): written by the build, not ethics-sourced. A correction confirmed after
   # the next application had begun.
   correction_too_late: 'Not recorded: the next application had begun.'

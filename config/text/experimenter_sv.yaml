@@ -607,6 +607,8 @@ warnings:
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   substitution_recorded: 'Registrerat: {filament} g användes i stället.'
   substitution_not_lower: 'Registrerat, men {filament} g är inte lättare.'
+  # DRAFT (LOG N7.F18ac): written by the build, not ethics-sourced
+  substitution_asked: 'Registrerat: efterfrågade {filament} g användes.'
   # DRAFT (LOG N7.F18y): written by the build, not ethics-sourced
   correction_too_late: 'Inte registrerat: nästa applicering hade börjat.'
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced

@@ -612,6 +612,18 @@ def test_a_self_started_touch_holds_the_session_until_its_prompt_is_up(app, load
         _finish(runner, demo)
 
 
+def test_the_demo_panel_is_added_below_the_lab_screen_size_never_clipped(app, loaded):
+    """Code review of N7.F18x: the window is capped at the lab screen, and a demonstration's
+    panel, which a session does not have, raises the cap rather than being squeezed."""
+    runner, demo = _demo(app, loaded)
+    try:
+        window = runner.experimenter
+        assert window.maximumHeight() >= window.minimumSizeHint().height()
+        assert window.maximumWidth() == experimenter_ui.LAB_SCREEN_WIDTH_PX
+    finally:
+        _finish(runner, demo)
+
+
 def test_a_scheduled_wait_lasts_its_demo_length_and_says_the_sessions(app, loaded):
     """S, 22 Oct 2026: a wait shorter in a demonstration lasts long enough to read, then the
     demonstration goes on, and the panel says the session's length. Lengths shrunk here so
