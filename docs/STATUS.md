@@ -1,5 +1,12 @@
 # STATUS
 
+> **Testing on the lab PC? Use `pilot/demo-feedback-2`, not `main`** (S, 22 Oct 2026). That
+> branch has newer updates from S's demos of 21 and 22 Oct (LOG N7.F18) that are not yet tested
+> on the lab PC or merged here, so a demo run from `main` shows the older software. Claude: if
+> asked to test or run the demo while on `main`, say so and offer to switch to that branch
+> (`git switch pilot/demo-feedback-2`, after `git fetch`); its own `docs/STATUS.md` says what
+> to check there. Remove this note when the branch is merged.
+
 **Last updated:** 21 October 2026 (on the lab PC).
 **Milestone:** 6 (pilotable), in progress. **Priority: testing the code in demo mode** (S,
 20 Oct). The real valve garment is not built yet, so everything that needs it is parked.
