@@ -265,13 +265,16 @@ meanwhile, which stops the touch. A re-calibration chosen inside another during 
 intervention is counted as an intervention one too. A choice no longer offered when the
 dialog is confirmed is logged `recalibration_ignored` (severity `warning`) and does nothing.
 
-`substitution_not_recorded` (origin `experimenter`, severity `warning`, `detail`
-`trial <n>: <label> g`) is written when a filament trial ends with a filament chosen in the
-filament-applied-instead choice and Record never pressed. It did **not** change what the
-trial's row records as applied. The choice is offered only during a filament trial and reset
-when it ends, so it is never carried to the next trial (docs/LOG.md N7.F11a3). Until 21 Oct
-2026 the entry was free text, `detail` what was typed, and a label not in the set was refused
-as `substitution_unknown`; the choice now lists the set's filaments only (N7.F18e).
+The filament applied instead is chosen in a dialog, Correct last application…, from the
+"applied" press until the next application's cue (docs/LOG.md N7.F18y): before the rating is
+in, into the trial's own row (`substitution_entered`); after it, as a `corrections` row and
+`substitution_corrected` (origin `experimenter`, severity `info`, or `warning` when not lighter
+than asked; `detail` `<table> trial <n>: asked <label> g, applied <label> g, recorded <label>
+g`). The same dialog discards and repeats. A choice is recorded on confirming, so nothing is
+left chosen and unrecorded, and `substitution_not_recorded` is no longer written: until 22 Oct
+2026 it marked a filament chosen in the filament-applied-instead entry and Record never
+pressed (`detail` `trial <n>: <label> g`), which did not change the row. Before 21 Oct 2026 the
+entry was free text, and a label not in the set was refused as `substitution_unknown`.
 
 The masking noise is heard only while the garment may run: through the touch calibration and
 while the intervention's touch is on, from the masking check on (docs/LOG.md N7.F18j). Otherwise
@@ -439,6 +442,29 @@ drop discarded trials, anti-join on (`table`, `trial_timestamp_iso`).
 | trial_timestamp_iso | iso8601 | - | yes | That row's `timestamp_iso` |
 | trial_index | int | - | yes | That row's `trial_index`, for reading the file by eye |
 | detail | str | - | no | Free text |
+
+### corrections
+
+One row per pinprick application whose filament the experimenter corrected after the rating
+was in (S, 22 Oct 2026; docs/LOG.md N7.F18y): another filament than the one its row records was
+applied. The row itself stays as written, for the reason under `discards`; this one points at
+it by its `timestamp_iso`. To use the filament actually applied, take the last correction of a
+row, if any, over the row's own `applied_filament_label_g` and `substituted`, and read its forces
+from filaments.yaml. A correction made before the rating is in the row itself, as before. The
+long protocol's next step and estimate, and the intolerable cap, are decided from the corrected
+filament from the moment it is entered.
+
+| Column | Type | Unit | Required | Description |
+|---|---|---|---|---|
+| timestamp_iso | iso8601 | - | yes | Wall clock when the experimenter corrected it |
+| t_session_s | float | s | no | Seconds from session t=0 |
+| phase | str | - | yes | Phase |
+| block_index | int | - | no | Scheduled block, empty outside a block |
+| table | str | - | yes | The table holding the corrected row: `pinprick` |
+| trial_timestamp_iso | iso8601 | - | yes | That row's `timestamp_iso` |
+| trial_index | int | - | yes | That row's `trial_index`, for reading the file by eye |
+| applied_filament_label_g | str | g | yes | Gram label of the filament actually applied |
+| substituted | bool | - | yes | `true` when it differs from the one the software asked for |
 
 ---
 

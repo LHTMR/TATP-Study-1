@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QApplication, QDialog
 import run_session
 from tatp import config as cfg
 from tatp import preflight as pre
+from tatp import resume
 from tatp.devices import Present, candidates, check_key
 from tatp.session import SessionError
 
@@ -375,3 +376,23 @@ def test_accepting_resumes_with_the_recorded_seed(app, config):
     assert second.session.rng_seed == 11
     assert second.session.resumed_from == first.session.files.path("session").name
     run_session.shut_down(second)
+
+
+def test_a_resume_rebuilds_the_cap_from_a_corrected_ceiling_rating(tmp_path):
+    """A ceiling rating whose filament was corrected after it (`corrections`, docs/LOG.md
+    N7.F18y): the cap took both filaments, and keeps the lower, so a resume rebuilds both."""
+    session_file = tmp_path / "TATP1_x_P01_S1_session.csv"
+    session_file.write_text("key,value\n", encoding="utf-8")
+    pinprick = resume.table_path(session_file, "pinprick")
+    pinprick.write_text(
+        "timestamp_iso,phase,block_index,region,site_index,applied_filament_label_g,intolerable\n"
+        "2026-10-22T10:00:00.000,post_sensitisation,,primary,3,26,true\n"
+        "2026-10-22T10:00:20.000,post_sensitisation,,primary,4,26,false\n",
+        encoding="utf-8")
+    resume.table_path(session_file, "corrections").write_text(
+        "table,trial_timestamp_iso,applied_filament_label_g\n"
+        "pinprick,2026-10-22T10:00:00.000,15\n", encoding="utf-8")
+    assert resume._intolerable([session_file]) == (
+        ("post_sensitisation", None, "primary", 3, "26"),
+        ("post_sensitisation", None, "primary", 3, "15"),
+    )

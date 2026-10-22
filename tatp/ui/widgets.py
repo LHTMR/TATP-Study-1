@@ -762,6 +762,90 @@ class ActionChoiceDialog(ChoiceDialog):
         return next((key for key, option in self.actions.items() if option.isChecked()), "")
 
 
+# What `CorrectionDialog.choice` returns as its action.
+CORRECT_FILAMENT = "filament"
+CORRECT_DISCARD = "discard"
+
+
+class CorrectionDialog(QDialog):
+    """Correct last application… (S, 22 Oct 2026): another filament was applied, one of
+    `filaments` ({gram label: wording}, none when that can no longer be recorded), or discard
+    and repeat it. One press chooses, each a button that stays down, the choices one group;
+    Discard is listed even when it cannot be taken yet, greyed, with `discard_note` saying when
+    it can. Confirm needs a choice."""
+
+    def __init__(
+        self,
+        title: str,
+        message: str,
+        filament_label: str,
+        filaments: dict[str, str],
+        discard: str,
+        discard_note: str,
+        can_discard: bool,
+        confirm: str,
+        cancel: str,
+        parent: QWidget | None = None,
+    ):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setStyleSheet(stylesheet())
+        self.message = label(SIZE_BODY, wrap=True)
+        self.message.setText(message)
+        self.confirm = button(confirm, SIZE_BODY)
+        self.confirm.setStyleSheet(emphasis_button_style(WARNING_COLOUR))
+        self.confirm.setEnabled(False)
+        self.confirm.clicked.connect(self.accept)
+        self.cancel = button(cancel, SIZE_BODY)
+        self.cancel.clicked.connect(self.reject)
+        self.group = QButtonGroup(self)
+        self.group.setExclusive(True)
+        self.group.buttonToggled.connect(lambda *_: self.confirm.setEnabled(
+            self.group.checkedButton() is not None))
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(MARGIN_PX, MARGIN_PX, MARGIN_PX, MARGIN_PX)
+        layout.addWidget(self.message)
+        layout.addSpacing(GROUP_GAP_PX)
+        self.filaments: dict[str, QPushButton] = {}
+        if filaments:
+            caption = label(SIZE_SMALL, colour=SECONDARY)
+            caption.setText(filament_label)
+            layout.addWidget(caption)
+            row = QHBoxLayout()
+            for label_g, wording in filaments.items():
+                option = button(wording, SIZE_BODY)
+                option.setCheckable(True)
+                self.group.addButton(option)
+                self.filaments[label_g] = option
+                row.addWidget(option)
+            row.addStretch(1)
+            layout.addLayout(row)
+            layout.addSpacing(GROUP_GAP_PX)
+        self.discard = button(discard, SIZE_BODY)
+        self.discard.setCheckable(True)
+        self.discard.setEnabled(can_discard)
+        self.group.addButton(self.discard)
+        self.discard_note = label(SIZE_SMALL, wrap=True, colour=SECONDARY)
+        self.discard_note.setText(discard_note)
+        layout.addWidget(self.discard)
+        layout.addWidget(self.discard_note)
+        layout.addSpacing(GROUP_GAP_PX)
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(self.cancel)
+        buttons.addWidget(self.confirm)
+        layout.addLayout(buttons)
+
+    def choice(self) -> tuple[str, str]:
+        """(`CORRECT_FILAMENT`, gram label) or (`CORRECT_DISCARD`, ""), or ("", "") before a
+        choice."""
+        if self.discard.isChecked():
+            return CORRECT_DISCARD, ""
+        chosen = next((g for g, option in self.filaments.items() if option.isChecked()), "")
+        return (CORRECT_FILAMENT, chosen) if chosen else ("", "")
+
+
 class MessageDialog(QDialog):
     """A message with one or two buttons: the error dialog, and the resume question."""
 

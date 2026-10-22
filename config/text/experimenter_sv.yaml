@@ -533,12 +533,11 @@ controls:
   # DRAFT (LOG N7.F10a): written by the build, not ethics-sourced. Shown in the emptied note
   # field once the note is written to the log.
   note_saved: 'Anteckningen sparades {time}. Skriv en ny här.'
-  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. Ett val bland
-  # uppsättningens filament, inte fritext (S, 21 okt 2026).
-  substitution: 'Filament använt i stället:'
-  substitution_none: '—'
+  # DRAFT (LOG N7.F18y): written by the build, not ethics-sourced. En kontroll för båda
+  # rättelserna av appliceringen som just gjordes (S, 22 okt 2026).
+  correct_application: Rätta senaste appliceringen…
+  correction_confirm: Registrera
   substitution_option: '{filament} g'
-  record_substitution: Registrera
   # DRAFT (LOG N7.F18f): written by the build, not ethics-sourced. Rutan för
   # kartläggningsavstånden till höger, en rad per kartlagd tidpunkt (S, 21 okt 2026).
   distances_title: Avstånd (mm)
@@ -618,8 +617,8 @@ warnings:
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   substitution_recorded: 'Registrerat: {filament} g användes i stället.'
   substitution_not_lower: 'Registrerat, men {filament} g är inte lättare.'
-  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
-  substitution_not_recorded: '{value} g registrerades inte.'
+  # DRAFT (LOG N7.F18y): written by the build, not ethics-sourced
+  correction_too_late: 'Inte registrerat: nästa applicering hade börjat.'
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   catch_trials_felt: >-
     Fler än tillåten andel av kontrollförsöken utan tryck rapporterades som kända ({value}).
@@ -729,8 +728,11 @@ dialogs:
   # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. Asked the same in every
   # phase, so the asking says nothing about the touch (SPEC.md 16).
   disconnect_confirm: Koppla från plagget? Det går till noll först.
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
-  discard_confirm: Kassera det senaste försöket? Skattningen sparas i data, märkt som kasserad, och försöket görs om om inte gränsen för antal appliceringar är nådd.
+  # DRAFT (LOG N7.F18y): written by the build, not ethics-sourced. Rätta senaste appliceringen…
+  correction: Vad var fel med appliceringen som just gjordes?
+  correction_filament: 'Ett annat filament användes:'
+  correction_discard: Skattningen sparas i data, märkt som kasserad, och appliceringen görs om om inte gränsen för antal appliceringar är nådd.
+  correction_discard_after_rating: Möjligt när deltagaren har skattat den.
   # SPEC.md 15. Båda värdena formateras av sessionen från dess egen text.
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   resume_found: 'En oavslutad session hittades för denna deltagare. Genomfört: {completed}. {since_sensitisation} Återuppta den med den ursprungliga tidsplanen?'

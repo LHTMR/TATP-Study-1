@@ -487,7 +487,9 @@ and the participant needs no channel beyond the scale itself and the emergency s
 - **Experimenter discretion survives as substitution.** The experimenter may apply a lower
   filament than the software asked for whenever they judge it warranted. The row records which
   filament was applied as well as which was asked for, and **the estimator fits the applied
-  value, not the intended one.**
+  value, not the intended one.** It is entered through Correct last application…, from the
+  "applied" press until the next cue; after the rating, as a `corrections` row the search and
+  the cap then follow (docs/LOG.md N7.F18y).
 
 A ceiling rating is a **censored** observation — the participant had no headroom, so the true
 response may be higher. It will nearly always land on a `search` trial, since measurement sits

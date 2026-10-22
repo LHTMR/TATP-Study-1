@@ -1435,7 +1435,7 @@ class SessionRunner(Procedure):
         self.waiting_until_s = None
         self._settled_then = None
         self.experimenter.hide_fit_preview()
-        self.experimenter.withdraw_substitution()
+        self.experimenter.set_actions_enabled(substitution=False)
         self.experimenter.offer_alternative(None)
         if self.session.block_index is not None:
             self.session.end_block(aborted=True)

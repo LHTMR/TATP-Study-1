@@ -548,12 +548,12 @@ controls:
   # DRAFT (LOG N7.F10a): written by the build, not ethics-sourced. Shown in the emptied note
   # field once the note is written to the log.
   note_saved: 'Note saved at {time}. Type another here.'
-  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. A choice of the set's
-  # filaments, not free text (S, 21 Oct 2026). {filament} is a gram label.
-  substitution: 'Filament applied instead:'
-  substitution_none: '—'
+  # DRAFT (LOG N7.F18y): written by the build, not ethics-sourced. One control for both
+  # corrections of the application just given (S, 22 Oct 2026); its dialog lists the set's
+  # filaments, never free text. {filament} is a gram label.
+  correct_application: Correct last application…
+  correction_confirm: Record
   substitution_option: '{filament} g'
-  record_substitution: Record
   # DRAFT (LOG N7.F18f): written by the build, not ethics-sourced. The mapping distances box
   # on the right of the window, a row per mapped time point (S, 21 Oct 2026).
   distances_title: Distances (mm)
@@ -635,9 +635,9 @@ warnings:
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   substitution_recorded: 'Recorded: {filament} g applied instead.'
   substitution_not_lower: 'Recorded, but {filament} g is not lighter.'
-  # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. A filament chosen and never
-  # recorded when its trial ended.
-  substitution_not_recorded: '{value} g not recorded: the one asked for stands.'
+  # DRAFT (LOG N7.F18y): written by the build, not ethics-sourced. A correction confirmed after
+  # the next application had begun.
+  correction_too_late: 'Not recorded: the next application had begun.'
   catch_trials_felt: >-
     More than the allowed share of zero-pressure catch trials were reported as felt ({value}).
   schedule: 'Schedule warning, block {block}: {value}'
@@ -757,8 +757,11 @@ dialogs:
   # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. Asked the same in every
   # phase, so the asking says nothing about the touch (SPEC.md 16).
   disconnect_confirm: Disconnect the garment? It goes to zero first.
-  # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced
-  discard_confirm: Discard the last trial? Its rating is kept in the data, marked as discarded, and the trial is repeated unless the application limit is reached.
+  # DRAFT (LOG N7.F18y): written by the build, not ethics-sourced. Correct last application…
+  correction: What was wrong with the application just given?
+  correction_filament: 'Another filament was applied:'
+  correction_discard: Its rating is kept in the data, marked as discarded, and it is repeated unless the application limit is reached.
+  correction_discard_after_rating: Possible once the participant has rated it.
   # SPEC.md 15. Both values are formatted by the session from its own text.
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   resume_found: 'An unfinished session was found for this participant. Completed: {completed}. {since_sensitisation} Resume it, keeping the original timing?'

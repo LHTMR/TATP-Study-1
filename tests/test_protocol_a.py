@@ -26,6 +26,7 @@ from tatp.pinprick import (
     LongProtocol,
     LongResult,
     ShortProtocol,
+    ladder_index,
     prior_for,
 )
 from tatp.procedure import NO_RERUNS_LEFT, Rig
@@ -507,17 +508,17 @@ def test_discard_is_offered_only_while_there_is_something_to_discard(rig):
     experimenter, participant = rig.experimenter, rig.participant
     protocol = _long(rig)
     protocol.start()
-    assert experimenter.discard_button.isHidden(), "nothing has been applied yet"
+    assert not experimenter._awaiting["discard"], "nothing has been applied yet"
     experimenter.proceed_requested.emit()
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
-    assert experimenter.discard_button.isHidden(), "the application is not complete"
+    assert not experimenter._awaiting["discard"], "the application is not complete"
     _answer(participant, _observer(protocol._trial))
-    assert not experimenter.discard_button.isHidden(), "the interval after a rated application"
-    assert experimenter.discard_button.isEnabled()
+    assert experimenter._awaiting["discard"], "the interval after a rated application"
+    assert experimenter.correct_button.isEnabled()
     experimenter.discard_requested.emit()
-    assert experimenter.discard_button.isHidden(), "discarded, nothing is left to discard"
+    assert not experimenter._awaiting["discard"], "discarded, nothing is left to discard"
     protocol.cancel()
-    assert experimenter.discard_button.isHidden(), "the protocol has ended"
+    assert experimenter.correct_button.isHidden(), "the protocol has ended"
 
 
 def test_a_recalibration_in_the_protocols_place_withdraws_discard_and_gives_it_back(rig):
@@ -531,71 +532,112 @@ def test_a_recalibration_in_the_protocols_place_withdraws_discard_and_gives_it_b
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
     _answer(participant, _observer(protocol._trial))
     held = protocol._discardable
-    assert held is not None and not experimenter.discard_button.isHidden()
+    assert held is not None and experimenter._awaiting["discard"]
     protocol.suspend_offers()
-    assert experimenter.discard_button.isHidden()
+    assert not experimenter._awaiting["discard"]
     experimenter.discard_requested.emit()
     assert "discard_ignored" in _events(rig.session)
     assert _rows(rig.session, "discards") == []
     protocol.restore_offers()
-    assert protocol._discardable == held and not experimenter.discard_button.isHidden()
+    assert protocol._discardable == held and experimenter._awaiting["discard"]
     protocol.cancel()
 
 
-def test_the_substitution_entry_is_offered_only_while_a_filament_trial_listens(rig):
-    """A filament typed outside a filament trial reached no listener and was cleared and lost
-    (15 Oct 2026 pilot review). The trial that listens is the one that offers the choice, of
-    the set's filaments (S, 21 Oct 2026)."""
+def test_a_correction_is_offered_from_the_applied_press_until_the_next_cue(rig):
+    """S, 22 Oct 2026: one control, Correct last application…, for the filament applied
+    instead and for discard and repeat: offered once there is an application to correct,
+    listing the set's other filaments, Discard greyed until the rating is in."""
     experimenter, participant = rig.experimenter, rig.participant
     protocol = _long(rig)
-    assert experimenter.substitution.isHidden()
+    assert experimenter.correct_button.isHidden()
     protocol.start()
-    experimenter.proceed_requested.emit()
+    experimenter.proceed_requested.emit()  # the go: the first application's cue
+    _spin(lambda: protocol._trial is not None and protocol._trial.awaits_proceed)
+    assert experimenter.correct_button.isHidden(), "not before it is applied"
+    experimenter.proceed_requested.emit()  # applied
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
-    for widget in (experimenter.substitution, experimenter.substitution_button):
-        assert not widget.isHidden() and widget.isEnabled(), "a filament trial is running"
-    labels = [experimenter.substitution.itemData(i)
-              for i in range(1, experimenter.substitution.count())]
-    assert labels == [f.label_g for f in protocol.filaments], "the set, lightest first"
-    # Chosen and never recorded: not applied, but logged when the trial withdraws the choice.
-    experimenter.substitution.setCurrentIndex(experimenter.substitution.findData("15"))
+    correct = experimenter.correct_button
+    assert not correct.isHidden() and correct.isEnabled()
+    dialog = experimenter.correction_dialog()
+    asked = protocol._trial.application.filament_label_g
+    assert list(dialog.filaments) == [f.label_g for f in protocol.filaments
+                                      if f.label_g != asked], "the set's others, lightest first"
+    assert not dialog.discard.isEnabled(), "not until it is rated"
+    dialog.deleteLater()
     _answer(participant, _observer(protocol._trial))
-    assert not experimenter.substitution.isEnabled(), "the trial has ended"
-    assert not experimenter.substitution_button.isEnabled()
-    assert experimenter.substitution.currentData() == ""
-    (logged,) = [row for row in _rows(rig.session, "log")
-                 if row["event"] == "substitution_not_recorded"]
-    assert logged["origin"] == "experimenter" and logged["severity"] == "warning"
-    assert logged["detail"].endswith(": 15 g")
-    assert not [row for row in _rows(rig.session, "log")
-                if row["event"] == "substitution_entered"]
-    # And beside the choice, until the next application starts (S, 21 Oct 2026).
-    assert experimenter.substitution_message.text() == _not_recorded(experimenter, "15")
-    assert experimenter._warning_text == ""
-    _spin(lambda: protocol._trial is not None)
-    assert experimenter.substitution_message.text() == "", "gone as the next one starts"
+    dialog = experimenter.correction_dialog()
+    assert dialog.discard.isEnabled() and dialog.filaments, "in the rest: both"
+    dialog.deleteLater()
+    _spin(lambda: protocol._trial is not None and not protocol._trial.delivered_elapsed_s)
+    assert not experimenter._awaiting["discard"] and not experimenter._awaiting["substitution"]
     protocol.cancel()
-    assert experimenter.substitution.isHidden(), "the protocol has ended"
+    assert experimenter.correct_button.isHidden(), "the protocol has ended"
 
 
-def _not_recorded(experimenter, typed: str) -> str:
-    return experimenter.text["warnings"]["substitution_not_recorded"].format(
-        value=typed, controls=experimenter.text["controls"]
-    )
+def test_the_dialog_records_what_is_chosen_only_on_confirming(rig):
+    window = rig.experimenter
+    filaments, discards = _emitted_args(window.substitution_entered), []
+    window.discard_requested.connect(lambda: discards.append(True))
+    window.set_filaments(["8", "15"])
+    window.set_actions_enabled(substitution=True, discard=True)
+    dialog = window.open_correction_dialog()
+    dialog.filaments["15"].click()
+    assert not filaments, "nothing until confirmed"
+    dialog.confirm.click()
+    assert filaments == [("15",)]
+    dialog = window.open_correction_dialog()
+    dialog.discard.click()
+    dialog.confirm.click()
+    assert discards == [True]
+    dialog = window.open_correction_dialog()
+    dialog.filaments["8"].click()
+    window.set_actions_enabled(substitution=False, discard=False)  # the next cue meanwhile
+    dialog.confirm.click()
+    assert filaments == [("15",)], "too late: nothing recorded"
+    assert window.substitution_message.text() == window.text["warnings"]["correction_too_late"]
 
 
-def test_a_filament_typed_when_the_stop_ends_the_trial_is_warned(rig):
-    """The emergency stop cancels the trial with the entry still holding text: logged and
-    shown, as when the trial ends by its rating."""
+def _emitted_args(signal) -> list:
+    seen = []
+    signal.connect(lambda *args: seen.append(args))
+    return seen
+
+
+def test_a_correction_after_the_rating_is_a_row_of_its_own_and_replans(rig):
+    """The rated row stays as written; the correction points at it, as a discard does, and the
+    search steps from the filament applied (S, 22 Oct 2026)."""
+    session, experimenter = rig.session, rig.experimenter
+    protocol = _long(rig)
+    done = _start(protocol)
+    _spin(lambda: rig.participant.stack.currentWidget() is rig.participant.vas)
+    first = protocol._trial
+    _answer(rig.participant, 0)  # below the target: the search would step up from 26 g
+    assert protocol._correctable is first and experimenter._awaiting["substitution"]
+    stepped_up = protocol._expected.filament_label_g
+    experimenter.substitution_entered.emit("15")
+    (row,) = _rows(session, "pinprick")
+    assert row["applied_filament_label_g"] == "26", "the rated row as written"
+    (correction,) = _rows(session, "corrections")
+    assert correction["trial_timestamp_iso"] == row["timestamp_iso"]
+    assert correction["applied_filament_label_g"] == "15"
+    assert correction["substituted"] == "true"
+    assert "substitution_corrected" in _events(session)
+    # Below the target at 15 g: the next step is up from 15 g, which is 26 g, not past it.
+    assert protocol._expected.filament_label_g == "26" != stepped_up
+    assert protocol.state.outcomes[-1].applied_index == ladder_index(protocol.filaments, "15")
+    assert protocol.state.delivered == 1, "corrected, not delivered again"
+    protocol.cancel()
+    assert not done
+
+
+def test_the_stop_withdraws_the_correction_offer(rig):
     experimenter, participant = rig.experimenter, rig.participant
     protocol = _long(rig)
     _start(protocol)
     _spin(lambda: participant.stack.currentWidget() is participant.vas)
-    experimenter.substitution.setCurrentIndex(experimenter.substitution.findData("10"))
+    assert experimenter._awaiting["substitution"]
     participant.emergency_stop.emit()
-    assert "substitution_not_recorded" in _events(rig.session)
-    assert experimenter.substitution_message.text() == _not_recorded(experimenter, "10")
-    assert experimenter.substitution.currentData() == ""
+    assert not experimenter._awaiting["substitution"]
     experimenter.resume_requested.emit()
     protocol.cancel()
 

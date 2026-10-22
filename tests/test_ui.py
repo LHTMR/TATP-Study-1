@@ -784,16 +784,22 @@ def test_every_action_signal_has_a_control_that_emits_it(drawn):
     for widget, signal in (
         (window.proceed_button, window.proceed_requested),
         (window.pause_button, window.pause_requested),
-        (window.discard_button, window.discard_requested),
         (window.rebalance_button, window.rebalance_requested),
         (window.fit_accept_button, window.fit_accepted),
         (window.garment_button, window.garment_disconnect_requested),
     ):
         seen = _emitted(signal)
         widget.click()
-        if widget in (window.garment_button, window.discard_button):  # asked first (N7.F17e)
+        if widget is window.garment_button:  # asked first (N7.F17e)
             window.findChildren(widgets.MessageDialog)[-1].accept()
         assert seen == [()], f"{widget.text()} did not emit"
+    # Discard, through Correct last application…, which asks first (S, 22 Oct 2026).
+    seen = _emitted(window.discard_requested)
+    window.correct_button.click()
+    dialog = window.findChildren(widgets.CorrectionDialog)[-1]
+    dialog.discard.click()
+    dialog.confirm.click()
+    assert seen == [()]
 
 
 def _offered(window, widget) -> bool:
@@ -978,7 +984,7 @@ def test_what_became_of_a_substitution_fits_beside_it(app, language):
     window.show()
     warnings = text["warnings"]
     for key, kind in (("substitution_recorded", CONFIRMED), ("substitution_not_lower", QUERIED),
-                      ("substitution_not_recorded", QUERIED)):
+                      ("correction_too_late", QUERIED)):
         shown = warnings[key].format(filament="0.008", value="0.008",
                                      controls=text["controls"])
         window.show_substitution(shown, kind)
@@ -1092,23 +1098,9 @@ def test_a_hidden_control_leaves_the_focus_with_the_window(drawn):
     window.refresh()
     assert QApplication.focusWidget() is window
     window.set_actions_enabled(substitution=True)
-    window.substitution.setFocus()
-    assert window.withdraw_substitution() == ""
+    window.correct_button.setFocus()
+    window.set_actions_enabled(substitution=False)
     assert QApplication.focusWidget() is window
-
-
-def test_withdrawing_the_substitution_hands_back_an_unrecorded_choice(drawn):
-    window, _ = drawn
-    window.set_filaments(["8", "15", "26"])
-    window.set_actions_enabled(substitution=True)
-    window.substitution.setCurrentIndex(window.substitution.findData("15"))
-    with pytest.raises(AssertionError, match="withdraw_substitution"):
-        window.set_actions_enabled(substitution=False)
-    assert window.withdraw_substitution() == "15"
-    assert window.substitution.currentData() == ""
-    assert not window.substitution.isVisibleTo(window)
-    window.refresh()
-    assert window.withdraw_substitution() == "", "handed back once only"
 
 
 def test_a_long_open_items_line_is_cut_visibly(app):
@@ -1538,20 +1530,13 @@ def test_a_rerun_carries_its_reason(drawn):
     assert seen == [("filament slipped",)]
 
 
-def test_a_note_and_a_substitution_are_emitted_and_cleared(drawn):
+def test_a_note_is_emitted_and_cleared(drawn):
     window, _ = drawn
-    notes, substitutions = _emitted(window.note_entered), _emitted(window.substitution_entered)
+    notes = _emitted(window.note_entered)
     window.note.setText("  participant sneezed ")
     window.note_button.click()
-    window.set_filaments(["8", "15", "26"])
-    window.set_actions_enabled(substitution=True)
-    window.substitution.setCurrentIndex(window.substitution.findData("15"))
-    window.substitution_button.click()
     assert notes == [("participant sneezed",)]
-    assert substitutions == [("15",)]
-    assert window.note.text() == "" and window.substitution.currentData() == ""
-    window.substitution_button.click()
-    assert substitutions == [("15",)], "nothing chosen is nothing recorded"
+    assert window.note.text() == ""
     window.note_button.click()
     assert notes == [("participant sneezed",)], "an empty note is not a note"
 

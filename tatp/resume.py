@@ -219,12 +219,7 @@ def load(open_session: OpenSession, config, per_channel_pressure: bool) -> Resum
         chosen_filament_label_g=chosen,
         deliveries=deliveries,
         preferred_pattern=preferred,
-        intolerable=tuple(
-            (row["phase"], int(row["block_index"]) if row["block_index"] else None,
-             row["region"], int(row["site_index"]), row["applied_filament_label_g"])
-            for row in _rows(chain, "pinprick")
-            if row["intolerable"] == "true"
-        ),
+        intolerable=_intolerable(chain),
         mapping=_mapping(chain, log, list(config.study1["mapping"]["path_ids"])),
         vas_trained=frozenset(
             row["detail"] for row in log if row["event"] == VAS_TRAINING_CONFIRMED
@@ -317,6 +312,24 @@ def _chain(session_file: Path) -> list[Path]:
 
 def _rows(chain: list[Path], table: str) -> list[dict[str, str]]:
     return [row for path in chain for row in read_rows(table_path(path, table))]
+
+
+def _intolerable(chain: list[Path]) -> tuple[tuple[str, int | None, str, int, str], ...]:
+    """Each ceiling rating's site and filament, as the cap took them: the filament the row
+    records, and any it was corrected to after the rating (`corrections`, docs/LOG.md N7.F18y),
+    since the cap took both and keeps the lower."""
+    corrected: dict[str, list[str]] = {}
+    for row in _rows(chain, "corrections"):
+        if row["table"] == "pinprick":
+            corrected.setdefault(row["trial_timestamp_iso"], []).append(
+                row["applied_filament_label_g"])
+    return tuple(
+        (row["phase"], int(row["block_index"]) if row["block_index"] else None,
+         row["region"], int(row["site_index"]), label)
+        for row in _rows(chain, "pinprick") if row["intolerable"] == "true"
+        for label in [row["applied_filament_label_g"],
+                      *corrected.get(row["timestamp_iso"], [])]
+    )
 
 
 def _completed(log: list[dict[str, str]]) -> list[str]:

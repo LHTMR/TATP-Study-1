@@ -49,7 +49,7 @@ import math
 import random
 import statistics
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
@@ -436,6 +436,13 @@ class LongProtocolState:
             self.crossing = None
         return outcome
 
+    def correct_last(self, applied_index: int) -> None:
+        """The last application was of another filament: recorded again as that one, as
+        though it had been from the start -- the search steps, or brackets, from it."""
+        outcome = self.discard_last()
+        self.delivered -= 1  # recorded again below, not delivered again
+        self.record(replace(outcome, applied_index=applied_index))
+
     def measure_levels(self) -> list[int]:
         assert self.crossing is not None
         low = min(max(self.crossing - (self.measure_n_levels - 1), 0), self.top)
@@ -540,6 +547,12 @@ class IntolerableCap:
         if any(cap is None for cap in caps):
             return None
         return max(caps)
+
+
+def other_filaments(filaments: Sequence[Filament], applied_label_g: str) -> list[str]:
+    """The set's gram labels, lightest first, but the one recorded as applied: what can be
+    named as applied instead of it."""
+    return [f.label_g for f in filaments if f.label_g != applied_label_g]
 
 
 def jittered_isi_s(rng: random.Random, isi_min_s: float, isi_max_s: float) -> float:
@@ -679,6 +692,9 @@ class _RatedTrial(QObject):
     def _disconnect_extra(self) -> None:
         pass
 
+    def _applied_extra(self) -> None:
+        """What this kind of trial offers once the experimenter says it was applied."""
+
     def _rated(self, response) -> None:
         """After the row is written, before `finished`."""
 
@@ -745,6 +761,7 @@ class _RatedTrial(QObject):
         self.stimulus_delivered_iso = self.session.clock.wall_iso()
         self.session.log("stimulus_delivered", origin="experimenter",
                          detail=self._stimulus_detail())
+        self._applied_extra()
         self.show_after_delivery()
         self._cue_rating()
 
@@ -852,6 +869,7 @@ class PinprickTrial(_RatedTrial):
         self.filaments = ladder(session.config)
         # Changed by the experimenter's substitution while the trial runs (SPEC.md 8.2).
         self.applied_label_g = application.applied_label_g
+        self.rating_percent: float | None = None
 
     def _filament(self, label_g: str) -> Filament:
         return self.filaments[ladder_index(self.filaments, label_g)]
@@ -867,28 +885,16 @@ class PinprickTrial(_RatedTrial):
 
     def _connect_extra(self) -> None:
         self.experimenter.substitution_entered.connect(self._on_substitution)
-        # The one owner of the choice's offer: it is shown exactly while it is listened to,
-        # listing the set's filaments, lightest first (S, 21 Oct 2026: a drop-down).
-        self.experimenter.set_filaments([filament.label_g for filament in self.filaments])
+
+    def _applied_extra(self) -> None:
+        # The one owner of the offer while the trial runs: from the "applied" press, when
+        # there is an application to correct (S, 22 Oct 2026), until the rating is in.
+        self.experimenter.set_filaments(other_filaments(self.filaments, self.applied_label_g))
         self.experimenter.set_actions_enabled(substitution=True)
 
     def _disconnect_extra(self) -> None:
         self.experimenter.substitution_entered.disconnect(self._on_substitution)
-        # A filament typed and not recorded is not this trial's data, but it is not lost
-        # without trace either: it was what the experimenter meant to say about it.
-        unrecorded = self.experimenter.withdraw_substitution()
-        if unrecorded:
-            self.session.log(
-                "substitution_not_recorded", origin="experimenter", severity="warning",
-                detail=f"trial {self.trial_index}: {unrecorded} g",
-            )
-            # Beside the choice too: the experimenter meant it, and the row says otherwise.
-            self.experimenter.show_substitution(
-                self.experimenter.text["warnings"]["substitution_not_recorded"].format(
-                    value=unrecorded, controls=self.experimenter.text["controls"]
-                ),
-                QUERIED,
-            )
+        self.experimenter.set_actions_enabled(substitution=False)
 
     def _on_substitution(self, label_g: str) -> None:
         """The experimenter applied another filament than the one asked for (SPEC.md 8.2).
@@ -917,11 +923,14 @@ class PinprickTrial(_RatedTrial):
                 filament=label_g),
             CONFIRMED if lower else QUERIED,
         )
+        self.experimenter.set_filaments(other_filaments(self.filaments, label_g))
         if self.delivered_elapsed_s is not None:
             self.show_after_delivery()
         self.experimenter.refresh()
 
     def _rated(self, response) -> None:
+        # For a correction in the rest after it (`_Series._on_late_substitution`).
+        self.rating_percent = response.rating_percent
         if response.rating_percent >= self.intolerable_vas_pct:
             # SPEC.md 8.2. Logged as well as flagged in the row, so the cap that constrains the
             # following applications is visible in the event stream rather than only derivable.
@@ -1049,6 +1058,8 @@ class _Series(Procedure):
         self.applications = 0
         # (table, the row's timestamp_iso, its trial_index) while a discard is accepted.
         self._discardable: tuple[str, str, int] | None = None
+        # The rated filament application that may still be corrected (`_set_discardable`).
+        self._correctable: PinprickTrial | None = None
         # What was discardable when a re-calibration took this protocol's place.
         self._held_discardable: tuple[str, str, int] | None = None
         # Through the interval: the application it leads to, shown so the experimenter can
@@ -1077,9 +1088,11 @@ class _Series(Procedure):
 
     def connect_actions(self) -> None:
         self.experimenter.discard_requested.connect(self._on_discard)
+        self.experimenter.substitution_entered.connect(self._on_late_substitution)
 
     def disconnect_actions(self) -> None:
         self.experimenter.discard_requested.disconnect(self._on_discard)
+        self.experimenter.substitution_entered.disconnect(self._on_late_substitution)
         self._set_discardable(None)
         self.experimenter.set_progress("")
         self.experimenter.set_sites_in_use(self.region, None)
@@ -1101,10 +1114,18 @@ class _Series(Procedure):
         self._set_discardable(self._held_discardable)
         self._held_discardable = None
 
-    def _set_discardable(self, discardable: tuple[str, str, int] | None) -> None:
-        # The button is enabled only while there is something to discard (docs/LOG.md N7.U10).
+    def _set_discardable(self, discardable: tuple[str, str, int] | None,
+                         trial: _RatedTrial | None = None) -> None:
+        """The application just rated, which may be discarded -- and, a filament's, corrected
+        for the filament applied (S, 22 Oct 2026) -- through the rest after it; None ends
+        both. Offered only while there is something to correct (docs/LOG.md N7.U10)."""
         self._discardable = discardable
-        self.experimenter.set_actions_enabled(discard=discardable is not None)
+        self._correctable = trial if isinstance(trial, PinprickTrial) else None
+        if self._correctable is not None:
+            self.experimenter.set_filaments(
+                other_filaments(self.filaments, self._correctable.applied_label_g))
+        self.experimenter.set_actions_enabled(discard=discardable is not None,
+                                              substitution=self._correctable is not None)
 
     def rating_scale(self) -> str:
         """The scale this protocol's applications are rated on."""
@@ -1233,7 +1254,7 @@ class _Series(Procedure):
 
     def interval(self, table: str, trial: _RatedTrial) -> None:
         """The jittered wait after an application, during which it may be discarded."""
-        self._set_discardable((table, trial.cue_onset_iso, trial.trial_index))
+        self._set_discardable((table, trial.cue_onset_iso, trial.trial_index), trial)
         assert trial.delivered_elapsed_s is not None, "a rated application was pressed applied"
         self._interval_start_s = trial.delivered_elapsed_s
         self._wait_then_next(received=self._received(trial))
@@ -1325,6 +1346,68 @@ class _Series(Procedure):
 
     def _rollback(self) -> bool:
         raise NotImplementedError
+
+    # -- the filament applied instead, after the rating (S, 22 Oct 2026) ------------------
+
+    def _on_late_substitution(self, label_g: str) -> None:
+        """Another filament than the one recorded was applied to the application just rated.
+
+        While the trial runs it takes this itself (`PinprickTrial._on_substitution`), into its
+        row. Once rated, its row is written and is never rewritten, so the correction is a row
+        of its own in `corrections`, pointing at it as a discard does; and what the filament
+        decides is decided again from the one applied -- the search's next step, and a ceiling
+        rating's cap, which keeps the lower of the two filaments.
+        """
+        trial = self._correctable
+        if trial is None:
+            return  # the trial running takes it, or nothing waits for one
+        # Stage boundary (CLAUDE.md): the dialog lists the ladder and nothing else.
+        assert label_g in {f.label_g for f in self.filaments}, f"no {label_g} g filament"
+        table, trial_timestamp_iso, trial_index = self._discardable
+        previous = trial.applied_label_g
+        trial.applied_label_g = label_g
+        asked = trial.application.filament_label_g
+        clock = self.session.clock
+        self.session.files.write(
+            "corrections",
+            timestamp_iso=clock.wall_iso(),
+            t_session_s=clock.t_session_s(),
+            phase=self.session.phase,
+            block_index=self.session.block_index,
+            table=table,
+            trial_timestamp_iso=trial_timestamp_iso,
+            trial_index=trial_index,
+            applied_filament_label_g=label_g,
+            substituted=label_g != asked,
+        )
+        lower = (self.filaments[ladder_index(self.filaments, label_g)].force_nominal_mn
+                 < self.filaments[ladder_index(self.filaments, asked)].force_nominal_mn)
+        self.session.log(
+            "substitution_corrected", origin="experimenter",
+            severity="info" if lower else "warning",
+            detail=f"{table} trial {trial_index}: asked {asked} g, applied {label_g} g, "
+                   f"recorded {previous} g",
+        )
+        applied = ladder_index(self.filaments, label_g)
+        self._corrected(trial, applied)
+        assert trial.rating_percent is not None, "corrected before it was rated"
+        _record_ceiling(self, trial.rating_percent, applied, trial.application.site_index)
+        warnings = self.experimenter.text["warnings"]
+        self.experimenter.show_substitution(
+            warnings["substitution_recorded" if lower else "substitution_not_lower"].format(
+                filament=label_g),
+            CONFIRMED if lower else QUERIED,
+        )
+        self.experimenter.set_filaments(other_filaments(self.filaments, label_g))
+        # What comes next is decided again from the filament applied.
+        self._expected = self._upcoming()
+        self._shown_seconds = None
+        if self._expected is not None:
+            self._show_expected()
+        self.experimenter.refresh()
+
+    def _corrected(self, trial: _RatedTrial, applied_index: int) -> None:
+        """The last application's filament, corrected: what the series decided from it."""
 
     # -- discard and repeat (SPEC.md 11) ------------------------------------------------
 
@@ -1602,12 +1685,15 @@ class LongProtocol(_Series):
         applied = ladder_index(self.filaments, trial.applied_label_g)
         rating = response.rating_percent
         self.state.record(Outcome(planned.index, applied, rating, planned.purpose))
-        _record_ceiling(self, trial, response, applied, site)
+        _record_ceiling(self, response.rating_percent, applied, site)
         self.interval(PINPRICK_TABLE, trial)
 
     def _rollback(self) -> bool:
         self.state.discard_last()
         return not self.state.finished
+
+    def _corrected(self, trial: PinprickTrial, applied_index: int) -> None:
+        self.state.correct_last(applied_index)
 
     def _count_lost_delivery(self) -> None:
         self.state.count_lost_delivery()
@@ -1758,14 +1844,14 @@ class LongProtocol(_Series):
         self.begin()
 
 
-def _record_ceiling(protocol, trial: PinprickTrial, response, applied: int, site: int) -> None:
+def _record_ceiling(protocol, rating_percent: float, applied: int, site: int) -> None:
     """Feed a ceiling rating to the cap, and log what it now bars.
 
     Logged only, never shown. With the ceiling at the top of the scale, "site N is capped"
     would tell the experimenter the participant rated 100 there, and the lab screen never
     carries a rating (SPEC.md 11). The software enforces the cap itself (docs/LOG.md N7.B11).
     """
-    if response.rating_percent < protocol.intolerable_vas_pct:
+    if rating_percent < protocol.intolerable_vas_pct:
         return
     went_global = protocol.cap.record(protocol.region, site, applied)
     label = protocol.filaments[protocol.cap.cap_for(protocol.region, site)].label_g
@@ -1957,7 +2043,7 @@ class ShortProtocol(_RatingSeries):
 
     def _rated(self, trial: PinprickTrial, response) -> None:
         applied = ladder_index(self.filaments, trial.applied_label_g)
-        _record_ceiling(self, trial, response, applied, self._site)
+        _record_ceiling(self, response.rating_percent, applied, self._site)
         self._on_rated(trial, response)
 
 

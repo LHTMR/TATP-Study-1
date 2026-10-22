@@ -590,8 +590,9 @@ def _experimenter_states(config: cfg.Config) -> dict:
             ),
         ),
         "substitution_recorded": (
-            "A lighter filament recorded as applied instead: the message beside the choice, "
-            "in the target colour, until the next application starts (S, 21 Oct 2026).",
+            "A lighter filament recorded as applied instead: the message beside Correct last "
+            "application…, in the target colour, until the next application starts (S, 21 and "
+            "22 Oct 2026).",
             {"phase": "pre_sensitisation", "elapsed_s": SAMPLE_ELAPSED_S},
             lambda window: (
                 pinprick(window),
@@ -714,9 +715,10 @@ def _experimenter_states(config: cfg.Config) -> dict:
             "offered, Next step greyed, and nothing moved.",
             {"phase": "intervention", "elapsed_s": SAMPLE_ELAPSED_S,
              "interruption": "emergency_stop"},
-            # The stop cancels the trial, which withdraws the substitution entry
+            # The stop cancels the trial, which withdraws the correction's offer
             # (tatp/pinprick.py `_disconnect_extra`).
-            lambda window: (pinprick(window), window.withdraw_substitution()),
+            lambda window: (pinprick(window),
+                            window.set_actions_enabled(substitution=False)),
         ),
         "touchcal_stopped_recalibrate": (
             "The participant pressed the stop during touch calibration's step 4, with step 2's "
@@ -1008,6 +1010,21 @@ def _experimenter_shots(config: cfg.Config, language: str) -> Iterator[Shot]:
         "Re-calibrate… with Restart the calibration and a reason chosen, shown pressed, so "
         "Re-calibrate is enabled.",
         _chosen(window.recalibration_dialog(), "restart", "channel_uneven"),
+    )
+    # Correct last application… for the 26 g just given (S, 22 Oct 2026).
+    given = config.study1["pinprick"]["primary_filament_label_g"]
+    window.set_filaments([f["label_g"] for f in config.filaments["filaments"]
+                          if f["label_g"] != given])
+    window.set_actions_enabled(substitution=True, discard=False)
+    dialogs["correction_dialog"] = (
+        "Correct last application… before the rating is in: another filament from the set, "
+        "or Discard and repeat, listed greyed, saying when it can be taken.",
+        window.correction_dialog(),
+    )
+    window.set_actions_enabled(discard=True)
+    dialogs["correction_dialog_rated"] = (
+        "Correct last application… in the rest after the rating: both corrections offered.",
+        window.correction_dialog(),
     )
     for name, (description, dialog) in dialogs.items():
         yield Shot(f"experimenter_{language}_{name}", f"{description} ({language})",

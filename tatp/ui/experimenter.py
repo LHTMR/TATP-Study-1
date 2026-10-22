@@ -68,7 +68,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QSizePolicy,
-    QStackedLayout,
     QVBoxLayout,
     QWidget,
 )
@@ -77,6 +76,8 @@ from tatp import touchcal_maths as maths
 from tatp.ui.garment_display import GarmentDisplay
 from tatp.ui.timeline import PhaseTimeline
 from tatp.ui.widgets import (
+    CORRECT_DISCARD,
+    CORRECT_FILAMENT,
     DEMO_BANNER_COLOUR,
     DISABLED,
     DISCONNECTED_COLOUR,
@@ -93,6 +94,7 @@ from tatp.ui.widgets import (
     TARGET_COLOUR,
     WARNING_COLOUR,
     ActionChoiceDialog,
+    CorrectionDialog,
     FitPlot,
     MessageDialog,
     ReasonDialog,
@@ -609,47 +611,26 @@ class ExperimenterWindow(QWidget):
         self.set_target(None)
 
     def _build_substitution(self) -> QHBoxLayout:
-        """The filament applied instead (SPEC.md 8.2), at the foot of what is going on now,
-        under the instruction it corrects (S, 21 Oct 2026): a choice of the set's filaments,
-        never free text, and its own message beside it, from the press until the next
-        application starts. Its place is kept throughout, so nothing moves as it comes."""
-        controls = self.text["controls"]
-        self.substitution_label = label(SIZE_SMALL, colour=SECONDARY)
-        self.substitution_label.setText(controls["substitution"])
-        self.substitution = sized(QComboBox(), SIZE_SMALL)
-        self.substitution_button = button(controls["record_substitution"])
-        self.substitution_button.clicked.connect(self._enter_substitution)
+        """Correct last application… at the foot of what is going on now, under the
+        instruction it is about (S, 22 Oct 2026: one control for both corrections, the filament
+        applied instead (SPEC.md 8.2) and discard and repeat (SPEC.md 11)), from the "applied"
+        press until the next application's cue; and beside it what became of the last
+        correction, until the next application starts. Its place is kept throughout, so
+        nothing moves as it comes."""
+        self.correct_button = button(self.text["controls"]["correct_application"])
+        self.correct_button.clicked.connect(self.open_correction_dialog)
         self.substitution_message = label(SIZE_SMALL, wrap=True)
         self.substitution_message.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.substitution_message.setFixedHeight(
             self.substitution_message.fontMetrics().lineSpacing() * SUBSTITUTION_MESSAGE_LINES)
-        # Discard and repeat, about the application just given, so with it in what is going on
-        # now, not among the session's controls (S, 22 Oct 2026). It shares the choice's
-        # place: it is offered in the rest after a rating, when the choice is over, and the
-        # message beside them keeps its width.
-        self.discard_button = button(controls["discard_repeat"])
-        choice = QHBoxLayout()
-        choice.setContentsMargins(0, 0, 0, 0)
-        choice.setSpacing(ITEM_GAP_PX)
-        for widget in (self.substitution_label, self.substitution, self.substitution_button):
-            _reserve(widget)
-            choice.addWidget(widget)
-        discard = QHBoxLayout()
-        discard.setContentsMargins(0, 0, 0, 0)
-        _reserve(self.discard_button)
-        discard.addWidget(self.discard_button)
-        discard.addStretch(1)
-        self._choice_slot = QStackedLayout()
-        for page_layout in (choice, discard):
-            page = QWidget()
-            page.setLayout(page_layout)
-            self._choice_slot.addWidget(page)
+        # The filaments the dialog offers (`set_filaments`).
+        self._filaments: list[str] = []
         row = QHBoxLayout()
         row.setSpacing(ITEM_GAP_PX)
-        row.addLayout(self._choice_slot)
-        _reserve(self.substitution_message)
+        for widget in (self.correct_button, self.substitution_message):
+            _reserve(widget)
+        row.addWidget(self.correct_button)
         row.addWidget(self.substitution_message, 1)
-        self.set_filaments([])
         return row
 
     def _build_controls(self) -> None:
@@ -721,7 +702,6 @@ class ExperimenterWindow(QWidget):
             self.key_shortcuts.append(shortcut)
         self.pause_button.clicked.connect(self.pause_requested.emit)
         self.resume_button.clicked.connect(self.resume_requested.emit)
-        self.discard_button.clicked.connect(self._discard_clicked)
         self.rebalance_button.clicked.connect(self.rebalance_requested.emit)
         self.fit_accept_button.clicked.connect(self.fit_accepted.emit)
         self.fit_rerun_button.clicked.connect(self.open_rerun_dialog)
@@ -989,14 +969,10 @@ class ExperimenterWindow(QWidget):
         self.stages.setVisible(True)
 
     def set_filaments(self, labels: Sequence[str]) -> None:
-        """The set's filaments by gram label, lightest first, for the choice of the one
-        applied instead (SPEC.md 8.2; S, 21 Oct 2026: a drop-down, not free text)."""
-        controls = self.text["controls"]
-        self.substitution.clear()
-        self.substitution.addItem(controls["substitution_none"], "")
-        for label_g in labels:
-            self.substitution.addItem(
-                controls["substitution_option"].format(filament=label_g), label_g)
+        """The filaments, by gram label and lightest first, that Correct last application…
+        offers as applied instead: the set's, never free text (S, 21 Oct 2026), less the one
+        already recorded as applied."""
+        self._filaments = list(labels)
 
     def show_substitution(self, text: str, kind: str) -> None:
         """What became of the filament applied instead, beside it: `CONFIRMED` or `QUERIED`
@@ -1027,10 +1003,12 @@ class ExperimenterWindow(QWidget):
         `rebalance` offers the calibration's own rematch; `fit_decision` offers Accept and
         Re-run, and `fit_accept` or `fit_rerun` one of them where the other would be refused
         (review of N7.F16: a choice offered and then refused is a dead control);
-        `discard` offers Discard and repeat; `skip_calibration` offers Skip calibration, which
-        exists only on a pilot rig; `substitution` offers the filament-applied-instead choice,
-        while a filament trial listens for it, and an offer takes down the last one's message
-        (S, 21 Oct 2026: it lingered into the next application). Each is hidden, in a place
+        `discard` and `substitution` offer the two corrections of the last application,
+        Discard and repeat and the filament applied instead, through Correct last
+        application…, which is offered while either is; an offer of the filament takes down
+        the last correction's message (S, 21 Oct 2026: it lingered into the next application).
+        `skip_calibration` offers Skip calibration, which exists only on a pilot rig. Each is
+        hidden, in a place
         kept for it, when not offered, because a control that does nothing when pressed is one
         the experimenter learns to distrust (UI_PRINCIPLES.md 5.1), and ten of them are a lot
         to look at.
@@ -1042,15 +1020,8 @@ class ExperimenterWindow(QWidget):
         or stopped but not paused, and its dialog offers only those, and neither while the
         procedure offers its own rematch, nor Restart beside its Re-run (`_recalibrations`);
         `recalibration_used` says, while stopped, that the limit is reached.
-
-        The substitution choice is withdrawn through `withdraw_substitution`, which hands back
-        anything chosen and not recorded, so it is never dropped unseen.
         """
-        assert not (substitution is False and self.substitution.currentData()), (
-            "the substitution choice holds an unrecorded filament: withdraw it with "
-            "withdraw_substitution()"
-        )
-        if substitution:
+        if substitution and not self._awaiting["substitution"]:
             self.substitution_message.setText("")
         if fit_decision is not None:
             fit_accept = fit_rerun = fit_decision
@@ -1077,15 +1048,6 @@ class ExperimenterWindow(QWidget):
     @staticmethod
     def _keyed(text: str, key: str) -> str:
         return f"{text}{KEY_HINT_SEPARATOR}[{key}]"
-
-    def withdraw_substitution(self) -> str:
-        """Stop offering the filament-applied-instead choice. Returns the gram label chosen in
-        it and not recorded, for the trial to log, and resets it so it can never be recorded
-        against the next trial."""
-        unrecorded = self.substitution.currentData() or ""
-        self.substitution.setCurrentIndex(0)
-        self.set_actions_enabled(substitution=False)
-        return unrecorded
 
     def set_mapping_phases(self, phases: Sequence[str]) -> None:
         """The time points that have a mapping, in session order (SPEC.md 8.4): a row each in
@@ -1284,19 +1246,41 @@ class ExperimenterWindow(QWidget):
         # so a double press never lands on the step after.
         self._apply_enabled()
 
-    def discard_dialog(self) -> MessageDialog:
-        controls = self.text["controls"]
-        return MessageDialog(controls["discard_repeat"],
-                             self.text["dialogs"]["discard_confirm"],
-                             controls["discard_repeat"], controls["cancel"], parent=self)
+    def correction_dialog(self) -> CorrectionDialog:
+        """What was wrong with the application just given: another filament, or discard and
+        repeat it (S, 22 Oct 2026). Discard is listed until the rating is in, greyed, saying
+        so; the filaments only while one can be recorded."""
+        controls, dialogs = self.text["controls"], self.text["dialogs"]
+        filaments = ({label_g: controls["substitution_option"].format(filament=label_g)
+                      for label_g in self._filaments}
+                     if self._awaiting["substitution"] else {})
+        discard_note = dialogs["correction_discard" if self._awaiting["discard"]
+                               else "correction_discard_after_rating"]
+        return CorrectionDialog(
+            controls["correct_application"], dialogs["correction"],
+            dialogs["correction_filament"], filaments,
+            controls["discard_repeat"], discard_note, self._awaiting["discard"],
+            controls["correction_confirm"], controls["cancel"], parent=self,
+        )
 
-    def _discard_clicked(self) -> None:
-        """Asked first: a slip discarded a rating with one click (LOG N7.F17e). Still offered
-        when answered, or nothing is discarded -- the procedure may have moved on meanwhile."""
-        dialog = self.discard_dialog()
-        dialog.accepted.connect(
-            lambda: self._awaiting["discard"] and self.discard_requested.emit())
+    def open_correction_dialog(self) -> CorrectionDialog:
+        """Asked in a dialog, so one slip of the mouse records nothing (LOG N7.F17e). What is
+        chosen goes only if still offered when confirmed: the procedure may have moved on, and
+        then the line beside the control says nothing was recorded."""
+        dialog = self.correction_dialog()
+
+        def chosen() -> None:
+            action, filament = dialog.choice()
+            if action == CORRECT_FILAMENT and self._awaiting["substitution"]:
+                self.substitution_entered.emit(filament)
+            elif action == CORRECT_DISCARD and self._awaiting["discard"]:
+                self.discard_requested.emit()
+            else:
+                self.show_substitution(self.text["warnings"]["correction_too_late"], QUERIED)
+
+        dialog.accepted.connect(chosen)
         dialog.open()
+        return dialog
 
     def disconnect_dialog(self) -> MessageDialog:
         controls = self.text["controls"]
@@ -1327,12 +1311,6 @@ class ExperimenterWindow(QWidget):
         `note_saved_shown_s`, so it is never left up hours later (review of N7.F16)."""
         self.note.setPlaceholderText(self.text["controls"]["note_saved"].format(time=time_text))
         self._note_timer.start()
-
-    def _enter_substitution(self) -> None:
-        filament = self.substitution.currentData()
-        if filament:
-            self.substitution_entered.emit(filament)
-            self.substitution.setCurrentIndex(0)
 
     # -- read from the session ----------------------------------------------------------
 
@@ -1660,7 +1638,6 @@ class ExperimenterWindow(QWidget):
         accepting = running and self._awaiting["fit_accept"]
         rerunning = running and self._awaiting["fit_rerun"]
 
-        discarding = running and self._awaiting["discard"]
         offering = running and self._alternative is not None
         rebalancing = running and self._awaiting["rebalance"]
         skipping = self._awaiting["skip_calibration"]
@@ -1674,13 +1651,7 @@ class ExperimenterWindow(QWidget):
                          and bool(self._recalibrations()))
         # The choice stays in sight with its message until the next application offers it
         # afresh, so what became of the last one can still be read (S, 21 Oct 2026).
-        choice_shown = substituting or bool(self.substitution_message.text())
-        # Discard takes the choice's place while it is offered, paused or not, so the place
-        # does not flip with a pause.
-        discard_place = self._awaiting["discard"]
-        self._choice_slot.setCurrentIndex(1 if discard_place else 0)
-        message_shown = choice_shown
-        choice_shown = choice_shown and not discard_place
+        correcting = substituting or self._awaiting["discard"]
         # (widget, shown, pressable). Skip calibration stays in sight through an
         # interruption, as it was, but cannot be pressed then.
         offered = (
@@ -1690,17 +1661,15 @@ class ExperimenterWindow(QWidget):
             (self.abort_button, open_, open_),
             (self.resume_button, not running and not self._resuming,
              not running and not self._resuming),
-            (self.discard_button, discarding, discarding),
             (self.alternative_button, offering, offering),
             (self.rebalance_button, rebalancing, rebalancing),
             (self.fit_accept_button, accepting, accepting),
             (self.fit_rerun_button, rerunning, rerunning),
             (self.recalibrate_button, recalibrating, recalibrating),
             (self.skip_button, skipping, running and skipping),
-            (self.substitution_label, choice_shown, True),
-            (self.substitution, choice_shown, substituting),
-            (self.substitution_button, choice_shown, substituting),
-            (self.substitution_message, message_shown, True),
+            (self.correct_button, correcting, running and correcting),
+            (self.substitution_message, correcting or bool(self.substitution_message.text()),
+             True),
             (self.distances, mapped, mapped),
         )
         focus = QApplication.focusWidget()
