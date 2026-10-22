@@ -734,6 +734,8 @@ class DemoControls(QWidget):
             self.demo.jump(stage_id)
             self.status.setText(self.words["jumped"].format(stage=self.jump_list.currentText()))
             self._jump_chosen = False
+            # Done: Space is Next again, not Go a second time (S, 22 Oct 2026).
+            self.window().setFocus()
         self.sync()
 
     def sync(self, *_stage_id) -> None:

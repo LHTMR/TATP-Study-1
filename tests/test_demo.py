@@ -458,8 +458,11 @@ def test_jump_to_goes_straight_to_a_step_without_running_those_between(app, load
     runner.start()
     try:
         session = runner.session
+        demo.controls.jump_button.setFocus()
         _jump(runner, demo, "post_sensitisation.long")
         assert _stage(runner) == "post_sensitisation.long"
+        window = demo.controls.window()
+        assert window.focusWidget() is window, "Space is Next again, not Go a second time"
         assert (demo.participant_mode, demo.experimenter_mode) == (WATCH, OFF)
         events = _events(session)
         started = [e["detail"] for e in events if e["event"] == "stage_started"]

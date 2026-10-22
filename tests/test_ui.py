@@ -1175,10 +1175,48 @@ def test_a_text_field_keeps_its_keys(app, loaded):
     window.activateWindow()
     QTest.qWaitForWindowActive(window)
     window.note.setFocus()
-    seen = _emitted(window.proceed_requested) + _emitted(window.pause_requested)
+    proceeded, paused = _emitted(window.proceed_requested), _emitted(window.pause_requested)
     QTest.keyClicks(window.note, "P ")
     assert window.note.text() == "P "
-    assert seen == []
+    assert proceeded == [] and paused == []
+    window.close()
+
+
+def test_space_is_next_when_the_window_opens_and_after_a_note(app, loaded):
+    """S, 22 Oct 2026: "space still doesn't work, it just puts spaces in the note field".
+    Given no focus, Qt handed it to the note, the first field that takes it, so Space typed
+    there. The window holds it; a note written gives it back; a click on the background
+    takes it from a field."""
+    window = ExperimenterWindow(loaded.experimenter_text, lambda: _all_keys())
+    window.set_proceed_source(lambda: True)
+    window.resize(1280, 800)
+    window.show()
+    window.activateWindow()
+    QTest.qWaitForWindowActive(window)
+    proceeded, notes = _emitted(window.proceed_requested), _emitted(window.note_entered)
+    assert QApplication.focusWidget() is window
+    QTest.keyClick(QApplication.focusWidget(), Qt.Key_Space)
+    assert proceeded == [()] and window.note.text() == ""
+
+    QTest.mouseClick(window.note, Qt.LeftButton)
+    assert window.note.hasFocus()
+    QTest.keyClicks(window.note, "a b")
+    QTest.keyClick(window.note, Qt.Key_Return)
+    assert notes == [("a b",)]
+    QTest.keyClick(QApplication.focusWidget(), Qt.Key_Space)
+    assert proceeded == [(), ()] and window.note.text() == ""
+
+    QTest.mouseClick(window.note, Qt.LeftButton)
+    QTest.keyClicks(window.note, "x")
+    QTest.mouseClick(window, Qt.LeftButton, pos=QPoint(window.width() // 2, 2))
+    assert QApplication.focusWidget() is window, "a click beside the field takes the focus"
+
+    window.set_mapping_phases(["post_sensitisation"])
+    field = window.distances.fields("post_sensitisation")[0]
+    QTest.mouseClick(field, Qt.LeftButton)
+    QTest.keyClicks(field, "30")
+    QTest.keyClick(field, Qt.Key_Return)
+    assert QApplication.focusWidget() is window, "a distance sent gives it back too"
     window.close()
 
 

@@ -354,6 +354,11 @@ class ExperimenterWindow(QWidget):
         self._build_entries()
         self._build_controls()
         self.fit_preview = FitPreviewWindow(self)
+        # The window holds the focus, so Space is Next: given none, Qt hands it to the first
+        # field that takes it -- the note -- and Space typed spaces there (S, 22 Oct 2026). A
+        # click on the window's background takes it back from a field.
+        self.setFocusPolicy(Qt.ClickFocus)
+        self.setFocus()
 
         # Read top to bottom: banners, who and where, phase and clock, the phase's steps, any
         # interruption, then what is going on now, then the controls. The gaps carry that
@@ -1252,6 +1257,8 @@ class ExperimenterWindow(QWidget):
         if note:
             self.note_entered.emit(note)
             self.note.clear()
+            # Written: Space is Next again (S, 22 Oct 2026).
+            self.setFocus()
 
     def confirm_note(self, time_text: str) -> None:
         """The note is in the log. Said in the emptied field, where the eye already is, so
@@ -1931,6 +1938,8 @@ class DistancesBox(QWidget):
                 for field in fields:
                     self._sent[field] = field.text().strip()
                 self.entered.emit(phase, tuple(values))
+                # Sent: Space is Next again, as after a note (S, 22 Oct 2026).
+                self.window().setFocus()
 
     def clear_confirmation(self) -> None:
         """Take down a confirmation; a query stays until it is answered."""
