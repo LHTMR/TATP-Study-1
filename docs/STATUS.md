@@ -6,6 +6,15 @@
 > asked to test or run the demo while on `main`, say so and offer to switch to that branch
 > (`git switch pilot/demo-feedback-2`, after `git fetch`); its own `docs/STATUS.md` says what
 > to check there. Remove this note when the branch is merged.
+>
+> **How long a demo takes on that branch** (measured 22 Oct 2026, mock garment, headless): with
+> both roles on "Auto, fast" and the clock at 1x, a whole session runs in about **13 min** --
+> touch calibration 3.7, pre-sensitisation 1.8, post-sensitisation 1.7, intervention (12
+> blocks) 3.8, post-intervention 1.6, the rest under 0.3. Nearly all of it is the demo's
+> shortened waits (3 s rests and estimation touches, 5 s before each block), not the
+> simulated people. A higher Clock speed in Run a demo (`--demo-speed`, up to 100x, mock
+> garment only) shrinks the rests and the estimation touches by that factor; the scheduled
+> waits still take their 5 real seconds each. Jump to goes straight to any step.
 
 **Last updated:** 21 October 2026 (on the lab PC).
 **Milestone:** 6 (pilotable), in progress. **Priority: testing the code in demo mode** (S,
