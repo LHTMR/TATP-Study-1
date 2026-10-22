@@ -31,6 +31,7 @@ from PySide6.QtWidgets import QWidget
 
 from tatp.clock import Clock
 from tatp.responder import Action, Responder
+from tatp.ui.widgets import set_points
 from tatp.units import MS_PER_S
 
 # Layout and colour. Not study parameters (SPEC.md 4.2 lists timings, forces, pressures,
@@ -607,7 +608,7 @@ class VasWidget(QWidget):
 
     def _anchor_font(self) -> QFont:
         font = QFont(self.font())
-        font.setPointSize(ANCHOR_POINT_SIZE)
+        set_points(font, ANCHOR_POINT_SIZE)
         return font
 
     def _anchor_layout(self, metrics) -> list[tuple[str, float, int, float]]:
@@ -695,7 +696,7 @@ class VasWidget(QWidget):
         y = top
         for index, (text, point_size) in enumerate(self.heading_blocks()):
             font = QFont(self.font())
-            font.setPointSize(point_size)
+            set_points(font, point_size)
             box = QRect(margin, int(y), width, int(line_y - y))
             drawn = QFontMetrics(font).boundingRect(box, PROSE_FLAGS, text)
             if painter is not None:
@@ -744,7 +745,7 @@ class VasWidget(QWidget):
         top = int(self.height() * TRAINING_Y_FRACTION)
         box = QRect(margin, top, self.width() - 2 * margin, self.height() - top)
         font = QFont(self.font())
-        font.setPointSize(QUESTION_POINT_SIZE)
+        set_points(font, QUESTION_POINT_SIZE)
         if painter is not None:
             painter.setFont(font)
             painter.setPen(FOREGROUND)

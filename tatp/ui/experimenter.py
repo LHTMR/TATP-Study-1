@@ -105,6 +105,7 @@ from tatp.ui.widgets import (
     line_edit,
     primary_button_style,
     sample_line,
+    set_points,
     sized,
     stylesheet,
 )
@@ -113,6 +114,11 @@ from tatp.units import MIN_PER_H, MS_PER_S, S_PER_MIN
 # The window's own margin: narrower than the shared one, because height is what this screen is
 # short of.
 MARGIN_PX = 20
+# The lab's experimenter screen in Qt's pixels: 1920 x 1200 at 150 % (docs/LOG.md N7.U10).
+# The window is never larger, on any machine, so a bigger screen -- a MacBook's 1440 x 870 --
+# shows what the lab shows, not a roomier layout (S, 22 Oct 2026).
+LAB_SCREEN_WIDTH_PX = 1280
+LAB_SCREEN_HEIGHT_PX = 800
 IDENTITY_SEPARATOR = "  ·  "
 # Between a button's label and its key.
 KEY_HINT_SEPARATOR = "  "
@@ -358,6 +364,7 @@ class ExperimenterWindow(QWidget):
         # for a window with no session behind it.
         self._proceed_awaited: Callable[[], bool] = lambda: True
 
+        self.setMaximumSize(LAB_SCREEN_WIDTH_PX, LAB_SCREEN_HEIGHT_PX)
         self._build_banners()
         self._build_header()
         self._build_centre()
@@ -1517,7 +1524,7 @@ class ExperimenterWindow(QWidget):
                 TIMELINE_SHARE + COUNTDOWN_SHARE)
             for size in COUNTDOWN_SIZES:
                 font = self.countdown.font()
-                font.setPointSize(size)
+                set_points(font, size)
                 font.setBold("bold" in style)
                 if QFontMetrics(font).horizontalAdvance(shown) <= room:
                     break

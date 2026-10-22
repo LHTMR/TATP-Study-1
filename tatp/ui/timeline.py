@@ -30,6 +30,7 @@ from tatp.ui.widgets import (
     SIZE_LARGE,
     SIZE_SMALL,
     TARGET_COLOUR,
+    set_points,
     sized,
 )
 
@@ -54,7 +55,7 @@ class PhaseTimeline(QWidget):
         self.phases: list[tuple[str, str, str]] = []
         self.current: str | None = None
         self._current_font = QFont(self.font())
-        self._current_font.setPointSize(current_size)
+        set_points(self._current_font, current_size)
         self._current_font.setBold(True)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setFixedHeight(

@@ -68,6 +68,7 @@ from tatp.ui.vas import (
     VasWidget,
     draw_prose,
 )
+from tatp.ui.widgets import set_points
 from tatp.units import MS_PER_S
 
 # How the window draws itself. Not study parameters (SPEC.md 4.2 lists timings, forces,
@@ -161,7 +162,7 @@ class _MessageScreen(QWidget):
         painter.fillRect(self.rect(), BACKGROUND)
         painter.setPen(FOREGROUND)
         font = QFont(self.font())
-        font.setPointSize(MESSAGE_POINT_SIZE)
+        set_points(font, MESSAGE_POINT_SIZE)
         font.setBold(self.emphasised)
         painter.setFont(font)
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
@@ -201,7 +202,7 @@ class _CueScreen(QWidget):
         painter.fillRect(self.rect(), BACKGROUND)
         painter.setPen(FOREGROUND)
         font = QFont(self.font())
-        font.setPointSize(BUTTON_SYMBOL_POINT_SIZE)
+        set_points(font, BUTTON_SYMBOL_POINT_SIZE)
         painter.setFont(font)
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
         top = int(self.height() * QUESTION_Y_FRACTION)
@@ -413,7 +414,7 @@ class _ControlScreen(QWidget):
                 pressed=side in self.held,
             )
         font = QFont(self.font())
-        font.setPointSize(MESSAGE_POINT_SIZE)
+        set_points(font, MESSAGE_POINT_SIZE)
         painter.setFont(font)
         painter.setPen(FOREGROUND)
         margin = int(self.width() * SIDE_MARGIN_FRACTION)
@@ -431,7 +432,7 @@ class _ControlScreen(QWidget):
         place in the list, read at a glance between the two buttons that move it."""
         left, right = _button_rect(self, SIDES[0]), _button_rect(self, SIDES[1])
         font = QFont(self.font())
-        font.setPointSize(MESSAGE_POINT_SIZE)
+        set_points(font, MESSAGE_POINT_SIZE)
         font.setBold(True)
         painter.setFont(font)
         painter.setPen(FOREGROUND)
@@ -442,7 +443,7 @@ class _ControlScreen(QWidget):
         left, right = _button_rect(self, SIDES[0]), _button_rect(self, SIDES[1])
         for index, (label, row) in enumerate(zip(self.pair, PAIR_ROW_FRACTIONS, strict=True)):
             font = QFont(self.font())
-            font.setPointSize(BUTTON_LABEL_POINT_SIZE)
+            set_points(font, BUTTON_LABEL_POINT_SIZE)
             font.setBold(index == self.playing)
             painter.setFont(font)
             painter.setPen(FOREGROUND)
@@ -462,7 +463,7 @@ class _ControlScreen(QWidget):
 def _draw_top_text(painter: QPainter, widget: QWidget, text: str) -> None:
     """Text top-aligned where every participant screen starts reading (UI_PRINCIPLES.md 5.5)."""
     font = QFont(widget.font())
-    font.setPointSize(QUESTION_POINT_SIZE)
+    set_points(font, QUESTION_POINT_SIZE)
     painter.setFont(font)
     painter.setPen(FOREGROUND)
     margin = int(widget.width() * SIDE_MARGIN_FRACTION)
@@ -517,14 +518,14 @@ def _draw_symbol_button(
         painter.drawEllipse(rect.center(), diameter // 2, diameter // 2)
         painter.setBrush(Qt.NoBrush)
     symbol_font = QFont(widget.font())
-    symbol_font.setPointSize(BUTTON_SYMBOL_POINT_SIZE)
+    set_points(symbol_font, BUTTON_SYMBOL_POINT_SIZE)
     symbol_font.setBold(disc is not None)
     # Shrunk to fit if it is wider than the button: a symbol cut off at both edges stops
     # being the symbol.
     room = rect.width() - 2 * BUTTON_RADIUS_PX
     width = QFontMetrics(symbol_font).horizontalAdvance(symbol)
     if width > room:
-        symbol_font.setPointSizeF(BUTTON_SYMBOL_POINT_SIZE * room / width)
+        set_points(symbol_font, BUTTON_SYMBOL_POINT_SIZE * room / width)
     painter.setFont(symbol_font)
     painter.setPen(colour)
     painter.drawText(rect, Qt.AlignCenter, symbol)
@@ -550,13 +551,13 @@ def _draw_button(
     painter.drawRoundedRect(rect, BUTTON_RADIUS_PX, BUTTON_RADIUS_PX)
 
     symbol_font = QFont(widget.font())
-    symbol_font.setPointSize(BUTTON_SYMBOL_POINT_SIZE)
+    set_points(symbol_font, BUTTON_SYMBOL_POINT_SIZE)
     painter.setFont(symbol_font)
     painter.setPen(BACKGROUND if pressed else FOREGROUND)
     painter.drawText(rect, Qt.AlignCenter, responder.symbol_for(action))
 
     label_font = QFont(widget.font())
-    label_font.setPointSize(BUTTON_LABEL_POINT_SIZE)
+    set_points(label_font, BUTTON_LABEL_POINT_SIZE)
     painter.setFont(label_font)
     painter.setPen(FOREGROUND)
     label_width = int(widget.width() * BUTTON_LABEL_WIDTH_FRACTION)
@@ -584,7 +585,7 @@ class _ResponseButton(QPushButton):
         self._deliver = deliver
         self.setFocusPolicy(Qt.NoFocus)
         font = self.font()
-        font.setPointSize(RESPONSE_BUTTON_POINT_SIZE)
+        set_points(font, RESPONSE_BUTTON_POINT_SIZE)
         self.setFont(font)
         self.setMinimumSize(RESPONSE_BUTTON_WIDTH_PX, RESPONSE_BUTTON_HEIGHT_PX)
         self.setStyleSheet(

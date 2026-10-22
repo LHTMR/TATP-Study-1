@@ -14,7 +14,7 @@ import math
 from collections.abc import Sequence
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -60,6 +60,12 @@ DEMO_BANNER_COLOUR = "#5a3d8a"
 
 # One scale, four steps, each meaning a level rather than a screen's local preference
 # (UI_PRINCIPLES.md 4.3).
+# Pixels per point on the lab PC: Windows lays text out at 96 dots to the inch, against the
+# 72 points of an inch. A unit conversion (`set_points`).
+PX_PER_POINT = 96 / 72
+# Windows' own interface size, and the headless platform's: what anything not sized here is
+# drawn at, on every platform (macOS's own is 13).
+SIZE_SYSTEM = 9
 SIZE_SMALL = 15
 SIZE_BODY = 18
 SIZE_LARGE = 24
@@ -156,10 +162,17 @@ def stylesheet() -> str:
     )
 
 
+def set_points(font: QFont, point_size: float) -> QFont:
+    """`font` at `point_size` as the lab PC draws it, on every platform: Windows, and Qt's
+    headless platform the tests run on, draw a point as 96/72 of a pixel, macOS as one, so the
+    same screen had a third more room on a Mac (S, 22 Oct 2026: "We should minimise those
+    differences"). In pixels, which every platform draws alike."""
+    font.setPixelSize(max(1, round(point_size * PX_PER_POINT)))
+    return font
+
+
 def sized(widget: QWidget, point_size: int) -> QWidget:
-    font = widget.font()
-    font.setPointSize(point_size)
-    widget.setFont(font)
+    widget.setFont(set_points(widget.font(), point_size))
     return widget
 
 

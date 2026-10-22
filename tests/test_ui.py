@@ -756,6 +756,21 @@ def drawn(app, loaded):
     return window, held
 
 
+def _points(font) -> int:
+    """A font's size in points as `widgets.set_points` set it, in pixels on every platform."""
+    return round(font.pixelSize() / widgets.PX_PER_POINT)
+
+
+def test_text_is_the_lab_pcs_size_on_every_platform(app):
+    """S, 22 Oct 2026: the Mac should look like the lab PC. A point is 96/72 of a pixel there,
+    one pixel on a Mac; set in pixels, the two are alike."""
+    assert widgets.label(widgets.SIZE_BODY).font().pixelSize() == round(
+        widgets.SIZE_BODY * 96 / 72)
+    assert ExperimenterWindow.maximumSize(ExperimenterWindow(
+        cfg.load("en", "en").experimenter_text, lambda: _all_keys())).toTuple() == (
+        experimenter_ui.LAB_SCREEN_WIDTH_PX, experimenter_ui.LAB_SCREEN_HEIGHT_PX)
+
+
 def _emitted(signal) -> list:
     seen = []
     signal.connect(lambda *args: seen.append(args))
@@ -1241,7 +1256,7 @@ def test_the_zone_diagram_is_shown_only_with_a_target_beside_its_instruction(dra
     window.set_target("secondary", 2)
     assert window.zone.isVisibleTo(window)
     assert window.zone.height() > experimenter_ui.INSTRUCTION_LINES * window.instruction.font(
-        ).pointSize(), "at least as tall as the instruction's lines"
+        ).pixelSize(), "at least as tall as the instruction's lines"
     assert window._left_width() < full
     window.set_instruction("next", experimenter_ui.NOW)
     assert not window.zone.isVisibleTo(window)
@@ -1251,8 +1266,8 @@ def test_the_zone_diagram_is_shown_only_with_a_target_beside_its_instruction(dra
 def test_the_session_clock_is_secondary(drawn):
     """Looked up, not watched: small and grey beside who and where (15 Oct 2026 pilot)."""
     window, _ = drawn
-    assert window.elapsed.font().pointSize() == widgets.SIZE_SMALL
-    assert window.countdown.font().pointSize() == widgets.SIZE_LARGE
+    assert _points(window.elapsed.font()) == widgets.SIZE_SMALL
+    assert _points(window.countdown.font()) == widgets.SIZE_LARGE
 
 
 def test_open_items_appearing_mid_session_are_refused(app, loaded):
@@ -1994,10 +2009,10 @@ def test_a_long_instruction_steps_down_the_scale_and_moves_nothing(drawn):
     window.show()
     window.set_instruction("x", experimenter_ui.NOW)
     status_y = window.status.pos().y()
-    assert window.instruction.font().pointSize() == experimenter_ui.SIZE_HEADLINE
+    assert _points(window.instruction.font()) == experimenter_ui.SIZE_HEADLINE
     longest = max(window.text["instructions"].values(), key=len)
     window.set_instruction(longest, experimenter_ui.NOW)
-    assert window.instruction.font().pointSize() < experimenter_ui.SIZE_HEADLINE
+    assert _points(window.instruction.font()) < experimenter_ui.SIZE_HEADLINE
     assert window.instruction.heightForWidth(window.instruction.width()) <= (
         window.instruction.height()
     ), "the longest instruction does not fit even at the smallest size"

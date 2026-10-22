@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QApplication
 
 from tatp.config import REPO_ROOT
 from tatp.devices import on_lab_platform
+from tatp.ui.widgets import SIZE_SYSTEM, set_points
 
 SCALE_FACTORS_VARIABLE = "QT_SCREEN_SCALE_FACTORS"
 SCALE_FACTORS_SEPARATOR = ";"
@@ -71,7 +72,8 @@ def application(hardware: dict) -> QApplication:
     assert not missing, f"no font file supplies {sorted(missing)}; the files hold {installed}"
     font = QFont()
     font.setFamilies(families)
-    app.setFont(font)
+    # The lab PC's size, on every platform (`set_points`).
+    app.setFont(set_points(font, SIZE_SYSTEM))
 
     # Fail fast: Qt substitutes a fallback for a family it cannot match and says nothing,
     # which is exactly how the platform font went unnoticed.

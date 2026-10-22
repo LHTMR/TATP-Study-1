@@ -67,6 +67,8 @@ from tatp.touchcal import MATCH_TARGET, FitReady
 from tatp.ui.application import application
 from tatp.ui.experimenter import (
     CONFIRMED,
+    LAB_SCREEN_HEIGHT_PX,
+    LAB_SCREEN_WIDTH_PX,
     NOW,
     PREPARE,
     QUERIED,
@@ -86,8 +88,8 @@ DIFF_DIR = SCREENSHOT_DIR / "diff"
 # How the windows are grabbed. Presentation, not study parameters (SPEC.md 4.2): the size is
 # the lab PC's, and the tolerance is what separates a font rasterising a shade differently on
 # another machine from a screen that actually changed.
-WIDTH_PX = 1280
-HEIGHT_PX = 800
+WIDTH_PX = LAB_SCREEN_WIDTH_PX
+HEIGHT_PX = LAB_SCREEN_HEIGHT_PX
 # The lab laptop's usable screen, for the windows that open on it maximized or fitted to it
 # (the designer, the instruments dialog): a 1920 x 1080 panel at 150 % scaling, less the
 # taskbar and a title bar. Photographed there, S sees them as they will open.
