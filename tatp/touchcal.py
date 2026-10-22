@@ -1271,7 +1271,7 @@ class TouchCalibration(Procedure):
         # grows with the pressure, and a catch trial, with no ramp, would never be delayed:
         # the pause would tell the participant what is coming (LOG N7.F14e). On the mock
         # garment nobody feels the touch and nothing recorded is data, so a demonstration may
-        # run it shorter (`demo.estimation_window_mock_s`).
+        # run it shorter (`tatp.demo.demo_rests`).
         if garment.worn:
             window_s = float(self.touch["estimation_window_s"])
             # A ramp re-checks the rate limit once a tick, so it can end up to a tick late.

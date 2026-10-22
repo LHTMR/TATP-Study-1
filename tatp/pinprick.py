@@ -637,6 +637,10 @@ class _RatedTrial(QObject):
         cues = session.config.study1["cues"]
         self.warning_lead_s = float(cues["warning_lead_s"])
         self.warning_duration_s = float(cues["warning_duration_s"])
+        # The experimenter's "Get ready" through the cue's lead is shown only if it stays up
+        # long enough to be read (S, 22 Oct 2026); otherwise what was up stays, as a series'
+        # ready line or the end of its rest says the same.
+        self._prepare_shown = self.warning_lead_s >= float(cues["experimenter_min_shown_s"])
         # Stage boundary (CLAUDE.md): the cue precedes the stimulus, so the lead cannot be
         # shorter than the cue itself. Config that says otherwise is a mistake, not a schedule.
         assert self.warning_lead_s >= self.warning_duration_s, (
@@ -714,19 +718,26 @@ class _RatedTrial(QObject):
         self.participant.show_warning_cue()
         self.session.log("warning_cue", detail=f"trial {self.trial_index}")
 
-        self._instruct(instruction, GET_READY)
+        if self._prepare_shown:
+            self._instruct(instruction, GET_READY)
+        else:
+            self._mark_target()
         self.experimenter.set_status("")
         self.experimenter.refresh()
         self._after_from(self._cue_onset_elapsed_s, self.warning_duration_s, self._end_cue)
 
     def _instruct(self, text: str, heading: str) -> None:
         self.experimenter.set_instruction(text, heading)
+        self._mark_target()
+
+    def _mark_target(self) -> None:
         # The zone diagram marks where this stimulus goes (SPEC.md 11), and a filament brings
         # the monofilament technique with it.
         self.experimenter.set_target(
             self.application.region,
             self.application.site_index,
             filament=isinstance(self.application, Application),
+            brush=isinstance(self.application, BrushApplication),
         )
 
     def _end_cue(self) -> None:
@@ -1048,6 +1059,9 @@ class _Series(Procedure):
     goes to the next site in rotation, like any other application after one delivered there.
     """
 
+    # Whether its stimulus is the brush, whose sites the zone diagram draws its own way.
+    BRUSH = False
+
     def __init__(self, rig: Rig, isi_min_s: float, isi_max_s: float):
         super().__init__(rig)
         assert 0 < isi_min_s <= isi_max_s, f"ISI {isi_min_s}..{isi_max_s} s is not a range"
@@ -1144,7 +1158,7 @@ class _Series(Procedure):
             # The zone the series is in, on the diagram beside it (S, 21 Oct 2026); not beside
             # a sentence to read aloud, which has the instruction's whole width (LOG N7.F17e).
             if not self._ready_is_read_aloud():
-                self.experimenter.set_target(self.region)
+                self.experimenter.set_target(self.region, brush=self.BRUSH)
             self.experimenter.refresh()
 
         self.await_proceed(lambda: self.train_then((self.rating_scale(),), then), prepare)
@@ -1248,7 +1262,8 @@ class _Series(Procedure):
                 self.instruct(RATING_NEXT_OPEN, WAIT)
                 return
         self.experimenter.set_target(self.region, application.site_index,
-                                     filament=isinstance(application, Application))
+                                     filament=isinstance(application, Application),
+                                     brush=isinstance(application, BrushApplication))
 
     def interval(self, table: str, trial: _RatedTrial) -> None:
         """The jittered wait after an application, during which it may be discarded or
@@ -1316,7 +1331,8 @@ class _Series(Procedure):
             self.instruct(PREPARE_FILAMENT if preparing else NEXT_FILAMENT, heading,
                           wait_s=seconds, filament=expected.filament_label_g)
         self.experimenter.set_target(self.region, expected.site_index,
-                                     filament=isinstance(expected, Application))
+                                     filament=isinstance(expected, Application),
+                                     brush=isinstance(expected, BrushApplication))
 
     def _received(self, trial: _RatedTrial) -> str:
         if isinstance(trial, BrushTrial):
@@ -2057,6 +2073,7 @@ class BrushProtocol(_RatingSeries):
     `finished` carries a `RatingSeriesResult` whose `stimulus` is `brush`."""
 
     TABLE = BRUSH_TABLE
+    BRUSH = True
 
     def __init__(self, rig: Rig, region: str):
         brush = rig.session.config.study1["brush"]
@@ -2064,7 +2081,9 @@ class BrushProtocol(_RatingSeries):
             rig,
             region,
             int(brush["n_trials"]),
-            int(brush["n_sites"]),
+            # Per zone (S, 22 Oct 2026): the primary zone is one site, which the brush covers;
+            # the secondary zone four, the first again for a fifth stroke.
+            int(brush["n_sites"][region]),
             (float(brush["isi_min_s"]), float(brush["isi_max_s"])),
         )
 

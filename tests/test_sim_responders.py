@@ -32,7 +32,7 @@ from tatp.pinprick import PAIN_SCALE
 from tatp.procedure import Rig
 from tatp.responder import Responder
 from tatp.session import Session
-from tatp.ui.experimenter import NOW, PREPARE, ExperimenterWindow
+from tatp.ui.experimenter import NOW, PREPARE, WAIT, ExperimenterWindow
 from tatp.ui.participant import ParticipantWindow
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
@@ -298,24 +298,21 @@ def test_the_instruction_template_parses_back_into_its_fields(loaded):
     assert match["filament"] == "0.40"
 
 
-def test_the_experimenter_applies_the_named_filament_at_every_cue(rig):
-    """Once per cue, so the same filament asked for twice is applied twice."""
+def test_the_experimenter_applies_the_named_filament_each_time_it_is_asked(rig):
+    """When "Apply" goes up, so the same filament asked for twice is applied twice -- the
+    instruction between them changes, as the rating's line comes up (N7.F18aa)."""
     virtual = VirtualParticipant(rig.participant, rig.session.garment, rig.session.config, SEED)
     experimenter = VirtualExperimenter(rig, virtual)
+    experimenter.set_pace(False, 0.0)  # a person presses; the simulation still reads
     experimenter.start()
-    text = rig.experimenter.text
-    rig.experimenter.set_instruction(
-        instruction(rig.session.config, "prepare_filament",
-                    filament="26", force_mn=255.0, site=1,
-                    region=text["terms"]["regions"]["primary"]),
-        PREPARE,
-    )
+    apply = instruction(rig.session.config, "apply_filament", filament="26")
     for applications in (1, 2):
-        rig.participant.show_warning_cue()
+        rig.experimenter.set_instruction(apply, NOW)
         _spin(lambda applications=applications: len(experimenter.applied) == applications)
         assert virtual.stimulus_mn == 255.0
         virtual.rating_for(PAIN_SCALE)
-        rig.participant.show_blank()
+        rig.experimenter.set_instruction("rating", WAIT)
+        _spin(lambda: experimenter._read_for_apply == "rating")
     assert experimenter.applied == ["26", "26"]
 
 
@@ -323,13 +320,7 @@ def test_the_experimenter_strokes_the_brush_when_asked(rig):
     virtual = VirtualParticipant(rig.participant, rig.session.garment, rig.session.config, SEED)
     experimenter = VirtualExperimenter(rig, virtual)
     experimenter.start()
-    text = rig.experimenter.text
-    rig.experimenter.set_instruction(
-        instruction(rig.session.config, "prepare_brush",
-                    site=1, region=text["terms"]["regions"]["primary"]),
-        PREPARE,
-    )
-    rig.participant.show_warning_cue()
+    rig.experimenter.set_instruction(instruction(rig.session.config, "apply_brush"), NOW)
     _spin(lambda: experimenter.applied == ["brush"])
     assert virtual.brush_felt
     virtual.rating_for(PAIN_SCALE)

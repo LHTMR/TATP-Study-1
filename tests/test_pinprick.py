@@ -174,11 +174,13 @@ def test_the_rating_waits_for_the_experimenter_to_say_the_filament_is_applied(ru
     """S, 20 Oct 2026 (LOG N7.F16f, N7.F17a): the scale is shown only at the experimenter's
     press, at once, and the row records when the press came."""
     session, participant, experimenter = running
+    experimenter.set_instruction("ready", "prepare")
     trial = PinprickTrial(session, participant, experimenter, APPLICATION)
     trial.start()
-    # Through the cue's lead, what to have ready; "Now: apply" only with Next step offered.
+    # The cue's 1 s lead is too short to read: what was up stays (S, 22 Oct 2026); "Now:
+    # apply" only with Next step offered.
     prepare = experimenter.instruction.text()
-    assert prepare.startswith(experimenter.text["instructions"]["prepare_filament"][:8])
+    assert prepare == "ready"
     _spin(lambda: trial.awaits_proceed)
     assert experimenter.instruction.text() != prepare
     assert experimenter.zone.region == APPLICATION.region, "the target stays with it"
@@ -286,6 +288,9 @@ def test_the_experimenter_is_told_what_to_apply_and_never_the_rating(running):
     session, participant, experimenter = running
     text = session.config.experimenter_text
     trial = PinprickTrial(session, participant, experimenter, APPLICATION)
+    # A lead long enough to read: "Get ready" with the filament, under Prepare. (The
+    # configured 1 s is not, and leaves what was up: `test_the_rating_waits_for_...`.)
+    trial._prepare_shown = True
     trial.start()
     headings = text["headings"]
     assert "26 g" in experimenter.instruction.text()

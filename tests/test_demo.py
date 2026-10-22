@@ -30,6 +30,7 @@ from tatp.demo import (
     DemoError,
     check_person,
     demo_config,
+    demo_wait_s,
     shuffled_allocation,
     worn_garment,
 )
@@ -38,6 +39,7 @@ from tatp.launcher import LauncherWindow
 from tatp.remote_keys import ANY_KEYBOARD
 from tatp.session import DRIVERS, SessionError
 from tatp.session_runner import SELF_STARTED
+from tatp.ui import experimenter as experimenter_ui
 from tatp.ui.experimenter import NOW
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
@@ -151,20 +153,25 @@ def test_a_demonstration_on_a_real_garment_runs_at_real_time_only(loaded):
     assert demo_config(loaded, 2.0, DEMO_GARMENT).hardware["garment"]["driver"] == DEMO_GARMENT
 
 
-def test_a_demonstration_shortens_its_rests(loaded):
-    """S, 16 Oct 2026 (LOG N7.F14b, N7.F14e): the pinprick and brush rests, and the touch
-    estimation window on the mock garment only."""
+def test_a_demonstration_shortens_its_waits_to_what_can_be_read(loaded):
+    """S, 22 Oct 2026 (LOG N7.F18aa): a wait shorter in a demonstration lasts 3 s if the
+    session's is up to a minute, 5 s if longer, and one no longer than 3 s is kept. The
+    pinprick and brush rests, and the touch estimation window on the mock garment only."""
     demo = loaded.study1["demo"]
+    assert [demo_wait_s(demo, s) for s in (2.0, 3.0, 13.0, 60.0, 61.0, 1800.0)] == [
+        2.0, 3.0, 3.0, 3.0, 5.0, 5.0]
     study1 = demo_config(loaded, REAL_TIME_SPEED, DEMO_GARMENT).study1
     for series in ("pinprick", "brush"):
-        assert study1[series]["isi_min_s"] == study1[series]["isi_max_s"] == demo["rest_s"]
+        assert study1[series]["isi_min_s"] == study1[series]["isi_max_s"] == 3.0
     window_key = "estimation_window_s"
-    assert study1["touch_calibration"][window_key] == demo["estimation_window_mock_s"]
+    assert study1["touch_calibration"][window_key] == 3.0
+    assert study1["touch_calibration"]["estimation_settle_s"] == (
+        loaded.study1["touch_calibration"]["estimation_settle_s"]), "no longer than 3 s: kept"
     worn = demo_config(loaded, REAL_TIME_SPEED, "arduino_mosfet").study1
     assert worn["touch_calibration"][window_key] == (
         loaded.study1["touch_calibration"][window_key]
     ), "a worn garment keeps the study's window, which covers the slowest ramp"
-    assert loaded.study1["pinprick"]["isi_min_s"] != demo["rest_s"], "the study's is untouched"
+    assert loaded.study1["pinprick"]["isi_min_s"] != 3.0, "the study's is untouched"
 
 
 def test_worn_is_declared_by_the_driver():
@@ -605,6 +612,34 @@ def test_a_self_started_touch_holds_the_session_until_its_prompt_is_up(app, load
         _finish(runner, demo)
 
 
+def test_a_scheduled_wait_lasts_its_demo_length_and_says_the_sessions(app, loaded):
+    """S, 22 Oct 2026: a wait shorter in a demonstration lasts long enough to read, then the
+    demonstration goes on, and the panel says the session's length. Lengths shrunk here so
+    the test is quick; the rule is `test_a_demonstration_shortens_its_waits_...`."""
+    demo_settings = loaded.study1["demo"]
+    demo_settings.update(short_wait_s=0.2, long_wait_s=0.3)
+    runner, demo = _demo(app, loaded)
+    runner.start()
+    try:
+        _jump(runner, demo, "capsaicin.apply")  # its due time, less the skip lead, ahead
+        deadline = time.monotonic() + 10.0  # real seconds; the wait itself is 0.2 s
+        while demo.wait_lengths() is None:
+            assert time.monotonic() < deadline, "no shortened wait began"
+            QApplication.processEvents()
+        demo_s, session_s = demo.wait_lengths()
+        assert demo_s == 0.2 and session_s > demo_s
+        demo.controls.sync()
+        words = loaded.experimenter_text["demo"]
+        assert demo.controls.differs_now.text() == words["wait_differs"].format(
+            demo="0.2", session=experimenter_ui.clock_text(round(session_s)))
+        while runner.waiting_until_s is not None:
+            assert time.monotonic() < deadline, "the wait did not end at its demo length"
+            QApplication.processEvents()
+        assert "demo_wait_skipped" in [e["event"] for e in _events(runner.session)]
+    finally:
+        _finish(runner, demo)
+
+
 def test_jumping_out_of_the_touch_calibration_silences_the_noise(app, loaded):
     """A calibration cancelled by a jump never says it is done: the noise must not stay on
     into stages where the garment cannot run (review of N7.F18j)."""
@@ -818,7 +853,7 @@ def test_how_a_demo_differs_is_said_where_and_while_it_applies(app, loaded):
     pinprick = loaded.study1["pinprick"]
     assert f"{float(pinprick['isi_min_s']):g}–{float(pinprick['isi_max_s']):g}" in shown, (
         "the session's own interval, not the demo's")
-    assert f"{float(loaded.study1['demo']['rest_s']):g} s" in shown
+    assert f"{float(demo.settings['rest_s']):g} s" in shown
     demo.set_auto_run(False)
     runner.session.set_phase("intervention")
     assert demo.differs_now() in (RESTS_DIFFER, GARMENT_DIFFERS)

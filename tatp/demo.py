@@ -25,9 +25,12 @@ commands and data files -- with these things changed, and none of them able to r
   the rate limit and the stop are the session's own, unchanged. The remote alone is the remote
   when it is plugged in, as in a session (`demo_key_source`); every keyboard otherwise, so it
   runs on any computer. A simulated participant's presses arrive either way.
-- **Shorter waits for the hand** (`demo_rests`): the rests between applications, the delay
-  from an application to its scale, and on the mock garment the estimation run's window and
-  settle. What a demonstration shows is what happens, not the waiting.
+- **Shorter waits** (`demo_wait_s`; S, 22 Oct 2026): every wait shorter than a session's
+  lasts long enough to read -- 3 s for one up to a minute, 5 s for a longer one -- and the
+  demo panel says the session's length beside it. The rests between applications and on the
+  mock garment the estimation run's window and settle (`demo_rests`), and each scheduled wait,
+  which the demonstration ends at its length (`Demo._watch_wait`). What a demonstration shows
+  is what happens, not the waiting.
 - **What the garment is doing**, channel by channel, in the experimenter window's channel
   display (`tatp/ui/garment_display.py`), in every phase -- which lets a watcher infer the
   condition during the intervention. S asked for it, 15 Oct 2026 (open item L16); a real
@@ -85,7 +88,7 @@ from tatp.responder import Action
 from tatp.session import DRIVERS, with_session_choices
 from tatp.session_runner import SessionRunner, stage_group, stage_names
 from tatp.touchcal import EstimationPresentation
-from tatp.ui.experimenter import BLINDED_PHASES
+from tatp.ui.experimenter import BLINDED_PHASES, clock_text
 from tatp.ui.garment_display import states_from_status
 from tatp.ui.participant import ParticipantWindow
 from tatp.ui.widgets import (
@@ -125,6 +128,8 @@ REMOTE_OUTLINE_INSET_PX = 0.5
 # `demo.session_differs` keys for what the step under way does differently (`differs_now`).
 ESTIMATION_DIFFERS = "estimation"
 RESTS_DIFFER = "rests"
+# A scheduled wait, shortened (`Demo.wait_lengths`): said with its own lengths.
+WAITS_DIFFER = "waits"
 GARMENT_DIFFERS = "garment"
 # The suffix of the whole explanation of each, shown on hover.
 DETAIL = "_detail"
@@ -147,27 +152,39 @@ def real_time_settings(study1: dict, speed: float, scale_timeout: bool = True) -
     return {**study1, "choice": choice, "touch_calibration": touch}
 
 
+def demo_wait_s(demo: dict, session_s: float) -> float:
+    """How long a wait of `session_s` in a session lasts in a demonstration (S, 22 Oct 2026):
+    as it is if no longer than `demo.short_wait_s`, else that, or `demo.long_wait_s` past
+    `demo.long_wait_from_s` -- long enough to read what is up, never the waiting itself."""
+    short_s = float(demo["short_wait_s"])
+    if session_s <= short_s:
+        return session_s
+    return short_s if session_s <= float(demo["long_wait_from_s"]) else float(
+        demo["long_wait_s"])
+
+
 def demo_rests(study1: dict, garment: str) -> dict:
-    """`study1` with a demonstration's rests (LOG N7.F14b, N7.F14e, N7.F16g): `demo.rest_s`
-    between pinprick and brush applications; and on the mock garment
-    `demo.estimation_window_mock_s` for the touch calibration's estimation window and
-    `demo.estimation_settle_mock_s` before each of its scales. A worn garment keeps the
-    study's window and settle, which cover a real sleeve's ramp and inflation."""
+    """`study1` with a demonstration's rests (`demo_wait_s`; LOG N7.F14b, N7.F14e, N7.F16g,
+    N7.F18aa): between pinprick and brush applications, and on the mock garment the touch
+    calibration's estimation window and the settle before each of its scales. A worn garment
+    keeps the study's window and settle, which cover a real sleeve's ramp and inflation. The
+    demonstration's `rest_s` and `estimation_window_s`, and the session's beside them, are what
+    the demo controls say (`session_differs`)."""
     demo = study1["demo"]
-    rest_s = float(demo["rest_s"])
+    rest_s = demo_wait_s(demo, float(study1["pinprick"]["isi_min_s"]))
     pinprick = {**study1["pinprick"], "isi_min_s": rest_s, "isi_max_s": rest_s}
     brush = {**study1["brush"], "isi_min_s": rest_s, "isi_max_s": rest_s}
     touch = study1["touch_calibration"]
-    # What a session would have run instead, which the demo controls say beside each
-    # (`session_differs`).
     session = {"isi_min_s": float(study1["pinprick"]["isi_min_s"]),
                "isi_max_s": float(study1["pinprick"]["isi_max_s"]),
                "estimation_window_s": float(touch["estimation_window_s"])}
     if not worn_garment(garment):
-        touch = {**touch, "estimation_window_s": float(demo["estimation_window_mock_s"]),
-                 "estimation_settle_s": float(demo["estimation_settle_mock_s"])}
+        touch = {**touch,
+                 "estimation_window_s": demo_wait_s(demo, float(touch["estimation_window_s"])),
+                 "estimation_settle_s": demo_wait_s(demo, float(touch["estimation_settle_s"]))}
     return {**study1, "touch_calibration": touch, "pinprick": pinprick, "brush": brush,
-            "demo": {**demo, "session": session}}
+            "demo": {**demo, "session": session, "rest_s": rest_s,
+                     "estimation_window_s": float(touch["estimation_window_s"])}}
 
 
 def resolved(path: str) -> Path:
@@ -370,6 +387,36 @@ class Demo(QObject):
             int(round(float(self.settings["controls_refresh_s"]) * MS_PER_S))
         )
         self._forward_timer.timeout.connect(self._forward)
+        # Each scheduled wait lasts `demo_wait_s` of its session length, then ends (S, 22 Oct
+        # 2026): (the session time it waits until, the real time it began, its demo and
+        # session lengths), or None while no wait runs.
+        self._wait: tuple[float, float, float, float] | None = None
+        self._wait_timer = QTimer(self)
+        self._wait_timer.setInterval(self._forward_timer.interval())
+        self._wait_timer.timeout.connect(self._watch_wait)
+        self._wait_timer.start()
+
+    def _watch_wait(self) -> None:
+        """End the scheduled wait under way once its demonstration length has passed."""
+        until_s = self.runner.waiting_until_s
+        now_s = self.session.clock.t_session_s()
+        if until_s is None or now_s is None or self.session.closed:
+            self._wait = None
+            return
+        if self._wait is None or self._wait[0] != until_s:
+            session_s = until_s - now_s
+            self._wait = (until_s, self.session.clock.real_elapsed_s(),
+                          demo_wait_s(self.settings, session_s), session_s)
+        _, began_s, demo_s, session_s = self._wait
+        if demo_s < session_s and self.session.clock.real_elapsed_s() - began_s >= demo_s:
+            self.skip_wait(0.0)
+
+    def wait_lengths(self) -> tuple[float, float] | None:
+        """(demonstration, session) seconds of the scheduled wait under way, where the
+        demonstration shortens it; None otherwise."""
+        if self._wait is None or self._wait[2] >= self._wait[3]:
+            return None
+        return self._wait[2], self._wait[3]
 
     def _feed_garment(self) -> None:
         if not shiboken6.isValid(self._display):
@@ -394,6 +441,8 @@ class Demo(QObject):
             return ESTIMATION_DIFFERS
         if isinstance(procedure, _Series):
             return RESTS_DIFFER
+        if self.wait_lengths() is not None:
+            return WAITS_DIFFER
         if self.session.phase in BLINDED_PHASES:
             return GARMENT_DIFFERS
         return None
@@ -496,6 +545,7 @@ class Demo(QObject):
         self.experimenter.stop()
         self._garment_timer.stop()
         self._forward_timer.stop()
+        self._wait_timer.stop()
         if self.controls is not None:
             self.controls.timer.stop()
 
@@ -589,7 +639,7 @@ def session_differs(text: dict, demo: dict) -> dict[str, str]:
     session = demo["session"]
     values = {"demo": f"{float(demo['rest_s']):g}", "low": f"{session['isi_min_s']:g}",
               "high": f"{session['isi_max_s']:g}"}
-    estimation = {"demo": f"{float(demo['estimation_window_mock_s']):g}",
+    estimation = {"demo": f"{float(demo['estimation_window_s']):g}",
                   "session": f"{session['estimation_window_s']:g}"}
     # Each panel line is short, its `_detail` the whole of it on hover.
     return {key: line.format(**(estimation if key.startswith(ESTIMATION_DIFFERS) else values))
@@ -745,10 +795,18 @@ class DemoControls(QWidget):
         self.experimenter_mode.show_mode(demo.experimenter_mode)
         # Said there and then, not listed apart (S, 20 Oct 2026).
         key = demo.differs_now()
-        differs = "" if key is None else self.differs[key]
+        if key == WAITS_DIFFER:
+            # Said with this wait's own lengths (S, 22 Oct 2026).
+            demo_s, session_s = demo.wait_lengths()
+            lengths = {"demo": f"{demo_s:g}", "session": clock_text(round(session_s))}
+            differs = words["wait_differs"].format(**lengths)
+            detail = words["wait_differs_detail"].format(**lengths)
+        else:
+            differs = "" if key is None else self.differs[key]
+            detail = "" if key is None else self.differs[f"{key}{DETAIL}"]
         if differs != self.differs_now.text():
             self.differs_now.setText(differs)
-            self.differs_now.setToolTip("" if key is None else self.differs[f"{key}{DETAIL}"])
+            self.differs_now.setToolTip(detail)
 
         self.auto_run_button.setChecked(demo.auto_running)
         self.auto_run_button.setText(words["auto_running" if demo.auto_running

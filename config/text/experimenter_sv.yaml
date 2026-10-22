@@ -699,6 +699,9 @@ demo:
   remote: 'Fjärrkontroll:'
   worn_note: 'Plagget bärs: bara personer, ingen automatisk körning.'
   worn_note_detail: 'Någon kan ha plagget på sig: deltagaren och försöksledaren är personer, inte simuleringar, och automatisk körning är avstängd. Hoppa till fungerar ändå, men inte förbi beröringskalibreringen innan den har körts.'
+  # DRAFT (LOG N7.F18aa): written by the build, not ethics-sourced. {session} är m:ss.
+  wait_differs: 'Demoväntan: {demo} s (session: {session})'
+  wait_differs_detail: 'En demonstration väntar {demo} s här och går sedan vidare; en session väntar {session}. Automatisk körning avslutar den direkt.'
   # Hur en demonstration skiljer sig från en session, sagt där det gäller (LOG N7.F17d).
   # DRAFT (LOG N7.F17d): written by the build, not ethics-sourced
   session_differs:

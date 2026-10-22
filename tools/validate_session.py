@@ -227,8 +227,13 @@ LOSSLESS = ("confirms_without_marker", "stops_mid_block", DISTANCES)
 # Out of range by design at pre-S, and in which direction.
 OUT_OF_RANGE = {"f40_below_bottom": "below", "f40_above_top": "above"}
 
-# Tables a whole normal session may legitimately not write, and why.
-MAY_BE_ABSENT = {"discards": "no trial was discarded"}
+# Tables a whole normal session may legitimately not write: unless the event that writes them
+# is logged (and why they may be absent). A correction after a rating is tested in
+# tests/test_protocol_a.py; no scenario substitutes a filament.
+MAY_BE_ABSENT = {
+    "discards": ("trial_discarded", "no trial was discarded"),
+    "corrections": ("substitution_corrected", "no filament was corrected after its rating"),
+}
 # What identifies a trial in each trial table, for the seed check: the plan, never the
 # response. A pressure the participant produced depends on timer timing, so it is left out.
 TRIAL_ORDER_COLUMNS = {
@@ -694,7 +699,7 @@ def check_all_schema_tables_written(runs):
         for table in SCHEMA:
             if table in run.headers:
                 continue
-            if table in MAY_BE_ABSENT and not _logged(run, "trial_discarded"):
+            if table in MAY_BE_ABSENT and not _logged(run, MAY_BE_ABSENT[table][0]):
                 continue
             failures.append(f"{run.name}: no {table} file")
     return failures

@@ -928,13 +928,15 @@ class ExperimenterWindow(QWidget):
             self.clear_warning()
 
     def set_target(self, region: str | None, site: int | None = None,
-                   filament: bool = False, path: str | None = None) -> None:
+                   filament: bool = False, path: str | None = None,
+                   brush: bool = False) -> None:
         """Where the current stimulus goes, on the zone diagram beside the instruction (SPEC.md
         11): the zone, and the `site` in it or the mapping's `path` (S, 21 Oct 2026).
 
-        `filament` shows the monofilament technique under the instruction.
+        `filament` shows the monofilament technique under the instruction; `brush` draws the
+        brush's sites rather than a filament's (S, 22 Oct 2026).
         """
-        self.zone.set_target(region, site, path)
+        self.zone.set_target(region, site, path, brush)
         if (region is not None) != self.zone.isVisibleTo(self):
             self.zone.setVisible(region is not None)
             self._fitted = None

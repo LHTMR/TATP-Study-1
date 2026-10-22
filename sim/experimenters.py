@@ -2,16 +2,16 @@
 
 The normal experimenter runs a whole session from the experimenter screen, and only from it:
 
-- **It applies what the screen asks for, once per warning cue.** At each cue it reads the
-  instruction -- the "Get ready" line -- parses it against the `prepare_filament` or
-  `prepare_brush` wording it was formatted from, and touches the virtual participant: the
-  filament's force -- the weighed one where the set has been weighed, since that is what the
-  filament presses with -- or the brush. Once "Apply" is up with Next offered, it presses
-  Next (docs/LOG.md N7.F16f). Reading
-  the screen rather than the protocol is the point: a prompt that named the wrong filament
-  would be applied wrongly here, as it would be in the lab. The cue is noticed as it goes up
-  (`warning_cue_shown`), not by looking now and then: at the validator's speed a cue is on
-  screen for well under a millisecond.
+- **It applies what the screen asks for, once each time it is asked.** When "Apply" goes up
+  it parses the line against the `apply_filament` or `apply_brush` wording it was formatted
+  from, and touches the virtual participant: the filament's force -- the weighed one where
+  the set has been weighed, since that is what the filament presses with -- or the brush;
+  then, with Next offered, it presses Next (docs/LOG.md N7.F16f). Reading the screen rather
+  than the protocol is the point: a prompt that named the wrong filament would be applied
+  wrongly here, as it would be in the lab. "Apply" stays up until Next is pressed, so it is
+  never missed between looks; it is read even when a person presses, so the simulated
+  participant feels what they apply. (Until 22 Oct 2026 it read the cue's "Get ready" line,
+  which is no longer shown for a cue too short to read, N7.F18aa.)
 - **It presses Next step whenever the screen says the software is waiting for it** -- the
   garment fitted, the thermode started, the capsaicin, the next block, the next mapping path,
   the rekindle, the intervention's end, and at last the session complete, which closes the
@@ -112,8 +112,6 @@ class VirtualExperimenter(QObject):
         self._apply = template("apply_filament")
         self._brush = template("apply_brush")
         # What is up at the cue: what to have ready (LOG N7.F16f).
-        self._prepare = template("prepare_filament")
-        self._prepare_brush = template("prepare_brush")
         self._mapping_ready = template("mapping_ready")
         self._mapping_path = template("mapping_path")
         self._proceed_templates = [template(key) for key in PROCEED_TEMPLATES]
@@ -154,15 +152,11 @@ class VirtualExperimenter(QObject):
         self._instruction_at_s = 0.0
 
         rig.interruptions.interrupted.connect(self._on_interrupted)
-        rig.participant.warning_cue_shown.connect(self._on_cue)
         self._resume_timer = QTimer(self)
         self._resume_timer.setSingleShot(True)
         self._resume_timer.timeout.connect(self._resume)
-        # The instruction of a trial is set just after its cue goes up, in the same call.
-        self._cue_timer = QTimer(self)
-        self._cue_timer.setSingleShot(True)
-        self._cue_timer.setInterval(0)
-        self._cue_timer.timeout.connect(self._apply_at_cue)
+        # The instruction last read for what to apply (`_apply_if_asked`).
+        self._read_for_apply = ""
         self._timer = QTimer(self)
         self._timer.setInterval(int(round(TICK_S * MS_PER_S)))
         self._timer.timeout.connect(self._tick)
@@ -173,7 +167,6 @@ class VirtualExperimenter(QObject):
     def stop(self) -> None:
         self._timer.stop()
         self._resume_timer.stop()
-        self._cue_timer.stop()
 
     def set_pace(self, acts: bool, reaction_s: float) -> None:
         """Whether it presses anything, and how long an instruction is up before it does, in
@@ -186,19 +179,15 @@ class VirtualExperimenter(QObject):
         if not acts:
             self._resume_timer.stop()
 
-    # -- the cue ------------------------------------------------------------------------
+    # -- what is applied ----------------------------------------------------------------
 
-    def _on_cue(self) -> None:
-        self._cue_timer.start()
-
-    def _apply_at_cue(self) -> None:
-        instruction = self.rig.experimenter.instruction.text()
-        match = self._prepare.fullmatch(instruction)
+    def _apply_if_asked(self, instruction: str) -> None:
+        match = self._apply.fullmatch(instruction)
         if match is not None:
             label = match["filament"]
             self.applied.append(label)
             self.participant.feel_filament(self._forces[label])
-        elif self._prepare_brush.fullmatch(instruction) is not None:
+        elif self._brush.fullmatch(instruction) is not None:
             self.applied.append("brush")
             self.participant.feel_brush()
 
@@ -220,6 +209,10 @@ class VirtualExperimenter(QObject):
         ):
             if label.text():
                 self.seen_text.add(label.text())
+        # Read whoever presses, so the simulated participant feels what is applied.
+        if window.instruction.text() != self._read_for_apply:
+            self._read_for_apply = window.instruction.text()
+            self._apply_if_asked(self._read_for_apply)
 
         if not self.acts:
             return

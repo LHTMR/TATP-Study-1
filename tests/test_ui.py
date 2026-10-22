@@ -13,7 +13,7 @@ import time
 
 import numpy as np
 import pytest
-from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtCore import QEvent, QLineF, QPoint, Qt
 from PySide6.QtGui import QFont, QFontInfo, QFontMetrics, QImage, QKeyEvent, QKeySequence
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QWidget
@@ -1817,12 +1817,49 @@ def test_the_zone_diagram_marks_the_target_and_a_new_step_clears_it(drawn):
 
 
 def test_every_site_a_protocol_uses_is_on_the_diagram(loaded):
-    """The figure carries a numbered site for each of the rotation's (open item 11)."""
+    """The figure carries a numbered site for each of the filament rotation's (open item 11);
+    the brush has one stroke per edge of the primary zone, and the primary zone is its one
+    site there (S, 22 Oct 2026)."""
     zone = widgets.ZoneDiagram(loaded.experimenter_text["zones"],
                                loaded.experimenter_text["terms"]["mapping_paths_short"])
     for region in ("primary", "secondary"):
         assert zone.sites(region) == int(loaded.study1["pinprick"]["n_sites"])
-        assert zone.sites(region) == int(loaded.study1["brush"]["n_sites"])
+    brush_sites = loaded.study1["brush"]["n_sites"]
+    assert brush_sites["primary"] == 1
+    assert brush_sites["secondary"] <= len(widgets.BRUSH_EDGES)
+
+
+def test_the_brush_sites_are_drawn_as_the_brush_is_used(loaded):
+    """S, 22 Oct 2026: in the primary zone the whole zone is the site; in the secondary zone
+    four strokes, one along each edge of the primary zone, the first again for a fifth."""
+    zone = widgets.ZoneDiagram(loaded.experimenter_text["zones"],
+                               loaded.experimenter_text["terms"]["mapping_paths_short"])
+    zone.resize(240, 240)
+    zone.set_target("primary", 1, brush=True)
+    assert zone.drawn_sites() == 0, "the zone itself, no markers"
+    zone.set_sites_in_use("secondary", 4)
+    zone.set_target("secondary", 2, brush=True)
+    strokes = zone._site_shapes(zone._drawing_rect())
+    assert len(strokes) == 4 and all(isinstance(s, QLineF) for s in strokes)
+    with pytest.raises(AssertionError, match="no brush site 5"):
+        zone.set_target("secondary", 5, brush=True)
+
+
+def test_the_primary_filament_sites_are_spread_evenly_for_the_number_used(loaded):
+    """S, 22 Oct 2026: five sites drawn as if eight were used looked lopsided."""
+    zone = widgets.ZoneDiagram(loaded.experimenter_text["zones"],
+                               loaded.experimenter_text["terms"]["mapping_paths_short"])
+    zone.resize(240, 240)
+    zone.set_sites_in_use("primary", 5)
+    zone.set_target("primary", 1)
+    sites = zone._site_shapes(zone._drawing_rect())
+    rows = sorted({round(s.center().y()) for s in sites})
+    assert len(sites) == 5 and len(rows) == 2
+    assert [sum(round(s.center().y()) == y for s in sites) for y in rows] == [3, 2]
+    for y in rows:  # evenly spaced along each row
+        xs = sorted(s.center().x() for s in sites if round(s.center().y()) == y)
+        gaps = {round(b - a) for a, b in zip(xs, xs[1:], strict=False)}
+        assert len(gaps) <= 1
 
 
 @pytest.mark.parametrize("limb, mirrored", [("left", True), ("right", False)])

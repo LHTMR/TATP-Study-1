@@ -40,19 +40,16 @@ demo:
   participant_reaction_s: 1.0        # from a new screen to the first press on it
   participant_press_interval_s: 0.2  # between presses, so the marker is seen to move
   experimenter_reaction_s: 1.5       # from a new instruction to pressing Next step
-  # The rest between two pinprick or brush applications in a demonstration, in session
-  # seconds, in place of the study's (S, 16 Oct 2026; LOG N7.F14b): a demonstration shows
-  # what happens, not the waiting.
-  rest_s: 0.5
-  # The touch calibration's estimation window in a demonstration on the mock garment (S, 16
-  # Oct 2026; LOG N7.F14e). Shorter than the slowest ramp: nothing a demonstration records
-  # is data. A demonstration on a worn garment keeps the study's window.
-  estimation_window_mock_s: 1.5
-  # The touch calibration's estimation run, on the mock garment: the stimulus on this long
-  # before its intensity scale appears, in place of `touch_calibration.estimation_settle_s`.
-  # That 3 s lets a real sleeve finish inflating (R32); the mock has nothing to inflate (LOG
-  # N7.F16g). A worn garment keeps the study's.
-  estimation_settle_mock_s: 0.5
+  # How long a wait lasts in a demonstration, which shows what happens, not the waiting (S,
+  # 22 Oct 2026; LOG N7.F18aa): a session's wait up to `short_wait_s` as it is; up to
+  # `long_wait_from_s`, `short_wait_s`; longer, `long_wait_s` -- long enough to be read, and
+  # said beside it with the session's own length. The rests between pinprick and brush
+  # applications, the estimation run's window and settle on the mock garment (a worn one
+  # keeps the study's, which cover a real sleeve's ramp), and every scheduled wait: heat,
+  # capsaicin, the gaps between blocks. Auto-run still ends one at once.
+  short_wait_s: 3.0
+  long_wait_s: 5.0
+  long_wait_from_s: 60.0
   # What the garment is commanded to do, channel by channel, on the experimenter screen in
   # every phase (tatp/ui/garment_display.py; N7.F12f, N7.F16i), read from the garment this
   # often. The lit-up fade is hardware.yaml's screens.garment_highlight_s.
@@ -148,7 +145,13 @@ pinprick:
 
 brush:
   n_trials: 5                        # same structure as the short protocol (SPEC.md 8.3)
-  n_sites: 8
+  # Per zone (S, 22 Oct 2026; docs/research/R37; LOG N7.F18ab): the primary zone is small and
+  # the brush, about 1 cm wide, covers it, so it is one site; the secondary zone has a stroke
+  # along each of the primary zone's four edges, just outside it, the first again for the
+  # fifth. Each series starts at site 1.
+  n_sites:
+    primary: 1
+    secondary: 4
   isi_min_s: 13.0                    # the short protocol's timing, which SPEC.md 8.3 says the
   isi_max_s: 17.0                    # brush shares; kept separate so either can be tuned in
                                      # piloting without moving the other
@@ -345,6 +348,9 @@ cues:
   # through the warning cue: the cue's lead alone flashed it up for a second (S, 22 Oct 2026;
   # LOG N7.F18r). The rest before that stays "Wait". The same in every condition.
   experimenter_prepare_lead_s: 5.0
+  # An experimenter screen that would be up for less than this in a session is not shown:
+  # what was up stays (S, 22 Oct 2026). The warning cue's own lead is the one such today.
+  experimenter_min_shown_s: 2.0
   # A rest between two stimuli longer than this shows `screens.please_wait` rather than a
   # blank, so the participant can see that the pause is meant (S, 16 Oct 2026; LOG N7.F14d).
   please_wait_min_s: 1.0

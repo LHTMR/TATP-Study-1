@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QLineF, QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
@@ -102,6 +102,22 @@ PATH_OUTSIDE = 0.3
 PATH_INSIDE = 0.25
 PATH_LINE_PX = 2
 PATH_TARGET_LINE_PX = 5
+# The brush's sites (S, 22 Oct 2026): in the primary zone the whole zone, which the brush
+# covers, tinted; in the secondary zone a stroke along each edge of the primary zone, just
+# outside it, in the mapping paths' order (proximal, lateral, distal, medial), the first again
+# for a fifth. Placeholder positions, as the filament sites' are (open item 11).
+BRUSH_EDGES = tuple(PATH_DIRECTIONS)
+BRUSH_OFFSET_UNITS = 8
+BRUSH_STROKE_FRACTION = 0.6
+BRUSH_LINE_PX = 3
+BRUSH_TARGET_LINE_PX = 7
+BRUSH_ZONE_TINT_ALPHA = 0.3
+# The primary zone's filament sites, spread evenly across it for the number a series uses:
+# one row up to this many, two beyond, the first the longer (five: three and two).
+ONE_ROW_SITES_MAX = 4
+# Each site in the middle of its equal share of a row, or of the zone's height.
+SHARE_MIDDLE = 0.5
+PRIMARY = "primary"
 ARROW_HEAD_PX = 9
 ARROW_HEAD_TARGET_SCALE = 1.5
 # Label sizes in the figure's own units, so they scale with it.
@@ -278,6 +294,7 @@ class ZoneDiagram(QWidget):
         self.region: str | None = None
         self.site: int | None = None
         self.path: str | None = None
+        self.brush = False
         self.mirrored = False
         # Per zone, how many sites the series under way uses (`set_sites_in_use`).
         self.in_use: dict[str, int] = {}
@@ -295,14 +312,17 @@ class ZoneDiagram(QWidget):
         return count
 
     def set_target(self, region: str | None, site: int | None = None,
-                   path: str | None = None) -> None:
-        """Mark `region`, its `site` if one, or the mapping's `path` if one; None clears."""
+                   path: str | None = None, brush: bool = False) -> None:
+        """Mark `region`, its `site` if one, or the mapping's `path` if one; None clears.
+        `brush` marks the brush's sites rather than a filament's."""
         assert region is None or region in ZONE_IDS, f"no zone {region!r}"
-        assert site is None or (region is not None and 1 <= site <= self.sites(region)), (
-            f"{ZONES_SVG} has no site {site} in the {region} zone"
+        most = (1 if region == PRIMARY else len(BRUSH_EDGES)) if brush else (
+            self.sites(region) if region is not None else 0)
+        assert site is None or (region is not None and 1 <= site <= most), (
+            f"there is no {'brush ' if brush else ''}site {site} in the {region} zone"
         )
         assert path is None or path in PATH_DIRECTIONS, f"no mapping path {path!r}"
-        self.region, self.site, self.path = region, site, path
+        self.region, self.site, self.path, self.brush = region, site, path, brush
         self.update()
 
     def set_sites_in_use(self, region: str, count: int | None) -> None:
@@ -316,7 +336,11 @@ class ZoneDiagram(QWidget):
 
     def drawn_sites(self) -> int:
         """How many of the target zone's sites are drawn: those the series uses, and the
-        current one even past that, where a repeat after a discard has gone on to it."""
+        current one even past that, where a repeat after a discard has gone on to it. None
+        for the brush in the primary zone, whose site is the whole zone."""
+        if self.brush:
+            return 0 if self.region == PRIMARY else min(
+                len(BRUSH_EDGES), self.in_use.get(self.region, len(BRUSH_EDGES)))
         figure = self.sites(self.region)
         return min(figure, max(self.in_use.get(self.region, figure), self.site or 0))
 
@@ -393,28 +417,90 @@ class ZoneDiagram(QWidget):
         painter.drawText(foot, Qt.AlignCenter, self.words["caption"])
 
     def _draw_sites(self, painter: QPainter, drawing: QRectF, scale: float) -> None:
-        """The sites drawn, the current one filled and numbered."""
-        for site in range(1, self.drawn_sites() + 1):
-            marker = self._rect(drawing, SITE_ID.format(region=self.region, site=site))
-            if site != self.site:
+        """The sites drawn, the current one filled or heavy, and numbered."""
+        marker = self._rect(drawing, SITE_ID.format(region=PRIMARY, site=1))
+        radius = marker.width() / 2 * SITE_TARGET_SCALE
+        if self.brush and self.region == PRIMARY:
+            tint = QColor(TARGET_COLOUR)
+            tint.setAlphaF(BRUSH_ZONE_TINT_ALPHA)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(tint)
+            painter.drawRect(self._rect(drawing, ZONE_IDS[PRIMARY]))
+            return
+        for site, shape in enumerate(self._site_shapes(drawing), start=1):
+            current = site == self.site
+            if isinstance(shape, QLineF):
+                painter.setPen(QPen(QColor(TARGET_COLOUR),
+                                    BRUSH_TARGET_LINE_PX if current else BRUSH_LINE_PX))
+                painter.drawLine(shape)
+                if current:
+                    self._draw_number(painter, shape.center(), radius, site)
+                continue
+            if not current:
                 painter.setPen(QPen(QColor(TARGET_COLOUR), SITE_LINE_PX))
                 painter.setBrush(Qt.NoBrush)
-                painter.drawEllipse(marker)
+                painter.drawEllipse(shape)
                 continue
-            centre = marker.center()
-            radius = marker.width() / 2 * SITE_TARGET_SCALE
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(TARGET_COLOUR))
-            painter.drawEllipse(centre, radius, radius)
-            font = painter.font()
-            font.setPixelSize(max(1, round(2 * radius * SITE_NUMBER_SCALE)))
-            font.setBold(True)
-            painter.setFont(font)
-            painter.setPen(QColor(BACKGROUND))
-            painter.drawText(QRectF(centre.x() - radius, centre.y() - radius,
-                                    2 * radius, 2 * radius), Qt.AlignCenter, str(site))
-            font.setBold(False)
-            painter.setFont(font)
+            self._draw_number(painter, shape.center(), shape.width() / 2 * SITE_TARGET_SCALE,
+                              site)
+
+    def _site_shapes(self, drawing: QRectF) -> list:
+        """Where each drawn site is, on the widget: a brush stroke's line, or a filament
+        site's marker -- in the primary zone spread evenly for the number drawn, elsewhere
+        the figure's own."""
+        count = self.drawn_sites()
+        if self.brush:
+            return [self._brush_stroke(drawing, edge) for edge in BRUSH_EDGES[:count]]
+        if self.region == PRIMARY:
+            return self._even_sites(drawing, count)
+        return [self._rect(drawing, SITE_ID.format(region=self.region, site=site))
+                for site in range(1, count + 1)]
+
+    def _brush_stroke(self, drawing: QRectF, edge: str) -> QLineF:
+        bounds = self.renderer.boundsOnElement(ZONE_IDS[PRIMARY])
+        dx, dy = PATH_DIRECTIONS[edge]
+        centre = bounds.center()
+        if dx:
+            x = (bounds.left() - BRUSH_OFFSET_UNITS if dx < 0
+                 else bounds.right() + BRUSH_OFFSET_UNITS)
+            half = bounds.height() * BRUSH_STROKE_FRACTION / 2
+            ends = ((x, centre.y() - half), (x, centre.y() + half))
+        else:
+            y = (bounds.top() - BRUSH_OFFSET_UNITS if dy < 0
+                 else bounds.bottom() + BRUSH_OFFSET_UNITS)
+            half = bounds.width() * BRUSH_STROKE_FRACTION / 2
+            ends = ((centre.x() - half, y), (centre.x() + half, y))
+        return QLineF(self._point(drawing, *ends[0]), self._point(drawing, *ends[1]))
+
+    def _even_sites(self, drawing: QRectF, count: int) -> list[QRectF]:
+        bounds = self.renderer.boundsOnElement(ZONE_IDS[PRIMARY])
+        marker = self.renderer.boundsOnElement(SITE_ID.format(region=PRIMARY, site=1))
+        radius = marker.width() / 2
+        rows = [count] if count <= ONE_ROW_SITES_MAX else [math.ceil(count / 2), count // 2]
+        sites = []
+        for row, in_row in enumerate(rows):
+            y = bounds.top() + bounds.height() * (row + SHARE_MIDDLE) / len(rows)
+            for k in range(in_row):
+                x = bounds.left() + bounds.width() * (k + SHARE_MIDDLE) / in_row
+                sites.append(QRectF(self._point(drawing, x - radius, y - radius),
+                                    self._point(drawing, x + radius, y + radius)).normalized())
+        return sites
+
+    def _draw_number(self, painter: QPainter, centre: QPointF, radius: float,
+                     site: int) -> None:
+        """The current site: filled, with its number."""
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(TARGET_COLOUR))
+        painter.drawEllipse(centre, radius, radius)
+        font = painter.font()
+        font.setPixelSize(max(1, round(2 * radius * SITE_NUMBER_SCALE)))
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(BACKGROUND))
+        painter.drawText(QRectF(centre.x() - radius, centre.y() - radius,
+                                2 * radius, 2 * radius), Qt.AlignCenter, str(site))
+        font.setBold(False)
+        painter.setFont(font)
 
     def _draw_paths(self, painter: QPainter, drawing: QRectF, scale: float) -> None:
         """The four mapping paths, from outside the secondary zone toward its centre, each

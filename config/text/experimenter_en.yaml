@@ -725,6 +725,10 @@ demo:
   remote: 'Remote:'
   worn_note: 'Worn garment: people only; no auto-run.'
   worn_note_detail: 'Someone may be wearing this garment: the participant and the experimenter are people, not simulations, and auto-run is off. Jump to still works, but not past the touch calibration before it has run.'
+  # DRAFT (LOG N7.F18aa): written by the build, not ethics-sourced. On the demo panel through
+  # a scheduled wait a demonstration shortens (S, 22 Oct 2026); {session} is m:ss.
+  wait_differs: 'Demo wait: {demo} s (session: {session})'
+  wait_differs_detail: 'A demonstration waits {demo} s here, then goes on; a session waits {session}. Auto-run ends it at once.'
   # How a demonstration differs from a session, each with the session's own value, said where
   # it applies (S, 20 Oct 2026: "not one info dump but embedded where relevant"; LOG N7.F17d):
   # `rests`, `estimation` and `garment` on the demo panel while that step runs (`garment` also
