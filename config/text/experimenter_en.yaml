@@ -203,6 +203,9 @@ instructions:
   rating_next_open: 'The participant is rating. What comes next depends on the rating.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. The series' last.
   rating_last: 'The participant is rating the last application of this series.'
+  # DRAFT (LOG N7.F18ae): written by the build, not ethics-sourced. After a series' last
+  # application, until Next: no rest, but a step to correct it in (S, 22 Oct 2026).
+  series_end: 'The series is done. If the last application needs it, use {controls[correct_application]} Then press {controls[proceed]} to go on.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. The gap before an
   # application, under "Wait" with the time left until it is due (S, 16 and 21 Oct 2026).
   next_filament: 'Coming up: the {filament} g filament.'

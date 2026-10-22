@@ -136,10 +136,15 @@ def _drive(procedure, done, respond=_observer, before_answer=None, max_trials=60
         return getattr(procedure._trial, "awaits_proceed", False)
 
     while not done:
-        _spin(lambda: done or applying()
+        _spin(lambda: done or applying() or procedure._at_series_end
               or participant.stack.currentWidget() is participant.vas)
         if done:
             break
+        if procedure._at_series_end:
+            # The series' end: the experimenter goes on (N7.F18ae).
+            procedure.experimenter.proceed_requested.emit()
+            _spin(lambda: done or not procedure._at_series_end)
+            continue
         if applying():
             # Applied: the experimenter says so, and the rating is cued from it (N7.F16f).
             procedure.experimenter.proceed_requested.emit()
@@ -151,6 +156,30 @@ def _drive(procedure, done, respond=_observer, before_answer=None, max_trials=60
         answered += 1
         assert answered <= max_trials, "the protocol did not end"
     return answered
+
+
+def _rate_until(protocol, reached, respond=_observer) -> None:
+    """Rate each application as `respond` says until `reached()`, going on from the series'
+    end step with Next (N7.F18ae)."""
+    participant = protocol.participant
+    while not reached():
+        _spin(lambda: reached() or protocol._at_series_end
+              or participant.stack.currentWidget() is participant.vas)
+        if reached():
+            return
+        if protocol._at_series_end:
+            protocol.experimenter.proceed_requested.emit()
+            _spin(lambda: reached() or not protocol._at_series_end)
+            continue
+        _answer(participant, respond(protocol._trial))
+
+
+def _until_done(protocol, done) -> None:
+    """Wait for the series to end, going on from its end step with Next (N7.F18ae)."""
+    _spin(lambda: done or protocol._at_series_end)
+    if not done:
+        protocol.experimenter.proceed_requested.emit()
+        _until_done(protocol, done)
 
 
 def _start(procedure) -> list:
@@ -469,7 +498,7 @@ def test_the_last_application_at_the_cap_ends_the_run_with_no_rest(app, loaded, 
     for _ in range(2):
         _spin(lambda: rig.participant.stack.currentWidget() is rig.participant.vas)
         _answer(rig.participant, 0)
-    _spin(lambda: done)
+    _until_done(protocol, done)
     assert done[0].capped and len(_rows(rig.session, "pinprick")) == 2
     intervals = [e for e in _events(rig.session) if e == "interval"]
     assert len(intervals) == 1, "a rest after the first, none after the last"
@@ -640,7 +669,7 @@ def test_a_correction_that_ends_the_run_ends_the_rest_with_it(rig):
     _answer(rig.participant, 1)  # 75 %: at or above the target
     assert protocol._expected is not None
     rig.experimenter.substitution_entered.emit(protocol.filaments[0].label_g)
-    _spin(lambda: done)
+    _until_done(protocol, done)
     assert done[0].out_of_range and done[0].out_of_range_direction == "below"
 
 
@@ -673,12 +702,37 @@ def test_the_last_application_can_be_discarded_before_its_rating(rig):
         _answer(participant, 0)
     _spin(lambda: participant.stack.currentWidget() is participant.vas)  # the repeat
     _answer(participant, 0)
-    _spin(lambda: done)
+    _until_done(protocol, done)
     rows = _rows(session, "pinprick")
     (discard,) = _rows(session, "discards")
     assert len(rows) == n_trials + 1
     assert discard["trial_timestamp_iso"] == rows[n_trials - 1]["timestamp_iso"]
     assert "discard_pending" in _events(session)
+
+
+def test_a_series_ends_on_next_with_the_last_application_still_correctable(rig):
+    """S, 22 Oct 2026: no rest after the last application, but "a screen at the end where the
+    experimenter has to press next to move onto the next phase, this can have the correction
+    option". A Discard there repeats the last application, after the usual rest."""
+    session, experimenter, participant = rig.session, rig.experimenter, rig.participant
+    protocol = ShortProtocol(rig, "primary", "26", _cap(rig))
+    done = _start(protocol)
+    n_trials = session.config.study1["pinprick"]["short_protocol_n_trials"]
+    for _ in range(n_trials):
+        _spin(lambda: participant.stack.currentWidget() is participant.vas)
+        _answer(participant, 0)
+    _spin(lambda: protocol._at_series_end)
+    assert experimenter.instruction.text() == cfg.instruction(session.config, "series_end")
+    assert experimenter.heading == "now" and not done
+    assert experimenter._awaiting["discard"] and experimenter._awaiting["substitution"]
+    experimenter.discard_requested.emit()
+    assert not protocol._at_series_end, "the repeat follows, not the end"
+    _spin(lambda: participant.stack.currentWidget() is participant.vas)
+    _answer(participant, 0)
+    _spin(lambda: protocol._at_series_end)
+    experimenter.proceed_requested.emit()
+    _spin(lambda: done)
+    assert len(_rows(session, "pinprick")) == n_trials + 1
 
 
 def test_the_stop_withdraws_the_correction_offer(rig):
@@ -761,10 +815,7 @@ def test_a_rerun_takes_down_the_warning_about_the_run_it_discards(app, loaded, t
     protocol = _long(rig)
     _start(protocol)
     assert window._warning_text == "from the stage before"
-    for _ in range(2):
-        _spin(lambda: rig.participant.stack.currentWidget() is rig.participant.vas)
-        _answer(rig.participant, 0)
-    _spin(lambda: protocol._awaiting_fit is not None)
+    _rate_until(protocol, lambda: protocol._awaiting_fit is not None, lambda trial: 0)
     capped = window.text["warnings"]["application_cap"].format(value=2)
     assert capped in window._warning_text
     window.fit_rerun_requested.emit("again")
@@ -808,18 +859,11 @@ def test_the_fit_preview_rerun_keeps_the_superseded_run(app, loaded, tmp_path):
     protocol.fit_ready.connect(fits.append)
     done = _start(protocol)
 
-    _spin(lambda: fits or (rig.participant.stack.currentWidget() is rig.participant.vas))
-    while not fits:
-        _answer(rig.participant, _observer(protocol._trial))
-        _spin(lambda: fits or (rig.participant.stack.currentWidget() is rig.participant.vas))
+    _rate_until(protocol, lambda: bool(fits))
     assert len(fits[0].points) == 9
     experimenter.fit_rerun_requested.emit("filament slipped")
     experimenter.proceed_requested.emit()
-    while len(fits) < 2:
-        _spin(lambda: len(fits) > 1 or (
-            rig.participant.stack.currentWidget() is rig.participant.vas))
-        if len(fits) < 2:
-            _answer(rig.participant, _observer(protocol._trial))
+    _rate_until(protocol, lambda: len(fits) > 1)
     experimenter.fit_accepted.emit()
     assert done and done[0].run_index == 2
 
@@ -842,11 +886,7 @@ def test_the_f40_preview_enables_the_choice_and_closes_on_it(app, loaded, tmp_pa
     protocol.fit_ready.connect(fits.append)
     protocol.fit_ready.connect(experimenter.show_fit_preview)
     done = _start(protocol)
-    while not fits:
-        _spin(lambda: fits or (rig.participant.stack.currentWidget() is rig.participant.vas))
-        if not fits:
-            assert experimenter.fit_accept_button.isHidden()
-            _answer(rig.participant, _observer(protocol._trial))
+    _rate_until(protocol, lambda: bool(fits))
     assert not experimenter.fit_accept_button.isHidden()
     assert experimenter.fit_accept_button.isEnabled()
     assert experimenter.fit_preview.isVisible()
@@ -868,10 +908,7 @@ def test_the_fit_preview_rerun_is_bounded(app, loaded, tmp_path):
     protocol.fit_ready.connect(fits.append)
     protocol.fit_ready.connect(rig.experimenter.show_fit_preview)
     done = _start(protocol)
-    while not fits:
-        _spin(lambda: fits or (rig.participant.stack.currentWidget() is rig.participant.vas))
-        if not fits:
-            _answer(rig.participant, _observer(protocol._trial))
+    _rate_until(protocol, lambda: bool(fits))
     # At the limit Re-run is not offered -- not even by the preview opening over it -- and the
     # instruction says so before any press (reviews of N7.F16, N7.F17e), not after a refused
     # one.

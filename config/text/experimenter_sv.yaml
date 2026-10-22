@@ -199,6 +199,8 @@ instructions:
   rating_next_open: 'Deltagaren skattar. Vad som kommer härnäst beror på skattningen.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   rating_last: 'Deltagaren skattar seriens sista applicering.'
+  # DRAFT (LOG N7.F18ae): written by the build, not ethics-sourced
+  series_end: 'Serien är klar. Om den senaste appliceringen behöver det, använd {controls[correct_application]} Tryck sedan på {controls[proceed]} för att gå vidare.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. Uppehållet före en
   # applicering, under "Vänta" med tiden som är kvar (S, 16 och 21 okt 2026).
   next_filament: 'Härnäst: filamentet {filament} g.'

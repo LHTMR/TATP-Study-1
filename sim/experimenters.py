@@ -66,6 +66,8 @@ PROCEED_INSTRUCTIONS = (
     "intervention_end", "session_complete", "session_aborted",
     # The distances asked for after the last path; Next does not wait for them (N7.F18s).
     "mapping_measure",
+    # A series' end, where the last application could be corrected (N7.F18ae).
+    "series_end",
 )
 # Templated instructions after which the software waits for Next: the ready line of each kind
 # of series and block, the VAS training -- the anchors and proportionality explained aloud,

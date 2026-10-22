@@ -103,6 +103,8 @@ FIT_PREVIEW_KEY = "f40"
 # Keys in the experimenter text's `instructions`, not wording.
 NEXT_FILAMENT = "next_filament"
 NEXT_BRUSH = "next_brush"
+# After a series' last application, until Next (S, 22 Oct 2026).
+SERIES_END = "series_end"
 # The trial's own "Prepare" wording (`_RatedTrial._instruction`), from the end of the rest.
 PREPARE_FILAMENT = f"{PREPARE}_filament"
 PREPARE_BRUSH = f"{PREPARE}_brush"
@@ -1087,6 +1089,8 @@ class _Series(Procedure):
         # Discard chosen between the "applied" press and the rating: done once the rating is
         # in (`interval`), so the series' last application can be discarded too.
         self._discard_pending = False
+        # Waiting for Next after the series' last application (`_await_series_end`).
+        self._at_series_end = False
         # What was discardable when a re-calibration took this protocol's place.
         # What `suspend_offers` withdrew: the discardable application, and the trial that may
         # still be corrected.
@@ -1292,8 +1296,9 @@ class _Series(Procedure):
         """The jittered wait after an application, during which it may be discarded or
         corrected. None after the series' last: nothing follows it to space, so the series
         ends with its rating (S, 22 Oct 2026: "We don't need a final rest after the last
-        filament"), and its filament can be corrected only until its rating is in. A discard
-        chosen before the rating is done now, the last application's included (SPEC.md 11)."""
+        filament"), but a step the experimenter ends with Next, through which it can still be
+        corrected (`_await_series_end`). A discard chosen before the rating is done now
+        (SPEC.md 11)."""
         assert trial.delivered_elapsed_s is not None, "a rated application was pressed applied"
         self._interval_start_s = trial.delivered_elapsed_s
         if self._discard_pending:
@@ -1301,16 +1306,39 @@ class _Series(Procedure):
             self._set_discardable((table, trial.cue_onset_iso, trial.trial_index), trial)
             self._on_discard()
             return
-        if self._upcoming() is None:
-            self.experimenter.set_status(self._received(trial))
-            self._end_now()
-            return
         self._set_discardable((table, trial.cue_onset_iso, trial.trial_index), trial)
+        if self._upcoming() is None:
+            self._await_series_end(self._received(trial))
+            return
         self._wait_then_next(received=self._received(trial))
 
-    def _end_now(self) -> None:
-        # Not inside the rating's own handling, which is still unwinding.
-        self.step(lambda: self._after(0.0, self._next))
+    def _await_series_end(self, status: str) -> None:
+        """After the series' last application, no rest but a step the experimenter ends with
+        Next, through which the last application can still be corrected or discarded (S, 22
+        Oct 2026: "give a screen at the end where the experimenter has to press next to move
+        onto the next phase, this can have the correction option"). `status` is what the
+        status line says meanwhile."""
+        self._at_series_end = True
+        self._countdown.stop()
+
+        def prepare() -> None:
+            self.rig.show_between()
+            self.instruct(SERIES_END, NOW)
+            self.experimenter.set_status(status)
+
+        self.await_proceed(self._finish_series, prepare)
+
+    def _finish_series(self) -> None:
+        self._at_series_end = False
+        self._set_discardable(None)
+        self._next()
+
+    def _leave_series_end(self) -> None:
+        """A correction there sends the series on (a repeat, or the search continuing): the
+        Next it waited for no longer ends it."""
+        if self._at_series_end:
+            self._at_series_end = False
+            self.on_proceed(None)
 
     def _wait_then_next(self, received: str = "") -> None:
         """`received`: the status line naming the application just rated -- never its rating,
@@ -1455,7 +1483,14 @@ class _Series(Procedure):
         self._expected = self._upcoming()
         self._shown_seconds = None
         if self._expected is None:
-            self._advance()
+            if not self._at_series_end:
+                self._await_series_end("")
+            self.experimenter.refresh()
+            return
+        if self._at_series_end:
+            # The search goes on from the corrected filament: a rest, then the next.
+            self._leave_series_end()
+            self._wait_then_next()
             return
         self._show_expected()
         self.experimenter.refresh()
@@ -1507,8 +1542,10 @@ class _Series(Procedure):
         self.experimenter.set_status(self.experimenter.text["status"][status])
         self.experimenter.refresh()
         if not repeats:
-            self._end_now()
+            self._set_discardable(None)
+            self._await_series_end(self.experimenter.text["status"][status])
             return
+        self._leave_series_end()
         # A fresh interval, timed from the discarded application's press as every interval is
         # (SPEC.md 8.3; LOG N7.F17a), so the repeat is as far from the stimulus actually given
         # as any application is from the one before it -- not from the discard.
