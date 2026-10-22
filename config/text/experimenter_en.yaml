@@ -203,13 +203,6 @@ instructions:
   rating_next_open: 'The participant is rating. What comes next depends on the rating.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. The series' last.
   rating_last: 'The participant is rating the last application of this series.'
-  # DRAFT (LOG N7.F11b8, N7.F14c): written by the build, not ethics-sourced. The jittered gap
-  # after a rating when no application follows it: the series is over. The response is
-  # reported on the status line (`received_*`).
-  between_applications: 'The series is done. The next step will appear here.'
-  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced. The same gap after a
-  # discard, which the status reports, when no application follows it.
-  between_applications_discarded: 'Discarded. The next step will appear here.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. The gap before an
   # application, under "Wait" with the time left until it is due (S, 16 and 21 Oct 2026).
   next_filament: 'Coming up: the {filament} g filament.'
@@ -606,8 +599,6 @@ status:
   # small size: a test holds both languages to it.
   recalibration_used: The re-calibrations allowed in a session are used up, so only {controls[resume]} is offered.
   discarded: Last trial discarded. It will be repeated.
-  discarded_not_repeated: >-
-    Last trial discarded. The application limit has been reached, so it will not be repeated.
 
 warnings:
   # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. A path that ended at

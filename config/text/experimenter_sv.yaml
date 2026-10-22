@@ -199,13 +199,6 @@ instructions:
   rating_next_open: 'Deltagaren skattar. Vad som kommer härnäst beror på skattningen.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced
   rating_last: 'Deltagaren skattar seriens sista applicering.'
-  # DRAFT (LOG N7.F11b8, N7.F14c): written by the build, not ethics-sourced. Det slumpade
-  # uppehållet efter en skattning när ingen applicering följer: serien är slut. Svaret
-  # rapporteras på statusraden (`received_*`).
-  between_applications: 'Serien är klar. Det som kommer härnäst visas här.'
-  # DRAFT (LOG N7.F11b8): written by the build, not ethics-sourced. Samma uppehåll efter en
-  # kassering, som statusraden rapporterar, när ingen applicering följer.
-  between_applications_discarded: 'Kasserat. Det som kommer härnäst visas här.'
   # DRAFT (LOG N7.F18e): written by the build, not ethics-sourced. Uppehållet före en
   # applicering, under "Vänta" med tiden som är kvar (S, 16 och 21 okt 2026).
   next_filament: 'Härnäst: filamentet {filament} g.'
@@ -589,9 +582,6 @@ status:
   recalibration_used: Omkalibreringarna som tillåts i en session är förbrukade, så bara {controls[resume]} erbjuds.
   # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
   discarded: Senaste försöket kasserat. Det upprepas.
-  # DRAFT (LOG N7.U4): written by the build, not ethics-sourced
-  discarded_not_repeated: >-
-    Senaste försöket kasserat. Gränsen för antal appliceringar är nådd, så det upprepas inte.
 
 warnings:
   # DRAFT (LOG N7.F17e): written by the build, not ethics-sourced. A path that ended at

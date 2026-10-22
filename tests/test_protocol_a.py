@@ -459,7 +459,9 @@ def test_a_cap_is_required(rig):
         ShortProtocol(rig, "primary", "26", None)
 
 
-def test_a_discard_at_the_application_cap_says_it_will_not_be_repeated(app, loaded, tmp_path):
+def test_the_last_application_at_the_cap_ends_the_run_with_no_rest(app, loaded, tmp_path):
+    """S, 22 Oct 2026: no rest after a series' last application -- here the cap's -- so
+    there is nothing to discard after it, and the run ends at its rating."""
     study1 = {**loaded.study1, "pinprick": {**loaded.study1["pinprick"], "max_applications": 2}}
     rig = _make_rig(loaded, tmp_path, study1=study1)
     protocol = _long(rig)
@@ -467,16 +469,10 @@ def test_a_discard_at_the_application_cap_says_it_will_not_be_repeated(app, load
     for _ in range(2):
         _spin(lambda: rig.participant.stack.currentWidget() is rig.participant.vas)
         _answer(rig.participant, 0)
-    rig.experimenter.discard_requested.emit()
-    status = rig.experimenter.status.text()
-    assert status == rig.experimenter.text["status"]["discarded_not_repeated"]
-    # The line in the gap fits either case, and says nothing about a response received.
-    assert rig.experimenter.instruction.text() == cfg.instruction(
-        rig.session.config, "between_applications_discarded"
-    )
     _spin(lambda: done)
-    assert len(_rows(rig.session, "pinprick")) == 2 and done[0].capped
-    assert len(_rows(rig.session, "discards")) == 1
+    assert done[0].capped and len(_rows(rig.session, "pinprick")) == 2
+    intervals = [e for e in _events(rig.session) if e == "interval"]
+    assert len(intervals) == 1, "a rest after the first, none after the last"
     rig.session.close()
 
 
@@ -865,7 +861,8 @@ def test_the_short_protocol_intervals_are_jittered_within_range(rig):
     intervals = [
         float(r["detail"].split()[0]) for r in _rows(session, "log") if r["event"] == "interval"
     ]
-    assert len(intervals) == pinprick["short_protocol_n_trials"]
+    # One rest between each two, none after the last (S, 22 Oct 2026).
+    assert len(intervals) == pinprick["short_protocol_n_trials"] - 1
     assert all(pinprick["isi_min_s"] <= s <= pinprick["isi_max_s"] for s in intervals)
     assert len(set(intervals)) > 1
 

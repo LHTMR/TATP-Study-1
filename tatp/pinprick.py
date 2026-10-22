@@ -101,8 +101,6 @@ OFFSET_KEYS = {
 FIT_PREVIEW_KEY = "f40"
 
 # Keys in the experimenter text's `instructions`, not wording.
-BETWEEN_APPLICATIONS = "between_applications"
-BETWEEN_DISCARDED = "between_applications_discarded"
 NEXT_FILAMENT = "next_filament"
 NEXT_BRUSH = "next_brush"
 # The trial's own "Prepare" wording (`_RatedTrial._instruction`), from the end of the rest.
@@ -1253,7 +1251,14 @@ class _Series(Procedure):
                                      filament=isinstance(application, Application))
 
     def interval(self, table: str, trial: _RatedTrial) -> None:
-        """The jittered wait after an application, during which it may be discarded."""
+        """The jittered wait after an application, during which it may be discarded or
+        corrected. None after the series' last: nothing follows it to space, so the series
+        ends with its rating (S, 22 Oct 2026: "We don't need a final rest after the last
+        filament"), and the last can be corrected only until its rating is in."""
+        if self._upcoming() is None:
+            self.experimenter.set_status(self._received(trial))
+            self._next()
+            return
         self._set_discardable((table, trial.cue_onset_iso, trial.trial_index), trial)
         assert trial.delivered_elapsed_s is not None, "a rated application was pressed applied"
         self._interval_start_s = trial.delivered_elapsed_s
@@ -1281,12 +1286,12 @@ class _Series(Procedure):
                                 + wait_s)
             # Also what a resume lands on, so the stop screen does not outlast the stop.
             self.participant.show_rest(wait_s)
-            if self._expected is None:
-                self.instruct(BETWEEN_APPLICATIONS if received else BETWEEN_DISCARDED, WAIT)
-            else:
-                self._shown_seconds = None
-                self._show_expected()
-                self._countdown.start()
+            # Stage boundary (CLAUDE.md): a rest comes only before another application
+            # (`interval`), and a discard in it leaves room to repeat.
+            assert self._expected is not None, "a rest with no application after it"
+            self._shown_seconds = None
+            self._show_expected()
+            self._countdown.start()
             self._after(wait_s, self._advance)
 
         self.step(begin)
@@ -1436,11 +1441,11 @@ class _Series(Procedure):
         self.session.log(
             "trial_discarded", origin="experimenter", detail=f"{table} trial {trial_index}"
         )
-        # The discard is recorded either way -- the trial was delivered badly whatever follows.
-        # At the application cap no repeat can follow, and the status says so.
+        # Offered only in the rest before another application (`interval`), so the run is
+        # never at its cap here and the repeat always follows.
         repeats = self._rollback()
-        status = "discarded" if repeats else "discarded_not_repeated"
-        self.experimenter.set_status(self.experimenter.text["status"][status])
+        assert repeats, "a discard left no room to repeat it"
+        self.experimenter.set_status(self.experimenter.text["status"]["discarded"])
         self.experimenter.refresh()
         # A fresh interval, timed from the discarded application's press as every interval is
         # (SPEC.md 8.3; LOG N7.F17a), so the repeat is as far from the stimulus actually given

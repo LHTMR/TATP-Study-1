@@ -468,12 +468,6 @@ def test_the_first_pain_measure_is_introduced_once(finished):
     assert first not in later, "the later long protocols have the ordinary ready line"
 
 
-def test_the_gap_after_a_rating_does_not_leave_the_last_application_up(finished):
-    """LOG N7.F11b8: during the interval the instruction says to wait."""
-    between = finished.experimenter.text["instructions"]["between_applications"]
-    assert between in finished.shown_instructions
-
-
 def test_the_noise_is_heard_only_while_the_garment_may_run(finished):
     """S, 21 Oct 2026: silenced in every phase that does not need it and while the
     experimenter explains something; it masks the garment (Bilaga 3a). Heard through the touch
