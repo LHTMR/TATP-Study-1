@@ -272,6 +272,9 @@ class _QuietDeliveryStart(DeliveryStart):
 
     prompting = False
     cueing = False
+    # The self-start prompt is up: from here the delivery has settled as far as it can without
+    # the participant (`SessionRunner._once_delivery_settles`).
+    prompted = Signal()
 
     def instruct(self, key: str, heading: str | None = None, **values: object) -> None:
         """Nothing on the experimenter screen."""
@@ -283,6 +286,8 @@ class _QuietDeliveryStart(DeliveryStart):
     def _cued(self) -> None:
         super()._cued()
         self.prompting = not self.ended
+        if self.prompting:
+            self.prompted.emit()
 
 
 def summary_phase(stage_id: str) -> str:
@@ -852,9 +857,13 @@ class SessionRunner(Procedure):
         construction to cover the longest possible ramp plus the cue, so at real speed this
         never waits and the experimenter-side timing is the same in every condition. On an
         accelerated clock the two timers can fire in either order, and this fixes the order. A
-        self-start delivery is never waited for, since it waits on the participant (N7.D17).
+        self-start delivery is waited for only until its prompt is up, never for the press,
+        which waits on the participant (N7.D17): otherwise, on an accelerated clock, the block
+        began first and the prompt came up over its trial, and the session stalled (the
+        intermittent stall of 20 Oct 2026; S's demo, 22 Oct 2026).
         """
-        if self._delivery is not None and not self._delivery.self_start:
+        delivery = self._delivery
+        if delivery is not None and not (delivery.self_start and delivery.prompting):
             self._settled_then = then
             return
         then()
@@ -870,6 +879,7 @@ class SessionRunner(Procedure):
         )
         self._delivery = trial
         trial.finished.connect(lambda _latency: self._delivered(trial))
+        trial.prompted.connect(lambda: self._prompted(trial))
         trial.start()
 
     def _delivered(self, trial: _QuietDeliveryStart) -> None:
@@ -884,6 +894,13 @@ class SessionRunner(Procedure):
         if self._settled_then is not None:
             then, self._settled_then = self._settled_then, None
             then()
+
+    def _prompted(self, trial: _QuietDeliveryStart) -> None:
+        """A self-start prompt is up: a step waiting for the delivery to settle goes on."""
+        if trial is not self._delivery or self._settled_then is None:
+            return
+        then, self._settled_then = self._settled_then, None
+        then()
 
     def _cancel_delivery(self) -> None:
         # A step waiting on the cancelled delivery is repeated from its start, not continued.
@@ -1392,6 +1409,13 @@ class SessionRunner(Procedure):
             # session goes on from to the touch (S's demo, 22 Oct 2026: a jump to
             # post-sensitisation ended at the intervention's start with nothing to deliver).
             self._fallbacks_for_touch()
+        if touches and self._delivery is not None:
+            # A touch start still under way -- its cue to come, or a self-start prompt not yet
+            # pressed -- would put its screen over the stage's own trial: started afresh, with
+            # the wait for its cue a start always has (S's demo, 22 Oct 2026: a jump back to
+            # a touch block stalled when the old start's prompt replaced the rating scale).
+            self._cancel_delivery()
+            self._touch_on = False
         if touches and not self._touch_on:
             self.session.set_phase(INTERVENTION)
             self._deliver(lambda: self._run_stage(index))

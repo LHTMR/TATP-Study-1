@@ -37,6 +37,7 @@ from tatp.garment.mock import MockGarment
 from tatp.launcher import LauncherWindow
 from tatp.remote_keys import ANY_KEYBOARD
 from tatp.session import DRIVERS, SessionError
+from tatp.session_runner import SELF_STARTED
 from tatp.ui.experimenter import NOW
 
 EXAMPLES = cfg.CONFIG_DIR / "patterns" / "examples"
@@ -534,6 +535,72 @@ def test_a_jump_past_the_calibration_brings_its_stand_in_at_once(app, loaded):
             QApplication.processEvents()
         runner.experimenter.proceed_requested.emit()  # its Next starts the touch
         assert runner._touch_on
+    finally:
+        _finish(runner, demo)
+
+
+def _run_past(runner, demo, stage_id: str) -> None:
+    """Run on, waits skipped, until `stage_id` has been done and the next step begun."""
+    ids = [stage.id for stage in runner.stages]
+    deadline = time.monotonic() + FULL_RUN_TIMEOUT_S
+    while runner.stage_index <= ids.index(stage_id) and not runner.session.closed:
+        assert time.monotonic() < deadline, (
+            f"stalled at {ids[runner.stage_index]}: "
+            f"{runner.rig.experimenter.instruction.text()!r}")
+        QApplication.processEvents()
+        demo.skip_wait()
+        time.sleep(0.0005)
+    assert "software_error" not in [e["event"] for e in _events(runner.session)]
+
+
+@pytest.mark.parametrize("jumps", [
+    # S's demo, 22 Oct 2026: past the calibration, then on through the intervention's start.
+    ("post_sensitisation.brush_primary",),
+    # Back to a touch block while the touch's start from the jump before is still pending,
+    # in the condition whose start waits for the participant: its prompt replaced the scale.
+    ("block.9", "block.2"),
+    # Back to setup, and into the touch calibration from the intervention.
+    ("block.3", "setup.masking_check"),
+    ("block.3", "touch_calibration"),
+])
+def test_a_jump_never_leaves_the_session_stuck(app, loaded, jumps):
+    """Each step jumped to is done and the session goes on, whatever was running before
+    (S's demo, 22 Oct 2026)."""
+    runner, demo = _demo(app, loaded, "--demo-speed", FULL_RUN_SPEED,
+                         "--sim-participant", FAST, "--sim-experimenter", FAST)
+    runner.session._condition = SELF_STARTED
+    runner.start()
+    try:
+        for stage_id in jumps:
+            while not runner.jumpable(stage_id):
+                QApplication.processEvents()
+            runner.jump_to(stage_id)
+        _run_past(runner, demo, jumps[-1])
+    finally:
+        _finish(runner, demo)
+
+
+def test_a_self_started_touch_holds_the_session_until_its_prompt_is_up(app, loaded):
+    """The intermittent stall of 20 Oct 2026: on an accelerated clock the end of the touch
+    start's display could come before the delivery's cue, and the block began; its prompt then
+    came up over the block's trial. A self-start delivery now holds the session until its
+    prompt is up, never until the press."""
+    runner, demo = _demo(app, loaded)
+    runner.session._condition = SELF_STARTED
+    runner.start()
+    try:
+        _jump(runner, demo, "intervention.start")  # past the calibration: its stand-in
+        runner._start_delivery()
+        delivery = runner._delivery
+        assert delivery.self_start and not delivery.prompting, "still ramping"
+        went_on = []
+        runner._once_delivery_settles(lambda: went_on.append(True))
+        assert not went_on, "held while it ramps"
+        deadline = time.monotonic() + 10.0  # real seconds: the ramp and cue at 1x
+        while not delivery.prompting:
+            assert time.monotonic() < deadline, "the prompt never came up"
+            QApplication.processEvents()
+        assert went_on == [True], "on as soon as the prompt is up, not waiting for the press"
     finally:
         _finish(runner, demo)
 
